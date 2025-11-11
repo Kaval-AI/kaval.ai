@@ -1,0 +1,14 @@
+<div class="chat-message-container">
+  @if (item?.role === 'user') {
+  <div class="user-input-container">{{ escapedContent }}</div>
+  } @else if (item?.role === 'assistant') {
+  <div class="response-container">
+    <mat-icon fontIcon="message" class="response-icon"></mat-icon>
+    <div class="response-content-container">
+      <markdown [data]="escapedContent"></markdown>
+    </div>
+  </div>
+  } @else {
+  <div class="system-message-container">{{ escapedContent }}</div>
+  }
+</div>

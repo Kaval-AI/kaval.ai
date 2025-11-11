@@ -1,0 +1,132 @@
+.chat-list-container {
+  width: 280px;
+  height: 100%;
+  padding: 16px;
+  background-color: #f0f4f9;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  box-shadow: inset -2px 0 5px rgba(0,0,0,0.05); /* Subtle inner shadow */
+  transition: width 0.2s ease-in-out, padding 0.2s ease-in-out; /* Smooth transition */
+}
+
+.chat-list-container.condensed {
+  width: 48px;
+}
+
+.sidenav-toggle-button {
+  top: 8px;
+  right: 8px;
+  margin-left: 12px;
+  z-index: 2; /* Ensure it's above other elements */
+  color: #555;
+  background-color: transparent;
+}
+
+
+.new-chat-button {
+  width: 100%;
+  margin-left: 3px;
+  justify-content: flex-start;
+  border-radius: 20px;
+  font-weight: 500;
+  text-transform: none;
+  overflow: hidden;
+}
+
+.recent-chats-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #555;
+  margin-top: 10px;
+  margin-bottom: 5px;
+  padding-left: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-items-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+}
+
+.chat-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, padding 0.2s ease;
+  position: relative; /* Crucial for positioning the context menu button */
+  overflow: hidden; /* Hide anything that goes outside */
+}
+
+.chat-item:hover {
+  background-color: #bbbbbb;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1); /* Subtle shadow on hover */
+}
+
+.chat-item.selected {
+  background-color: #3978ff;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15); /* Slightly stronger shadow when selected */
+}
+
+.chat-title {
+  flex-grow: 1;
+  font-size: 0.95rem;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 30px; /* Make space for the absolute positioned context menu button */
+}
+
+.chat-title.selected {
+  color: rgb(238, 238, 238);
+}
+
+/* Hide context menu button when condensed */
+.chat-item.condensed .context-menu-button {
+  display: none;
+}
+
+.context-menu-button {
+  position: absolute;
+  right: 0px; /* Distance from right edge of .chat-item */
+  top: 50%;
+  transform: translateY(-50%); /* Vertically center */
+  opacity: 0; /* Hidden by default */
+  background-color: transparent;
+  transition: opacity 0.2s ease; /* Smooth transition for opacity */
+}
+
+.context-menu-button.visible {
+  opacity: 1; /* Fully visible on hover */
+}
+
+/* Styles for when the button is focused (after clicking to open menu) */
+.context-menu-button:focus {
+  opacity: 1; /* Keep visible if menu is open via focus */
+}
+
+
+.chat-item-icon {
+  color: #555; /* Icon color when condensed */
+  font-size: 24px; /* Icon size when condensed */
+}
+
+.new-integration-button {
+  width: 100%;
+  margin-left: 3px;
+  justify-content: flex-start;
+  border-radius: 20px;
+  font-weight: 500;
+  text-transform: none;
+  overflow: hidden;
+}

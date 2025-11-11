@@ -1,0 +1,6 @@
+<div class="user-info-container">
+  <button matButton [matMenuTriggerFor]="menu">{{ userDetails?.username }}</button>
+  <mat-menu #menu="matMenu">
+    <button mat-menu-item (click)="logout()">Logout</button>
+  </mat-menu>
+</div>

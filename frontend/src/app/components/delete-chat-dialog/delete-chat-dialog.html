@@ -1,0 +1,8 @@
+<h2 mat-dialog-title>Delete chat?</h2>
+<mat-dialog-content class="mat-typography">
+  Confirming this action will delete all content from <b>"{{ data.title }}"</b>.
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button (click)="onCancel()">Cancel</button>
+  <button mat-flat-button color="warn" (click)="onConfirmDelete()" cdkFocusInitial>Delete</button>
+</mat-dialog-actions>

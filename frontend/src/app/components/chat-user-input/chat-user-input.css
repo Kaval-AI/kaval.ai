@@ -1,0 +1,42 @@
+.chat-user-input-container {
+  position: relative;
+}
+
+textarea {
+  width: calc(100% - 30px);
+  padding: 15px;
+  padding-bottom: 40px;
+  border: 1px solid rgb(148, 148, 148); 
+  border-radius: 10px;
+}
+
+textarea:focus {
+  outline: none;
+}
+
+mat-icon {
+  position: absolute;
+  right: 7px;
+  bottom: 17px;
+  color: rgb(53, 53, 53);
+  background-color: rgb(231, 231, 231);
+  padding: 5px;
+  padding-left: 8px;
+  border-radius: 22px;
+  cursor: pointer;
+}
+
+mat-icon:hover {
+  background-color: rgb(185, 185, 185);
+}
+
+.hidden-icon {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+
+p.tooltip {
+  font-size: 10px;
+  color: rgb(146, 146, 146)
+}

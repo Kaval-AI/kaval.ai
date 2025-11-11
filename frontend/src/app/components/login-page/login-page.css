@@ -1,0 +1,51 @@
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f0f2f5; /* A light grey background */
+}
+
+mat-card {
+  width: 100%;
+  max-width: 600px;
+  padding: 24px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+mat-card-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+mat-form-field {
+  margin-bottom: 16px;
+}
+
+button.full-width {
+  margin-top: 8px;
+  padding: 12px 0;
+  font-size: 1rem;
+}
+
+.error-message {
+  color: #f44336; /* Angular Material's default 'warn' color */
+  font-size: 0.875em;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+mat-card-title {
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+}
+
+mat-card-subtitle {
+  text-align: center;
+  margin-bottom: 24px;
+}

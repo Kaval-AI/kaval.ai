@@ -1,0 +1,31 @@
+.chat-message-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-input-container {
+  width: 80%;
+  align-self: flex-end;
+  background-color: #d2e2f1;
+  color: rgb(19, 19, 19);
+  padding: 17px;
+  border-radius: 15px;
+  margin-bottom: 30px;
+}
+
+.response-container {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 40px;
+}
+
+.response-icon {
+  color: rgb(141, 141, 255);
+  padding-top: 10px;
+  padding-right: 15px;
+}
+
+.response-content-container {
+  color: rgb(31, 31, 31);
+  padding: 10px;
+}

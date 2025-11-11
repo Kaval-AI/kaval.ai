@@ -1,0 +1,10 @@
+.chat-container {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+}
+
+app-chat-thread {
+  width: 100%;
+  height: 100%;
+}
