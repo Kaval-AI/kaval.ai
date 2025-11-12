@@ -6,9 +6,9 @@ from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi import HTTPException
+from httpx import AsyncClient
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
-from httpx import AsyncClient
 
 load_dotenv()
 
@@ -30,7 +30,6 @@ oauth.register(
 ALLOWED_USERS = ["tpetmanson@gmail.com"]
 
 AGENT_ENDPOINT_URL = "http://127.0.0.1:25123"
-
 
 # Add SessionMiddleware with a secret key
 app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(16))
@@ -82,6 +81,7 @@ async def chats_list(request: Request):
     assert results.status_code == 200
     return JSONResponse(results.json())
 
+
 @app.get("/chat/messages/{chat_id}")
 async def chats_messages(chat_id: str, request: Request):
     """Queries the list of chats available to the agent."""
@@ -89,6 +89,26 @@ async def chats_messages(chat_id: str, request: Request):
     #     raise HTTPException(status_code=401, detail="Unauthorized.")
     client = AsyncClient()
     results = await client.get(AGENT_ENDPOINT_URL + "/chat/messages/" + chat_id)
+    assert results.status_code == 200
+    return JSONResponse(results.json())
+
+
+@app.get("/input_schema")
+async def input_schema(request: Request):
+    # if not is_logged_in(request):
+    #     raise HTTPException(status_code=401, detail="Unauthorized.")
+    client = AsyncClient()
+    results = await client.get(AGENT_ENDPOINT_URL + "/input_schema")
+    assert results.status_code == 200
+    return JSONResponse(results.json())
+
+
+@app.get("/output_schema")
+async def output_schema(request: Request):
+    # if not is_logged_in(request):
+    #     raise HTTPException(status_code=401, detail="Unauthorized.")
+    client = AsyncClient()
+    results = await client.get(AGENT_ENDPOINT_URL + "/output_schema")
     assert results.status_code == 200
     return JSONResponse(results.json())
 
