@@ -82,6 +82,16 @@ async def chats_list(request: Request):
     assert results.status_code == 200
     return JSONResponse(results.json())
 
+@app.get("/chat/messages/{chat_id}")
+async def chats_messages(chat_id: str, request: Request):
+    """Queries the list of chats available to the agent."""
+    # if not is_logged_in(request):
+    #     raise HTTPException(status_code=401, detail="Unauthorized.")
+    client = AsyncClient()
+    results = await client.get(AGENT_ENDPOINT_URL + "/chat/messages/" + chat_id)
+    assert results.status_code == 200
+    return JSONResponse(results.json())
+
 
 if __name__ == "__main__":
     config = uvicorn.Config("kavalai.server:app", port=8000, log_level="debug", reload=True, access_log=True)

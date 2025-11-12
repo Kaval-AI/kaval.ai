@@ -1,8 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 
+
 export interface ChatMessageItem {
-  uuid: string;
-  chatUuid: string;
+  id: string;
+  chatId: string;
+  agentRunId: string;
   role: string;
   content: string
   createdAt: Date;
@@ -10,12 +12,13 @@ export interface ChatMessageItem {
 }
 
 export class ChatMessageItemFactory {
-  static create(chatUuid: string, role: string, content: string): ChatMessageItem {
+  static create(chatId: string, role: string, content: string): ChatMessageItem {
     return {
-      uuid: uuidv4(),
-      chatUuid: chatUuid,
-      role,
-      content,
+      id: uuidv4(),
+      chatId: chatId,
+      role: role,
+      agentRunId: "",
+      content: content,
       createdAt: new Date(),
       updatedAt: new Date()
     };

@@ -10,13 +10,17 @@ import { Chat } from '../components/chat/chat';
 
 interface IChatsService {
   createChat(title: string): Promise<ChatItem>
-  renameChat(chatUuid: string, newTitle: string): Promise<ChatItem>
-  deleteChat(chatUuid: string): Promise<void>
   listChats(): Promise<ChatItem[]>
   addMessage(message: ChatMessageItem): Promise<ChatMessageItem>
   listMessages(chatUuid: string): Promise<ChatMessageItem[]>
   generateResponse(chatUuid: string): Observable<string>
 }
+
+interface ChatMessagesResponse {
+  chat_id: string
+  chat_messages: ChatMessageItem[]
+}
+
 
 @Injectable({
   providedIn: 'root'
@@ -33,24 +37,6 @@ export class ChatsService implements IChatsService {
     });
   }
 
-  renameChat(chatUuid: string, newTitle: string): Promise<ChatItem> {
-    return new Promise((resolve, reject) => {
-      this.http.post<ChatItem>('/api/chat/rename', { uuid: chatUuid, newTitle: newTitle }).subscribe({
-        next: (chat) => resolve(chat),
-        error: (err) => reject(err)
-      })
-    });
-  }
-
-  deleteChat(chatUuid: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.http.post<void>('/api/chat/delete', { uuid: chatUuid }).subscribe({
-        next: () => resolve(),
-        error: (err) => reject(err)
-      })
-    });
-  }
-
   listChats(): Promise<ChatItem[]> {
     return new Promise((resolve, reject) => {
       this.http.get<ChatItems>('/api/chat/list').subscribe({
@@ -60,10 +46,10 @@ export class ChatsService implements IChatsService {
     });
   }
 
-  listMessages(chatUuid: string): Promise<ChatMessageItem[]> {
+  listMessages(chatId: string): Promise<ChatMessageItem[]> {
     return new Promise((resolve, reject) => {
-      this.http.get<ChatMessageItem[]>(`/api/chat/list_messages/${chatUuid}`).subscribe({
-        next: (messages) => resolve(messages),
+      this.http.get<ChatMessagesResponse>(`/api/chat/messages/${chatId}`).subscribe({
+        next: (response) => resolve(response.chat_messages),
         error: (err) => reject(err)
       })
     });

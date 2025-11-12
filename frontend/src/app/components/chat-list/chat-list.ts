@@ -81,7 +81,6 @@ export class ChatList implements OnInit{
       if (result) {
         chat.title = result;
         chat.updatedAt = new Date();
-        this.chatsService.renameChat(chatId, result);
       }
     });
   }
@@ -98,7 +97,6 @@ export class ChatList implements OnInit{
     dialogRef.afterClosed().subscribe(result => {
       if (result === true) {
         this.chats = this.chats.filter(c => c.id !== chatId);
-        this.chatsService.deleteChat(chat.id);
       }
     });
   }

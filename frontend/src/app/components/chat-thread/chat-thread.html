@@ -1,6 +1,6 @@
 <div class="chat-thread-container" [ngClass]="{'empty': isEmptyChat()}">
   <div class="chat-messages-container" #messagesContainer [ngClass]="{'empty': isEmptyChat()}">
-    @for (message of messages; track message.uuid) {
+    @for (message of messages; track message.id) {
     <app-chatmessage [item]="message"></app-chatmessage>
     } @empty {
     <div class="no-messages-placeholder">
