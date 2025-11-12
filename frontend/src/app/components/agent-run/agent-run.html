@@ -1,0 +1,17 @@
+<div class="agent-run">
+  <div class="chat-messages">
+    @for (message of this.agentRun.chat_messages; track message.id) {
+    <app-chatmessage [item]="message"></app-chatmessage>
+    } @empty {
+    <div class="no-messages-placeholder">
+      No messages yet. Start the conversation!
+    </div>
+    }
+  </div>
+  <div>input_data: 
+    <nxt-json-view [data]="this.agentRun.input_data" [levelOpen]="1"></nxt-json-view>
+  </div>
+  <div>output_data: 
+    <nxt-json-view [data]="this.agentRun.output_data" [levelOpen]="1"></nxt-json-view>
+  </div>
+</div>
