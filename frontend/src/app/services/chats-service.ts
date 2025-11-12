@@ -5,14 +5,6 @@ import { ChatItem, ChatItems } from '../models/chat-item';
 import { ChatMessageItem } from '../models/chat-message-item';
 
 
-interface IChatsService {
-  createChat(title: string): Promise<ChatItem>
-  listChats(): Promise<ChatItem[]>
-  addMessage(message: ChatMessageItem): Promise<ChatMessageItem>
-  listMessages(chatUuid: string): Promise<ChatMessageItem[]>
-  generateResponse(chatUuid: string): Observable<string>
-}
-
 interface ChatMessagesResponse {
   chat_id: string
   chat_messages: ChatMessageItem[]
@@ -27,17 +19,8 @@ interface ChatAgentRunsReponse {
 @Injectable({
   providedIn: 'root'
 })
-export class ChatsService implements IChatsService {
+export class ChatsService {
   constructor(private http: HttpClient) { }
-
-  createChat(title: string): Promise<ChatItem> {
-    return new Promise((resolve, reject) => {
-      this.http.post<ChatItem>('/api/chat/create', { title: title }).subscribe({
-        next: (chat) => resolve(chat),
-        error: (err) => reject(err)
-      })
-    });
-  }
 
   listChats(): Promise<ChatItem[]> {
     return new Promise((resolve, reject) => {
@@ -66,30 +49,57 @@ export class ChatsService implements IChatsService {
     });
   }
 
-  addMessage(message: ChatMessageItem): Promise<ChatMessageItem> {
+  getInputSchema(): Promise<any> {
     return new Promise((resolve, reject) => {
-      this.http.post<ChatMessageItem>('/api/chat/add_message', message).subscribe({
-        next: (msg) => resolve(msg),
+      this.http.get<any>(`/api/input_schema`).subscribe({
+        next: (response) => resolve(response),
         error: (err) => reject(err)
       })
     });
   }
 
-  generateResponse(chatUuid: string): Observable<string> {
-    return new Observable<string>(observer => {
-      const eventSource = new EventSource(`/api/generate_response/${chatUuid}`);
-      eventSource.onmessage = (event) => {
-        if (event.data === "[DONE]") {
-          observer.complete();
-          eventSource.close();
-          return;
-        }
-        observer.next(JSON.parse(event.data).text)
-      };
-      eventSource.onerror = (err) => {
-        console.error("EventSource failed:", err);
-        eventSource.close();
-      };
+  runAgent(inputData: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.http.post<any>(`/api/agent/run`, inputData).subscribe({
+        next: (response) => resolve(response),
+        error: (err) => reject(err)
+      })
     });
   }
+
+    // createChat(title: string): Promise<ChatItem> {
+  //   return new Promise((resolve, reject) => {
+  //     this.http.post<ChatItem>('/api/chat/create', { title: title }).subscribe({
+  //       next: (chat) => resolve(chat),
+  //       error: (err) => reject(err)
+  //     })
+  //   });
+  // }
+
+  // addMessage(message: ChatMessageItem): Promise<ChatMessageItem> {
+  //   return new Promise((resolve, reject) => {
+  //     this.http.post<ChatMessageItem>('/api/chat/add_message', message).subscribe({
+  //       next: (msg) => resolve(msg),
+  //       error: (err) => reject(err)
+  //     })
+  //   });
+  // }
+
+  // generateResponse(chatUuid: string): Observable<string> {
+  //   return new Observable<string>(observer => {
+  //     const eventSource = new EventSource(`/api/generate_response/${chatUuid}`);
+  //     eventSource.onmessage = (event) => {
+  //       if (event.data === "[DONE]") {
+  //         observer.complete();
+  //         eventSource.close();
+  //         return;
+  //       }
+  //       observer.next(JSON.parse(event.data).text)
+  //     };
+  //     eventSource.onerror = (err) => {
+  //       console.error("EventSource failed:", err);
+  //       eventSource.close();
+  //     };
+  //   });
+  // }
 }

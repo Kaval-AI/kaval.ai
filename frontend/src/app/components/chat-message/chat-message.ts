@@ -1,11 +1,10 @@
 import { Component, Input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { ChatMessageItem } from '../../models/chat-message-item';
-import { MarkdownComponent } from 'ngx-markdown';
 
 @Component({
   selector: 'app-chatmessage',
-  imports: [MatIconModule, MarkdownComponent],
+  imports: [MatIconModule],
   templateUrl: './chat-message.html',
   styleUrl: './chat-message.css'
 })

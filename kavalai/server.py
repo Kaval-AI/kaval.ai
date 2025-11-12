@@ -103,13 +103,26 @@ async def input_schema(chat_id: str, request: Request):
     return JSONResponse(results.json())
 
 
+@app.post("/agent/run")
+async def run_agent(request: Request):
+    # if not is_logged_in(request):
+    #     raise HTTPException(status_code=401, detail="Unauthorized.")
+    request_data = await request.json()
+    client = AsyncClient()
+    results = await client.post(AGENT_ENDPOINT_URL + "/run", json=request_data, timeout=60.0)
+    if results.status_code != 200:
+        raise HTTPException(status_code=results.status_code, detail=results.content)
+    return JSONResponse(results.json())
+
+
 @app.get("/input_schema")
 async def input_schema(request: Request):
     # if not is_logged_in(request):
     #     raise HTTPException(status_code=401, detail="Unauthorized.")
     client = AsyncClient()
     results = await client.get(AGENT_ENDPOINT_URL + "/input_schema")
-    assert results.status_code == 200
+    if results.status_code != 200:
+        raise HTTPException(status_code=results.status_code, detail=results.content)
     return JSONResponse(results.json())
 
 
@@ -119,6 +132,8 @@ async def output_schema(request: Request):
     #     raise HTTPException(status_code=401, detail="Unauthorized.")
     client = AsyncClient()
     results = await client.get(AGENT_ENDPOINT_URL + "/output_schema")
+    if results.status_code != 200:
+        raise HTTPException(status_code=results.status_code, detail=results.content)
     assert results.status_code == 200
     return JSONResponse(results.json())
 

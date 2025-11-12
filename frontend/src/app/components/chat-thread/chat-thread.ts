@@ -17,8 +17,9 @@ export class ChatThread {
   @ViewChild('messagesContainer') private messagesContainerRef!: ElementRef;
 
   // List of chat messages and AI responses.
-  messages: ChatMessageItem[] = [];
+  //messages: ChatMessageItem[] = [];
 
+  // Agent run data.
   agentRuns: any[] = []
 
   // Current chat ID, null if this is a new chat.
@@ -28,13 +29,14 @@ export class ChatThread {
   set currentChatId(value: string | null) {
     if (value === null) {
       console.log("Clearing messages");
-      this.messages = [];
+      //this.messages = [];
+      this.agentRuns = [];
     } else {
-      this.chatsService.listMessages(value).then(msgs => {
-        this.messages = [...msgs];
-        console.log(`"Loaded ${this.messages.length} for chat`);
-        this.scrollToBottom();
-      });
+      // this.chatsService.listMessages(value).then(msgs => {
+      //   this.messages = [...msgs];
+      //   console.log(`"Loaded ${this.messages.length} for chat`);
+      //   this.scrollToBottom();
+      // });
       this.chatsService.listAgentRuns(value).then(runs => {
         this.agentRuns = [...runs];
         console.log(`"Loaded ${this.agentRuns.length} agent runs for chat.`);
@@ -55,48 +57,57 @@ export class ChatThread {
 
   isEmptyChat(): boolean {
     if (this.currentChatId === null) {
-      if (this.messages.length !== 0) {
+      if (this.agentRuns.length !== 0) {
         throw new Error("Invariant violation: messages should be empty for new chat");
       }
     }
-    return this.messages.length === 0;
+    return this.agentRuns.length === 0;
   }
 
   async onUserInputSubmitted(messageText: string): Promise<void> {
+    var inputData = {
+      chat_id: this.currentChatId,
+      user_message: messageText
+    }
+    this.chatsService.runAgent(inputData).then((output_data) => {
+      console.log(output_data);
+      this.currentChatId = output_data.chat_id;
+      this.scrollToBottom();
+    })
     //let userMessage = ChatMessageItemFactory.create("user", messageText);
     // If this is a new chat, ask the ChatService to create a new chat.
-    if (this.isEmptyChat()) {
-      let title: string = messageText.substring(0, 30);
-      let chat = await this.chatsService.createChat(title);
-      this._currentChatId = chat.id;
-      this.newChatInitiated.emit({ chatUuid: chat.id });
-    }
+    // if (this.isEmptyChat()) {
+    //   let title: string = messageText.substring(0, 30);
+    //   let chat = await this.chatsService.createChat(title);
+    //   this._currentChatId = chat.id;
+    //   this.newChatInitiated.emit({ chatUuid: chat.id });
+    // }
 
-    // Creates user message.
-    let userMessage = ChatMessageItemFactory.create(this.currentChatId!, "user", messageText);
-    this.messages.push(userMessage);
-    this.scrollToBottom();
-    userMessage = await this.chatsService.addMessage(userMessage);
+    // // Creates user message.
+    // let userMessage = ChatMessageItemFactory.create(this.currentChatId!, "user", messageText);
+    // this.messages.push(userMessage);
+    // this.scrollToBottom();
+    // userMessage = await this.chatsService.addMessage(userMessage);
 
-    // Creates assistant message.
-    let assistantMessage = ChatMessageItemFactory.create(this.currentChatId!, "assistant", "");
-    this.messages.push(assistantMessage);
-    this.scrollToBottom();
+    // // Creates assistant message.
+    // let assistantMessage = ChatMessageItemFactory.create(this.currentChatId!, "assistant", "");
+    // this.messages.push(assistantMessage);
+    // this.scrollToBottom();
 
     // Stream message generation.
-    let responseObsservable = this.chatsService.generateResponse(this.currentChatId!)
-    responseObsservable.subscribe({
-      next: (response: string) => {
-        this.ngZone.run(() => {
-          assistantMessage.content = response;
-          this.scrollToBottom();
-        });
-      },
-      complete: () => {
-        this.chatsService.addMessage(assistantMessage);
-        console.log(`Response received, total of ${assistantMessage.content.length} characters`);
-      }
-    });
+    // let responseObsservable = this.chatsService.generateResponse(this.currentChatId!)
+    // responseObsservable.subscribe({
+    //   next: (response: string) => {
+    //     this.ngZone.run(() => {
+    //       assistantMessage.content = response;
+    //       this.scrollToBottom();
+    //     });
+    //   },
+    //   complete: () => {
+    //     this.chatsService.addMessage(assistantMessage);
+    //     console.log(`Response received, total of ${assistantMessage.content.length} characters`);
+    //   }
+    // });
   }
 
   private scrollToBottom(): void {
