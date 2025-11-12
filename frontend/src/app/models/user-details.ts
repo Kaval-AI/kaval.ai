@@ -3,7 +3,7 @@ interface UserDetails {
     name: string;
     given_name: string;
     family_name: string;
-    pictures: string;
+    picture: string;
     email: string;
     email_verified: boolean;
 }

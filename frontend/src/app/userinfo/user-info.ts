@@ -23,6 +23,7 @@ export class UserInfo implements OnInit {
 
   ngOnInit(): void {
     this.authService.userDetails.subscribe(details => {
+      console.log(details)
       this.userDetails = details;
     });
     this.authService.updateUserDetails()
