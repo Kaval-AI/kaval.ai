@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
+from httpx import AsyncClient
 
 load_dotenv()
 
@@ -27,6 +28,9 @@ oauth.register(
 )
 
 ALLOWED_USERS = ["tpetmanson@gmail.com"]
+
+AGENT_ENDPOINT_URL = "http://127.0.0.1:25123"
+
 
 # Add SessionMiddleware with a secret key
 app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(16))
@@ -66,6 +70,17 @@ async def google_auth_callback(request: Request):
 
     request.session["user_info"] = user_info
     return RedirectResponse(url="http://localhost:4200")
+
+
+@app.get("/chat/list")
+async def chats_list(request: Request):
+    """Queries the list of chats available to the agent."""
+    # if not is_logged_in(request):
+    #     raise HTTPException(status_code=401, detail="Unauthorized.")
+    client = AsyncClient()
+    results = await client.get(AGENT_ENDPOINT_URL + "/chat/list")
+    assert results.status_code == 200
+    return JSONResponse(results.json())
 
 
 if __name__ == "__main__":

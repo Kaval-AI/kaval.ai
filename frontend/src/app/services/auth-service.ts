@@ -35,7 +35,6 @@ export class AuthService {
   updateUserDetails(): void {
     this.http.get<UserDetails>("/api/user/get_details").subscribe({
       next: (user_details) => {
-        console.log(user_details);
         this.loggedIn = true;
         this.userDetails$.next(user_details as UserDetails);
       },

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ChatItem } from '../models/chat-item';
+import { ChatItems, ChatItem } from '../models/chat-item';
 import { HttpClient, HttpDownloadProgressEvent, HttpEvent, HttpEventType } from '@angular/common/http';
 import { ChatMessageItem } from '../models/chat-message-item';
 import { v4 as uuidv4 } from 'uuid';
@@ -53,8 +53,8 @@ export class ChatsService implements IChatsService {
 
   listChats(): Promise<ChatItem[]> {
     return new Promise((resolve, reject) => {
-      this.http.get<ChatItem[]>('/api/chat/list').subscribe({
-        next: (chats) => resolve(chats),
+      this.http.get<ChatItems>('/api/chat/list').subscribe({
+        next: (chats) => resolve(chats.chats),
         error: (err) => reject(err)
       })
     });

@@ -69,7 +69,7 @@ export class ChatList implements OnInit{
   }
 
   onRenameChat(chatId: string): void {
-    const chat = this.chats.find(c => c.uuid === chatId);
+    const chat = this.chats.find(c => c.id === chatId);
     if (!chat) return;
 
     const dialogRef = this.dialog.open(RenameChatDialog, {
@@ -87,7 +87,7 @@ export class ChatList implements OnInit{
   }
 
   onDeleteChat(chatId: string): void {
-    const chat = this.chats.find(c => c.uuid === chatId);
+    const chat = this.chats.find(c => c.id === chatId);
     if (!chat) return;
 
     const dialogRef = this.dialog.open(DeleteChatDialog, {
@@ -97,8 +97,8 @@ export class ChatList implements OnInit{
 
     dialogRef.afterClosed().subscribe(result => {
       if (result === true) {
-        this.chats = this.chats.filter(c => c.uuid !== chatId);
-        this.chatsService.deleteChat(chat.uuid);
+        this.chats = this.chats.filter(c => c.id !== chatId);
+        this.chatsService.deleteChat(chat.id);
       }
     });
   }

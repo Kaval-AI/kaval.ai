@@ -1,19 +1,26 @@
 import { v4 as uuidv4 } from 'uuid';
 
+export interface ChatItems {
+  chats: ChatItem[]
+}
+
+
 export interface ChatItem {
-  uuid: string;
+  id: string;
+  title: string;
+  context: any;
   createdAt: Date;
   updatedAt: Date;
-  title: string
 }
 
 export class ChatItemFactory {
   static create(title: string): ChatItem {
     return {
-      uuid: uuidv4(),
+      id: uuidv4(),
+      title: title,
+      context: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      title: title
     };
   }
 }

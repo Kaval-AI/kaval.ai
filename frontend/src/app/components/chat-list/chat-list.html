@@ -17,32 +17,32 @@
   @if (!isCondensed) {
   <h3 class="recent-chats-title">Recent chats</h3>
   <ul class="chat-items-list">
-    @for (chat of getOrderedChats(); track chat.uuid) {
-    <li class="chat-item" (click)="onChatClick(chat.uuid)"
-      (mouseenter)="onMouseEnter(chat.uuid)" (mouseleave)="onMouseLeave()"
+    @for (chat of getOrderedChats(); track chat.id) {
+    <li class="chat-item" (click)="onChatClick(chat.id)"
+      (mouseenter)="onMouseEnter(chat.id)" (mouseleave)="onMouseLeave()"
       [ngClass]="{
-        hovered: hoveredChatId === chat.uuid,
-        selected: selectedChatId === chat.uuid
+        hovered: hoveredChatId === chat.id,
+        selected: selectedChatId === chat.id
       }">
       <span class="chat-title" [ngClass]="{
-        hovered: hoveredChatId === chat.uuid,
-        selected: selectedChatId === chat.uuid
+        hovered: hoveredChatId === chat.id,
+        selected: selectedChatId === chat.id
       }">{{ chat.title }}</span>
 
       <!-- Context Menu Button (visible on hover) -->
       <button mat-icon-button [matMenuTriggerFor]="chatMenu"
         (click)="$event.stopPropagation()" class="context-menu-button"
-        [ngClass]="{'visible': hoveredChatId === chat.uuid}">
+        [ngClass]="{'visible': hoveredChatId === chat.id}">
         <mat-icon>more_vert</mat-icon>
       </button>
 
       <!-- The chat menu -->
       <mat-menu #chatMenu="matMenu">
-        <button mat-menu-item (click)="onRenameChat(chat.uuid)">
+        <button mat-menu-item (click)="onRenameChat(chat.id)">
           <mat-icon>edit</mat-icon>
           <span>Rename</span>
         </button>
-        <button mat-menu-item (click)="onDeleteChat(chat.uuid)">
+        <button mat-menu-item (click)="onDeleteChat(chat.id)">
           <mat-icon>delete</mat-icon>
           <span>Delete</span>
         </button>
@@ -50,16 +50,16 @@
     </li>
     }
   </ul>
-  <h3 class="recent-chats-title">Integrations</h3>
+  <!-- <h3 class="recent-chats-title">Integrations</h3>
   <button matButton class="new-integration-button">
     <mat-icon>email</mat-icon><span>Email</span>
   </button>
   <button matButton class="new-integration-button">
     <mat-icon>calendar_today</mat-icon><span>Calendar</span>
-  </button>
+  </button> -->
 
-  <h3 class="recent-chats-title">RAG</h3>
+  <!-- <h3 class="recent-chats-title">RAG</h3>
 
-  <h3 class="recent-chats-title">Agent programming</h3>
+  <h3 class="recent-chats-title">Agent programming</h3> -->
 }
 </div>

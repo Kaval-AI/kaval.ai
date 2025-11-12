@@ -60,8 +60,8 @@ export class ChatThread {
     if (this.isEmptyChat()) {
       let title: string = messageText.substring(0, 30);
       let chat = await this.chatsService.createChat(title);
-      this._currentChatId = chat.uuid;
-      this.newChatInitiated.emit({ chatUuid: chat.uuid });
+      this._currentChatId = chat.id;
+      this.newChatInitiated.emit({ chatUuid: chat.id });
     }
 
     // Creates user message.
