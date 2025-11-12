@@ -33,6 +33,7 @@
     "marked": "^16.2.1",
     "ngx-markdown": "^20.1.0",
     "normalize.css": "^8.0.1",
+    "nxt-json-view": "^20.0.0",
     "prismjs": "^1.30.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",

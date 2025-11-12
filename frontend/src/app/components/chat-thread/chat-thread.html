@@ -1,11 +1,16 @@
 <div class="chat-thread-container" [ngClass]="{'empty': isEmptyChat()}">
   <div class="chat-messages-container" #messagesContainer [ngClass]="{'empty': isEmptyChat()}">
-    @for (message of messages; track message.id) {
+    <!-- @for (message of messages; track message.id) {
     <app-chatmessage [item]="message"></app-chatmessage>
     } @empty {
     <div class="no-messages-placeholder">
       No messages yet. Start the conversation!
     </div>
+    }
+  </div> -->
+  <div class="agent-runs-container">
+    @for (agentRun of agentRuns; track agentRun.id) {
+      <app-agent-run [agentRun]="agentRun"></app-agent-run>
     }
   </div>
   <div class="chat-input-container" [ngClass]="{'empty': isEmptyChat()}">

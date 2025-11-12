@@ -1,11 +1,8 @@
+import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { ChatItems, ChatItem } from '../models/chat-item';
-import { HttpClient, HttpDownloadProgressEvent, HttpEvent, HttpEventType } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { ChatItem, ChatItems } from '../models/chat-item';
 import { ChatMessageItem } from '../models/chat-message-item';
-import { v4 as uuidv4 } from 'uuid';
-import { BehaviorSubject, Observable } from 'rxjs';
-import { ChatMessage } from '../components/chat-message/chat-message';
-import { Chat } from '../components/chat/chat';
 
 
 interface IChatsService {
@@ -19,6 +16,11 @@ interface IChatsService {
 interface ChatMessagesResponse {
   chat_id: string
   chat_messages: ChatMessageItem[]
+}
+
+interface ChatAgentRunsReponse {
+  chat_id: string
+  agent_runs: any[]
 }
 
 
@@ -50,6 +52,15 @@ export class ChatsService implements IChatsService {
     return new Promise((resolve, reject) => {
       this.http.get<ChatMessagesResponse>(`/api/chat/messages/${chatId}`).subscribe({
         next: (response) => resolve(response.chat_messages),
+        error: (err) => reject(err)
+      })
+    });
+  }
+
+  listAgentRuns(chatId: string): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      this.http.get<ChatAgentRunsReponse>(`/api/chat/agent_runs/${chatId}`).subscribe({
+        next: (response) => resolve(response.agent_runs),
         error: (err) => reject(err)
       })
     });

@@ -1,6 +1,7 @@
 import { Component, Input, Output, ViewChild, ElementRef, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatMessage } from '../chat-message/chat-message';
+import { AgentRun } from '../agent-run/agent-run';
 import { ChatUserInput } from '../chat-user-input/chat-user-input';
 import { ChatMessageItem, ChatMessageItemFactory } from '../../models/chat-message-item';
 import { ChatsService } from '../../services/chats-service';
@@ -8,7 +9,7 @@ import { NgZone } from '@angular/core';
 
 @Component({
   selector: 'app-chat-thread',
-  imports: [ChatMessage, ChatUserInput, CommonModule],
+  imports: [AgentRun, ChatUserInput, CommonModule],
   templateUrl: './chat-thread.html',
   styleUrl: './chat-thread.css'
 })
@@ -17,6 +18,8 @@ export class ChatThread {
 
   // List of chat messages and AI responses.
   messages: ChatMessageItem[] = [];
+
+  agentRuns: any[] = []
 
   // Current chat ID, null if this is a new chat.
   private _currentChatId: string | null = null;
@@ -31,7 +34,12 @@ export class ChatThread {
         this.messages = [...msgs];
         console.log(`"Loaded ${this.messages.length} for chat`);
         this.scrollToBottom();
-      })
+      });
+      this.chatsService.listAgentRuns(value).then(runs => {
+        this.agentRuns = [...runs];
+        console.log(`"Loaded ${this.agentRuns.length} agent runs for chat.`);
+        console.log(this.agentRuns)
+      });
     }
     this._currentChatId = value;
   }

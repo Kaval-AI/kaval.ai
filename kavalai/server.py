@@ -93,6 +93,16 @@ async def chats_messages(chat_id: str, request: Request):
     return JSONResponse(results.json())
 
 
+@app.get("/chat/agent_runs/{chat_id}")
+async def input_schema(chat_id: str, request: Request):
+    # if not is_logged_in(request):
+    #     raise HTTPException(status_code=401, detail="Unauthorized.")
+    client = AsyncClient()
+    results = await client.get(AGENT_ENDPOINT_URL + "/chat/agent_runs/" + chat_id)
+    assert results.status_code == 200
+    return JSONResponse(results.json())
+
+
 @app.get("/input_schema")
 async def input_schema(request: Request):
     # if not is_logged_in(request):

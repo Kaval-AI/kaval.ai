@@ -4,9 +4,7 @@
   } @else if (item?.role === 'assistant') {
   <div class="response-container">
     <mat-icon fontIcon="message" class="response-icon"></mat-icon>
-    <div class="response-content-container">
-      <markdown [data]="escapedContent"></markdown>
-    </div>
+    <div class="response-content-container">{{ escapedContent }}</div>
   </div>
   } @else {
   <div class="system-message-container">{{ escapedContent }}</div>
