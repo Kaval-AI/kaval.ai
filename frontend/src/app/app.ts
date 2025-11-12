@@ -15,7 +15,7 @@ export class App implements OnInit {
   }
 
   ngOnInit(): void {
-    this.authService.updateLoginStatus();
+    this.authService.updateUserDetails();
   }
 
   get isLoggedIn(): boolean {

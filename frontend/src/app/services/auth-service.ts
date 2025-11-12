@@ -15,53 +15,38 @@ export class AuthService {
 
   constructor(private http: HttpClient) { }
 
-  login(email: string, password: string): Observable<any> {
-    var credentials = {
-      "Email": email,
-      "Password": password
-    }
-    return this.http.post("/api/user/login", credentials).pipe(
-      tap(() => {
-        console.log("Login successful");
-        this.loggedIn = true;
-      })
-    );
+  login() {
+    window.location.href = "/api/login";
   }
 
   logout(): void {
-    this.http.post("/api/user/logout", {}).subscribe({
-      next: () => this.loggedIn = false,
-    });
-  }
-
-  updateLoginStatus(): void {
-    this.http.get<{ isLoggedIn: boolean }>("/api/user/isloggedin").subscribe({
-      next: (result) => {
-        const isLoggedIn = result["isLoggedIn"];
-        console.log("Logged in status:", isLoggedIn);
-        this.loggedIn = isLoggedIn
+    this.http.get("/api/logout").subscribe({
+      next: () => {
+        this.loggedIn = false;
+        this.userDetails$.next(null);
       },
       error: () => {
         this.loggedIn = false;
+        this.userDetails$.next(null);
+      }
+    });
+  }
+
+  updateUserDetails(): void {
+    this.http.get<UserDetails>("/api/user/get_details").subscribe({
+      next: (user_details) => {
+        console.log(user_details);
+        this.loggedIn = true;
+        this.userDetails$.next(user_details as UserDetails);
+      },
+      error: () => {
+        this.loggedIn = false;
+        this.userDetails$.next(null);
       }
     });
   }
 
   getIsLoggedIn(): boolean {
     return this.loggedIn;
-  }
-
-  updateUserDetails(): void {
-    if (!this.loggedIn) {
-      this.userDetails$.next(null);
-    }
-    this.http.get<UserDetails>("/api/user/details").subscribe({
-      next: (details) => {
-        this.userDetails$.next(details);
-      },
-      error: () => {
-        this.userDetails$.next(null);
-      }
-    });
   }
 }

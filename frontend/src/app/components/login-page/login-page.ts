@@ -22,35 +22,13 @@ import { AuthService } from '../../services/auth-service';
   styleUrls: ['./login-page.css']
 })
 export class LoginPage {
-  loginForm: FormGroup;
-  errorMessage: string | null = null;
-
   constructor(
     private fb: FormBuilder,
     private authService: AuthService
   ) {
-    this.loginForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
-      password: ['', [Validators.required]]
-    });
   }
 
-  onSubmit(): void {
-    if (this.loginForm.invalid) {
-      return;
-    }
-    this.errorMessage = null;
-    const { email, password } = this.loginForm.value;
-
-    this.authService.login(email, password).subscribe({
-      next: () => {
-        console.log('Login successful from form');
-        // The main app component will automatically handle the view change
-      },
-      error: (err: any) => {
-        this.errorMessage = 'Invalid email or password. Please try again.';
-        console.error('Login failed', err);
-      }
-    });
+  login(): void {
+    this.authService.login();
   }
 }
