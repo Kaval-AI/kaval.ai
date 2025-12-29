@@ -4,3 +4,8 @@ httpx
 itsdangerous
 python-dotenv
 rich
+sqlalchemy
+psycopg2-binary
+asyncpg
+pytest
+pytest-asyncio

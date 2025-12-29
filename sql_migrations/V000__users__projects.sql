@@ -1,4 +1,4 @@
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA public;
 
 
 CREATE TABLE users (
