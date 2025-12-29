@@ -1,0 +1,17 @@
+services:
+  postgres_db:
+    image: pgvector/pgvector:pg15-trixie
+    restart: no
+    environment:
+      POSTGRES_USER: kavalai_dev
+      POSTGRES_PASSWORD: kavalai_dev
+      POSTGRES_DB: kavalai_dev
+    ports:
+      - "14000:5432"
+    volumes:
+      - ./local_data/pgdata:/var/lib/postgresql/pgdata
+    networks:
+      - kavalai
+networks:
+  kavalai:
+    driver: bridge
