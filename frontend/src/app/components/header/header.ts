@@ -1,9 +1,10 @@
 import { Component } from '@angular/core';
-import { UserInfo } from '../userinfo/user-info';
+import { UserInfo } from '../user-info/user-info';
+import { ProjectSelector } from '../project-selector/project-selector';
 
 @Component({
   selector: 'app-header',
-  imports: [UserInfo],
+  imports: [UserInfo, ProjectSelector],
   templateUrl: './header.html',
   styleUrl: './header.css'
 })
