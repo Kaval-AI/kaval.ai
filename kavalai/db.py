@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum as PyEnum
 from uuid import UUID, uuid4
 
@@ -18,9 +18,7 @@ def get_database_url():
 engine = create_async_engine(get_database_url(), echo=True, poolclass=NullPool)
 
 AsyncKavalaiSession = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False
+    bind=engine, class_=AsyncSession, expire_on_commit=False
 )
 
 
@@ -28,18 +26,24 @@ class Base(DeclarativeBase):
     metadata = MetaData(schema=os.environ["POSTGRES_DB_SCHEMA"])
 
 
-# 5. ORM Models
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     email: Mapped[str] = mapped_column(TEXT, unique=True, nullable=False)
     name: Mapped[str] = mapped_column(TEXT, nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     picture: Mapped[str | None] = mapped_column(TEXT)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow,
-                                                 onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     # Relationships
     memberships: Mapped[list["ProjectMembership"]] = relationship(back_populates="user")
@@ -48,12 +52,19 @@ class User(Base):
 class Project(Base):
     __tablename__ = "projects"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     name: Mapped[str] = mapped_column(TEXT, nullable=False)
     description: Mapped[str | None] = mapped_column(TEXT)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow,
-                                                 onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     # Relationships
     members: Mapped[list["ProjectMembership"]] = relationship(back_populates="project")
@@ -67,16 +78,20 @@ class ProjectRole(str, PyEnum):
 class ProjectMembership(Base):
     __tablename__ = "project_memberships"
 
-    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
+    )
     role: Mapped[ProjectRole] = mapped_column(
         ENUM(
             ProjectRole,
             name="project_role",
-            schema=os.environ.get("POSTGRES_DB_SCHEMA"),  # This is the missing link!
-            create_type=False  # Tell SQLAlchemy the type already exists
+            schema=os.environ.get("POSTGRES_DB_SCHEMA"),
+            create_type=False,
         ),
-        nullable=False
+        nullable=False,
     )
 
     # Relationship Links
