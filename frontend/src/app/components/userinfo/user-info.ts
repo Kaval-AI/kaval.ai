@@ -1,9 +1,8 @@
 import { Component, OnInit } from '@angular/core';
-import { AuthService } from '../services/auth-service';
+import { AuthService } from '../../services/auth-service';
 import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
-import { MatIconModule } from '@angular/material/icon';
-import { MatMenuModule } from '@angular/material/menu';
+import { DropdownMenuTriggerDirective } from '../dropdown-menu/dropdown-menu';
 
 @Component({
   selector: 'app-user-info',
@@ -11,9 +10,7 @@ import { MatMenuModule } from '@angular/material/menu';
   styleUrls: ['./user-info.css'],
   imports: [
     CommonModule,
-    MatButtonModule,
-    MatIconModule,
-    MatMenuModule,
+    DropdownMenuTriggerDirective
   ],
 })
 export class UserInfo implements OnInit {

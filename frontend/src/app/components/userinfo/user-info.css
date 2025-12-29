@@ -1,0 +1,15 @@
+.user-details {
+  display: flex;
+  align-items: center;
+}
+
+.user-name {
+  margin-right: 10px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
