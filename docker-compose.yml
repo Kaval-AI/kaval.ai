@@ -6,6 +6,7 @@ services:
       POSTGRES_USER: kavalai_dev
       POSTGRES_PASSWORD: kavalai_dev
       POSTGRES_DB: kavalai_dev
+      PGDATA: /var/lib/postgresql/pgdata
     ports:
       - "14000:5432"
     volumes:

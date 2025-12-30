@@ -28,8 +28,6 @@ oauth.register(
     client_kwargs={"scope": "openid email profile"},
 )
 
-ALLOWED_USERS = ["tpetmanson@gmail.com"]
-
 AGENT_ENDPOINT_URL = "http://127.0.0.1:25123"
 
 # Add SessionMiddleware with a secret key
