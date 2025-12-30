@@ -7,31 +7,27 @@ import { ChatsService } from '../../services/chats-service';
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [
-    CommonModule,
-    ChatList,
-    ChatThread
-  ],
+  imports: [CommonModule, ChatList, ChatThread],
   templateUrl: './chat.html',
-  styleUrl: './chat.css'
+  styleUrl: './chat.css',
 })
 export class Chat {
   @ViewChild('chatThread') private chatThread!: ChatThread;
-  @ViewChild("chatList") private chatList!: ChatList;
+  @ViewChild('chatList') private chatList!: ChatList;
 
-  constructor(public chatsService: ChatsService) { }
+  constructor(public chatsService: ChatsService) {}
 
   /**
-    * Called when current chat should be cleared (e.g. user wants to start a new chat).
-    */
+   * Called when current chat should be cleared (e.g. user wants to start a new chat).
+   */
   onNewChatRequested(): void {
     this.chatThread.currentChatId = null;
   }
 
-  /** 
+  /**
    * Called after user has initiated a conversation in an empty chat thread.
    */
-  onNewChatInitiated(value: {chatUuid: string}): void {
+  onNewChatInitiated(value: { chatUuid: string }): void {
     this.chatList.reloadChats();
   }
 

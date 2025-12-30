@@ -3,9 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 
-
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class AuthService {
   private loggedIn: boolean = false;
@@ -13,14 +12,14 @@ export class AuthService {
 
   public userDetails = this.userDetails$.asObservable();
 
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient) {}
 
   login() {
-    window.location.href = "/api/login";
+    window.location.href = '/api/login';
   }
 
   logout(): void {
-    this.http.get("/api/logout").subscribe({
+    this.http.get('/api/logout').subscribe({
       next: () => {
         this.loggedIn = false;
         this.userDetails$.next(null);
@@ -28,12 +27,12 @@ export class AuthService {
       error: () => {
         this.loggedIn = false;
         this.userDetails$.next(null);
-      }
+      },
     });
   }
 
   updateUserDetails(): void {
-    this.http.get<UserDetails>("/api/user/get_details").subscribe({
+    this.http.get<UserDetails>('/api/user/get_details').subscribe({
       next: (user_details) => {
         this.loggedIn = true;
         this.userDetails$.next(user_details as UserDetails);
@@ -41,7 +40,7 @@ export class AuthService {
       error: () => {
         this.loggedIn = false;
         this.userDetails$.next(null);
-      }
+      },
     });
   }
 

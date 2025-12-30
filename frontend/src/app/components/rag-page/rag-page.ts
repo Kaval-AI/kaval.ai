@@ -6,6 +6,4 @@ import { Component } from '@angular/core';
   templateUrl: './rag-page.html',
   styleUrl: './rag-page.css',
 })
-export class RagPage {
-
-}
+export class RagPage {}

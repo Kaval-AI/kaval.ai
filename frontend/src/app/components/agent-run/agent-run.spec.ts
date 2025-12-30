@@ -8,9 +8,8 @@ describe('AgentRun', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [AgentRun]
-    })
-    .compileComponents();
+      imports: [AgentRun],
+    }).compileComponents();
 
     fixture = TestBed.createComponent(AgentRun);
     component = fixture.componentInstance;

@@ -8,9 +8,8 @@ describe('RenameChatDialog', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [RenameChatDialog]
-    })
-    .compileComponents();
+      imports: [RenameChatDialog],
+    }).compileComponents();
 
     fixture = TestBed.createComponent(RenameChatDialog);
     component = fixture.componentInstance;

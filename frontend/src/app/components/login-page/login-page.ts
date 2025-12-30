@@ -1,6 +1,11 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import {
+  ReactiveFormsModule,
+  FormBuilder,
+  FormGroup,
+  Validators,
+} from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -16,17 +21,16 @@ import { AuthService } from '../../services/auth-service';
     MatCardModule,
     MatFormFieldModule,
     MatInputModule,
-    MatButtonModule
+    MatButtonModule,
   ],
   templateUrl: './login-page.html',
-  styleUrls: ['./login-page.css']
+  styleUrls: ['./login-page.css'],
 })
 export class LoginPage {
   constructor(
     private fb: FormBuilder,
     private authService: AuthService
-  ) {
-  }
+  ) {}
 
   login(): void {
     this.authService.login();

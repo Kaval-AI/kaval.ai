@@ -2,10 +2,9 @@
   <app-chat-list
     #chatList
     (newChatRequested)="onNewChatRequested()"
-    (chatSelected)="onChatSelected($event)">
+    (chatSelected)="onChatSelected($event)"
+  >
   </app-chat-list>
-  <app-chat-thread 
-    #chatThread
-    (newChatInitiated)="onNewChatInitiated($event)">
+  <app-chat-thread #chatThread (newChatInitiated)="onNewChatInitiated($event)">
   </app-chat-thread>
 </div>

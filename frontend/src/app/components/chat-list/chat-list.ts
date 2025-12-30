@@ -1,4 +1,11 @@
-import { Component, Output, EventEmitter, OnChanges, SimpleChanges, OnInit } from '@angular/core';
+import {
+  Component,
+  Output,
+  EventEmitter,
+  OnChanges,
+  SimpleChanges,
+  OnInit,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -12,16 +19,11 @@ import { ChatsService } from '../../services/chats-service';
 @Component({
   selector: 'app-chat-list',
   standalone: true,
-  imports: [
-    CommonModule,
-    MatButtonModule,
-    MatIconModule,
-    MatMenuModule,
-  ],
+  imports: [CommonModule, MatButtonModule, MatIconModule, MatMenuModule],
   templateUrl: './chat-list.html',
-  styleUrl: './chat-list.css'
+  styleUrl: './chat-list.css',
 })
-export class ChatList implements OnInit{
+export class ChatList implements OnInit {
   chats: ChatItem[] = [];
 
   hoveredChatId: string | null = null;
@@ -35,7 +37,8 @@ export class ChatList implements OnInit{
 
   constructor(
     public dialog: MatDialog,
-    public chatsService: ChatsService) { }
+    public chatsService: ChatsService
+  ) {}
 
   ngOnInit(): void {
     this.reloadChats();
@@ -47,11 +50,14 @@ export class ChatList implements OnInit{
   }
 
   reloadChats(): void {
-    this.chatsService.listChats().then(chats => this.chats = chats);
+    this.chatsService.listChats().then((chats) => (this.chats = chats));
   }
 
   getOrderedChats(): ChatItem[] {
-    return [...this.chats].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return [...this.chats].sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
   }
 
   onChatClick(chatId: string): void {
@@ -69,15 +75,15 @@ export class ChatList implements OnInit{
   }
 
   onRenameChat(chatId: string): void {
-    const chat = this.chats.find(c => c.id === chatId);
+    const chat = this.chats.find((c) => c.id === chatId);
     if (!chat) return;
 
     const dialogRef = this.dialog.open(RenameChatDialog, {
       width: '600px',
-      data: { currentTitle: chat.title }
+      data: { currentTitle: chat.title },
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().subscribe((result) => {
       if (result) {
         chat.title = result;
         chat.updatedAt = new Date();
@@ -86,17 +92,17 @@ export class ChatList implements OnInit{
   }
 
   onDeleteChat(chatId: string): void {
-    const chat = this.chats.find(c => c.id === chatId);
+    const chat = this.chats.find((c) => c.id === chatId);
     if (!chat) return;
 
     const dialogRef = this.dialog.open(DeleteChatDialog, {
       width: '600px',
-      data: { title: chat.title }
+      data: { title: chat.title },
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().subscribe((result) => {
       if (result === true) {
-        this.chats = this.chats.filter(c => c.id !== chatId);
+        this.chats = this.chats.filter((c) => c.id !== chatId);
       }
     });
   }

@@ -22,5 +22,5 @@ export const routes: Routes = [
   { path: 'rag', component: RagPage },
 
   // Wildcard route for 404 - Should always be last
-  { path: '**', redirectTo: 'projects' }
+  { path: '**', redirectTo: 'projects' },
 ];

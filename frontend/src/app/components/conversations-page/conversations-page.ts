@@ -6,6 +6,4 @@ import { Component } from '@angular/core';
   templateUrl: './conversations-page.html',
   styleUrl: './conversations-page.css',
 })
-export class ConversationsPage {
-
-}
+export class ConversationsPage {}

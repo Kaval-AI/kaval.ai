@@ -2,7 +2,7 @@
 .dropdown-menu-panel {
   background: white;
   border-radius: 4px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
   min-width: 150px;
   padding: 8px 0;
   display: flex;

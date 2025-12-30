@@ -1,7 +1,10 @@
 <div class="chat-list-container" [ngClass]="{'condensed': isCondensed}">
   <!-- Burger Icon to Toggle Sidenav -->
-  <button mat-icon-button (click)="toggleCondensed()"
-    class="sidenav-toggle-button">
+  <button
+    mat-icon-button
+    (click)="toggleCondensed()"
+    class="sidenav-toggle-button"
+  >
     <mat-icon>menu</mat-icon>
   </button>
 
@@ -18,21 +21,33 @@
   <h3 class="recent-chats-title">Recent chats</h3>
   <ul class="chat-items-list">
     @for (chat of getOrderedChats(); track chat.id) {
-    <li class="chat-item" (click)="onChatClick(chat.id)"
-      (mouseenter)="onMouseEnter(chat.id)" (mouseleave)="onMouseLeave()"
+    <li
+      class="chat-item"
+      (click)="onChatClick(chat.id)"
+      (mouseenter)="onMouseEnter(chat.id)"
+      (mouseleave)="onMouseLeave()"
       [ngClass]="{
         hovered: hoveredChatId === chat.id,
         selected: selectedChatId === chat.id
-      }">
-      <span class="chat-title" [ngClass]="{
+      }"
+    >
+      <span
+        class="chat-title"
+        [ngClass]="{
         hovered: hoveredChatId === chat.id,
         selected: selectedChatId === chat.id
-      }">{{ chat.title }}</span>
+      }"
+        >{{ chat.title }}</span
+      >
 
       <!-- Context Menu Button (visible on hover) -->
-      <button mat-icon-button [matMenuTriggerFor]="chatMenu"
-        (click)="$event.stopPropagation()" class="context-menu-button"
-        [ngClass]="{'visible': hoveredChatId === chat.id}">
+      <button
+        mat-icon-button
+        [matMenuTriggerFor]="chatMenu"
+        (click)="$event.stopPropagation()"
+        class="context-menu-button"
+        [ngClass]="{'visible': hoveredChatId === chat.id}"
+      >
         <mat-icon>more_vert</mat-icon>
       </button>
 
@@ -61,5 +76,5 @@
   <!-- <h3 class="recent-chats-title">RAG</h3>
 
   <h3 class="recent-chats-title">Agent programming</h3> -->
-}
+  }
 </div>

@@ -7,6 +7,4 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
   templateUrl: './sidebar-menu.html',
   styleUrl: './sidebar-menu.css',
 })
-export class SidebarMenu {
-
-}
+export class SidebarMenu {}

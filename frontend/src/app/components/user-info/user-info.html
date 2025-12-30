@@ -1,12 +1,12 @@
 <button class="user-details" [dropdownMenuTrigger]="userInfoMenu">
   <span class="user-name">{{ userDetails?.name }}</span>
-  <img [src]="userDetails?.picture" alt="User Image" class="user-avatar"/>
+  <img [src]="userDetails?.picture" alt="User Image" class="user-avatar" />
 </button>
 
 <ng-template #userInfoMenu>
   <div class="dropdown-menu-panel">
     <button>User profile</button>
-    <hr/>
+    <hr />
     <button (click)="logout()">Logout</button>
   </div>
 </ng-template>

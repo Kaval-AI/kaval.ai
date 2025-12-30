@@ -1,12 +1,22 @@
 <h2 mat-dialog-title>Rename Chat</h2>
 <mat-dialog-content class="mat-typography">
   <mat-form-field appearance="outline" class="w-full">
-    <input matInput [(ngModel)]="newTitle" 
-           (keydown.enter)="onRename()" 
-           cdkFocusInitial>
+    <input
+      matInput
+      [(ngModel)]="newTitle"
+      (keydown.enter)="onRename()"
+      cdkFocusInitial
+    />
   </mat-form-field>
 </mat-dialog-content>
 <mat-dialog-actions align="end">
   <button mat-button (click)="onCancel()">Cancel</button>
-  <button mat-flat-button color="primary" (click)="onRename()" [disabled]="!newTitle.trim()">Rename</button>
+  <button
+    mat-flat-button
+    color="primary"
+    (click)="onRename()"
+    [disabled]="!newTitle.trim()"
+  >
+    Rename
+  </button>
 </mat-dialog-actions>

@@ -8,22 +8,19 @@ import { DropdownMenuTriggerDirective } from '../dropdown-menu/dropdown-menu';
   selector: 'app-user-info',
   templateUrl: './user-info.html',
   styleUrls: ['./user-info.css'],
-  imports: [
-    CommonModule,
-    DropdownMenuTriggerDirective
-  ],
+  imports: [CommonModule, DropdownMenuTriggerDirective],
 })
 export class UserInfo implements OnInit {
   userDetails: UserDetails | null = null;
 
-  constructor(private authService: AuthService) { }
+  constructor(private authService: AuthService) {}
 
   ngOnInit(): void {
-    this.authService.userDetails.subscribe(details => {
-      console.log(details)
+    this.authService.userDetails.subscribe((details) => {
+      console.log(details);
       this.userDetails = details;
     });
-    this.authService.updateUserDetails()
+    this.authService.updateUserDetails();
   }
 
   logout(): void {

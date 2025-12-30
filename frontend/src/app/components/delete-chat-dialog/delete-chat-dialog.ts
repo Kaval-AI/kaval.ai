@@ -1,5 +1,9 @@
 import { Component, Inject } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA,
+  MatDialogRef,
+  MatDialogModule,
+} from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 
@@ -10,13 +14,9 @@ export interface DeleteChatDialogData {
 @Component({
   selector: 'app-delete-chat-dialog',
   standalone: true,
-  imports: [
-    CommonModule,
-    MatDialogModule,
-    MatButtonModule
-  ],
+  imports: [CommonModule, MatDialogModule, MatButtonModule],
   templateUrl: './delete-chat-dialog.html',
-  styleUrl: './delete-chat-dialog.css'
+  styleUrl: './delete-chat-dialog.css',
 })
 export class DeleteChatDialog {
   constructor(

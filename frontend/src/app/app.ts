@@ -9,11 +9,10 @@ import { RouterOutlet } from '@angular/router';
   selector: 'app-root',
   imports: [LoginPage, SidebarMenu, UserInfo, RouterOutlet],
   templateUrl: './app.html',
-  styleUrl: './app.css'
+  styleUrl: './app.css',
 })
 export class App implements OnInit {
-  constructor(private authService: AuthService) {
-  }
+  constructor(private authService: AuthService) {}
 
   ngOnInit(): void {
     this.authService.updateUserDetails();

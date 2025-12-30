@@ -5,7 +5,6 @@ import { UserInfo } from '../user-info/user-info';
   selector: 'app-header',
   imports: [UserInfo],
   templateUrl: './header.html',
-  styleUrl: './header.css'
+  styleUrl: './header.css',
 })
-export class Header {
-}
+export class Header {}

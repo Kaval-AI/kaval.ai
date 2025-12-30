@@ -6,7 +6,7 @@ import { ChatMessageItem } from '../../models/chat-message-item';
   selector: 'app-chatmessage',
   imports: [MatIconModule],
   templateUrl: './chat-message.html',
-  styleUrl: './chat-message.css'
+  styleUrl: './chat-message.css',
 })
 export class ChatMessage {
   @Input() item: ChatMessageItem | null = null;

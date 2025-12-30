@@ -1,9 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 
 export interface ChatItems {
-  chats: ChatItem[]
+  chats: ChatItem[];
 }
-
 
 export interface ChatItem {
   id: string;

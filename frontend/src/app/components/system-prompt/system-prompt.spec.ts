@@ -8,9 +8,8 @@ describe('SystemPrompt', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SystemPrompt]
-    })
-    .compileComponents();
+      imports: [SystemPrompt],
+    }).compileComponents();
 
     fixture = TestBed.createComponent(SystemPrompt);
     component = fixture.componentInstance;

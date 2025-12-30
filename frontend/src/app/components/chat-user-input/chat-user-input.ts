@@ -12,10 +12,10 @@ import { CdkTextareaAutosize, TextFieldModule } from '@angular/cdk/text-field'; 
     MatIconModule,
     FormsModule,
     TextFieldModule,
-    CdkTextareaAutosize
+    CdkTextareaAutosize,
   ],
   templateUrl: './chat-user-input.html',
-  styleUrl: './chat-user-input.css'
+  styleUrl: './chat-user-input.css',
 })
 export class ChatUserInput {
   @Output() textSubmitted = new EventEmitter<string>();

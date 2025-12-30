@@ -6,6 +6,4 @@ import { Component } from '@angular/core';
   templateUrl: './configs-page.html',
   styleUrl: './configs-page.css',
 })
-export class ConfigsPage {
-
-}
+export class ConfigsPage {}

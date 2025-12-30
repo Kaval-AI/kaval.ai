@@ -1,9 +1,19 @@
-import { Component, Input, Output, ViewChild, ElementRef, EventEmitter } from '@angular/core';
+import {
+  Component,
+  Input,
+  Output,
+  ViewChild,
+  ElementRef,
+  EventEmitter,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatMessage } from '../chat-message/chat-message';
 import { AgentRun } from '../agent-run/agent-run';
 import { ChatUserInput } from '../chat-user-input/chat-user-input';
-import { ChatMessageItem, ChatMessageItemFactory } from '../../models/chat-message-item';
+import {
+  ChatMessageItem,
+  ChatMessageItemFactory,
+} from '../../models/chat-message-item';
 import { ChatsService } from '../../services/chats-service';
 import { NgZone } from '@angular/core';
 
@@ -11,7 +21,7 @@ import { NgZone } from '@angular/core';
   selector: 'app-chat-thread',
   imports: [AgentRun, ChatUserInput, CommonModule],
   templateUrl: './chat-thread.html',
-  styleUrl: './chat-thread.css'
+  styleUrl: './chat-thread.css',
 })
 export class ChatThread {
   @ViewChild('messagesContainer') private messagesContainerRef!: ElementRef;
@@ -20,7 +30,7 @@ export class ChatThread {
   //messages: ChatMessageItem[] = [];
 
   // Agent run data.
-  agentRuns: any[] = []
+  agentRuns: any[] = [];
 
   // Current chat ID, null if this is a new chat.
   private _currentChatId: string | null = null;
@@ -28,7 +38,7 @@ export class ChatThread {
   @Input()
   set currentChatId(value: string | null) {
     if (value === null) {
-      console.log("Clearing messages");
+      console.log('Clearing messages');
       //this.messages = [];
       this.agentRuns = [];
     } else {
@@ -37,10 +47,10 @@ export class ChatThread {
       //   console.log(`"Loaded ${this.messages.length} for chat`);
       //   this.scrollToBottom();
       // });
-      this.chatsService.listAgentRuns(value).then(runs => {
+      this.chatsService.listAgentRuns(value).then((runs) => {
         this.agentRuns = [...runs];
         console.log(`"Loaded ${this.agentRuns.length} agent runs for chat.`);
-        console.log(this.agentRuns)
+        console.log(this.agentRuns);
       });
     }
     this._currentChatId = value;
@@ -53,12 +63,17 @@ export class ChatThread {
   // Should emit user inputted text if a new chat is initiated.
   @Output() newChatInitiated = new EventEmitter<{ chatUuid: string }>();
 
-  constructor(private chatsService: ChatsService, private ngZone: NgZone) { }
+  constructor(
+    private chatsService: ChatsService,
+    private ngZone: NgZone
+  ) {}
 
   isEmptyChat(): boolean {
     if (this.currentChatId === null) {
       if (this.agentRuns.length !== 0) {
-        throw new Error("Invariant violation: messages should be empty for new chat");
+        throw new Error(
+          'Invariant violation: messages should be empty for new chat'
+        );
       }
     }
     return this.agentRuns.length === 0;
@@ -67,13 +82,13 @@ export class ChatThread {
   async onUserInputSubmitted(messageText: string): Promise<void> {
     var inputData = {
       chat_id: this.currentChatId,
-      user_message: messageText
-    }
+      user_message: messageText,
+    };
     this.chatsService.runAgent(inputData).then((output_data) => {
       console.log(output_data);
       this.currentChatId = output_data.chat_id;
       this.scrollToBottom();
-    })
+    });
     //let userMessage = ChatMessageItemFactory.create("user", messageText);
     // If this is a new chat, ask the ChatService to create a new chat.
     // if (this.isEmptyChat()) {
