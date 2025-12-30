@@ -2,5 +2,4 @@ header {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
-    background-color: rgb(255, 255, 255);
 }

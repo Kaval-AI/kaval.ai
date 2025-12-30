@@ -1,12 +1,13 @@
 import { Component, OnInit } from '@angular/core';
-import { Header } from './components/header/header';
-import { Chat } from "./components/chat/chat";
 import { LoginPage } from './components/login-page/login-page';
 import { AuthService } from './services/auth-service';
+import { SidebarMenu } from './components/sidebar-menu/sidebar-menu';
+import { UserInfo } from './components/user-info/user-info';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
-  imports: [Header, Chat, LoginPage],
+  imports: [LoginPage, SidebarMenu, UserInfo, RouterOutlet],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
