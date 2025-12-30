@@ -17,6 +17,13 @@ li {
 
 li:hover {
   color: white;
-  background-color: rgb(100, 100, 100);
+  font-weight: bold;
+  background-color: rgb(120, 120, 120);
   cursor: pointer;
+}
+
+li.active {
+  color: white;
+  font-weight: bold;
+  background-color: rgb(100, 100, 100);
 }
