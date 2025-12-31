@@ -1,0 +1,59 @@
+header, header select, header button {
+  font-size: 24px;
+  padding: 10px;
+  margin: 3px;
+}
+
+div.centered {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  text-align: center;
+  gap: 10px;
+}
+
+.form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 800px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem; /* Space between label and input */
+  align-items: flex-start;
+}
+
+.form-field label {
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.form-field input,
+.form-field textarea {
+  width: 100%; /* Fill the container width */
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+input, textarea {
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+input:disabled, textarea:disabled {
+  background-color: #f9f9f9;
+  border-color: transparent; /* Makes it look like plain text */
+  color: #333;
+  cursor: default;
+}

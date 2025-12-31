@@ -1,15 +1,17 @@
 import logging
 import os
 import secrets
+from uuid import UUID
 
 import uvicorn
 from authlib.integrations.starlette_client import OAuth
-from fastapi import FastAPI, Request, HTTPException, status
+from fastapi import FastAPI, Request, HTTPException, status, Body
 from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
 
-from kavalai.db import AsyncKavalaiSession, User
+from kavalai import db
+from kavalai.db import is_owner, is_member
 
 # Set up the app logger
 logger = logging.getLogger(__name__)
@@ -35,10 +37,10 @@ app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(16))
 
 
 async def authenticate_and_sync_user(user_info: dict):
-    async with AsyncKavalaiSession() as session:
+    async with db.AsyncKavalaiSession() as session:
         # Check if user exists in the database.
         email = user_info.get("email")
-        stmt = select(User).where(User.email == email)
+        stmt = select(db.User).where(db.User.email == email)
         result = await session.execute(stmt)
         user = result.scalars().first()
 
@@ -61,6 +63,31 @@ async def authenticate_and_sync_user(user_info: dict):
 
 def is_logged_in(request: Request):
     return request.session.get("user_info") is not None
+
+
+def assert_logged_in(request: Request):
+    if not is_logged_in(request):
+        raise HTTPException(status_code=401, detail="Unauthorized.")
+
+
+def assert_is_admin(request: Request):
+    user_session = request.session.get("user_info")
+    if not user_session.get("is_admin"):
+        raise HTTPException(
+            status_code=403, detail="Only administrators can create new projects."
+        )
+
+
+def assert_is_owner(session: db.AsyncSession, request: Request, project_id: UUID):
+    if not is_owner(session, UUID(request.session.get("user_info")["id"]), project_id):
+        raise HTTPException(
+            status_code=403, detail="Only administrators can create new projects."
+        )
+
+
+def assert_is_member(session: db.AsyncSession, request: Request, project_id: UUID):
+    if not is_member(session, UUID(request.session.get("user_info")["id"]), project_id):
+        raise HTTPException(status_code=403, detail="Must be a member of the project.")
 
 
 @app.get("/login")
@@ -103,6 +130,71 @@ async def google_auth_callback(request: Request):
     except Exception as e:
         logger.error(f"Auth error: {e}")
         raise HTTPException(status_code=400, detail="Authentication failed.")
+
+
+@app.post("/projects/create")
+async def projects_create(request: Request, data: dict = Body(...)):
+    assert_logged_in(request)
+    # Check that user is admin.
+    user_session = request.session.get("user_info")
+    if not user_session.get("is_admin"):
+        raise HTTPException(
+            status_code=403, detail="Only administrators can create new projects."
+        )
+    async with db.AsyncKavalaiSession() as session:
+        new_project = await db.insert(session, db.Project, data)
+        # Automatically make the creator the owner in ProjectMembership.
+        membership_data = {
+            "user_id": UUID(user_session["id"]),
+            "project_id": new_project.id,
+            "role": db.ProjectRole.owner,
+        }
+        await db.insert(session, db.ProjectMembership, membership_data)
+
+        return new_project
+
+
+@app.get("/projects/get/{project_id}")
+async def projects_get_by_id(project_id: UUID, request: Request):
+    assert_logged_in(request)
+    async with db.AsyncKavalaiSession() as session:
+        assert_is_member(session, request, project_id)
+        project = await db.get_one(session, db.Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return project
+
+
+@app.get("/projects/all")
+async def projects_get_all(request: Request):
+    assert_logged_in(request)
+    user_id = UUID(request.session.get("user_info")["id"])
+    async with db.AsyncKavalaiSession() as session:
+        # Instead of db.get_all, use the filtered join query
+        projects = await db.get_user_projects(session, user_id)
+        return projects
+
+
+@app.put("/projects/update/{project_id}")
+async def projects_update(project_id: UUID, request: Request, data: dict = Body(...)):
+    assert_logged_in(request)
+    async with db.AsyncKavalaiSession() as session:
+        assert_is_owner(session, request, project_id)
+        updated = await db.update(session, db.Project, project_id, data)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Project not found.")
+        return updated
+
+
+@app.delete("/projects/delete/{project_id}")
+async def projects_delete(project_id: UUID, request: Request):
+    assert_logged_in(request)
+    async with db.AsyncKavalaiSession() as session:
+        assert_is_owner(session, request, project_id)
+        success = await db.delete(session, db.Project, project_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return {"status": "deleted"}
 
 
 # @app.get("/chat/list")

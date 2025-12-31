@@ -1,84 +1,113 @@
-from uuid import UUID
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from kavalai.db import User, Project, ProjectMembership, ProjectRole
+from kavalai.db import (
+    User,
+    Project,
+    ProjectMembership,
+    ProjectRole,
+    insert,
+    update,
+    delete,
+    get_one,
+    get_all,
+    is_member,
+    is_owner,
+    get_user_projects,
+)
 
 
 @pytest.mark.asyncio
-async def test_create_user(db: AsyncSession):
-    """Test that a user can be persisted and retrieved."""
-    new_user = User(
-        email="dev@kavalai.io",
-        name="Kavalai Developer",
-        is_admin=True
+async def test_crud_utilities(db: AsyncSession):
+    """Test the generic CRUD utility functions in db.py."""
+    # Test Insert
+    user_data = {"email": "utility@test.com", "name": "Utility Test"}
+    user = await insert(db, User, user_data)
+    assert user.id is not None
+    assert user.email == "utility@test.com"
+
+    # Test Get One
+    fetched_user = await get_one(db, User, user.id)
+    assert fetched_user.name == "Utility Test"
+
+    # Test Update
+    updated_user = await update(db, User, user.id, {"name": "New Name"})
+    assert updated_user.name == "New Name"
+
+    # Test Get All
+    all_users = await get_all(db, User)
+    assert len(all_users) >= 1
+
+    # Test Delete
+    success = await delete(db, User, user.id)
+    assert success is True
+    deleted_user = await get_one(db, User, user.id)
+    assert deleted_user is None
+
+
+@pytest.mark.asyncio
+async def test_access_control_logic(db: AsyncSession):
+    """Test is_member and is_owner helper functions."""
+    # Setup
+    user = await insert(db, User, {"email": "acl@test.com", "name": "ACL User"})
+    project = await insert(db, Project, {"name": "ACL Project"})
+
+    # Add membership as owner
+    await insert(
+        db,
+        ProjectMembership,
+        {"user_id": user.id, "project_id": project.id, "role": ProjectRole.owner},
     )
-    db.add(new_user)
-    await db.commit()
 
-    # Retrieve and verify
-    stmt = select(User).where(User.email == "dev@kavalai.io")
-    result = await db.execute(stmt)
-    user = result.scalars().first()
+    # Test helpers
+    assert await is_member(db, user.id, project.id) is True
+    assert await is_owner(db, user.id, project.id) is True
 
-    assert user is not None
-    assert user.name == "Kavalai Developer"
-    assert isinstance(user.id, UUID)
-    assert user.is_admin is True
+    # Test non-existent member
+    assert await is_member(db, uuid4(), project.id) is False
 
 
 @pytest.mark.asyncio
-async def test_create_project(db: AsyncSession):
-    """Test project creation and default timestamps."""
-    project = Project(
-        name="Internal Tooling",
-        description="A project for internal automation"
+async def test_get_user_projects_with_role(db: AsyncSession):
+    # Setup
+    user = await insert(db, User, {"email": "role@test.com", "name": "Role User"})
+    project = await insert(db, Project, {"name": "Role Project"})
+    await insert(
+        db,
+        ProjectMembership,
+        {"user_id": user.id, "project_id": project.id, "role": ProjectRole.viewer},
     )
-    db.add(project)
-    await db.commit()
 
-    stmt = select(Project).where(Project.name == "Internal Tooling")
-    result = await db.execute(stmt)
-    fetched = result.scalars().first()
+    # Execute
+    results = await get_user_projects(db, user.id)
 
-    assert fetched.description == "A project for internal automation"
-    assert fetched.created_at is not None
+    # Assert
+    assert len(results) == 1
+    assert results[0]["name"] == "Role Project"
+    assert results[0]["role"] == "viewer"
 
 
 @pytest.mark.asyncio
-async def test_project_membership_workflow(db: AsyncSession):
-    """
-    Test the full relationship:
-    User -> ProjectMembership -> Project
-    """
-    # 1. Setup User and Project
-    owner = User(email="owner@test.com", name="Owner User")
-    viewer = User(email="viewer@test.com", name="Viewer User")
-    project = Project(name="Shared Project")
+async def test_cascade_delete(db: AsyncSession):
+    """Ensure deleting a project removes its memberships but not the users."""
+    user = await insert(db, User, {"email": "cascade@test.com", "name": "Cascade"})
+    project = await insert(db, Project, {"name": "Delete Me"})
 
-    db.add_all([owner, viewer, project])
-    await db.flush()
+    await insert(
+        db,
+        ProjectMembership,
+        {"user_id": user.id, "project_id": project.id, "role": ProjectRole.owner},
+    )
 
-    m1 = ProjectMembership(user_id=owner.id, project_id=project.id, role=ProjectRole.owner)
-    m2 = ProjectMembership(user_id=viewer.id, project_id=project.id, role=ProjectRole.viewer)
+    # Delete project
+    await delete(db, Project, project.id)
 
-    db.add_all([m1, m2])
-    await db.commit()
+    # Check that membership is gone (via cascade)
+    membership = await get_one(db, ProjectMembership, (user.id, project.id))
+    assert membership is None
 
-    # 3. Verify Relationship from Project Side
-    stmt = select(Project).options(selectinload(Project.members)).where(Project.id == project.id)
-    res = await db.execute(stmt)
-    fetched_project = res.scalars().first()
-
-    assert len(fetched_project.members) == 2
-
-    # 4. Verify Relationship from User Side
-    stmt = select(User).options(selectinload(User.memberships)).where(User.id == owner.id)
-    res = await db.execute(stmt)
-    fetched_owner = res.scalars().first()
-
-    assert len(fetched_owner.memberships) == 1
-    assert fetched_owner.memberships[0].role == ProjectRole.owner
+    # Check that user still exists
+    still_here = await get_one(db, User, user.id)
+    assert still_here is not None

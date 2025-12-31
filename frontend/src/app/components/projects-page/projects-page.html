@@ -1,1 +1,51 @@
-<p>projects-page works!</p>
+@if (projects.length > 0) {
+  <header>
+    <label for="projectSelect">Current project: </label>
+    <select id="projectSelect"
+            (change)="onProjectSelect($event)"
+            [value]="selectedProject?.id || ''">
+      <option value="" disabled>-- Choose a Project --</option>
+      @for (p of projects; track p.id) {
+        <option [value]="p.id">{{ p.name }}</option>
+      }
+    </select>
+    <button type="button" (click)="startNewProject()">+ Add new</button>
+  </header>
+}
+@if (projects.length > 0 || isEditing) {
+<div class="centered">
+  <main>
+    <form [formGroup]="projectForm" (ngSubmit)="saveProject()" class="form-container">
+      <div class="form-field">
+        <label for="name">Project Name</label>
+        <input id="name"
+               type="text"
+               formControlName="name"
+               placeholder="Enter project name">
+      </div>
+
+      <div class="form-field">
+        <label for="desc">Description</label>
+        <textarea id="desc" formControlName="description" rows="4"></textarea>
+      </div>
+
+      <div class="button-row">
+        @if (!isEditing) {
+          <button type="button" (click)="toggleEdit()">Edit</button>
+          @if (selectedProject?.role === 'owner') {
+            <button type="button" class="btn-delete" (click)="deleteProject()">Delete</button>
+          }
+        } @else {
+          <button type="submit" [disabled]="projectForm.invalid">Save</button>
+          <button type="button" (click)="toggleEdit()">Cancel</button>
+        }
+      </div>
+    </form>
+  </main>
+</div>
+} @else if (projects.length == 0 && !isEditing) {
+  <div class="centered">
+    <p>We don't have any projects.</p>
+    <button type="button" (click)="startNewProject()">Add New</button>
+  </div>
+}
