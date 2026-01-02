@@ -1,7 +1,6 @@
 import os
 from datetime import datetime, timezone
 from enum import Enum as PyEnum
-from typing import Type, TypeVar, Sequence, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import MetaData
@@ -14,19 +13,19 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.pool import NullPool
 
 
-def get_database_url():
-    return f"postgresql+asyncpg://{os.environ['POSTGRES_DB_USER']}:{os.environ['POSTGRES_DB_PASSWORD']}@{os.environ['POSTGRES_DB_HOST']}:{os.environ['POSTGRES_DB_PORT']}/{os.environ['POSTGRES_DB_NAME']}"
+def get_backoffice_db_url():
+    return f"postgresql+asyncpg://{os.environ['BACKOFFICE_DB_USER']}:{os.environ['BACKOFFICE_DB_PASSWORD']}@{os.environ['BACKOFFICE_DB_HOST']}:{os.environ['BACKOFFICE_DB_PORT']}/{os.environ['BACKOFFICE_DB_NAME']}"
 
 
-engine = create_async_engine(get_database_url(), echo=True, poolclass=NullPool)
+engine = create_async_engine(get_backoffice_db_url(), echo=True, poolclass=NullPool)
 
-AsyncKavalaiSession = async_sessionmaker(
+AsyncBackofficeSession = async_sessionmaker(
     bind=engine, class_=AsyncSession, expire_on_commit=False
 )
 
 
 class Base(DeclarativeBase):
-    metadata = MetaData(schema=os.environ["POSTGRES_DB_SCHEMA"])
+    metadata = MetaData(schema=os.environ["BACKOFFICE_DB_SCHEMA"])
 
 
 class User(Base):
@@ -95,7 +94,7 @@ class ProjectMembership(Base):
         ENUM(
             ProjectRole,
             name="project_role",
-            schema=os.environ.get("POSTGRES_DB_SCHEMA"),
+            schema=os.environ.get("BACKOFFICE_DB_SCHEMA"),
             create_type=False,
         ),
         nullable=False,
@@ -154,48 +153,3 @@ async def get_user_projects(db: AsyncSession, user_id: UUID) -> list[dict]:
         projects_with_roles.append(project_data)
 
     return projects_with_roles
-
-
-# Type variable to represent any SQLAlchemy model
-T = TypeVar("T", bound=Base)
-
-
-async def get_all(db: AsyncSession, model: Type[T]) -> Sequence[T]:
-    """Fetch all records for the model."""
-    result = await db.execute(select(model))
-    return result.scalars().all()
-
-
-async def get_one(db: AsyncSession, model: Type[T], id: Any) -> T | None:
-    """Fetch a single record by its primary key."""
-    return await db.get(model, id)
-
-
-async def insert(db: AsyncSession, model: Type[T], data: dict) -> T:
-    """Create a new record."""
-    instance = model(**data)
-    db.add(instance)
-    await db.commit()
-    await db.refresh(instance)
-    return instance
-
-
-async def update(db: AsyncSession, model: Type[T], id: Any, data: dict) -> T | None:
-    """Update an existing record by ID."""
-    instance = await get_one(db, model, id)
-    if instance:
-        for key, value in data.items():
-            setattr(instance, key, value)
-        await db.commit()
-        await db.refresh(instance)
-    return instance
-
-
-async def delete(db: AsyncSession, model: Type[T], id: Any) -> bool:
-    """Delete a record by ID."""
-    instance = await get_one(db, model, id)
-    if instance:
-        await db.delete(instance)
-        await db.commit()
-        return True
-    return False

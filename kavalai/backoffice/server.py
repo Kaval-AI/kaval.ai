@@ -10,8 +10,8 @@ from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
 
-from kavalai import db
-from kavalai.db import is_owner, is_member
+from kavalai.backoffice import db
+from kavalai.backoffice.db import is_owner, is_member
 
 # Set up the app logger
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(16))
 
 
 async def authenticate_and_sync_user(user_info: dict):
-    async with db.AsyncKavalaiSession() as session:
+    async with db.AsyncBackofficeSession() as session:
         # Check if user exists in the database.
         email = user_info.get("email")
         stmt = select(db.User).where(db.User.email == email)
@@ -141,7 +141,7 @@ async def projects_create(request: Request, data: dict = Body(...)):
         raise HTTPException(
             status_code=403, detail="Only administrators can create new projects."
         )
-    async with db.AsyncKavalaiSession() as session:
+    async with db.AsyncBackofficeSession() as session:
         new_project = await db.insert(session, db.Project, data)
         # Automatically make the creator the owner in ProjectMembership.
         membership_data = {
@@ -157,7 +157,7 @@ async def projects_create(request: Request, data: dict = Body(...)):
 @app.get("/projects/get/{project_id}")
 async def projects_get_by_id(project_id: UUID, request: Request):
     assert_logged_in(request)
-    async with db.AsyncKavalaiSession() as session:
+    async with db.AsyncBackofficeSession() as session:
         assert_is_member(session, request, project_id)
         project = await db.get_one(session, db.Project, project_id)
         if not project:
@@ -169,7 +169,7 @@ async def projects_get_by_id(project_id: UUID, request: Request):
 async def projects_get_all(request: Request):
     assert_logged_in(request)
     user_id = UUID(request.session.get("user_info")["id"])
-    async with db.AsyncKavalaiSession() as session:
+    async with db.AsyncBackofficeSession() as session:
         # Instead of db.get_all, use the filtered join query
         projects = await db.get_user_projects(session, user_id)
         return projects
@@ -178,7 +178,7 @@ async def projects_get_all(request: Request):
 @app.put("/projects/update/{project_id}")
 async def projects_update(project_id: UUID, request: Request, data: dict = Body(...)):
     assert_logged_in(request)
-    async with db.AsyncKavalaiSession() as session:
+    async with db.AsyncBackofficeSession() as session:
         assert_is_owner(session, request, project_id)
         updated = await db.update(session, db.Project, project_id, data)
         if not updated:
@@ -189,7 +189,7 @@ async def projects_update(project_id: UUID, request: Request, data: dict = Body(
 @app.delete("/projects/delete/{project_id}")
 async def projects_delete(project_id: UUID, request: Request):
     assert_logged_in(request)
-    async with db.AsyncKavalaiSession() as session:
+    async with db.AsyncBackofficeSession() as session:
         assert_is_owner(session, request, project_id)
         success = await db.delete(session, db.Project, project_id)
         if not success:
@@ -266,7 +266,11 @@ async def projects_delete(project_id: UUID, request: Request):
 
 if __name__ == "__main__":
     config = uvicorn.Config(
-        "kavalai.server:app", port=8000, log_level="debug", reload=True, access_log=True
+        "kavalai.backoffice.server:app",
+        port=8000,
+        log_level="debug",
+        reload=True,
+        access_log=True,
     )
     server = uvicorn.Server(config)
     server.run()

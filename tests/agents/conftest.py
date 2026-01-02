@@ -4,17 +4,21 @@ import pytest_asyncio
 from sqlalchemy import text
 
 # 1. Set environment variable BEFORE importing the DB module
-os.environ["POSTGRES_DB_SCHEMA"] = "kavalai_test"
+AGENTS_SCHEMA = "test_agents"
+os.environ["AGENTS_DB_SCHEMA"] = AGENTS_SCHEMA
 
-from kavalai.db import AsyncKavalaiSession, Base
+from kavalai.agents.db import AsyncAgentsSession, Base
 
 
 @pytest_asyncio.fixture(scope="function")
-async def db(request):
-    async with AsyncKavalaiSession() as session:
+async def agents_db(request):
+    async with AsyncAgentsSession() as session:
         # Get all table names from the Base metadata to truncate them
         # This is safer than 'DROP SCHEMA' as it keeps the structure
-        tables = ", ".join(f"kavalai_test.{table.name}" for table in reversed(Base.metadata.sorted_tables))
+        tables = ", ".join(
+            f"{AGENTS_SCHEMA}.{table.name}"
+            for table in reversed(Base.metadata.sorted_tables)
+        )
 
         if tables:
             # TRUNCATE is much faster than DELETE for cleaning test data

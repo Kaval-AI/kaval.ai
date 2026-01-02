@@ -1,18 +1,11 @@
 repos:
-  # -------------------------------
-  # Linting + Autofix: Ruff
-  # (replaces flake8 + isort + many plugins)
-  # -------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.4.2
     hooks:
       - id: ruff
-        args: ["--fix"]
+        args: ["--fix", "--ignore=E402"] # Adds E402 to the ignore list
       - id: ruff-format
 
-  # -------------------------------
-  # YAML validation
-  # -------------------------------
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.35.1
     hooks:
