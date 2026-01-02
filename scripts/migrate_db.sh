@@ -29,9 +29,9 @@ docker run --rm \
   --network kavalai_kavalai \
   -v "$(pwd)/sql_migrations/app:/flyway/sql" \
   flyway/flyway \
-  -url="jdbc:postgresql://${APP_DB_HOST}:${APP_DB_PORT}/${APP_DB_NAME}" \
-  -schemas="${APP_DB_SCHEMA}" \
-  -user="${APP_DB_USER}" \
-  -password="${APP_DB_PASSWORD}" \
+  -url="jdbc:postgresql://${AGENTS_DB_HOST}:${AGENTS_DB_PORT}/${AGENTS_DB_NAME}" \
+  -schemas="${AGENTS_DB_SCHEMA}" \
+  -user="${AGENTS_DB_USER}" \
+  -password="${AGENTS_DB_PASSWORD}" \
   -connectRetries=1 \
   migrate
