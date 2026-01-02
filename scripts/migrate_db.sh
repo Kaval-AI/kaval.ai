@@ -12,14 +12,26 @@ fi
 # Load environment variables
 export $(grep -v '^#' "$ENV_FILE" | xargs)
 
-# Run Flyway container
+# Backoffice migrations
 docker run --rm \
   --network kavalai_kavalai \
-  -v "$(pwd)/sql_migrations:/flyway/sql" \
+  -v "$(pwd)/sql_migrations/backoffice:/flyway/sql" \
   flyway/flyway \
-  -url="jdbc:postgresql://${POSTGRES_DB_HOST}:${POSTGRES_DB_PORT}/${POSTGRES_DB_NAME}" \
-  -schemas="${POSTGRES_DB_SCHEMA}" \
-  -user="${POSTGRES_DB_USER}" \
-  -password="${POSTGRES_DB_PASSWORD}" \
+  -url="jdbc:postgresql://${BACKOFFICE_DB_HOST}:${BACKOFFICE_DB_PORT}/${BACKOFFICE_DB_NAME}" \
+  -schemas="${BACKOFFICE_DB_SCHEMA}" \
+  -user="${BACKOFFICE_DB_USER}" \
+  -password="${BACKOFFICE_DB_PASSWORD}" \
+  -connectRetries=1 \
+  migrate
+
+# App migrations
+docker run --rm \
+  --network kavalai_kavalai \
+  -v "$(pwd)/sql_migrations/app:/flyway/sql" \
+  flyway/flyway \
+  -url="jdbc:postgresql://${APP_DB_HOST}:${APP_DB_PORT}/${APP_DB_NAME}" \
+  -schemas="${APP_DB_SCHEMA}" \
+  -user="${APP_DB_USER}" \
+  -password="${APP_DB_PASSWORD}" \
   -connectRetries=1 \
   migrate

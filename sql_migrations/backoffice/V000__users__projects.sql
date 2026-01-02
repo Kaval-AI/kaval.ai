@@ -20,7 +20,6 @@ CREATE TABLE projects (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-
 CREATE TYPE project_role AS ENUM ('owner', 'viewer');
 
 
