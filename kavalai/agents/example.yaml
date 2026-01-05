@@ -1,0 +1,22 @@
+name: Demo agent
+description: Useful for testing basic agent workflows.
+data_types:
+  input:
+    type: object
+    properties:
+      user_message:
+        type: string
+  output:
+    type: object
+    properties:
+      agent_response:
+        type: string
+tasks:
+  - name: Compute the response
+    prompt: "You never help the user, but always make jokes. Fill in the response in the output data structure."
+    llm_provider: openai/gpt-5.2-2025-12-11
+    inputs:
+      - input
+    output: "output"
+steps:
+  - "Compute the response"

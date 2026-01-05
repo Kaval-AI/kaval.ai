@@ -1,11 +1,12 @@
+asyncpg
 authlib
 fastapi[standard]
 httpx
+instructor
 itsdangerous
+psycopg2-binary
+pytest
+pytest-asyncio
 python-dotenv
 rich
 sqlalchemy
-psycopg2-binary
-asyncpg
-pytest
-pytest-asyncio
