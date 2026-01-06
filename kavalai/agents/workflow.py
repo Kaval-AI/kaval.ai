@@ -42,7 +42,6 @@ class WorkflowModel(BaseModel):
     data_types: dict[str, dict]
     mcp_servers: list[McpServer]
     tasks: list[Task]
-    steps: list[str]
 
 
 class RunContext(BaseModel):
@@ -99,8 +98,7 @@ class Workflow:
             raise KeyError(f"Data type '{name}' was not defined in YAML datatypes.")
         return self.models[name]
 
-    async def run_prompt(self, task_name, run_context: RunContext):
-        task = self.tasks[task_name]
+    async def run_prompt(self, task: Task, run_context: RunContext):
         input_data = {
             input_name: run_context.data.get(input_name) for input_name in task.inputs
         }
@@ -117,8 +115,7 @@ class Workflow:
         logger.info(f"Setting {task.output} = {response.model_dump_json()}")
         run_context.data[task.output] = response
 
-    async def run_tool(self, task_name, run_context: RunContext):
-        task = self.tasks[task_name]
+    async def run_tool(self, task: Task, run_context: RunContext):
         async with sse_client(self.mcp_servers[task.mcp_server].url) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -157,13 +154,12 @@ class Workflow:
                 run_context.data["input"].user_message,
             )
         # Run the steps sequentially.
-        for step_name in self.workflow_model.steps:
-            logger.info("Running task <%s>", step_name)
-            task = self.tasks[step_name]
+        for task in self.workflow_model.tasks:
+            logger.info("Running task <%s>", task.name)
             if task.prompt:
-                await self.run_prompt(step_name, run_context)
+                await self.run_prompt(task, run_context)
             elif task.tool:
-                await self.run_tool(step_name, run_context)
+                await self.run_tool(task, run_context)
             else:
                 raise WorkflowException(str(task))
         # Add agent response to chat history.
@@ -176,7 +172,7 @@ class Workflow:
         return run_context.data["output"]
 
     def __repr__(self):
-        return f"<Workflow agent='{self.agent_name}' steps={len(self.steps)}>"
+        return f"<Workflow agent='{self.agent_name}' tasks={len(self.tasks)}>"
 
 
 async def main():

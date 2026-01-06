@@ -6,7 +6,25 @@ data_types:
     properties:
       user_message:
         type: string
-  rss_feed:
+  ycombinator_news:
+    type: object
+    properties:
+      title:
+        type: string
+      url:
+        type: string
+      items:
+        type: array
+        items:
+          type: object
+          properties:
+            title:
+              type: string
+            link:
+              type: string
+            summary:
+              type: string
+  err_news:
     type: object
     properties:
       title:
@@ -33,19 +51,23 @@ mcp_servers:
   - name: rss
     url: http://localhost:10000/sse
 tasks:
-  - name: Get latest news
+  - name: Get latest hacker news
     tool: get_rss_feed
     mcp_server: rss
     arguments:
       url: "https://news.ycombinator.com/rss"
-    output: rss_feed
+    output: ycombinator_news
+  - name: Get latest Estonian news
+    tool: get_rss_feed
+    mcp_server: rss
+    arguments:
+      url: "https://news.err.ee/rss"
+    output: err_news
   - name: Compute the response
-    prompt: "Be a funny useless assistant, give brief vague misleading answers, tie them to latest news if possible."
+    prompt: "Be a funny useless assistant, give brief vague misleading answers, tie them to news if possible."
     llm_provider: openai/gpt-5.2-2025-12-11
     inputs:
       - input
-      - rss_feed
+      - ycombinator_news
+      - err_news
     output: output
-steps:
-  - "Get latest news"
-  - "Compute the response"
