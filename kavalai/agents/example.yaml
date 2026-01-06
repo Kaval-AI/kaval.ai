@@ -1,5 +1,6 @@
 name: Demo agent
 description: Useful for testing basic agent workflows.
+llm_provider: openai/gpt-5.2-2025-12-11
 data_types:
   input:
     type: object
@@ -64,8 +65,7 @@ tasks:
       url: "https://news.err.ee/rss"
     output: err_news
   - name: Compute the response
-    prompt: "Be a funny useless assistant, give brief vague misleading answers, tie them to news if possible."
-    llm_provider: openai/gpt-5.2-2025-12-11
+    prompt: "Agent task: Your task is to respond to user acting like BB King. You are equipped with recent news."
     inputs:
       - input
       - ycombinator_news

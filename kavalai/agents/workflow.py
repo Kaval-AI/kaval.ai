@@ -22,7 +22,6 @@ class Task(BaseModel):
     output: str
     # LLM call
     prompt: Optional[str] = None
-    llm_provider: Optional[str] = None
     # MCP tool call
     tool: Optional[str] = None
     mcp_server: Optional[str] = None
@@ -39,6 +38,7 @@ class McpServer(BaseModel):
 class WorkflowModel(BaseModel):
     name: str
     description: str
+    llm_provider: str
     data_types: dict[str, dict]
     mcp_servers: list[McpServer]
     tasks: list[Task]
@@ -104,10 +104,13 @@ class Workflow:
         }
         input_text = make_prompt(task.prompt, input_data)
         client = instructor.from_provider(
-            task.llm_provider, async_client=True, mode=instructor.Mode.JSON
+            self.workflow_model.llm_provider,
+            async_client=True,
+            mode=instructor.Mode.JSON,
         )
         # Run the completion.
         system_message = dict(role="system", content=input_text)
+        logger.info("SYSTEM: %s", system_message)
         response = await client.chat.completions.create(
             response_model=self.get_data_type(task.output),
             messages=[system_message],
@@ -178,7 +181,7 @@ class Workflow:
 async def main():
     workflow = Workflow.from_yaml("kavalai/agents/example.yaml")
     result = await workflow.run(
-        dict(user_message="Hello! What is the capital of France?")
+        dict(user_message="Hey man, what is the meaning of life, dude?")
     )
     logger.info("RESULT: %s", result.model_dump_json())
 
