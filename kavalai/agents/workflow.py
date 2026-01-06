@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import List, Dict, Type, Optional, Any
+from typing import Dict, Type, Optional, Literal
 from uuid import UUID
 
 import instructor
@@ -16,16 +16,21 @@ from kavalai.agents.schema_parser import SchemaParser
 logger = logging.getLogger(__name__)
 
 
+class TypeInputInfo(BaseModel):
+    type: Literal["literal", "context"]
+    value: Optional[BaseModel | str | int | float | bool] = None
+    name: Optional[str] = None
+
+
 class Task(BaseModel):
     name: str
-    inputs: List[str] = []
+    inputs: dict[str, TypeInputInfo] = {}
     output: str
     # LLM call
     prompt: Optional[str] = None
     # MCP tool call
     tool: Optional[str] = None
     mcp_server: Optional[str] = None
-    arguments: Optional[dict[str, Any]] = None
 
 
 class McpServer(BaseModel):
@@ -122,9 +127,13 @@ class Workflow:
         async with sse_client(self.mcp_servers[task.mcp_server].url) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                call_result = await session.call_tool(
-                    task.tool, arguments=task.arguments
-                )
+                inputs = {}
+                for name, info in task.inputs.items():
+                    if info.type == "literal":
+                        inputs[name] = info.value
+                    else:
+                        inputs[name] = run_context[info.name if info.name else name]
+                call_result = await session.call_tool(task.tool, arguments=inputs)
                 result = json.loads(call_result.content[0].text)
                 # If we have a data type defined for tool result, convert it.
                 if self.get_data_type(task.output):

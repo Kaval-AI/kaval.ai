@@ -55,19 +55,28 @@ tasks:
   - name: Get latest hacker news
     tool: get_rss_feed
     mcp_server: rss
-    arguments:
-      url: "https://news.ycombinator.com/rss"
+    inputs:
+      url:
+        type: literal
+        value: "https://news.ycombinator.com/rss"
     output: ycombinator_news
   - name: Get latest Estonian news
     tool: get_rss_feed
     mcp_server: rss
-    arguments:
-      url: "https://news.err.ee/rss"
+    inputs:
+      url:
+        type: literal
+        value: "https://news.ycombinator.com/rss"
     output: err_news
   - name: Compute the response
     prompt: "Agent task: Your task is to respond to user acting like BB King. You are equipped with recent news."
     inputs:
-      - input
-      - ycombinator_news
-      - err_news
+      input:
+        type: context
+        value: input
+      ycombinator_news:
+        type: context
+      estonian_news:
+        type: context
+        name: err_news
     output: output
