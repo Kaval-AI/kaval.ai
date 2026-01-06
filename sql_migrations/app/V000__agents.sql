@@ -6,37 +6,47 @@ CREATE TABLE agents (
     description TEXT,
     input_schema JSONB,
     output_schema JSONB,
-    template_variables JSONB,
+    workflow JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-
+-- Sessions: A container for a specific user interaction or conversation
 CREATE TABLE sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
     external_id TEXT,
+    metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-
-CREATE TABLE interactions (
+CREATE TABLE runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     input_data JSONB,
     output_data JSONB,
-    steps JSONB,
+    context JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE TABLE tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
+    session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    run_id UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    inputs JSONB,
+    output JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 CREATE TABLE chat_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
     session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    interaction_id UUID REFERENCES interactions(id) ON DELETE SET NULL,
+    run_id UUID REFERENCES runs(id) ON DELETE SET NULL,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

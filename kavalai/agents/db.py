@@ -14,14 +14,12 @@ def get_agents_db_url():
 
 
 engine = create_async_engine(get_agents_db_url(), echo=True, poolclass=NullPool)
-
 AsyncAgentsSession = async_sessionmaker(
     bind=engine, class_=AsyncSession, expire_on_commit=False
 )
 
 
 class Base(DeclarativeBase):
-    # Set schema from env, similar to your backoffice setup
     metadata = MetaData(schema=os.environ.get("AGENTS_DB_SCHEMA"))
 
 
@@ -35,7 +33,9 @@ class Agent(Base):
     description: Mapped[str | None] = mapped_column(TEXT)
     input_schema: Mapped[dict | None] = mapped_column(JSONB)
     output_schema: Mapped[dict | None] = mapped_column(JSONB)
-    template_variables: Mapped[dict | None] = mapped_column(JSONB)
+    workflow: Mapped[dict | None] = mapped_column(
+        JSONB
+    )  # Updated to match SQL 'workflow'
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -45,10 +45,10 @@ class Agent(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationships
     sessions: Mapped[list["Session"]] = relationship(
         back_populates="agent", cascade="all, delete-orphan", passive_deletes=True
     )
+    tasks: Mapped[list["Task"]] = relationship(back_populates="agent")
     chat_messages: Mapped[list["ChatMessage"]] = relationship(
         back_populates="agent", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -73,9 +73,11 @@ class Session(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationships
     agent: Mapped["Agent"] = relationship(back_populates="sessions")
-    interactions: Mapped[list["Interaction"]] = relationship(
+    runs: Mapped[list["Run"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan", passive_deletes=True
+    )
+    tasks: Mapped[list["Task"]] = relationship(
         back_populates="session", cascade="all, delete-orphan", passive_deletes=True
     )
     chat_messages: Mapped[list["ChatMessage"]] = relationship(
@@ -83,8 +85,8 @@ class Session(Base):
     )
 
 
-class Interaction(Base):
-    __tablename__ = "interactions"
+class Run(Base):
+    __tablename__ = "runs"  # Renamed from 'interactions'
 
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), primary_key=True, default=uuid4
@@ -94,7 +96,7 @@ class Interaction(Base):
     )
     input_data: Mapped[dict | None] = mapped_column(JSONB)
     output_data: Mapped[dict | None] = mapped_column(JSONB)
-    steps: Mapped[dict | None] = mapped_column(JSONB)
+    context: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -104,11 +106,42 @@ class Interaction(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationships
-    session: Mapped["Session"] = relationship(back_populates="interactions")
-    chat_messages: Mapped[list["ChatMessage"]] = relationship(
-        back_populates="interaction"
+    session: Mapped["Session"] = relationship(back_populates="runs")
+    tasks: Mapped[list["Task"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", passive_deletes=True
     )
+    chat_messages: Mapped[list["ChatMessage"]] = relationship(back_populates="run")
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    agent_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("agents.id", ondelete="SET NULL")
+    )
+    session_id: Mapped[UUID] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
+    )
+    inputs: Mapped[dict | None] = mapped_column(JSONB)
+    output: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    agent: Mapped["Agent"] = relationship(back_populates="tasks")
+    session: Mapped["Session"] = relationship(back_populates="tasks")
+    run: Mapped["Run"] = relationship(back_populates="tasks")
 
 
 class ChatMessage(Base):
@@ -123,12 +156,10 @@ class ChatMessage(Base):
     session_id: Mapped[UUID] = mapped_column(
         ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
     )
-    interaction_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("interactions.id", ondelete="SET NULL")
+    run_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("runs.id", ondelete="SET NULL")
     )
-    role: Mapped[str] = mapped_column(
-        TEXT, nullable=False
-    )  # e.g., 'user', 'assistant', 'system'
+    role: Mapped[str] = mapped_column(TEXT, nullable=False)
     content: Mapped[str] = mapped_column(TEXT, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -139,7 +170,6 @@ class ChatMessage(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationships
     agent: Mapped["Agent"] = relationship(back_populates="chat_messages")
     session: Mapped["Session"] = relationship(back_populates="chat_messages")
-    interaction: Mapped["Interaction"] = relationship(back_populates="chat_messages")
+    run: Mapped["Run"] = relationship(back_populates="chat_messages")

@@ -7,42 +7,28 @@ data_types:
     properties:
       user_message:
         type: string
+  rss_feed:
+    type: object
+    properties:
+      title:
+        type: string
+      url:
+        type: string
+      items:
+        type: array
+        items:
+          type: object
+          properties:
+            title:
+              type: string
+            link:
+              type: string
+            summary:
+              type: string
   ycombinator_news:
-    type: object
-    properties:
-      title:
-        type: string
-      url:
-        type: string
-      items:
-        type: array
-        items:
-          type: object
-          properties:
-            title:
-              type: string
-            link:
-              type: string
-            summary:
-              type: string
+    $ref: rss_feed
   err_news:
-    type: object
-    properties:
-      title:
-        type: string
-      url:
-        type: string
-      items:
-        type: array
-        items:
-          type: object
-          properties:
-            title:
-              type: string
-            link:
-              type: string
-            summary:
-              type: string
+    $ref: rss_feed
   output:
     type: object
     properties:
@@ -69,7 +55,7 @@ tasks:
         value: "https://news.ycombinator.com/rss"
     output: err_news
   - name: Compute the response
-    prompt: "Agent task: Your task is to respond to user acting like BB King. You are equipped with recent news."
+    prompt: "Agent task: Your task is to respond to user acting like BB King. Always make a meaningful reference to recent news to share wisdom."
     inputs:
       input:
         type: context
