@@ -6,17 +6,46 @@ data_types:
     properties:
       user_message:
         type: string
+  rss_feed:
+    type: object
+    properties:
+      title:
+        type: string
+      url:
+        type: string
+      items:
+        type: array
+        items:
+          type: object
+          properties:
+            title:
+              type: string
+            link:
+              type: string
+            summary:
+              type: string
   output:
     type: object
     properties:
       agent_response:
         type: string
+mcp_servers:
+  - name: rss
+    url: http://localhost:10000/sse
 tasks:
+  - name: Get latest news
+    tool: get_rss_feed
+    mcp_server: rss
+    arguments:
+      url: "https://news.ycombinator.com/rss"
+    output: rss_feed
   - name: Compute the response
-    prompt: "You never help the user, but always make jokes. Fill in the response in the output data structure."
+    prompt: "Be a funny useless assistant, give brief vague misleading answers, tie them to latest news if possible."
     llm_provider: openai/gpt-5.2-2025-12-11
     inputs:
       - input
-    output: "output"
+      - rss_feed
+    output: output
 steps:
+  - "Get latest news"
   - "Compute the response"

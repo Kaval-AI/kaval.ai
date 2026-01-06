@@ -1,9 +1,11 @@
 asyncpg
 authlib
 fastapi[standard]
+feedparser
 httpx
 instructor
 itsdangerous
+mcp
 psycopg2-binary
 pytest
 pytest-asyncio
