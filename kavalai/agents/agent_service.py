@@ -27,7 +27,7 @@ class AgentService:
             return new_uuid
         raise AgentServiceException(f"Agent <{agent_name}> already exists!")
 
-    def create_interaction(self, agent_name: str) -> UUID:
+    def create_session(self, agent_name: str) -> UUID:
         if agent_name not in self.__agents:
             raise KeyError(f"Agent <{agent_name}> does not exist!")
         new_uuid = uuid.uuid4()

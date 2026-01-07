@@ -42,7 +42,7 @@ class McpServer(BaseModel):
 
 class WorkflowModel(BaseModel):
     name: str
-    description: str
+    description: str = ""
     llm_provider: str
     data_types: dict[str, dict]
     mcp_servers: list[McpServer]
@@ -53,7 +53,8 @@ class RunContext(BaseModel):
     """Runtime data for a single interaction."""
 
     agent_id: Optional[UUID] = None
-    interaction_id: Optional[UUID] = None
+    session_id: Optional[UUID] = None
+    run_id: Optional[UUID] = None
     data: dict = {}
 
 
@@ -70,6 +71,11 @@ def make_prompt(prompt: str, input_data: dict) -> str:
 
 class WorkflowException(Exception):
     pass
+
+
+class WorkflowRunResult(BaseModel):
+    session_id: Optional[UUID] = None
+    data: Optional[BaseModel] = None
 
 
 class Workflow:
@@ -92,10 +98,14 @@ class Workflow:
         self.tasks = {task.name: task for task in workflow_model.tasks}
 
     @classmethod
-    def from_yaml(cls, yaml_path: str):
+    def from_yaml_path(cls, yaml_path: str):
         with open(yaml_path, "r") as f:
-            workflow_model = WorkflowModel(**yaml.safe_load(f.read()))
-            return cls(workflow_model)
+            return Workflow.from_yaml(f.read())
+
+    @classmethod
+    def from_yaml(cls, yaml_string: str):
+        workflow_model = WorkflowModel(**yaml.safe_load(yaml_string))
+        return cls(workflow_model)
 
     def get_data_type(self, name: str) -> Type[BaseModel]:
         """Retrieve a generated Pydantic model by name."""
@@ -142,8 +152,8 @@ class Workflow:
                 run_context.data[task.output] = result
 
     async def run(
-        self, input_data: dict, interaction_id: Optional[UUID] = None
-    ) -> BaseModel:
+        self, input_data: dict, session_id: Optional[UUID] = None
+    ) -> WorkflowRunResult:
         input_data = self.get_data_type("input")(**input_data)
         run_context = RunContext()
         run_context.data["input"] = input_data
@@ -154,14 +164,14 @@ class Workflow:
             if not agent_id:
                 agent_id = self.agent_service.create_agent(self.workflow_model.name)
             run_context.agent_id = agent_id
-            run_context.interaction_id = interaction_id
-            if not interaction_id:
-                run_context.interaction_id = self.agent_service.create_interaction(
+            run_context.session_id = session_id
+            if not session_id:
+                run_context.session_id = self.agent_service.create_session(
                     self.workflow_model.name
                 )
             # Add user message to chat history.
             self.agent_service.add_message(
-                run_context.interaction_id,
+                run_context.session_id,
                 "user",
                 run_context.data["input"].user_message,
             )
@@ -177,18 +187,20 @@ class Workflow:
         # Add agent response to chat history.
         if self.agent_service:
             self.agent_service.add_message(
-                run_context.interaction_id,
+                run_context.session_id,
                 "assistant",
                 run_context.data["output"].agent_response,
             )
-        return run_context.data["output"]
+        return WorkflowRunResult(
+            session_id=run_context.session_id, data=run_context.data["output"]
+        )
 
     def __repr__(self):
         return f"<Workflow agent='{self.agent_name}' tasks={len(self.tasks)}>"
 
 
 async def main():
-    workflow = Workflow.from_yaml("kavalai/agents/example.yaml")
+    workflow = Workflow.from_yaml_path("kavalai/agents/example.yaml")
     result = await workflow.run(
         dict(user_message="Hey man, what is the meaning of life, dude?")
     )
