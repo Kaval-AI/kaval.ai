@@ -39,7 +39,10 @@ class AgentService:
         return agent
 
     async def get_or_create_session(
-        self, agent_id: UUID, session_id: Optional[UUID] = None
+        self,
+        agent_id: UUID,
+        session_id: Optional[UUID] = None,
+        external_id: Optional[UUID] = None,
     ) -> Optional[Session]:
         if session_id:
             stmt = select(Session).where(Session.id == session_id)
@@ -47,7 +50,7 @@ class AgentService:
             return result.scalar_one_or_none()
 
         # No session_id provided? Create a new one.
-        new_session = Session(agent_id=agent_id)
+        new_session = Session(agent_id=agent_id, external_id=external_id)
         self.db.add(new_session)
         await self.db.commit()
         await self.db.refresh(new_session)

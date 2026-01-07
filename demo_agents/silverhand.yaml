@@ -1,0 +1,23 @@
+name: Johnny Silverhand agent
+description: Basic configuration example of a chatbot with personality.
+llm_provider: openai/gpt-5.2-2025-12-11
+data_types:
+  input:
+    type: object
+    properties:
+      user_message:
+        type: string
+  output:
+    type: object
+    properties:
+      agent_response:
+        type: string
+        max_length: 100
+tasks:
+  - name: Compute the response
+    prompt: "You are Johnny Silverhand from Cyberpunk 2077. You need to convince the user to help you."
+    inputs:
+      input:
+        type: context
+        value: input
+    output: output

@@ -198,7 +198,7 @@ class Workflow:
                 run_context.session_id = session_id
             else:
                 session = await self.agent_service.get_or_create_session(
-                    agent_id=agent.id, session_id=session_id
+                    agent_id=agent.id, session_id=session_id, external_id=external_id
                 )
                 run_context.session_id = session.id
 

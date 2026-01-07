@@ -1,6 +1,5 @@
-from typing import Any, Dict, Type
-
-from pydantic import BaseModel, create_model
+from typing import Any, Dict, Type, Tuple
+from pydantic import BaseModel, create_model, Field
 
 
 class SchemaParser:
@@ -8,8 +7,11 @@ class SchemaParser:
         self.raw_schemas = datatypes
         self.models: Dict[str, Type[BaseModel]] = {}
 
-    def _json_type_to_python(self, prop_def: Dict[str, Any]) -> Any:
-        """Maps JSON schema types to Python types."""
+    def _json_type_to_python(self, prop_def: Dict[str, Any]) -> Tuple[Any, Any]:
+        """
+        Maps JSON schema types to Python types and returns
+        a tuple of (type, FieldInfo).
+        """
         type_map = {
             "string": str,
             "integer": int,
@@ -22,15 +24,34 @@ class SchemaParser:
         # Handle References
         if "$ref" in prop_def:
             ref_name = prop_def["$ref"]
-            return self.parse_type(ref_name)
+            return self.parse_type(ref_name), ...
 
-        if prop_def.get("type") == "array":
-            items_def = prop_def.get("items", {})
-            item_type = self._json_type_to_python(items_def)
-            return list[item_type]
-
+        # Determine base type
         json_type = prop_def.get("type", "string")
-        return type_map.get(json_type, Any)
+
+        if json_type == "array":
+            items_def = prop_def.get("items", {})
+            item_type, _ = self._json_type_to_python(items_def)
+            python_type = list[item_type]
+        else:
+            python_type = type_map.get(json_type, Any)
+
+        # Build Field constraints
+        field_kwargs = {}
+
+        # Support maxLength -> max_length
+        if "max_length" in prop_def:
+            field_kwargs["max_length"] = prop_def["max_length"]
+
+        # Support minLength -> min_length
+        if "min_length" in prop_def:
+            field_kwargs["min_length"] = prop_def["min_length"]
+
+        # If we have constraints, return (type, Field(...)), else (type, ...)
+        if field_kwargs:
+            return python_type, Field(**field_kwargs)
+
+        return python_type, ...
 
     def parse_type(self, type_name: str) -> Type[BaseModel]:
         """Recursively parses a schema definition into a Pydantic model."""
@@ -45,19 +66,14 @@ class SchemaParser:
         fields = {}
 
         for field_name, field_def in properties.items():
-            # Determine the type of the field
-            field_type = self._json_type_to_python(field_def)
-            # In this simple parser, we treat all as optional or default to None
-            # You can expand this to check for 'required' arrays in the schema
-            fields[field_name] = (field_type, ...)
+            # Now returns (type, FieldInfo)
+            fields[field_name] = self._json_type_to_python(field_def)
 
-        # Dynamically create the Pydantic model
         model = create_model(type_name, **fields)
         self.models[type_name] = model
         return model
 
     def parse_all(self) -> Dict[str, Type[BaseModel]]:
-        """Parses all keys in the datatypes dict."""
         for type_name in self.raw_schemas:
             self.parse_type(type_name)
         return self.models

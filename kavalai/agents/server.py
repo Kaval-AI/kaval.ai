@@ -79,6 +79,7 @@ def create_mcp_agent_server(
             result = await workflow.run(
                 input_data=input_data.data.model_dump(),
                 session_id=input_data.session_id,
+                external_id=input_data.external_id,
             )
             return OutputType(session_id=result.session_id, data=result.data)
 
