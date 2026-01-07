@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 from typing import Dict, Type, Optional, Literal
@@ -86,12 +85,8 @@ class Workflow:
     ):
         self.workflow_model = workflow_model
         self.agent_service = agent_service
-
-        # Data types used in the workflow.
         self.parser = SchemaParser(workflow_model.data_types)
         self.models: Dict[str, Type[BaseModel]] = self.parser.parse_all()
-
-        # MCP servers
         self.mcp_servers = {
             server.name: server for server in workflow_model.mcp_servers
         }
@@ -123,15 +118,26 @@ class Workflow:
             async_client=True,
             mode=instructor.Mode.JSON,
         )
-        # Run the completion.
+
         system_message = dict(role="system", content=input_text)
-        logger.info("SYSTEM: %s", system_message)
         response = await client.chat.completions.create(
             response_model=self.get_data_type(task.output),
             messages=[system_message],
         )
-        logger.info(f"Setting {task.output} = {response.model_dump_json()}")
+
         run_context.data[task.output] = response
+
+        # DB LOGGING: Record this prompt as a Task
+        if self.agent_service and run_context.run_id:
+            await self.agent_service.add_task(
+                agent_id=run_context.agent_id,
+                session_id=run_context.session_id,
+                run_id=run_context.run_id,
+                inputs={"prompt": input_text},
+                output=response.model_dump()
+                if isinstance(response, BaseModel)
+                else {"result": response},
+            )
 
     async def run_tool(self, task: Task, run_context: RunContext):
         async with sse_client(self.mcp_servers[task.mcp_server].url) as (read, write):
@@ -142,40 +148,78 @@ class Workflow:
                     if info.type == "literal":
                         inputs[name] = info.value
                     else:
-                        inputs[name] = run_context[info.name if info.name else name]
+                        # Fixed key access for dict vs context
+                        inputs[name] = run_context.data.get(
+                            info.name if info.name else name
+                        )
+
                 call_result = await session.call_tool(task.tool, arguments=inputs)
                 result = json.loads(call_result.content[0].text)
-                # If we have a data type defined for tool result, convert it.
+
                 if self.get_data_type(task.output):
                     result = self.get_data_type(task.output)(**result)
                 logger.info(f"Setting {task.output} = {result.model_dump_json()}")
                 run_context.data[task.output] = result
 
-    async def run(
-        self, input_data: dict, session_id: Optional[UUID] = None
-    ) -> WorkflowRunResult:
-        input_data = self.get_data_type("input")(**input_data)
-        run_context = RunContext()
-        run_context.data["input"] = input_data
+                # DB LOGGING: Record this tool call as a Task
+                if self.agent_service and run_context.run_id:
+                    await self.agent_service.add_task(
+                        agent_id=run_context.agent_id,
+                        session_id=run_context.session_id,
+                        run_id=run_context.run_id,
+                        inputs={"tool": task.tool, "arguments": inputs},
+                        output=result.model_dump()
+                        if isinstance(result, BaseModel)
+                        else result,
+                    )
 
-        # Initialize agent and interaction data, if agent_service is defined.
+    async def run(
+        self,
+        input_data: dict,
+        session_id: Optional[UUID] = None,
+        external_id: Optional[str] = None,
+    ) -> WorkflowRunResult:
+        # 1. Parse Input
+        parsed_input = self.get_data_type("input")(**input_data)
+        run_context = RunContext()
+        run_context.data["input"] = parsed_input
+
+        # 2. Initialize DB Context (Agent -> Session -> Run)
         if self.agent_service:
-            agent_id = self.agent_service.get_agent_id(self.workflow_model.name)
-            if not agent_id:
-                agent_id = self.agent_service.create_agent(self.workflow_model.name)
-            run_context.agent_id = agent_id
-            run_context.session_id = session_id
-            if not session_id:
-                run_context.session_id = self.agent_service.create_session(
-                    self.workflow_model.name
-                )
-            # Add user message to chat history.
-            self.agent_service.add_message(
-                run_context.session_id,
-                "user",
-                run_context.data["input"].user_message,
+            # Get or create the agent definition
+            agent = await self.agent_service.get_or_create_agent(
+                name=self.workflow_model.name,
+                description=self.workflow_model.description,
+                workflow=self.workflow_model.model_dump(),
             )
-        # Run the steps sequentially.
+            run_context.agent_id = agent.id
+
+            # Get or create session (using UUID or string external_id)
+            if session_id:
+                run_context.session_id = session_id
+            else:
+                session = await self.agent_service.get_or_create_session(
+                    agent_id=agent.id, session_id=session_id
+                )
+                run_context.session_id = session.id
+
+            # Create the specific Run record for this execution
+            run = await self.agent_service.create_run(
+                session_id=run_context.session_id, input_data=input_data
+            )
+            run_context.run_id = run.id
+
+            # Log the initial user message
+            user_msg = getattr(parsed_input, "user_message", str(input_data))
+            await self.agent_service.add_chat_message(
+                agent_id=run_context.agent_id,
+                session_id=run_context.session_id,
+                run_id=run_context.run_id,
+                role="user",
+                content=user_msg,
+            )
+
+        # 3. Execute Workflow Steps
         for task in self.workflow_model.tasks:
             logger.info("Running task <%s>", task.name)
             if task.prompt:
@@ -183,29 +227,20 @@ class Workflow:
             elif task.tool:
                 await self.run_tool(task, run_context)
             else:
-                raise WorkflowException(str(task))
-        # Add agent response to chat history.
-        if self.agent_service:
-            self.agent_service.add_message(
-                run_context.session_id,
-                "assistant",
-                run_context.data["output"].agent_response,
+                raise WorkflowException(
+                    f"Task {task.name} has no prompt or tool defined."
+                )
+
+        # 4. Finalize and Log Response
+        output_model = run_context.data.get("output")
+        if self.agent_service and output_model:
+            agent_resp = getattr(output_model, "agent_response", str(output_model))
+            await self.agent_service.add_chat_message(
+                agent_id=run_context.agent_id,
+                session_id=run_context.session_id,
+                run_id=run_context.run_id,
+                role="assistant",
+                content=agent_resp,
             )
-        return WorkflowRunResult(
-            session_id=run_context.session_id, data=run_context.data["output"]
-        )
 
-    def __repr__(self):
-        return f"<Workflow agent='{self.agent_name}' tasks={len(self.tasks)}>"
-
-
-async def main():
-    workflow = Workflow.from_yaml_path("kavalai/agents/example.yaml")
-    result = await workflow.run(
-        dict(user_message="Hey man, what is the meaning of life, dude?")
-    )
-    logger.info("RESULT: %s", result.model_dump_json())
-
-
-if __name__ == "__main__":
-    asyncio.run(main(), debug=True)
+        return WorkflowRunResult(session_id=run_context.session_id, data=output_model)

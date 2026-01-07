@@ -29,9 +29,9 @@ tasks:
 
 
 @pytest.mark.asyncio
-async def test_workflow_mcp_integration():
+async def test_workflow_mcp_integration(agents_db):
     workflow = Workflow.from_yaml(SIMPLE_YAML)
-    mcp_server = create_mcp_agent_server(workflow)
+    mcp_server = create_mcp_agent_server(workflow, agents_db)
 
     async with Client(mcp_server) as client:
         result = await client.call_tool(

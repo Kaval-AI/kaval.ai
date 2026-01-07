@@ -2,7 +2,9 @@ import logging
 import os
 import secrets
 from argparse import ArgumentParser
+from contextlib import asynccontextmanager
 from typing import Optional
+from typing import Union
 from uuid import UUID
 
 import uvicorn
@@ -10,7 +12,10 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastmcp import FastMCP
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
 from kavalai.agents.agent_service import AgentService
+from kavalai.agents.db import AsyncAgentsSession
 from kavalai.agents.workflow import Workflow
 
 logging.basicConfig(level=logging.INFO)
@@ -41,10 +46,20 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(HTTPBasic())):
     return credentials.username
 
 
-def create_mcp_agent_server(workflow: Workflow):
-    mcp = FastMCP(workflow.workflow_model.name)
+@asynccontextmanager
+async def session_scope(session_or_factory):
+    if isinstance(session_or_factory, async_sessionmaker):
+        async with session_or_factory() as session:
+            yield session
+    else:
+        yield session_or_factory
 
-    workflow.agent_service = AgentService()
+
+def create_mcp_agent_server(
+    workflow: Workflow,
+    session_provider: Union[AsyncAgentsSession, async_sessionmaker, None] = None,
+) -> FastMCP:
+    mcp = FastMCP(workflow.workflow_model.name)
     InputDataType = workflow.get_data_type("input")
     OutputDataType = workflow.get_data_type("output")
 
@@ -59,10 +74,13 @@ def create_mcp_agent_server(workflow: Workflow):
 
     @mcp.tool()
     async def run_agent(input_data: InputType) -> OutputType:
-        result = await workflow.run(
-            input_data=input_data.data.model_dump(), session_id=input_data.session_id
-        )
-        return OutputType(session_id=result.session_id, data=result.data)
+        async with session_scope(session_provider) as session:
+            workflow.agent_service = AgentService(session)
+            result = await workflow.run(
+                input_data=input_data.data.model_dump(),
+                session_id=input_data.session_id,
+            )
+            return OutputType(session_id=result.session_id, data=result.data)
 
     return mcp
 

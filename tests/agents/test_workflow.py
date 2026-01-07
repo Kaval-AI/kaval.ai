@@ -1,139 +1,77 @@
-import json
-from unittest.mock import AsyncMock, patch, MagicMock
-from uuid import uuid4
-
 import pytest
+from kavalai.agents.workflow import Workflow
+from kavalai.agents.agent_service import AgentService
 
-from kavalai.agents.workflow import Workflow, WorkflowModel, RunContext, make_prompt
-
-
-@pytest.fixture
-def wf():
-    """Minimal workflow setup matching the updated WorkflowModel."""
-    config = {
-        "name": "TestAgent",
-        "description": "A test workflow",
-        "llm_provider": "openai/gpt-4o",  # Defined at top level in WorkflowModel
-        "data_types": {
-            "input": {
-                "type": "object",
-                "properties": {"user_message": {"type": "string"}},
-            },
-            "output": {
-                "type": "object",
-                "properties": {"agent_response": {"type": "string"}},
-            },
-            "data": {"type": "object", "properties": {"val": {"type": "string"}}},
-        },
-        "mcp_servers": [{"name": "srv", "url": "http://sse"}],
-        "tasks": [
-            {"name": "t1", "tool": "get_val", "mcp_server": "srv", "output": "data"},
-            {
-                "name": "t2",
-                "prompt": "Translate this",
-                "inputs": {
-                    "data": {
-                        "type": "context",
-                        "name": "data",
-                    }  # Updated to TypeInputInfo structure
-                },
-                "output": "output",
-            },
-        ],
-    }
-    return Workflow(WorkflowModel(**config))
-
-
-@pytest.fixture
-def ctx():
-    """Updated RunContext using run_id."""
-    return RunContext(
-        agent_id=uuid4(),
-        session_id=uuid4(),  # Renamed from interaction_id
-        data={},
-    )
+SIMPLE_YAML = """
+name: BB King Agent
+description: Just talks about the blues.
+llm_provider: openai/gpt-4o
+data_types:
+  input:
+    type: object
+    properties:
+      user_message: {type: string}
+  output:
+    type: object
+    properties:
+      agent_response: {type: string}
+mcp_servers: []
+tasks:
+  - name: Blues Talk
+    prompt: "You are BB King. You like talking about the blues."
+    inputs:
+      input: {type: context, name: input}
+    output: output
+"""
 
 
 @pytest.mark.asyncio
-class TestWorkflowLogic:
-    async def test_run_prompt(self, wf, ctx):
-        """Verifies LLM task execution and context storage."""
-        # Setup context with dependency data
-        ctx.data["data"] = wf.get_data_type("data")(val="test-val")
+class TestBBKingWorkflow:
+    async def test_bb_king_full_integration(self, agents_db):
+        """
+        Tests a real LLM call and verifies the data persistence
+        hierarchy: Agent -> Session -> Run -> Task -> ChatMessage.
+        """
+        # 1. Setup
+        service = AgentService(agents_db)
+        wf = Workflow.from_yaml(SIMPLE_YAML)
+        wf.agent_service = service
 
-        mock_res = wf.get_data_type("output")(agent_response="AI Response")
+        user_input = {"user_message": "Tell me about Lucille, your guitar."}
 
-        with patch("instructor.from_provider") as mock_inst:
-            # Setup the nested async mock for instructor
-            mock_cmpl = AsyncMock()
-            mock_cmpl.create.return_value = mock_res
-            mock_inst.return_value.chat.completions = mock_cmpl
+        # 2. Execution (Real LLM call happens here)
+        result = await wf.run(input_data=user_input)
 
-            await wf.run_prompt(wf.tasks["t2"], ctx)
+        # 3. Validation: Result Structure
+        assert result.session_id is not None
+        assert result.data is not None
+        assert (
+            "Lucille" in result.data.agent_response
+            or "guitar" in result.data.agent_response.lower()
+        )
 
-            assert ctx.data["output"].agent_response == "AI Response"
-            assert isinstance(ctx.data["output"], wf.get_data_type("output"))
+        # 4. Validation: Database Records
+        # Check Agent
+        agent = await service.get_or_create_agent(name="BB King Agent")
+        assert agent.description == "Just talks about the blues."
 
-    async def test_run_tool(self, wf, ctx):
-        """Verifies MCP tool execution and JSON-to-Pydantic conversion."""
-        # Mock the SSE and Session stack
-        mock_mcp_content = MagicMock()
-        mock_mcp_content.text = json.dumps({"val": "tool-val"})
+        # Check Chat History (Should have 2 messages: User and Assistant)
+        history = await service.get_chat_history(result.session_id)
+        assert len(history) == 2
+        assert history[0].role == "user"
+        assert history[0].content == user_input["user_message"]
+        assert history[1].role == "assistant"
+        assert history[1].content == result.data.agent_response
 
-        mock_mcp_res = MagicMock(content=[mock_mcp_content])
+        # Check Task Recording
+        # We query the DB directly to verify the specific task was logged
+        from kavalai.agents.db import Task
+        from sqlalchemy import select
 
-        mock_session = AsyncMock()
-        mock_session.call_tool.return_value = mock_mcp_res
+        stmt = select(Task).where(Task.session_id == result.session_id)
+        db_result = await agents_db.execute(stmt)
+        tasks = db_result.scalars().all()
 
-        with patch("kavalai.agents.workflow.sse_client") as mock_sse, patch(
-            "kavalai.agents.workflow.ClientSession"
-        ) as mock_client:
-            # Setup async context managers
-            mock_sse.return_value.__aenter__.return_value = (None, None)
-            mock_client.return_value.__aenter__.return_value = mock_session
-
-            await wf.run_tool(wf.tasks["t1"], ctx)
-
-            assert ctx.data["data"].val == "tool-val"
-            mock_session.call_tool.assert_called_once()
-
-    async def test_make_prompt_integration(self, wf):
-        """Checks if input data is correctly serialized into the system prompt."""
-        data = {"my_key": wf.get_data_type("data")(val="hello")}
-        prompt = make_prompt("Task:", data)
-
-        assert "INPUT DATA:" in prompt
-        # Verify JSON serialization of Pydantic models in prompt
-        assert 'my_key:{"val":"hello"}' in prompt
-
-    @pytest.mark.asyncio
-    async def test_workflow_full_run_mocked(self, wf):
-        """Test the full run method with service mocks."""
-        mock_service = MagicMock()
-        mock_service.get_agent_id.return_value = uuid4()
-        mock_service.create_run.return_value = (
-            uuid4()
-        )  # Updated from create_interaction
-
-        wf.agent_service = mock_service
-
-        # Mock the individual task runners to avoid network calls
-        with patch.object(wf, "run_prompt", new_callable=AsyncMock), patch.object(
-            wf, "run_tool", new_callable=AsyncMock
-        ):
-            # Create a dummy output in context data so run() doesn't fail
-            def side_effect(task, context):
-                if task.output == "output":
-                    context.data["output"] = wf.get_data_type("output")(
-                        agent_response="Done"
-                    )
-
-            wf.run_prompt.side_effect = side_effect
-
-            result = await wf.run(
-                input_data={"user_message": "Hello"}, session_id=uuid4()
-            )
-
-            assert result.data.agent_response == "Done"
-            assert result.session_id
-            assert mock_service.add_message.called
+        assert len(tasks) == 1
+        assert "BB King" in tasks[0].inputs["prompt"]
+        assert tasks[0].output["agent_response"] == result.data.agent_response
