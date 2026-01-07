@@ -1,12 +1,10 @@
-import json
 import logging
 from typing import Dict, Type, Optional, Literal
 from uuid import UUID
 
 import instructor
 import yaml
-from mcp import ClientSession
-from mcp.client.sse import sse_client
+from fastmcp import Client
 from pydantic import BaseModel
 
 from kavalai.agents.agent_service import AgentService
@@ -140,38 +138,39 @@ class Workflow:
             )
 
     async def run_tool(self, task: Task, run_context: RunContext):
-        async with sse_client(self.mcp_servers[task.mcp_server].url) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                inputs = {}
-                for name, info in task.inputs.items():
-                    if info.type == "literal":
-                        inputs[name] = info.value
-                    else:
-                        # Fixed key access for dict vs context
-                        inputs[name] = run_context.data.get(
-                            info.name if info.name else name
-                        )
+        inputs = {}
+        for name, info in task.inputs.items():
+            if info.type == "literal":
+                inputs[name] = info.value
+            else:
+                # Fallback to the key name if info.name is not explicitly provided
+                inputs[name] = run_context.data.get(info.name or name)
 
-                call_result = await session.call_tool(task.tool, arguments=inputs)
-                result = json.loads(call_result.content[0].text)
+        server_url = self.mcp_servers[task.mcp_server].url
+        async with Client(server_url) as client:
+            result_data = await client.call_tool(task.tool, arguments=inputs)
 
-                if self.get_data_type(task.output):
-                    result = self.get_data_type(task.output)(**result)
-                logger.info(f"Setting {task.output} = {result.model_dump_json()}")
-                run_context.data[task.output] = result
+        output_type = self.get_data_type(task.output)
+        if output_type:
+            result = (
+                output_type(**result_data)
+                if isinstance(result_data, dict)
+                else result_data
+            )
+        else:
+            result = result_data
+        logger.info(f"Setting {task.output} = {result}")
+        run_context.data[task.output] = result
 
-                # DB LOGGING: Record this tool call as a Task
-                if self.agent_service and run_context.run_id:
-                    await self.agent_service.add_task(
-                        agent_id=run_context.agent_id,
-                        session_id=run_context.session_id,
-                        run_id=run_context.run_id,
-                        inputs={"tool": task.tool, "arguments": inputs},
-                        output=result.model_dump()
-                        if isinstance(result, BaseModel)
-                        else result,
-                    )
+        # Store the tool run info.
+        if self.agent_service and run_context.run_id:
+            await self.agent_service.add_task(
+                agent_id=run_context.agent_id,
+                session_id=run_context.session_id,
+                run_id=run_context.run_id,
+                inputs={"tool": task.tool, "arguments": inputs},
+                output=result.model_dump() if isinstance(result, BaseModel) else result,
+            )
 
     async def run(
         self,
