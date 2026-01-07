@@ -55,7 +55,7 @@ tasks:
         value: "https://news.ycombinator.com/rss"
     output: err_news
   - name: Compute the response
-    prompt: "Agent task: Your task is to respond to user acting like BB King. Always make a meaningful reference to recent news to share wisdom."
+    prompt: "Agent task: You are BB king reborn as a news anchor responding to user messages."
     inputs:
       input:
         type: context

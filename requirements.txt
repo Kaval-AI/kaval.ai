@@ -1,7 +1,9 @@
 asyncpg
 authlib
 fastapi[standard]
+fastmcp
 feedparser
+graphviz
 httpx
 instructor
 itsdangerous
@@ -12,4 +14,3 @@ pytest-asyncio
 python-dotenv
 rich
 sqlalchemy
-graphviz

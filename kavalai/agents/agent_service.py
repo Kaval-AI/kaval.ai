@@ -16,8 +16,6 @@ class AgentService:
         self.__interactions = {}
 
     def get_agent_id(self, agent_name: str) -> Optional[str]:
-        if agent_name not in self.__agents:
-            raise KeyError(f"Agent <{agent_name}> does not exist!")
         return self.__agents.get(agent_name)
 
     def create_agent(self, agent_name: str) -> UUID:
