@@ -4,4 +4,4 @@ auth_username: "user"
 auth_password: "password"
 llm_provider: openai/gpt-5.2-2025-12-11
 task: |
-  Kasutaja tahab minna reisile.
+  Kasutaja tahab niisam chattida ükskõik mis teemadel.
