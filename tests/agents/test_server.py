@@ -1,10 +1,15 @@
-import pytest
-from unittest.mock import MagicMock, patch
-from fastmcp import Client
-from kavalai.agents.workflow import Workflow
-from kavalai.agents.server import create_mcp_agent_server
+import os
 
-# Minimal YAML for testing prompt logic
+import pytest
+from fastapi.testclient import TestClient
+
+from kavalai.agents.db import AsyncAgentsSession
+
+# Assuming your server code is in kavalai_server.py
+from kavalai.agents.server import create_agent_app
+from kavalai.agents.workflow import Workflow
+
+# 1. Setup the YAML configuration
 SIMPLE_YAML = """
 name: BB King Agent
 description: Just talks about the blues.
@@ -17,7 +22,9 @@ data_types:
   output:
     type: object
     properties:
-      agent_response: {type: string}
+      agent_response:
+        type: string
+        max_length: 250
 mcp_servers: []
 tasks:
   - name: Blues Talk
@@ -28,41 +35,53 @@ tasks:
 """
 
 
-@pytest.mark.asyncio
-async def test_workflow_mcp_integration(agents_db):
+@pytest.fixture(scope="function")
+def client(agents_db):
+    # Set dummy auth for testing
+    os.environ["HTTP_BASIC_AUTH_USER"] = "lucille"
+    os.environ["HTTP_BASIC_AUTH_PASSWORD"] = "blues123"
+
+    # Initialize real workflow from string/file
     workflow = Workflow.from_yaml(SIMPLE_YAML)
-    mcp_server = create_mcp_agent_server(workflow, agents_db)
 
-    async with Client(mcp_server) as client:
-        result = await client.call_tool(
-            "run_agent",
-            {"input_data": {"data": {"user_message": "What is the meaning of life?"}}},
-        )
-        assert result.data.session_id
-        assert result.data.data
+    # Create the app (using None for session_provider if DB isn't required for this simple test)
+    app = create_agent_app(workflow=workflow, session_provider=AsyncAgentsSession)
+    yield TestClient(app)
 
 
-def test_auth_logic_standalone():
-    """
-    Since we can't easily wrap the FastMCP Client in HTTP Basic Auth
-    without the FastAPI layer, we test the auth function as a unit.
-    """
-    from fastapi import HTTPException
-    from kavalai.agents.server import authenticate
+def test_run_agent_success(client):
+    """Test a successful authenticated request to the agent."""
+    payload = {
+        "session_id": None,
+        "data": {"user_message": "Tell me about your guitar."},
+    }
 
-    mock_creds = MagicMock()
-    mock_creds.username = "admin"
-    mock_creds.password = "password"
+    response = client.post("/run_agent", json=payload, auth=("lucille", "blues123"))
 
-    with patch.dict(
-        "os.environ",
-        {"BASIC_AUTH_USERNAME": "admin", "BASIC_AUTH_PASSWORD": "password"},
-    ):
-        # Should succeed
-        assert authenticate(mock_creds) == "admin"
+    assert response.status_code == 200
+    data = response.json()
+    assert "agent_response" in data["data"]
+    print(data)
+    # Verify the LLM persona is working
+    assert any(
+        word in data["data"]["agent_response"].lower()
+        for word in ["blues", "guitar", "king", "lucille"]
+    )
 
-        # Should fail
-        mock_creds.password = "wrong"
-        with pytest.raises(HTTPException) as exc:
-            authenticate(mock_creds)
-        assert exc.value.status_code == 401
+
+def test_run_agent_unauthorized(client):
+    """Test that wrong credentials return 401."""
+    payload = {"data": {"user_message": "Hello?"}}
+    response = client.post(
+        "/run_agent", json=payload, auth=("wrong_user", "wrong_pass")
+    )
+    assert response.status_code == 401
+
+
+def test_run_agent_invalid_input_schema(client):
+    """Test that Pydantic validation catches wrong data structures."""
+    # Sending 'text' instead of 'user_message' as defined in YAML
+    payload = {"data": {"wrong_field": "This will fail"}}
+    response = client.post("/run_agent", json=payload, auth=("lucille", "blues123"))
+    # FastAPI returns 422 Unprocessable Entity for schema validation errors
+    assert response.status_code == 422

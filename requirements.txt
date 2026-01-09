@@ -1,7 +1,7 @@
 asyncpg
 authlib
 fastapi[standard]
-fastmcp
+fastmcp==2.14.2
 feedparser
 graphviz
 httpx
@@ -14,3 +14,4 @@ pytest-asyncio
 python-dotenv
 rich
 sqlalchemy
+json-schema-to-pydantic

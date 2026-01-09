@@ -1,16 +1,22 @@
+"""Launch Kaval.AI agent MCP server.
+
+Example usage:
+HTTP_BASIC_AUTH_USER=user HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server demo_agents/silverhand.yaml --port 10000
+"""
+
 import logging
 import os
 import secrets
 from argparse import ArgumentParser
 from contextlib import asynccontextmanager
-from typing import Optional
-from typing import Union
+from typing import Annotated
+from typing import Optional, Union
 from uuid import UUID
 
 import uvicorn
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
+from fastapi import HTTPException, status, FastAPI, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastmcp import FastMCP
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -21,29 +27,28 @@ from kavalai.agents.workflow import Workflow
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+security = HTTPBasic()
 
-def authenticate(credentials: HTTPBasicCredentials = Depends(HTTPBasic())):
-    expected_username = os.environ.get("BASIC_AUTH_USERNAME")
-    expected_password = os.environ.get("BASIC_AUTH_PASSWORD")
 
-    if not expected_username or not expected_password:
-        logger.warning("Auth credentials not set in environment variables")
-        raise HTTPException(status_code=500, detail="Server auth configuration missing")
+def validate_auth(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
+    expected_username = os.environ.get("HTTP_BASIC_AUTH_USER")
+    expected_password = os.environ.get("HTTP_BASIC_AUTH_PASSWORD")
 
-    is_correct_username = secrets.compare_digest(
-        credentials.username, expected_username
-    )
-    is_correct_password = secrets.compare_digest(
-        credentials.password, expected_password
-    )
-
-    if not (is_correct_username and is_correct_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username/password",
-            headers={"WWW-Authenticate": "Basic"},
+    if expected_username and expected_password:
+        is_correct_username = secrets.compare_digest(
+            credentials.username, expected_username
         )
-    return credentials.username
+        is_correct_password = secrets.compare_digest(
+            credentials.password, expected_password
+        )
+        if is_correct_username and is_correct_password:
+            return True
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Incorrect username/password",
+        headers={"WWW-Authenticate": "Basic"},
+    )
 
 
 @asynccontextmanager
@@ -55,11 +60,15 @@ async def session_scope(session_or_factory):
         yield session_or_factory
 
 
-def create_mcp_agent_server(
+def create_agent_app(
     workflow: Workflow,
     session_provider: Union[AsyncAgentsSession, async_sessionmaker, None] = None,
-) -> FastMCP:
-    mcp = FastMCP(workflow.workflow_model.name)
+) -> FastAPI:
+    app = FastAPI(
+        title=workflow.workflow_model.name,
+        description=workflow.workflow_model.description,
+    )
+
     InputDataType = workflow.get_data_type("input")
     OutputDataType = workflow.get_data_type("output")
 
@@ -72,8 +81,13 @@ def create_mcp_agent_server(
         session_id: Optional[UUID]
         data: OutputDataType
 
-    @mcp.tool()
-    async def run_agent(input_data: InputType) -> OutputType:
+    @app.post("/run_agent", response_model=OutputType, operation_id="run_agent")
+    async def run_agent(
+        input_data: InputType,
+        credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    ) -> OutputType:
+        validate_auth(credentials)
+
         async with session_scope(session_provider) as session:
             workflow.agent_service = AgentService(session)
             result = await workflow.run(
@@ -83,11 +97,23 @@ def create_mcp_agent_server(
             )
             return OutputType(session_id=result.session_id, data=result.data)
 
-    return mcp
+    @app.get("/workflow", response_model=OutputType, operation_id="run_agent")
+    async def get_workflow(
+        credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+    ):
+        validate_auth(credentials)
+        return Response(
+            content=workflow.workflow_model.model_dump_json(),
+            media_type="application/json",
+        )
+
+    return app
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Kaval.AI Agent MCP Server")
+    parser = ArgumentParser(
+        description="Kaval.AI Agent REST Server. Uses HTTP_BASIC_AUTH_USER and HTTP_BASIC_AUTH_PASSWORD environment variables for authentication."
+    )
     parser.add_argument("workflow_yaml_path", type=str, help="Path to workflow YAML")
     parser.add_argument(
         "--port", type=int, default=8000, help="Port to run the server on"
@@ -95,5 +121,7 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
     args = parser.parse_args()
 
-    app = create_mcp_agent_server(Workflow.from_yaml_path(args.workflow_yaml_path))
+    workflow = Workflow.from_yaml_path(args.workflow_yaml_path)
+    app = create_agent_app(workflow=workflow, session_provider=AsyncAgentsSession)
+    logger.info(f"Starting <{workflow.workflow_model.name}>.")
     uvicorn.run(app, host=args.host, port=args.port)

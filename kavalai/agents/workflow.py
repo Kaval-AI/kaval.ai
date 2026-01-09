@@ -42,7 +42,7 @@ class WorkflowModel(BaseModel):
     description: str = ""
     llm_provider: str
     data_types: dict[str, dict]
-    mcp_servers: list[McpServer]
+    mcp_servers: list[McpServer] = []
     tasks: list[Task]
 
 
