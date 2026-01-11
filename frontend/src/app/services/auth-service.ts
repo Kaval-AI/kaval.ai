@@ -47,4 +47,9 @@ export class AuthService {
   getIsLoggedIn(): boolean {
     return this.loggedIn;
   }
+
+  getIsAdmin(): boolean {
+    const user = this.userDetails$.value;
+    return this.loggedIn && user != null && user.is_admin;
+  }
 }

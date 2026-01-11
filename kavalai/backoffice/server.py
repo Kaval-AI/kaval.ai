@@ -6,10 +6,9 @@ from uuid import UUID
 import uvicorn
 from authlib.integrations.starlette_client import OAuth
 from fastapi import FastAPI, Request, HTTPException, status, Body
-from sqlalchemy import select
+from kavalai.crud import insert, select, delete, update, get_one
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
-
 from kavalai.backoffice import db
 from kavalai.backoffice.db import is_owner, is_member
 
@@ -29,8 +28,6 @@ oauth.register(
     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
     client_kwargs={"scope": "openid email profile"},
 )
-
-AGENT_ENDPOINT_URL = "http://127.0.0.1:25123"
 
 # Add SessionMiddleware with a secret key
 app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(16))
@@ -142,14 +139,14 @@ async def projects_create(request: Request, data: dict = Body(...)):
             status_code=403, detail="Only administrators can create new projects."
         )
     async with db.AsyncBackofficeSession() as session:
-        new_project = await db.insert(session, db.Project, data)
+        new_project = await insert(session, db.Project, data)
         # Automatically make the creator the owner in ProjectMembership.
         membership_data = {
             "user_id": UUID(user_session["id"]),
             "project_id": new_project.id,
             "role": db.ProjectRole.owner,
         }
-        await db.insert(session, db.ProjectMembership, membership_data)
+        await insert(session, db.ProjectMembership, membership_data)
 
         return new_project
 
@@ -159,7 +156,7 @@ async def projects_get_by_id(project_id: UUID, request: Request):
     assert_logged_in(request)
     async with db.AsyncBackofficeSession() as session:
         assert_is_member(session, request, project_id)
-        project = await db.get_one(session, db.Project, project_id)
+        project = await get_one(session, db.Project, project_id)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         return project
@@ -180,7 +177,7 @@ async def projects_update(project_id: UUID, request: Request, data: dict = Body(
     assert_logged_in(request)
     async with db.AsyncBackofficeSession() as session:
         assert_is_owner(session, request, project_id)
-        updated = await db.update(session, db.Project, project_id, data)
+        updated = await update(session, db.Project, project_id, data)
         if not updated:
             raise HTTPException(status_code=404, detail="Project not found.")
         return updated
@@ -191,7 +188,7 @@ async def projects_delete(project_id: UUID, request: Request):
     assert_logged_in(request)
     async with db.AsyncBackofficeSession() as session:
         assert_is_owner(session, request, project_id)
-        success = await db.delete(session, db.Project, project_id)
+        success = await delete(session, db.Project, project_id)
         if not success:
             raise HTTPException(status_code=404, detail="Project not found")
         return {"status": "deleted"}
@@ -268,7 +265,7 @@ if __name__ == "__main__":
     config = uvicorn.Config(
         "kavalai.backoffice.server:app",
         port=8000,
-        log_level="debug",
+        log_level="info",
         reload=True,
         access_log=True,
     )

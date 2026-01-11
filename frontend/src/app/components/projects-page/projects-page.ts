@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ProjectService } from '../../services/project-service';
 import { Project } from '../../models/project';
+import { AuthService } from '../../services/auth-service';
 
 @Component({
   selector: 'app-projects-page',
@@ -13,6 +14,7 @@ import { Project } from '../../models/project';
 })
 export class ProjectsPage implements OnInit {
   private projectService = inject(ProjectService);
+  private authService = inject(AuthService);
   private fb = inject(FormBuilder);
 
   projects: Project[] = [];
@@ -34,6 +36,10 @@ export class ProjectsPage implements OnInit {
       this.projects = data;
       this.selectProject(this.projects.length > 0 ? this.projects[0] : null);
     });
+  }
+
+  getIsAdmin() {
+    return this.authService.getIsAdmin();
   }
 
   onProjectSelect(event: Event) {

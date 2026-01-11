@@ -46,6 +46,10 @@
 } @else if (projects.length == 0 && !isEditing) {
   <div class="centered">
     <p>We don't have any projects.</p>
-    <button type="button" (click)="startNewProject()">Add New</button>
+     @if (getIsAdmin()) {
+      <button type="button" (click)="startNewProject()">Add New</button>
+     } @else {
+      <p>You don't have admin rights. Ask your system administrator to configure a new project.</p>
+     }
   </div>
 }
