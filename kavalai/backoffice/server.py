@@ -175,6 +175,7 @@ async def projects_get_all(request: Request):
 @app.put("/projects/update/{project_id}")
 async def projects_update(project_id: UUID, request: Request, data: dict = Body(...)):
     assert_logged_in(request)
+    print(data)
     async with db.AsyncBackofficeSession() as session:
         assert_is_owner(session, request, project_id)
         updated = await update(session, db.Project, project_id, data)
@@ -192,73 +193,6 @@ async def projects_delete(project_id: UUID, request: Request):
         if not success:
             raise HTTPException(status_code=404, detail="Project not found")
         return {"status": "deleted"}
-
-
-# @app.get("/chat/list")
-# async def chats_list(request: Request):
-#     """Queries the list of chats available to the agent."""
-#     # if not is_logged_in(request):
-#     #     raise HTTPException(status_code=401, detail="Unauthorized.")
-#     client = AsyncClient()
-#     results = await client.get(AGENT_ENDPOINT_URL + "/chat/list")
-#     assert results.status_code == 200
-#     return JSONResponse(results.json())
-#
-#
-# @app.get("/chat/messages/{chat_id}")
-# async def chats_messages(chat_id: str, request: Request):
-#     """Queries the list of chats available to the agent."""
-#     # if not is_logged_in(request):
-#     #     raise HTTPException(status_code=401, detail="Unauthorized.")
-#     client = AsyncClient()
-#     results = await client.get(AGENT_ENDPOINT_URL + "/chat/messages/" + chat_id)
-#     assert results.status_code == 200
-#     return JSONResponse(results.json())
-#
-#
-# @app.get("/chat/agent_runs/{chat_id}")
-# async def input_schema(chat_id: str, request: Request):
-#     # if not is_logged_in(request):
-#     #     raise HTTPException(status_code=401, detail="Unauthorized.")
-#     client = AsyncClient()
-#     results = await client.get(AGENT_ENDPOINT_URL + "/chat/agent_runs/" + chat_id)
-#     assert results.status_code == 200
-#     return JSONResponse(results.json())
-#
-#
-# @app.post("/agent/run")
-# async def run_agent(request: Request):
-#     # if not is_logged_in(request):
-#     #     raise HTTPException(status_code=401, detail="Unauthorized.")
-#     request_data = await request.json()
-#     client = AsyncClient()
-#     results = await client.post(AGENT_ENDPOINT_URL + "/run", json=request_data, timeout=60.0)
-#     if results.status_code != 200:
-#         raise HTTPException(status_code=results.status_code, detail=results.content)
-#     return JSONResponse(results.json())
-#
-#
-# @app.get("/input_schema")
-# async def input_schema(request: Request):
-#     # if not is_logged_in(request):
-#     #     raise HTTPException(status_code=401, detail="Unauthorized.")
-#     client = AsyncClient()
-#     results = await client.get(AGENT_ENDPOINT_URL + "/input_schema")
-#     if results.status_code != 200:
-#         raise HTTPException(status_code=results.status_code, detail=results.content)
-#     return JSONResponse(results.json())
-#
-#
-# @app.get("/output_schema")
-# async def output_schema(request: Request):
-#     # if not is_logged_in(request):
-#     #     raise HTTPException(status_code=401, detail="Unauthorized.")
-#     client = AsyncClient()
-#     results = await client.get(AGENT_ENDPOINT_URL + "/output_schema")
-#     if results.status_code != 200:
-#         raise HTTPException(status_code=results.status_code, detail=results.content)
-#     assert results.status_code == 200
-#     return JSONResponse(results.json())
 
 
 if __name__ == "__main__":

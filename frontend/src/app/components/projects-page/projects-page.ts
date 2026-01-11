@@ -21,9 +21,16 @@ export class ProjectsPage implements OnInit {
   selectedProject: Project | null = null;
   isEditing = false;
 
+  // Updated Form Controls to match the new DB columns
   projectForm = this.fb.group({
     name: ['', [Validators.required]],
-    description: ['', []]
+    description: ['', []],
+    db_host: ['', []],
+    db_port: [5432, [Validators.min(1), Validators.max(65535)]],
+    db_user: ['', []],
+    db_password: ['', []],
+    db_name: ['', []],
+    db_schema: ['public', []]
   });
 
   ngOnInit() {
@@ -31,10 +38,13 @@ export class ProjectsPage implements OnInit {
   }
 
   loadProjects() {
-    console.log("Loading projects")
     this.projectService.getAll().subscribe((data: Project[]) => {
       this.projects = data;
-      this.selectProject(this.projects.length > 0 ? this.projects[0] : null);
+      // If we already have a selected project, keep it selected (and updated)
+      // otherwise, grab the first one.
+      const toSelect = this.projects.find(p => p.id === this.selectedProject?.id) ||
+                       (this.projects.length > 0 ? this.projects[0] : null);
+      this.selectProject(toSelect);
     });
   }
 
@@ -63,32 +73,42 @@ export class ProjectsPage implements OnInit {
     this.updateFormState();
 
     if (!this.isEditing && this.selectedProject) {
+      // Revert changes if cancelling
       this.projectForm.patchValue(this.selectedProject);
     }
   }
 
   selectProject(project: Project | null) {
     this.selectedProject = project;
-    this.isEditing = false; // Reset to view mode on selection
+    this.isEditing = false;
 
     if (project) {
+      // patchValue automatically maps matching keys from 'project' to form controls
       this.projectForm.patchValue(project);
     } else {
-      this.projectForm.reset();
+      this.projectForm.reset({
+        db_port: 5432,
+        db_schema: 'public'
+      });
     }
     this.updateFormState();
   }
 
   saveProject() {
     if (this.projectForm.invalid) return;
+
+    // Use getRawValue() if you want to include disabled fields,
+    // but here we just need the form data
     const formValue = this.projectForm.value as Partial<Project>;
-    this.isEditing = false;
+
     if (this.selectedProject?.id) {
       this.projectService.update(this.selectedProject.id, formValue).subscribe(() => {
+        this.isEditing = false;
         this.loadProjects();
       });
     } else {
       this.projectService.create(formValue).subscribe((newProj: Project) => {
+        this.isEditing = false;
         this.loadProjects();
         this.selectProject(newProj);
       });
@@ -108,7 +128,10 @@ export class ProjectsPage implements OnInit {
   startNewProject() {
     this.selectedProject = null;
     this.isEditing = true;
-    this.projectForm.reset();
+    this.projectForm.reset({
+      db_port: 5432,
+      db_schema: 'public'
+    });
     this.updateFormState();
   }
 }

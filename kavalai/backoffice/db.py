@@ -4,7 +4,7 @@ from enum import Enum as PyEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import MetaData
-from sqlalchemy import TEXT, Boolean, ForeignKey, DateTime
+from sqlalchemy import TEXT, Boolean, ForeignKey, DateTime, Integer
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ENUM
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,7 @@ def get_backoffice_db_url():
     return f"postgresql+asyncpg://{os.environ['BACKOFFICE_DB_USER']}:{os.environ['BACKOFFICE_DB_PASSWORD']}@{os.environ['BACKOFFICE_DB_HOST']}:{os.environ['BACKOFFICE_DB_PORT']}/{os.environ['BACKOFFICE_DB_NAME']}"
 
 
-engine = create_async_engine(get_backoffice_db_url(), echo=True, poolclass=NullPool)
+engine = create_async_engine(get_backoffice_db_url(), echo=False, poolclass=NullPool)
 
 AsyncBackofficeSession = async_sessionmaker(
     bind=engine, class_=AsyncSession, expire_on_commit=False
@@ -61,6 +61,15 @@ class Project(Base):
     )
     name: Mapped[str] = mapped_column(TEXT, nullable=False)
     description: Mapped[str | None] = mapped_column(TEXT)
+
+    # New Database Connection Columns
+    db_host: Mapped[str | None] = mapped_column(TEXT)
+    db_port: Mapped[int | None] = mapped_column(Integer, default=5432)
+    db_user: Mapped[str | None] = mapped_column(TEXT)
+    db_password: Mapped[str | None] = mapped_column(TEXT)
+    db_name: Mapped[str | None] = mapped_column(TEXT)
+    db_schema: Mapped[str | None] = mapped_column(TEXT, default="public")
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -126,7 +135,7 @@ async def is_owner(db: AsyncSession, user_id: UUID, project_id: UUID) -> bool:
 
 
 async def get_user_projects(db: AsyncSession, user_id: UUID) -> list[dict]:
-    """Fetch projects along with the specific user's role."""
+    """Fetch projects along with the specific user's role and DB details."""
     stmt = (
         select(Project, ProjectMembership.role)
         .join(ProjectMembership, Project.id == ProjectMembership.project_id)
@@ -134,21 +143,25 @@ async def get_user_projects(db: AsyncSession, user_id: UUID) -> list[dict]:
     )
 
     result = await db.execute(stmt)
-    # result contains Rows of (Project, ProjectRole)
 
     projects_with_roles = []
     for row in result.all():
         project_obj: Project = row[0]
         role: ProjectRole = row[1]
 
-        # Flatten the data to match your TypeScript 'ProjectWithRole' interface
         project_data = {
             "id": str(project_obj.id),
             "name": project_obj.name,
             "description": project_obj.description,
+            "db_host": project_obj.db_host,
+            "db_port": project_obj.db_port,
+            "db_user": project_obj.db_user,
+            "db_name": project_obj.db_name,
+            "db_schema": project_obj.db_schema,
+            "db_password": project_obj.db_password,
             "created_at": project_obj.created_at.isoformat(),
             "updated_at": project_obj.updated_at.isoformat(),
-            "role": role.value,  # The string value "owner" or "viewer"
+            "role": role.value,
         }
         projects_with_roles.append(project_data)
 
