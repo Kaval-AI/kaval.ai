@@ -9,14 +9,32 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.pool import NullPool
 
 
-def get_agents_db_url():
-    return f"postgresql+asyncpg://{os.environ['AGENTS_DB_USER']}:{os.environ['AGENTS_DB_PASSWORD']}@{os.environ['AGENTS_DB_HOST']}:{os.environ['AGENTS_DB_PORT']}/{os.environ['AGENTS_DB_NAME']}"
+class DatabaseManager:
+    """Manages dynamic engine creation and session factories."""
+
+    def __init__(self):
+        # Optional: Cache engines by a unique key (e.g., host+db_name)
+        # to avoid the overhead of re-creating engines constantly.
+        self._engines = {}
+
+    def get_url(self, user, password, host, port, db_name) -> str:
+        return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db_name}"
+
+    def get_sessionmaker(self, *, user, password, host, port, db_name):
+        url = self.get_url(user, password, host, port, db_name)
+
+        # Check cache first
+        if url not in self._engines:
+            self._engines[url] = create_async_engine(url, echo=True, poolclass=NullPool)
+
+        engine = self._engines[url]
+        return async_sessionmaker(
+            bind=engine, class_=AsyncSession, expire_on_commit=False
+        )
 
 
-engine = create_async_engine(get_agents_db_url(), echo=True, poolclass=NullPool)
-AsyncAgentsSession = async_sessionmaker(
-    bind=engine, class_=AsyncSession, expire_on_commit=False
-)
+# Global instance to manage cached engines
+db_manager = DatabaseManager()
 
 
 class Base(DeclarativeBase):

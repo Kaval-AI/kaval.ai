@@ -195,6 +195,35 @@ async def projects_delete(project_id: UUID, request: Request):
         return {"status": "deleted"}
 
 
+@app.get("/agents/get/{agent_id}")
+async def agents_get_by_id(agent_id: UUID, request: Request):
+    assert_logged_in(request)
+    async with db.AsyncBackofficeSession() as session:
+        agent = await get_one(session, db.Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        await assert_is_member(session, request, agent.project_id)
+
+        return agent
+
+
+@app.get("/agents/all/{project_id}")
+async def agents_get_all(project_id: UUID, request: Request):
+    """Fetch all agents belonging to a specific project."""
+    assert_logged_in(request)
+    async with db.AsyncBackofficeSession() as session:
+        # Security: Ensure user is a member of the project before listing agents
+        await assert_is_member(session, request, project_id)
+
+        # Use your custom select helper to filter by project_id
+        stmt = select(db.Agent).where(db.Agent.project_id == project_id)
+        result = await session.execute(stmt)
+        agents = result.scalars().all()
+
+        return agents
+
+
 if __name__ == "__main__":
     config = uvicorn.Config(
         "kavalai.backoffice.server:app",

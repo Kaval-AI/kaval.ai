@@ -3,8 +3,6 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-from kavalai.agents.db import AsyncAgentsSession
-
 # Assuming your server code is in kavalai_server.py
 from kavalai.agents.server import create_agent_app
 from kavalai.agents.workflow import Workflow
@@ -36,7 +34,7 @@ tasks:
 
 
 @pytest.fixture(scope="function")
-def client(agents_db):
+def client(agents_session_maker, agents_db):
     # Set dummy auth for testing
     os.environ["HTTP_BASIC_AUTH_USER"] = "lucille"
     os.environ["HTTP_BASIC_AUTH_PASSWORD"] = "blues123"
@@ -45,7 +43,7 @@ def client(agents_db):
     workflow = Workflow.from_yaml(SIMPLE_YAML)
 
     # Create the app (using None for session_provider if DB isn't required for this simple test)
-    app = create_agent_app(workflow=workflow, session_provider=AsyncAgentsSession)
+    app = create_agent_app(workflow=workflow, session_provider=agents_session_maker)
     yield TestClient(app)
 
 
