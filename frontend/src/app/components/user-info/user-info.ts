@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { AuthService } from '../../services/auth-service';
+import { UserService } from '../../services/user.service';
 import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 import { DropdownMenuTriggerDirective } from '../dropdown-menu/dropdown-menu';
@@ -13,7 +13,7 @@ import { DropdownMenuTriggerDirective } from '../dropdown-menu/dropdown-menu';
 export class UserInfo implements OnInit {
   userDetails: UserDetails | null = null;
 
-  constructor(private authService: AuthService) {}
+  constructor(private authService: UserService) {}
 
   ngOnInit(): void {
     this.authService.userDetails.subscribe((details) => {

@@ -6,7 +6,7 @@ import { tap } from 'rxjs/operators';
 @Injectable({
   providedIn: 'root',
 })
-export class AuthService {
+export class UserService {
   private loggedIn: boolean = false;
   private userDetails$ = new BehaviorSubject<UserDetails | null>(null);
 
@@ -51,5 +51,14 @@ export class AuthService {
   getIsAdmin(): boolean {
     const user = this.userDetails$.value;
     return this.loggedIn && user != null && user.is_admin;
+  }
+
+  setActiveProject(projectId: string): Observable<any> {
+    if (this.userDetails$.value) {
+      this.userDetails$.next({
+        ...this.userDetails$.value,
+        active_project_id: projectId});
+    }
+    return this.http.post<any>(`/api/user/set_active_project/${projectId}`, {});
   }
 }

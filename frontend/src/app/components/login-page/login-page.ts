@@ -10,7 +10,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
-import { AuthService } from '../../services/auth-service';
+import { UserService } from '../../services/user.service';
 
 @Component({
   selector: 'app-login-page',
@@ -29,7 +29,7 @@ import { AuthService } from '../../services/auth-service';
 export class LoginPage {
   constructor(
     private fb: FormBuilder,
-    private authService: AuthService
+    private authService: UserService
   ) {}
 
   login(): void {

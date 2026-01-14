@@ -3,7 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ProjectService } from '../../services/project-service';
 import { Project } from '../../models/project';
-import { AuthService } from '../../services/auth-service';
+import { UserService } from '../../services/user.service';
 
 @Component({
   selector: 'app-projects-page',
@@ -14,7 +14,7 @@ import { AuthService } from '../../services/auth-service';
 })
 export class ProjectsPage implements OnInit {
   private projectService = inject(ProjectService);
-  private authService = inject(AuthService);
+  private authService = inject(UserService);
   private fb = inject(FormBuilder);
 
   projects: Project[] = [];
@@ -57,6 +57,7 @@ export class ProjectsPage implements OnInit {
     const project = this.projects.find(p => p.id === target.value);
     if (project) {
       this.selectProject(project);
+      this.authService.setActiveProject(project.id);
     }
   }
 
@@ -110,7 +111,8 @@ export class ProjectsPage implements OnInit {
       this.projectService.create(formValue).subscribe((newProj: Project) => {
         this.isEditing = false;
         this.loadProjects();
-        this.selectProject(newProj);
+        this.selectProject(newProj)
+        this.authService.setActiveProject(newProj.id);
       });
     }
   }

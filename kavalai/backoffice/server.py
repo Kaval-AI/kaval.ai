@@ -129,6 +129,21 @@ async def google_auth_callback(request: Request):
         raise HTTPException(status_code=400, detail="Authentication failed.")
 
 
+@app.post("/user/set_active_project/{project_id}")
+async def set_active_project(project_id: UUID, request: Request):
+    assert_logged_in(request)
+    user_id = UUID(request.session.get("user_info")["id"])
+    async with db.AsyncBackofficeSession() as session:
+        # Verify membership before setting active
+        if not await db.is_member(session, user_id, project_id):
+            raise HTTPException(status_code=403, detail="Must be a member of the project.")
+
+        await update(session, db.User, user_id, {"active_project_id": project_id})
+
+        # Update session
+        request.session["user_info"]["active_project_id"] = str(project_id)
+        return {"status": "ok", "active_project_id": project_id}
+
 @app.post("/projects/create")
 async def projects_create(request: Request, data: dict = Body(...)):
     assert_logged_in(request)

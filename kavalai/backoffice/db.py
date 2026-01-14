@@ -38,6 +38,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(TEXT, nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     picture: Mapped[str | None] = mapped_column(TEXT)
+    active_project_id: Mapped[UUID | None] = mapped_column(ForeignKey("projects.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
