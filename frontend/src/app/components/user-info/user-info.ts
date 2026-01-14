@@ -1,8 +1,9 @@
-import { Component, OnInit } from '@angular/core';
-import { UserService } from '../../services/user.service';
-import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
+import { Component, OnInit } from '@angular/core';
 import { DropdownMenuTriggerDirective } from '../dropdown-menu/dropdown-menu';
+import { MatButtonModule } from '@angular/material/button';
+import { UserDetails } from '../../models/user-details';
+import { UserService } from '../../services/user-service';
 
 @Component({
   selector: 'app-user-info',
@@ -13,17 +14,17 @@ import { DropdownMenuTriggerDirective } from '../dropdown-menu/dropdown-menu';
 export class UserInfo implements OnInit {
   userDetails: UserDetails | null = null;
 
-  constructor(private authService: UserService) {}
+  constructor(private userService: UserService) {}
 
   ngOnInit(): void {
-    this.authService.userDetails.subscribe((details) => {
+    this.userService.userDetails.subscribe((details: UserDetails | null) => {
       console.log(details);
       this.userDetails = details;
     });
-    this.authService.updateUserDetails();
+    this.userService.updateUserDetails();
   }
 
   logout(): void {
-    this.authService.logout();
+    this.userService.logout();
   }
 }

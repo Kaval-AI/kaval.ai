@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
+import { UserDetails } from '../models/user-details';
 
 @Injectable({
   providedIn: 'root',
@@ -53,12 +54,20 @@ export class UserService {
     return this.loggedIn && user != null && user.is_admin;
   }
 
-  setActiveProject(projectId: string): Observable<any> {
-    if (this.userDetails$.value) {
-      this.userDetails$.next({
-        ...this.userDetails$.value,
-        active_project_id: projectId});
-    }
-    return this.http.post<any>(`/api/user/set_active_project/${projectId}`, {});
+  setActiveProject(projectId: string): void { // Changed from Observable<any> to void
+    this.http.post<any>(`/api/user/set_active_project/${projectId}`, {}).subscribe({
+      next: () => {
+        const currentDetails = this.userDetails$.value;
+        if (currentDetails) {
+          this.userDetails$.next({
+            ...currentDetails,
+            active_project_id: projectId
+          });
+        }
+      },
+      error: (err) => {
+        console.error('Failed to set active project', err);
+      }
+    });
   }
 }

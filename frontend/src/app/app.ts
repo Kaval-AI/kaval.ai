@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { LoginPage } from './components/login-page/login-page';
-import { UserService } from './services/user.service';
+import { UserService } from './services/user-service';
 import { SidebarMenu } from './components/sidebar-menu/sidebar-menu';
 import { UserInfo } from './components/user-info/user-info';
 import { RouterOutlet } from '@angular/router';
@@ -12,13 +12,13 @@ import { RouterOutlet } from '@angular/router';
   styleUrl: './app.css',
 })
 export class App implements OnInit {
-  constructor(private authService: UserService) {}
+  constructor(private userService: UserService) {}
 
   ngOnInit(): void {
-    this.authService.updateUserDetails();
+    this.userService.updateUserDetails();
   }
 
   get isLoggedIn(): boolean {
-    return this.authService.getIsLoggedIn();
+    return this.userService.getIsLoggedIn();
   }
 }

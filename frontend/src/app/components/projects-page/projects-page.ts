@@ -3,7 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ProjectService } from '../../services/project-service';
 import { Project } from '../../models/project';
-import { UserService } from '../../services/user.service';
+import { UserService } from '../../services/user-service';
 
 @Component({
   selector: 'app-projects-page',
@@ -14,7 +14,7 @@ import { UserService } from '../../services/user.service';
 })
 export class ProjectsPage implements OnInit {
   private projectService = inject(ProjectService);
-  private authService = inject(UserService);
+  private userService = inject(UserService);
   private fb = inject(FormBuilder);
 
   projects: Project[] = [];
@@ -49,7 +49,7 @@ export class ProjectsPage implements OnInit {
   }
 
   getIsAdmin() {
-    return this.authService.getIsAdmin();
+    return this.userService.getIsAdmin();
   }
 
   onProjectSelect(event: Event) {
@@ -57,7 +57,7 @@ export class ProjectsPage implements OnInit {
     const project = this.projects.find(p => p.id === target.value);
     if (project) {
       this.selectProject(project);
-      this.authService.setActiveProject(project.id);
+      this.userService.setActiveProject(project.id);
     }
   }
 
@@ -98,21 +98,22 @@ export class ProjectsPage implements OnInit {
   saveProject() {
     if (this.projectForm.invalid) return;
 
-    // Use getRawValue() if you want to include disabled fields,
-    // but here we just need the form data
     const formValue = this.projectForm.value as Partial<Project>;
 
     if (this.selectedProject?.id) {
       this.projectService.update(this.selectedProject.id, formValue).subscribe(() => {
         this.isEditing = false;
         this.loadProjects();
+        if (this.selectedProject?.id) {
+          this.userService.setActiveProject(this.selectedProject.id);
+        }
       });
     } else {
       this.projectService.create(formValue).subscribe((newProj: Project) => {
         this.isEditing = false;
         this.loadProjects();
         this.selectProject(newProj)
-        this.authService.setActiveProject(newProj.id);
+        this.userService.setActiveProject(newProj.id);
       });
     }
   }
