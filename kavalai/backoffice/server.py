@@ -11,6 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
 from kavalai.backoffice import db
 from kavalai.backoffice.db import is_owner, is_member
+from kavalai.agents.db import db_manager, Agent
 
 # Set up the app logger
 logger = logging.getLogger(__name__)
@@ -75,15 +76,21 @@ def assert_is_admin(request: Request):
         )
 
 
-def assert_is_owner(session: db.AsyncSession, request: Request, project_id: UUID):
-    if not is_owner(session, UUID(request.session.get("user_info")["id"]), project_id):
+async def assert_is_owner(session: db.AsyncSession, request: Request, project_id: UUID):
+    if not await is_owner(
+        session, UUID(request.session.get("user_info")["id"]), project_id
+    ):
         raise HTTPException(
             status_code=403, detail="Only administrators can create new projects."
         )
 
 
-def assert_is_member(session: db.AsyncSession, request: Request, project_id: UUID):
-    if not is_member(session, UUID(request.session.get("user_info")["id"]), project_id):
+async def assert_is_member(
+    session: db.AsyncSession, request: Request, project_id: UUID
+):
+    if not await is_member(
+        session, UUID(request.session.get("user_info")["id"]), project_id
+    ):
         raise HTTPException(status_code=403, detail="Must be a member of the project.")
 
 
@@ -172,7 +179,7 @@ async def projects_create(request: Request, data: dict = Body(...)):
 async def projects_get_by_id(project_id: UUID, request: Request):
     assert_logged_in(request)
     async with db.AsyncBackofficeSession() as session:
-        assert_is_member(session, request, project_id)
+        await assert_is_member(session, request, project_id)
         project = await get_one(session, db.Project, project_id)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -194,7 +201,7 @@ async def projects_update(project_id: UUID, request: Request, data: dict = Body(
     assert_logged_in(request)
     print(data)
     async with db.AsyncBackofficeSession() as session:
-        assert_is_owner(session, request, project_id)
+        await assert_is_owner(session, request, project_id)
         updated = await update(session, db.Project, project_id, data)
         if not updated:
             raise HTTPException(status_code=404, detail="Project not found.")
@@ -205,23 +212,35 @@ async def projects_update(project_id: UUID, request: Request, data: dict = Body(
 async def projects_delete(project_id: UUID, request: Request):
     assert_logged_in(request)
     async with db.AsyncBackofficeSession() as session:
-        assert_is_owner(session, request, project_id)
+        await assert_is_owner(session, request, project_id)
         success = await delete(session, db.Project, project_id)
         if not success:
             raise HTTPException(status_code=404, detail="Project not found")
         return {"status": "deleted"}
 
 
-@app.get("/agents/get/{agent_id}")
-async def agents_get_by_id(agent_id: UUID, request: Request):
+@app.get("/agents/get/{project_id}/{agent_id}")
+async def agents_get_by_id(project_id: UUID, agent_id: UUID, request: Request):
     assert_logged_in(request)
     async with db.AsyncBackofficeSession() as session:
-        agent = await get_one(session, db.Agent, agent_id)
+        await assert_is_member(session, request, project_id)
+        project = await get_one(session, db.Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        agent = await get_one(project_session, Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
-
-        await assert_is_member(session, request, agent.project_id)
-
         return agent
 
 
@@ -233,12 +252,55 @@ async def agents_get_all(project_id: UUID, request: Request):
         # Security: Ensure user is a member of the project before listing agents
         await assert_is_member(session, request, project_id)
 
-        # Use your custom select helper to filter by project_id
-        stmt = select(db.Agent).where(db.Agent.project_id == project_id)
-        result = await session.execute(stmt)
-        agents = result.scalars().all()
+        project = await get_one(session, db.Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
 
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        stmt = select(Agent)
+        result = await project_session.execute(stmt)
+        agents = result.scalars().all()
         return agents
+
+
+@app.post("/projects/test-connection/{project_id}")
+async def projects_test_connection(project_id: UUID, request: Request):
+    """Test connection to the project database."""
+    assert_logged_in(request)
+    async with db.AsyncBackofficeSession() as session:
+        await assert_is_member(session, request, project_id)
+        project = await get_one(session, db.Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        project_session_maker = db_manager.get_sessionmaker(
+            user=project.db_user,
+            password=project.db_password,
+            host=project.db_host,
+            port=project.db_port,
+            db_name=project.db_name,
+        )
+        async with project_session_maker() as project_session:
+            # Attempt to execute a simple query to verify connection
+            from sqlalchemy import text
+
+            await project_session.execute(text("SELECT 1"))
+        return {"status": "success", "message": "Connection successful"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"status": "error", "message": str(e)},
+        )
 
 
 if __name__ == "__main__":

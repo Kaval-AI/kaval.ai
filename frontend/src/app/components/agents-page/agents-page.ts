@@ -35,6 +35,7 @@ export class AgentsPage implements OnInit {
 
     this.loading = true;
     this.error = null;
+    console.log(`Loading agents for project ${activeProjectId}`);
 
     this.agentService.getAgentsByProject(activeProjectId).subscribe({
       next: (agents) => {

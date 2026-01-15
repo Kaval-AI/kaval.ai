@@ -29,4 +29,8 @@ export class ProjectService {
   delete(id: string | number): Observable<void> {
     return this.http.delete<void>(`/api/projects/delete/${id}`);
   }
+
+  testConnection(projectId: string): Observable<{status: string, message?: string}> {
+    return this.http.post<{status: string, message?: string}>(`/api/projects/test-connection/${projectId}`, {});
+  }
 }
