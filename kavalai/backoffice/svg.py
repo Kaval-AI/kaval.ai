@@ -5,7 +5,9 @@ from kavalai.agents.workflow import (
 
 
 def generate_workflow_svg(
-    model: WorkflowModel, output_filename: str = "workflow_graph"
+    model: WorkflowModel,
+    output_filename: str = "workflow_graph",
+    return_content: bool = False,
 ):
     # Initialize the graph
     dot = Digraph(name=model.name, comment=model.description)
@@ -15,8 +17,9 @@ def generate_workflow_svg(
     dot.attr("node", fontname="Arial", fontsize="12")
 
     # 1. Define Data Type Nodes (Rectangles)
-    for dt_name in model.data_types.keys():
-        dot.node(dt_name, dt_name, shape="box", style="filled", color="lightblue2")
+    if model.data_types:
+        for dt_name in model.data_types.keys():
+            dot.node(dt_name, dt_name, shape="box", style="filled", color="lightblue2")
 
     # 2. Define Task Nodes (Rounded Rectangles)
     for task in model.tasks:
@@ -37,14 +40,17 @@ def generate_workflow_svg(
         # 3. Create Edges
         # Inputs -> Task
         for input_name in task.inputs:
-            if input_name in model.data_types:
+            if model.data_types and input_name in model.data_types:
                 dot.edge(input_name, task_id)
 
         # Task -> Output
-        if task.output in model.data_types:
+        if model.data_types and task.output in model.data_types:
             dot.edge(task_id, task.output)
 
     # Render the graph
+    if return_content:
+        return dot.pipe(format="svg").decode("utf-8")
+
     dot.render(output_filename, format="svg", cleanup=True)
     print(f"Workflow SVG generated: {output_filename}.svg")
 

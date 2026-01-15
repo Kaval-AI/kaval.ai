@@ -12,6 +12,9 @@ from starlette.responses import JSONResponse, RedirectResponse
 from kavalai.backoffice import db
 from kavalai.backoffice.db import is_owner, is_member
 from kavalai.agents.db import db_manager, Agent
+from kavalai.agents.workflow import WorkflowModel
+from kavalai.backoffice.svg import generate_workflow_svg
+from fastapi.responses import Response
 
 # Set up the app logger
 logger = logging.getLogger(__name__)
@@ -267,6 +270,34 @@ async def agents_get_all(project_id: UUID, request: Request):
         result = await project_session.execute(stmt)
         agents = result.scalars().all()
         return agents
+
+
+@app.get("/agents/svg/{project_id}/{agent_id}")
+async def agents_get_svg(project_id: UUID, agent_id: UUID, request: Request):
+    """Fetch and return the workflow SVG for a specific agent."""
+    assert_logged_in(request)
+    project = await get_project_and_assert_access(request, project_id)
+
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        agent = await get_one(project_session, Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        if not agent.workflow:
+            raise HTTPException(status_code=400, detail="Agent has no workflow defined")
+
+        model = WorkflowModel(**agent.workflow)
+        svg_content = generate_workflow_svg(model, return_content=True)
+        return Response(content=svg_content, media_type="image/svg+xml")
 
 
 @app.post("/projects/test-connection/{project_id}")

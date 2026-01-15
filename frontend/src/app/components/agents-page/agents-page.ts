@@ -15,6 +15,8 @@ export class AgentsPage implements OnInit {
   agents: Agent[] = [];
   loading: boolean = false;
   error: string | null = null;
+  selectedAgent: Agent | null = null;
+  activeProjectId: string | null = null;
 
   constructor(
     private agentService: AgentService,
@@ -22,25 +24,27 @@ export class AgentsPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.activeProjectId = this.userService.getActiveProjectId();
     this.loadAgents();
   }
 
   private loadAgents(): void {
-    const activeProjectId = this.userService.getActiveProjectId();
-
-    if (!activeProjectId) {
+    if (!this.activeProjectId) {
       this.error = 'No active project selected';
       return;
     }
 
     this.loading = true;
     this.error = null;
-    console.log(`Loading agents for project ${activeProjectId}`);
+    console.log(`Loading agents for project ${this.activeProjectId}`);
 
-    this.agentService.getAgentsByProject(activeProjectId).subscribe({
+    this.agentService.getAgentsByProject(this.activeProjectId).subscribe({
       next: (agents) => {
         this.agents = agents;
         this.loading = false;
+        if (this.agents.length > 0) {
+          this.selectedAgent = this.agents[0];
+        }
       },
       error: (err) => {
         this.error = 'Failed to load agents';
@@ -48,5 +52,14 @@ export class AgentsPage implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  selectAgent(agent: Agent): void {
+    this.selectedAgent = agent;
+  }
+
+  getSvgUrl(agentId: string): string {
+    if (!this.activeProjectId) return '';
+    return this.agentService.getAgentSvgUrl(this.activeProjectId, agentId);
   }
 }

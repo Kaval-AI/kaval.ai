@@ -53,3 +53,24 @@ def test_generate_workflow_svg(tmp_path):
         mock_dot.render.assert_called_once_with(
             str(output_path), format="svg", cleanup=True
         )
+
+
+def test_generate_workflow_svg_content():
+    model_data = {
+        "name": "Test Workflow",
+        "description": "A test workflow",
+        "llm_provider": "openai",
+        "data_types": {},
+        "tasks": [],
+    }
+    model = WorkflowModel(**model_data)
+
+    with patch("kavalai.backoffice.svg.Digraph") as MockDigraph:
+        mock_dot = MockDigraph.return_value
+        mock_dot.pipe.return_value = b"<svg>test</svg>"
+
+        content = generate_workflow_svg(model, return_content=True)
+
+        assert content == "<svg>test</svg>"
+        mock_dot.pipe.assert_called_once_with(format="svg")
+        mock_dot.render.assert_not_called()

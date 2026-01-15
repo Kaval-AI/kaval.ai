@@ -9,21 +9,49 @@
       No agents found for this project.
     </div>
 
-    <table *ngIf="agents.length > 0" class="agents-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-          <th>Created At</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let agent of agents">
-          <td>{{ agent.name }}</td>
-          <td>{{ agent.description }}</td>
-          <td>{{ agent.created_at | date:'short' }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div *ngIf="agents.length > 0" class="agents-content">
+      <div class="agents-list">
+        <h3>Agents List</h3>
+        <table class="agents-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let agent of agents" (click)="selectAgent(agent)" [class.selected]="selectedAgent?.id === agent.id">
+              <td>{{ agent.name }}</td>
+              <td>{{ agent.description }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="agent-details" *ngIf="selectedAgent">
+        <h3>Agent Workflow: {{ selectedAgent.name }}</h3>
+        <div class="workflow-chart">
+          <img [src]="getSvgUrl(selectedAgent.id)" [alt]="selectedAgent.name + ' workflow'" />
+        </div>
+
+        <div class="raw-data">
+          <h4>Details</h4>
+          <p><strong>ID:</strong> {{ selectedAgent.id }}</p>
+          <p><strong>Created At:</strong> {{ selectedAgent.created_at | date:'short' }}</p>
+          <p><strong>Updated At:</strong> {{ selectedAgent.updated_at | date:'short' }}</p>
+
+          <div class="schemas">
+            <div>
+              <h5>Input Schema</h5>
+              <pre>{{ selectedAgent.input_schema | json }}</pre>
+            </div>
+            <div>
+              <h5>Output Schema</h5>
+              <pre>{{ selectedAgent.output_schema | json }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
