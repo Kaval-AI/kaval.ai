@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="All Tests - Frontend" type="js.build_tools.npm">
+    <package-json value="$PROJECT_DIR$/frontend/package.json" />
+    <command value="test" />
+    <scripts>
+      <script value="test" />
+    </scripts>
+    <node-interpreter value="project" />
+    <envs />
+    <method v="2" />
+  </configuration>
+</component>

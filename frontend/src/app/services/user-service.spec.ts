@@ -1,16 +1,63 @@
 import { TestBed } from '@angular/core/testing';
-
-import { UserService } from './user.service';
+import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { UserService } from './user-service';
+import { UserDetails } from '../models/user-details';
 
 describe('UserService', () => {
   let service: UserService;
+  let httpMock: HttpTestingController;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [UserService]
+    });
     service = TestBed.inject(UserService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it('should update user details', () => {
+    const mockUser: UserDetails = { email: 'test@test.com', name: 'Test', picture: '', is_admin: true, active_project_id: 'proj1' };
+    service.updateUserDetails();
+
+    const req = httpMock.expectOne('/api/user/get_details');
+    expect(req.request.method).toBe('GET');
+    req.flush(mockUser);
+
+    expect(service.getIsLoggedIn()).toBeTrue();
+    expect(service.getIsAdmin()).toBeTrue();
+    expect(service.getActiveProjectId()).toBe('proj1');
+  });
+
+  it('should handle logout', () => {
+    service.logout();
+    const req = httpMock.expectOne('/api/logout');
+    expect(req.request.method).toBe('GET');
+    req.flush({});
+
+    expect(service.getIsLoggedIn()).toBeFalse();
+  });
+
+  it('should set active project', () => {
+    const mockUser: UserDetails = { email: 'test@test.com', name: 'Test', picture: '', is_admin: false, active_project_id: 'old' };
+
+    // Setup initial state
+    service.updateUserDetails();
+    httpMock.expectOne('/api/user/get_details').flush(mockUser);
+
+    service.setActiveProject('new');
+    const req = httpMock.expectOne('/api/user/set_active_project/new');
+    expect(req.request.method).toBe('POST');
+    req.flush({});
+
+    expect(service.getActiveProjectId()).toBe('new');
   });
 });

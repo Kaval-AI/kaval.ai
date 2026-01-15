@@ -33,5 +33,5 @@ All of them should pass
 - Install latest npm `nvm install [latest version]`
 - Install [Angular](https://angular.dev/installation)
 - Next, go to the `frontend/` directory.
+- Install `npm install -g karma-cli`
 - Run `npm install`
-
