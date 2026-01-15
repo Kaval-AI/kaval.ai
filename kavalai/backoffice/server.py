@@ -94,6 +94,18 @@ async def assert_is_member(
         raise HTTPException(status_code=403, detail="Must be a member of the project.")
 
 
+async def get_project_and_assert_access(
+    request: Request, project_id: UUID
+) -> db.Project:
+    """Fetch project and assert user is a member."""
+    async with db.AsyncBackofficeSession() as session:
+        await assert_is_member(session, request, project_id)
+        project = await get_one(session, db.Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return project
+
+
 @app.get("/login")
 async def login(request: Request):
     redirect_uri = request.url_for("google_auth_callback")
@@ -178,12 +190,7 @@ async def projects_create(request: Request, data: dict = Body(...)):
 @app.get("/projects/get/{project_id}")
 async def projects_get_by_id(project_id: UUID, request: Request):
     assert_logged_in(request)
-    async with db.AsyncBackofficeSession() as session:
-        await assert_is_member(session, request, project_id)
-        project = await get_one(session, db.Project, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-        return project
+    return await get_project_and_assert_access(request, project_id)
 
 
 @app.get("/projects/all")
@@ -222,11 +229,7 @@ async def projects_delete(project_id: UUID, request: Request):
 @app.get("/agents/get/{project_id}/{agent_id}")
 async def agents_get_by_id(project_id: UUID, agent_id: UUID, request: Request):
     assert_logged_in(request)
-    async with db.AsyncBackofficeSession() as session:
-        await assert_is_member(session, request, project_id)
-        project = await get_one(session, db.Project, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_and_assert_access(request, project_id)
 
     # Connect to the project database
     project_session_maker = db_manager.get_sessionmaker(
@@ -248,13 +251,7 @@ async def agents_get_by_id(project_id: UUID, agent_id: UUID, request: Request):
 async def agents_get_all(project_id: UUID, request: Request):
     """Fetch all agents belonging to a specific project."""
     assert_logged_in(request)
-    async with db.AsyncBackofficeSession() as session:
-        # Security: Ensure user is a member of the project before listing agents
-        await assert_is_member(session, request, project_id)
-
-        project = await get_one(session, db.Project, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_and_assert_access(request, project_id)
 
     # Connect to the project database
     project_session_maker = db_manager.get_sessionmaker(
@@ -276,11 +273,7 @@ async def agents_get_all(project_id: UUID, request: Request):
 async def projects_test_connection(project_id: UUID, request: Request):
     """Test connection to the project database."""
     assert_logged_in(request)
-    async with db.AsyncBackofficeSession() as session:
-        await assert_is_member(session, request, project_id)
-        project = await get_one(session, db.Project, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_and_assert_access(request, project_id)
 
     try:
         project_session_maker = db_manager.get_sessionmaker(

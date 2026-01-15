@@ -62,6 +62,21 @@
             <input id="db_password" type="password" formControlName="db_password">
           </div>
         </div>
+
+        @if (selectedProject?.id && !isEditing) {
+          <div class="test-connection-row">
+            <button type="button"
+                    (click)="testConnection()"
+                    [disabled]="isTestingConnection">
+              {{ isTestingConnection ? 'Testing...' : 'Test Connection' }}
+            </button>
+            @if (connectionStatus) {
+              <span class="status-msg" [class.success]="connectionStatus.status === 'success'" [class.error]="connectionStatus.status === 'error'">
+                {{ connectionStatus.message }}
+              </span>
+            }
+          </div>
+        }
       </fieldset>
 
       <div class="button-row">

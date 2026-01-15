@@ -20,6 +20,8 @@ export class ProjectsPage implements OnInit {
   projects: Project[] = [];
   selectedProject: Project | null = null;
   isEditing = false;
+  connectionStatus: { status: string; message?: string } | null = null;
+  isTestingConnection = false;
 
   // Updated Form Controls to match the new DB columns
   projectForm = this.fb.group({
@@ -82,6 +84,7 @@ export class ProjectsPage implements OnInit {
   selectProject(project: Project | null) {
     this.selectedProject = project;
     this.isEditing = false;
+    this.connectionStatus = null;
 
     if (project) {
       // patchValue automatically maps matching keys from 'project' to form controls
@@ -131,10 +134,32 @@ export class ProjectsPage implements OnInit {
   startNewProject() {
     this.selectedProject = null;
     this.isEditing = true;
+    this.connectionStatus = null;
     this.projectForm.reset({
       db_port: 5432,
       db_schema: 'public'
     });
     this.updateFormState();
+  }
+
+  testConnection() {
+    if (!this.selectedProject?.id) return;
+
+    this.isTestingConnection = true;
+    this.connectionStatus = null;
+
+    this.projectService.testConnection(this.selectedProject.id).subscribe({
+      next: (res) => {
+        this.connectionStatus = res;
+        this.isTestingConnection = false;
+      },
+      error: (err) => {
+        this.connectionStatus = {
+          status: 'error',
+          message: err.error?.message || err.message || 'Unknown error'
+        };
+        this.isTestingConnection = false;
+      }
+    });
   }
 }

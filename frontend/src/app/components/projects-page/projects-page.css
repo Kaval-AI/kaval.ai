@@ -57,3 +57,23 @@ input:disabled, textarea:disabled {
   color: #333;
   cursor: default;
 }
+
+.test-connection-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.status-msg {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.status-msg.success {
+  color: #28a745;
+}
+
+.status-msg.error {
+  color: #dc3545;
+}
