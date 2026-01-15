@@ -1,0 +1,30 @@
+.agents-container {
+  padding: 20px;
+}
+
+.agents-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+.agents-table th, .agents-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.agents-table th {
+  background-color: #f2f2f2;
+}
+
+.loading, .error, .no-agents {
+  margin: 20px 0;
+  padding: 10px;
+}
+
+.error {
+  color: red;
+  background-color: #fee;
+  border: 1px solid red;
+}

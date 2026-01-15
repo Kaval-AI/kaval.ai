@@ -119,7 +119,7 @@ async def google_auth_callback(request: Request):
             "name": db_user.name,
             "picture": db_user.picture,
             "is_admin": db_user.is_admin,
-            "active_project_id": db_user.active_project_id,
+            "active_project_id": str(db_user.active_project_id),
         }
         return RedirectResponse(url="http://localhost:4200")
     except HTTPException as e:

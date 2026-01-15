@@ -54,6 +54,10 @@ export class UserService {
     return this.loggedIn && user != null && user.is_admin;
   }
 
+  getActiveProjectId(): string | null {
+    return this.userDetails$.value?.active_project_id || null;
+  }
+
   setActiveProject(projectId: string): void { // Changed from Observable<any> to void
     this.http.post<any>(`/api/user/set_active_project/${projectId}`, {}).subscribe({
       next: () => {
