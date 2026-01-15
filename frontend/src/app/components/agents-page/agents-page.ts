@@ -3,11 +3,15 @@ import { CommonModule } from '@angular/common';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { Agent } from '../../models/agent';
+import { BaseChartDirective } from 'ng2-charts';
+import { ChartConfiguration, ChartOptions, ChartType, Chart, registerables } from 'chart.js';
+
+Chart.register(...registerables);
 
 @Component({
   selector: 'app-agents-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, BaseChartDirective],
   templateUrl: './agents-page.html',
   styleUrl: './agents-page.css'
 })
@@ -18,6 +22,30 @@ export class AgentsPage implements OnInit {
   selectedAgent: Agent | null = null;
   activeProjectId: string | null = null;
 
+  stats: any = null;
+  public lineChartData: ChartConfiguration<'line'>['data'] = {
+    datasets: [],
+    labels: []
+  };
+  public lineChartOptions: ChartOptions<'line'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          stepSize: 1
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        display: true
+      }
+    }
+  };
+  public lineChartLegend = true;
+
   constructor(
     private agentService: AgentService,
     private userService: UserService
@@ -26,6 +54,69 @@ export class AgentsPage implements OnInit {
   ngOnInit(): void {
     this.activeProjectId = this.userService.getActiveProjectId();
     this.loadAgents();
+    this.loadStats();
+  }
+
+  private loadStats(): void {
+    if (!this.activeProjectId) return;
+
+    this.agentService.getAgentStats(this.activeProjectId).subscribe({
+      next: (stats) => {
+        this.stats = stats;
+        this.prepareChartData();
+      },
+      error: (err) => {
+        console.error('Failed to load stats', err);
+      }
+    });
+  }
+
+  private prepareChartData(): void {
+    if (!this.stats) return;
+
+    const labels = this.stats.runs.map((d: any) => {
+      const date = new Date(d.date);
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    });
+
+    this.lineChartData = {
+      labels: labels,
+      datasets: [
+        {
+          data: this.stats.runs.map((d: any) => d.count),
+          label: 'Runs',
+          borderColor: '#42A5F5',
+          backgroundColor: '#42A5F5',
+          fill: false,
+          tension: 0,
+          borderWidth: 3,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        },
+        {
+          data: this.stats.sessions.map((d: any) => d.count),
+          label: 'Sessions',
+          borderColor: '#FFA726',
+          backgroundColor: '#FFA726',
+          fill: false,
+          tension: 0,
+          borderWidth: 3,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        },
+        {
+          data: this.stats.messages.map((d: any) => d.count),
+          label: 'Messages',
+          borderColor: '#66BB6A',
+          backgroundColor: '#66BB6A',
+          fill: false,
+          tension: 0,
+          borderWidth: 3,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        }
+      ]
+    };
   }
 
   private loadAgents(): void {

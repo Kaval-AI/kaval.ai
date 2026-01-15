@@ -24,7 +24,9 @@
     "@angular/material": "^20.2.0",
     "@angular/platform-browser": "^20.2.0",
     "@angular/router": "^20.2.0",
+    "chart.js": "^4.5.1",
     "marked": "^16.2.1",
+    "ng2-charts": "^8.0.0",
     "ngx-markdown": "^20.1.0",
     "normalize.css": "^8.0.1",
     "nxt-json-view": "^20.0.0",
@@ -35,10 +37,10 @@
     "zone.js": "~0.15.0"
   },
   "devDependencies": {
+    "@angular-devkit/build-angular": "^20.1.6",
     "@angular/build": "^20.1.6",
     "@angular/cli": "^20.1.6",
     "@angular/compiler-cli": "^20.1.0",
-    "@angular-devkit/build-angular": "^20.1.6",
     "@types/jasmine": "~5.1.0",
     "husky": "^9.1.7",
     "jasmine-core": "~5.8.0",

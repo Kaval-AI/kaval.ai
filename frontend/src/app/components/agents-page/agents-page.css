@@ -91,3 +91,17 @@
   background-color: #fee;
   border: 1px solid red;
 }
+
+.stats-overview {
+  margin-top: 30px;
+  background-color: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid #ddd;
+}
+
+.chart-container {
+  height: 300px;
+  position: relative;
+}
