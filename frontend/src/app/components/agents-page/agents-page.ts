@@ -54,13 +54,12 @@ export class AgentsPage implements OnInit {
   ngOnInit(): void {
     this.activeProjectId = this.userService.getActiveProjectId();
     this.loadAgents();
-    this.loadStats();
   }
 
-  private loadStats(): void {
+  private loadStats(agentId?: string): void {
     if (!this.activeProjectId) return;
 
-    this.agentService.getAgentStats(this.activeProjectId).subscribe({
+    this.agentService.getAgentStats(this.activeProjectId, agentId).subscribe({
       next: (stats) => {
         this.stats = stats;
         this.prepareChartData();
@@ -134,7 +133,7 @@ export class AgentsPage implements OnInit {
         this.agents = agents;
         this.loading = false;
         if (this.agents.length > 0) {
-          this.selectedAgent = this.agents[0];
+          this.selectAgent(this.agents[0]);
         }
       },
       error: (err) => {
@@ -147,6 +146,7 @@ export class AgentsPage implements OnInit {
 
   selectAgent(agent: Agent): void {
     this.selectedAgent = agent;
+    this.loadStats(agent.id);
   }
 
   getSvgUrl(agentId: string): string {

@@ -239,4 +239,12 @@ async def test_agents_get_stats(client, backoffice_db):
 
             assert response.status_code == 200
             assert response.json() == mock_stats
-            mock_get_stats.assert_called_once()
+            mock_get_stats.assert_called_once_with(mock_session, days=7, agent_id=None)
+
+            # Test with agent_id
+            agent_id = uuid.uuid4()
+            response = await client.get(
+                f"/agents/stats/{project_id}?agent_id={agent_id}"
+            )
+            assert response.status_code == 200
+            mock_get_stats.assert_called_with(mock_session, days=7, agent_id=agent_id)

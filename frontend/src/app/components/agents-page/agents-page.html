@@ -54,8 +54,8 @@
       </div>
     </div>
 
-    <div *ngIf="stats" class="stats-overview">
-      <h3>Project Statistics (Last 7 Days)</h3>
+    <div *ngIf="selectedAgent && stats" class="stats-overview">
+      <h3>Agent Statistics: {{ selectedAgent.name }} (Last 7 Days)</h3>
       <div class="chart-container">
         <canvas baseChart
           [data]="lineChartData"

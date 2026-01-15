@@ -274,7 +274,9 @@ async def agents_get_all(project_id: UUID, request: Request):
 
 
 @app.get("/agents/stats/{project_id}")
-async def agents_get_stats(project_id: UUID, request: Request, days: int = 7):
+async def agents_get_stats(
+    project_id: UUID, request: Request, days: int = 7, agent_id: UUID | None = None
+):
     """Fetch daily stats for agents in a specific project."""
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
@@ -289,7 +291,9 @@ async def agents_get_stats(project_id: UUID, request: Request, days: int = 7):
     )
 
     async with project_session_maker() as project_session:
-        return await agent_stats.get_daily_stats(project_session, days=days)
+        return await agent_stats.get_daily_stats(
+            project_session, days=days, agent_id=agent_id
+        )
 
 
 @app.get("/agents/svg/{project_id}/{agent_id}")
