@@ -12,6 +12,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `agents/`: SDK and agent runtime logic.
         - `workflow.py`: Core workflow execution engine (YAML to execution).
         - `agent_service.py`: Service for managing agent state, sessions, and runs in the DB.
+        - `stats.py`: Statistics and analytics for agents (sessions, runs, messages).
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
         - `db.py`: Database models for agents, sessions, runs, tasks, and messages.
     - `backoffice/`: API and logic for the management UI.
