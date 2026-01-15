@@ -80,4 +80,21 @@ describe('ProjectService', () => {
     expect(req.request.method).toBe('POST');
     req.flush(mockRes);
   });
+
+  it('should handle getById with number id', () => {
+    const mockProject = { id: '1', name: 'Project 1' } as Project;
+    service.getById(1).subscribe(project => {
+      expect(project).toEqual(mockProject);
+    });
+    const req = httpMock.expectOne('/api/projects/get/1');
+    expect(req.request.method).toBe('GET');
+    req.flush(mockProject);
+  });
+
+  it('should handle delete with number id', () => {
+    service.delete(1).subscribe();
+    const req = httpMock.expectOne('/api/projects/delete/1');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null);
+  });
 });

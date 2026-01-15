@@ -1,12 +1,14 @@
 import { Component, TemplateRef, ViewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DropdownMenuTriggerDirective } from './dropdown-menu';
+import { By } from '@angular/platform-browser';
+import { OverlayContainer } from '@angular/cdk/overlay';
 
 @Component({
   standalone: true,
   imports: [DropdownMenuTriggerDirective],
   template: `
-    <button [dropdownMenuTrigger]="menu">Open</button>
+    <button id="trigger" [dropdownMenuTrigger]="menu">Open</button>
     <ng-template #menu>
       <div id="test-menu">Menu Content</div>
     </ng-template>
@@ -19,6 +21,8 @@ class TestHostComponent {
 describe('DropdownMenuTriggerDirective', () => {
   let component: TestHostComponent;
   let fixture: ComponentFixture<TestHostComponent>;
+  let overlayContainer: OverlayContainer;
+  let overlayContainerElement: HTMLElement;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -27,10 +31,45 @@ describe('DropdownMenuTriggerDirective', () => {
 
     fixture = TestBed.createComponent(TestHostComponent);
     component = fixture.componentInstance;
+    overlayContainer = TestBed.inject(OverlayContainer);
+    overlayContainerElement = overlayContainer.getContainerElement();
     fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    overlayContainer.ngOnDestroy();
   });
 
   it('should create host component', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should open and close menu on click', () => {
+    const trigger = fixture.debugElement.query(By.css('#trigger')).nativeElement;
+
+    // Open
+    trigger.click();
+    fixture.detectChanges();
+    expect(overlayContainerElement.querySelector('#test-menu')).toBeTruthy();
+
+    // Close
+    trigger.click();
+    fixture.detectChanges();
+    expect(overlayContainerElement.querySelector('#test-menu')).toBeFalsy();
+  });
+
+  it('should close menu on backdrop click', () => {
+    const trigger = fixture.debugElement.query(By.css('#trigger')).nativeElement;
+
+    // Open
+    trigger.click();
+    fixture.detectChanges();
+    expect(overlayContainerElement.querySelector('#test-menu')).toBeTruthy();
+
+    // Backdrop click
+    const backdrop = overlayContainerElement.querySelector('.cdk-overlay-backdrop') as HTMLElement;
+    backdrop.click();
+    fixture.detectChanges();
+    expect(overlayContainerElement.querySelector('#test-menu')).toBeFalsy();
   });
 });

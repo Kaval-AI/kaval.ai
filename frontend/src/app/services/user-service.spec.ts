@@ -60,4 +60,46 @@ describe('UserService', () => {
 
     expect(service.getActiveProjectId()).toBe('new');
   });
+
+  it('should handle login redirection', () => {
+    const spy = spyOn(service as any, 'redirect');
+    service.login();
+    expect(spy).toHaveBeenCalledWith('/api/login');
+  });
+
+  it('should handle updateUserDetails error', () => {
+    service.updateUserDetails();
+    const req = httpMock.expectOne('/api/user/get_details');
+    req.error(new ErrorEvent('Network error'));
+
+    expect(service.getIsLoggedIn()).toBeFalse();
+    expect(service.getActiveProjectId()).toBeNull();
+  });
+
+  it('should handle logout error', () => {
+    service.logout();
+    const req = httpMock.expectOne('/api/logout');
+    req.error(new ErrorEvent('Network error'));
+
+    expect(service.getIsLoggedIn()).toBeFalse();
+  });
+
+  it('should handle setActiveProject error', () => {
+    const consoleSpy = spyOn(console, 'error');
+    service.setActiveProject('new');
+    const req = httpMock.expectOne('/api/user/set_active_project/new');
+    req.error(new ErrorEvent('API error'));
+
+    expect(consoleSpy).toHaveBeenCalled();
+  });
+
+  it('should return false for isAdmin when user is null', () => {
+    expect(service.getIsAdmin()).toBeFalse();
+  });
+
+  it('should return false for isAdmin when not logged in', () => {
+    // This is a bit tricky as loggedIn is private.
+    // But initially it's false.
+    expect(service.getIsAdmin()).toBeFalse();
+  });
 });

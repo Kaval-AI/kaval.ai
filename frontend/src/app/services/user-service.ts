@@ -16,7 +16,11 @@ export class UserService {
   constructor(private http: HttpClient) {}
 
   login() {
-    window.location.href = '/api/login';
+    this.redirect('/api/login');
+  }
+
+  private redirect(url: string) {
+    window.location.href = url;
   }
 
   logout(): void {
@@ -55,7 +59,11 @@ export class UserService {
   }
 
   getActiveProjectId(): string | null {
-    return this.userDetails$.value?.active_project_id || null;
+    const user = this.userDetails$.value;
+    if (user && user.active_project_id) {
+      return user.active_project_id;
+    }
+    return null;
   }
 
   setActiveProject(projectId: string): void { // Changed from Observable<any> to void

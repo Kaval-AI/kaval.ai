@@ -62,4 +62,64 @@ describe('Chats', () => {
     const result = await promise;
     expect(result).toEqual(mockResponse);
   });
+
+  it('should list agent runs', async () => {
+    const mockAgentRuns = [{ id: 'run1' }];
+    const chatId = '123';
+    const promise = service.listAgentRuns(chatId);
+
+    const req = httpMock.expectOne(`/api/chat/agent_runs/${chatId}`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ chat_id: chatId, agent_runs: mockAgentRuns });
+
+    const result = await promise;
+    expect(result).toEqual(mockAgentRuns);
+  });
+
+  it('should get input schema', async () => {
+    const mockSchema = { type: 'object' };
+    const promise = service.getInputSchema();
+
+    const req = httpMock.expectOne('/api/input_schema');
+    expect(req.request.method).toBe('GET');
+    req.flush(mockSchema);
+
+    const result = await promise;
+    expect(result).toEqual(mockSchema);
+  });
+
+  it('should handle listChats error', async () => {
+    const promise = service.listChats();
+    const req = httpMock.expectOne('/api/chat/list');
+    req.error(new ErrorEvent('Network error'));
+    await expectAsync(promise).toBeRejected();
+  });
+
+  it('should handle listMessages error', async () => {
+    const promise = service.listMessages('123');
+    const req = httpMock.expectOne('/api/chat/messages/123');
+    req.error(new ErrorEvent('Network error'));
+    await expectAsync(promise).toBeRejected();
+  });
+
+  it('should handle listAgentRuns error', async () => {
+    const promise = service.listAgentRuns('123');
+    const req = httpMock.expectOne('/api/chat/agent_runs/123');
+    req.error(new ErrorEvent('Network error'));
+    await expectAsync(promise).toBeRejected();
+  });
+
+  it('should handle getInputSchema error', async () => {
+    const promise = service.getInputSchema();
+    const req = httpMock.expectOne('/api/input_schema');
+    req.error(new ErrorEvent('Network error'));
+    await expectAsync(promise).toBeRejected();
+  });
+
+  it('should handle runAgent error', async () => {
+    const promise = service.runAgent({});
+    const req = httpMock.expectOne('/api/agent/run');
+    req.error(new ErrorEvent('Network error'));
+    await expectAsync(promise).toBeRejected();
+  });
 });

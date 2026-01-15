@@ -55,6 +55,9 @@ describe('AgentsPage', () => {
     userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(throwError(() => new Error('API Error')));
 
+    // Suppress console error in test output
+    spyOn(console, 'error');
+
     fixture.detectChanges();
 
     expect(component.error).toBe('Failed to load agents');
