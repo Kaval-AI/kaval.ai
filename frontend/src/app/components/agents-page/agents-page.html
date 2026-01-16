@@ -17,12 +17,16 @@
             <tr>
               <th>Name</th>
               <th>Description</th>
+              <th>Created At</th>
+              <th>Updated At</th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let agent of agents" (click)="selectAgent(agent)" [class.selected]="selectedAgent?.id === agent.id">
               <td>{{ agent.name }}</td>
               <td>{{ agent.description }}</td>
+              <td>{{ agent.created_at | date:'dd-MM-yyyy HH:mm' }}</td>
+              <td>{{ agent.updated_at | date:'dd-MM-yyyy HH:mm' }}</td>
             </tr>
           </tbody>
         </table>
@@ -34,21 +38,14 @@
           <img [src]="getSvgUrl(selectedAgent.id)" [alt]="selectedAgent.name + ' workflow'" />
         </div>
 
-        <div class="raw-data">
-          <h4>Details</h4>
-          <p><strong>ID:</strong> {{ selectedAgent.id }}</p>
-          <p><strong>Created At:</strong> {{ selectedAgent.created_at | date:'dd-MM-yyyy HH:mm' }}</p>
-          <p><strong>Updated At:</strong> {{ selectedAgent.updated_at | date:'dd-MM-yyyy HH:mm' }}</p>
-
-          <div class="schemas">
-            <div>
-              <h5>Input Schema</h5>
-              <pre>{{ selectedAgent.input_schema | json }}</pre>
-            </div>
-            <div>
-              <h5>Output Schema</h5>
-              <pre>{{ selectedAgent.output_schema | json }}</pre>
-            </div>
+        <div class="schemas">
+          <div>
+            <h5>Input Schema</h5>
+            <pre>{{ selectedAgent.input_schema | json }}</pre>
+          </div>
+          <div>
+            <h5>Output Schema</h5>
+            <pre>{{ selectedAgent.output_schema | json }}</pre>
           </div>
         </div>
       </div>

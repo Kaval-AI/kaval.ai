@@ -16,19 +16,17 @@
 }
 
 .agents-content {
-  display: flex;
-  gap: 20px;
+  display: block;
   margin-top: 20px;
 }
 
 .agents-list {
-  flex: 1;
+  margin-bottom: 30px;
 }
 
 .agent-details {
-  flex: 2;
-  border-left: 1px solid #ddd;
-  padding-left: 20px;
+  border-top: 1px solid #ddd;
+  padding-top: 20px;
 }
 
 .agents-table tr {
