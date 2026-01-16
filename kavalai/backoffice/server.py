@@ -13,6 +13,7 @@ from kavalai.backoffice import db
 from kavalai.backoffice.db import is_owner, is_member
 from kavalai.agents.db import db_manager, Agent
 from kavalai.agents import stats as agent_stats
+from kavalai.agents import sessions as agent_sessions
 from kavalai.agents.workflow import WorkflowModel
 from kavalai.backoffice.svg import generate_workflow_svg
 from fastapi.responses import Response
@@ -333,6 +334,33 @@ async def agents_get_stats(
     async with project_session_maker() as project_session:
         return await agent_stats.get_daily_stats(
             project_session, days=days, agent_id=agent_id
+        )
+
+
+@app.get("/agents/sessions/{project_id}")
+async def agents_get_sessions(
+    project_id: UUID,
+    request: Request,
+    agent_id: UUID | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """Fetch session summaries for a specific project."""
+    assert_logged_in(request)
+    project = await get_project_and_assert_access(request, project_id)
+
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        return await agent_sessions.get_sessions_summary(
+            project_session, agent_id=agent_id, limit=limit, offset=offset
         )
 
 
