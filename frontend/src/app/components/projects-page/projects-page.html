@@ -1,15 +1,18 @@
 @if (projects.length > 0) {
   <header>
-    <label for="projectSelect">Current project: </label>
-    <select id="projectSelect"
-            (change)="onProjectSelect($event)"
-            [value]="selectedProject?.id || ''">
-      <option value="" disabled>-- Choose a Project --</option>
-      @for (p of projects; track p.id) {
-        <option [value]="p.id">{{ p.name }}</option>
-      }
-    </select>
-    <button type="button" (click)="startNewProject()">+ Add new</button>
+    <h2>Projects</h2>
+    <div>
+      <label for="projectSelect">Current project: </label>
+      <select id="projectSelect"
+              (change)="onProjectSelect($event)"
+              [value]="selectedProject?.id || ''">
+        <option value="" disabled>-- Choose a Project --</option>
+        @for (p of projects; track p.id) {
+          <option [value]="p.id">{{ p.name }}</option>
+        }
+      </select>
+      <button type="button" (click)="startNewProject()">+ Add new</button>
+    </div>
   </header>
 }
 
@@ -95,6 +98,7 @@
 </div>
 } @else if (projects.length == 0 && !isEditing) {
   <div class="centered">
+    <h2>Projects</h2>
     <p>We don't have any projects.</p>
      @if (getIsAdmin()) {
       <button type="button" (click)="startNewProject()">Add New</button>

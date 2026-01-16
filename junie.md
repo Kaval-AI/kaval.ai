@@ -24,7 +24,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `frontend/`: Angular-based project for the backoffice UI.
     - `src/app/models/`: TypeScript interfaces (e.g., `SessionSummary`, `Agent`).
     - `src/app/services/`: Angular services for API interaction (`AgentService`, `UserService`).
-    - `src/app/components/`: UI components (e.g., `ConversationsPage` for viewing sessions).
+    - `src/app/components/`: UI components (e.g., `ConversationsPage`, `LandingPage`).
 - `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
 - `scripts/`: Utility scripts (e.g., DB migration).
 - `tests/`: Backend tests.
@@ -55,3 +55,17 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `kavalai/backoffice/db.py`: Backoffice-side data schema (User, Project, ProjectMembership).
 - `frontend/src/app/services/`: Angular services (UserService, ProjectService, etc.).
 - `frontend/src/app/components/`: Angular components (UsersPage, ProjectsPage, etc.).
+
+## Backend Testing (Python)
+- **Framework**: `pytest`
+- **Location**: `tests/`
+- **Command**: `pytest`
+- **Coverage Command**: `pytest --cov=kavalai tests/`
+- **Notes**: Backend tests use `pytest-asyncio` for async database operations.
+
+## Frontend Testing (Angular)
+- **Framework**: `Jasmine` + `Karma`
+- **Location**: `frontend/src/app/**/*.spec.ts`
+- **Command**: `cd frontend && npm test -- --watch=false`
+- **Coverage Command**: `cd frontend && npm test -- --watch=false --code-coverage`
+- **Notes**: Ensure all mocks are updated if service interfaces change.

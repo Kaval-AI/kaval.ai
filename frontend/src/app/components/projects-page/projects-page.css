@@ -8,9 +8,8 @@ div.centered {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  text-align: center;
+  align-items: stretch;
+  text-align: left;
   gap: 10px;
 }
 
@@ -18,16 +17,39 @@ div.centered {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  width: 800px;
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Make them stacked to take 100% width as requested */
+/* Removed media query that made them side-by-side */
+
+fieldset {
+  border: 1px solid #ddd;
+  padding: 1.5rem;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+legend {
+  padding: 0 0.5rem;
+  font-weight: bold;
 }
 
 .form-field {
   display: flex;
   flex-direction: column;
   gap: 0.5rem; /* Space between label and input */
-  align-items: flex-start;
+  align-items: stretch;
+  width: 100%;
 }
 
 .form-field label {
@@ -80,4 +102,22 @@ input:disabled, textarea:disabled {
 
 .status-msg.error {
   color: #dc3545;
+}
+
+.button-row {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-start;
+}
+
+.button-row button {
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+}
+
+.btn-delete {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
 }

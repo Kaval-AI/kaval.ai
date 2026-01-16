@@ -1,12 +1,11 @@
-<div class="logo">Kaval.AI</div>
+<div class="logo" routerLink="/">Kaval.AI</div>
 <nav class="menu-items">
   <ul>
-    <li routerLink="/projects" routerLinkActive="active">Projects</li>
-    <li routerLink="/users" routerLinkActive="active">Users</li>
+    <li routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">Dashboard</li>
     <li routerLink="/agents" routerLinkActive="active">Agents</li>
+    <li routerLink="/conversations" routerLinkActive="active">Conversations</li>
     <li routerLink="/configs" routerLinkActive="active">LLM configs</li>
     <li routerLink="/rag" routerLinkActive="active">RAG</li>
-    <li routerLink="/conversations" routerLinkActive="active">Conversations</li>
     <li routerLink="/tests" routerLinkActive="active">Acceptance tests</li>
     <li routerLink="/metrics" routerLinkActive="active">Metrics</li>
   </ul>

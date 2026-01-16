@@ -8,6 +8,7 @@ Always refer to `junie.md` in the project root for an up-to-date overview of the
 - Security and isolation patterns
 
 Before starting any task, check `junie.md` to understand the relevant modules and their roles.
+After unit testing, update the `junie.md` for any important changes.
 
 ## Unit Testing
 At the end of every coding task, you must update the relevant unit tests and run them to ensure that your changes haven't introduced any regressions and that the new functionality works as expected.
@@ -15,17 +16,3 @@ At the end of every coding task, you must update the relevant unit tests and run
 ### Testing Goal
 - Aim for **100% test coverage** for all new and modified code.
 - Always run tests before submitting a task.
-
-### Backend Testing (Python)
-- **Framework**: `pytest`
-- **Location**: `tests/`
-- **Command**: `pytest`
-- **Coverage Command**: `pytest --cov=kavalai tests/`
-- **Notes**: Backend tests use `pytest-asyncio` for async database operations.
-
-### Frontend Testing (Angular)
-- **Framework**: `Jasmine` + `Karma`
-- **Location**: `frontend/src/app/**/*.spec.ts`
-- **Command**: `cd frontend && npm test -- --watch=false`
-- **Coverage Command**: `cd frontend && npm test -- --watch=false --code-coverage`
-- **Notes**: Ensure all mocks are updated if service interfaces change.
