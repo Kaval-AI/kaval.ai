@@ -1,1 +1,59 @@
-<p>users-page works!</p>
+<div class="users-container">
+  <div class="header">
+    <h1>Users</h1>
+    <button class="btn btn-primary" (click)="addUser()" *ngIf="!showForm">Add User</button>
+  </div>
+
+  <div *ngIf="showForm" class="user-form">
+    <h2>{{ isEditing ? 'Edit User' : 'Add New User' }}</h2>
+    <form [formGroup]="userForm" (ngSubmit)="saveUser()">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" formControlName="email" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" id="name" formControlName="name" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label for="picture">Picture URL</label>
+        <input type="text" id="picture" formControlName="picture" class="form-control" />
+      </div>
+      <div class="form-group checkbox">
+        <label>
+          <input type="checkbox" formControlName="is_admin" /> Is Admin
+        </label>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="cancelForm()">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="userForm.invalid">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <table class="users-table" *ngIf="!showForm">
+    <thead>
+      <tr>
+        <th>Picture</th>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Admin</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let user of users">
+        <td>
+          <img [src]="user.picture || 'assets/default-avatar.png'" alt="avatar" class="avatar" />
+        </td>
+        <td>{{ user.name }}</td>
+        <td>{{ user.email }}</td>
+        <td>{{ user.is_admin ? 'Yes' : 'No' }}</td>
+        <td class="actions">
+          <button class="btn btn-sm" (click)="editUser(user)">Edit</button>
+          <button class="btn btn-sm btn-danger" (click)="deleteUser(user)">Delete</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

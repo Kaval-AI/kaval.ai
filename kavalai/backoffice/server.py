@@ -6,7 +6,7 @@ from uuid import UUID
 import uvicorn
 from authlib.integrations.starlette_client import OAuth
 from fastapi import FastAPI, Request, HTTPException, status, Body
-from kavalai.crud import insert, select, delete, update, get_one
+from kavalai.crud import insert, select, delete, update, get_one, get_all
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
 from kavalai.backoffice import db
@@ -227,6 +227,46 @@ async def projects_delete(project_id: UUID, request: Request):
         success = await delete(session, db.Project, project_id)
         if not success:
             raise HTTPException(status_code=404, detail="Project not found")
+        return {"status": "deleted"}
+
+
+@app.get("/users/all")
+async def users_get_all(request: Request):
+    assert_logged_in(request)
+    assert_is_admin(request)
+    async with db.AsyncBackofficeSession() as session:
+        return await get_all(session, db.User)
+
+
+@app.post("/users/create")
+async def users_create(request: Request, data: dict = Body(...)):
+    assert_logged_in(request)
+    assert_is_admin(request)
+    async with db.AsyncBackofficeSession() as session:
+        return await insert(session, db.User, data)
+
+
+@app.put("/users/update/{user_id}")
+async def users_update(user_id: UUID, request: Request, data: dict = Body(...)):
+    assert_logged_in(request)
+    assert_is_admin(request)
+    async with db.AsyncBackofficeSession() as session:
+        updated = await update(session, db.User, user_id, data)
+        if not updated:
+            raise HTTPException(status_code=404, detail="User not found.")
+        return updated
+
+
+@app.delete("/users/delete/{user_id}")
+async def users_delete(user_id: UUID, request: Request):
+    assert_logged_in(request)
+    assert_is_admin(request)
+    if str(user_id) == request.session.get("user_info")["id"]:
+        raise HTTPException(status_code=400, detail="You cannot delete yourself.")
+    async with db.AsyncBackofficeSession() as session:
+        success = await delete(session, db.User, user_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="User not found")
         return {"status": "deleted"}
 
 

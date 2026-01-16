@@ -248,3 +248,100 @@ async def test_agents_get_stats(client, backoffice_db):
             )
             assert response.status_code == 200
             mock_get_stats.assert_called_with(mock_session, days=7, agent_id=agent_id)
+
+
+@pytest.mark.asyncio
+async def test_users_all(client, backoffice_db):
+    user_id = str(uuid.uuid4())
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
+        "kavalai.backoffice.server.assert_is_admin"
+    ), patch(
+        "starlette.requests.Request.session",
+        {"user_info": {"id": user_id, "is_admin": True}},
+    ):
+        # Add some users to backoffice_db
+        u1 = db.User(email="u1@test.com", name="User 1")
+        u2 = db.User(email="u2@test.com", name="User 2")
+        backoffice_db.add_all([u1, u2])
+        await backoffice_db.commit()
+
+        response = await client.get("/users/all")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 2
+        emails = [u["email"] for u in data]
+        assert "u1@test.com" in emails
+        assert "u2@test.com" in emails
+
+
+@pytest.mark.asyncio
+async def test_users_create(client, backoffice_db):
+    user_id = str(uuid.uuid4())
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
+        "kavalai.backoffice.server.assert_is_admin"
+    ), patch(
+        "starlette.requests.Request.session",
+        {"user_info": {"id": user_id, "is_admin": True}},
+    ):
+        new_user_data = {"email": "new@test.com", "name": "New User", "is_admin": False}
+        response = await client.post("/users/create", json=new_user_data)
+        assert response.status_code == 200
+        assert response.json()["email"] == "new@test.com"
+
+
+@pytest.mark.asyncio
+async def test_users_update(client, backoffice_db):
+    target_user_id = uuid.uuid4()
+    u = db.User(id=target_user_id, email="old@test.com", name="Old Name")
+    backoffice_db.add(u)
+    await backoffice_db.commit()
+
+    user_id = str(uuid.uuid4())
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
+        "kavalai.backoffice.server.assert_is_admin"
+    ), patch(
+        "starlette.requests.Request.session",
+        {"user_info": {"id": user_id, "is_admin": True}},
+    ):
+        update_data = {"name": "Updated Name"}
+        response = await client.put(f"/users/update/{target_user_id}", json=update_data)
+        assert response.status_code == 200
+        assert response.json()["name"] == "Updated Name"
+
+
+@pytest.mark.asyncio
+async def test_users_delete(client, backoffice_db):
+    target_user_id = uuid.uuid4()
+    u = db.User(id=target_user_id, email="del@test.com", name="Del Me")
+    backoffice_db.add(u)
+    await backoffice_db.commit()
+
+    user_id = str(uuid.uuid4())
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
+        "kavalai.backoffice.server.assert_is_admin"
+    ), patch(
+        "starlette.requests.Request.session",
+        {"user_info": {"id": user_id, "is_admin": True}},
+    ):
+        response = await client.delete(f"/users/delete/{target_user_id}")
+        assert response.status_code == 200
+        assert response.json()["status"] == "deleted"
+
+
+@pytest.mark.asyncio
+async def test_users_delete_self_fails(client, backoffice_db):
+    user_id = str(uuid.uuid4())
+    u = db.User(id=uuid.UUID(user_id), email="admin@test.com", name="Admin")
+    backoffice_db.add(u)
+    await backoffice_db.commit()
+
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
+        "kavalai.backoffice.server.assert_is_admin"
+    ), patch(
+        "starlette.requests.Request.session",
+        {"user_info": {"id": user_id, "is_admin": True}},
+    ):
+        response = await client.delete(f"/users/delete/{user_id}")
+        # Initially this might be 200, but we want it to be 400
+        assert response.status_code == 400
+        assert response.json()["detail"] == "You cannot delete yourself."

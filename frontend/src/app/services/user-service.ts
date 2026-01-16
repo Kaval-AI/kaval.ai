@@ -58,6 +58,10 @@ export class UserService {
     return this.loggedIn && user != null && user.is_admin;
   }
 
+  getUserDetailsValue(): UserDetails | null {
+    return this.userDetails$.value;
+  }
+
   getActiveProjectId(): string | null {
     const user = this.userDetails$.value;
     if (user && user.active_project_id) {
@@ -81,5 +85,21 @@ export class UserService {
         console.error('Failed to set active project', err);
       }
     });
+  }
+
+  getUsers(): Observable<UserDetails[]> {
+    return this.http.get<UserDetails[]>('/api/users/all');
+  }
+
+  createUser(userData: Partial<UserDetails>): Observable<UserDetails> {
+    return this.http.post<UserDetails>('/api/users/create', userData);
+  }
+
+  updateUser(userId: string, userData: Partial<UserDetails>): Observable<UserDetails> {
+    return this.http.put<UserDetails>(`/api/users/update/${userId}`, userData);
+  }
+
+  deleteUser(userId: string): Observable<any> {
+    return this.http.delete(`/api/users/delete/${userId}`);
   }
 }
