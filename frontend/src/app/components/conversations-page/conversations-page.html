@@ -1,1 +1,44 @@
-<p>conversations-page works!</p>
+<div class="conversations-container">
+  <div class="header">
+    <h2>Conversations</h2>
+    <button (click)="loadSessions()" [disabled]="loading">Refresh</button>
+  </div>
+
+  <div *ngIf="loading" class="loading-state">
+    Loading sessions...
+  </div>
+
+  <div *ngIf="error" class="error-state">
+    {{ error }}
+  </div>
+
+  <div *ngIf="!loading && !error && sessions.length === 0" class="empty-state">
+    No sessions found.
+  </div>
+
+  <div *ngIf="!loading && sessions.length > 0" class="sessions-list">
+    <div *ngFor="let session of sessions" class="session-card">
+      <div class="session-header">
+        <span class="session-id">Session: {{ session.session_id }}</span>
+        <span class="session-date">Updated: {{ formatDate(session.updated_at) }}</span>
+      </div>
+
+      <div class="session-stats">
+        <span class="stat-item">Runs: <strong>{{ session.runs_count }}</strong></span>
+        <span class="stat-item">Tasks: <strong>{{ session.tasks_count }}</strong></span>
+        <span class="stat-item">Messages: <strong>{{ session.messages_count }}</strong></span>
+      </div>
+
+      <div class="session-previews">
+        <div class="preview-item" *ngIf="session.first_message">
+          <label>First Message:</label>
+          <p class="preview-text">{{ session.first_message }}</p>
+        </div>
+        <div class="preview-item" *ngIf="session.last_message">
+          <label>Last Message:</label>
+          <p class="preview-text">{{ session.last_message }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
