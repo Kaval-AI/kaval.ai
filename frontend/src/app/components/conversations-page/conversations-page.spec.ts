@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ConversationsPage } from './conversations-page';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
+import { ActivatedRoute } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { Agent } from '../../models/agent';
 import { SessionSummary } from '../../models/session';
@@ -11,6 +12,7 @@ describe('ConversationsPage', () => {
   let fixture: ComponentFixture<ConversationsPage>;
   let agentServiceSpy: jasmine.SpyObj<AgentService>;
   let userServiceSpy: jasmine.SpyObj<UserService>;
+  let routeMock: any;
 
   const mockAgents: Agent[] = [
     { id: 'agent1', name: 'Agent 1' } as Agent,
@@ -35,12 +37,16 @@ describe('ConversationsPage', () => {
   beforeEach(async () => {
     agentServiceSpy = jasmine.createSpyObj('AgentService', ['getAgentsByProject', 'getSessions']);
     userServiceSpy = jasmine.createSpyObj('UserService', ['getActiveProjectId']);
+    routeMock = {
+      queryParams: of({})
+    };
 
     await TestBed.configureTestingModule({
       imports: [ConversationsPage],
       providers: [
         { provide: AgentService, useValue: agentServiceSpy },
-        { provide: UserService, useValue: userServiceSpy }
+        { provide: UserService, useValue: userServiceSpy },
+        { provide: ActivatedRoute, useValue: routeMock }
       ]
     }).compileComponents();
 
@@ -148,5 +154,17 @@ describe('ConversationsPage', () => {
     // Let's use a more stable test that doesn't depend on TZ if possible, or just check the format.
     const result = component.formatDate(dateStr);
     expect(result).toMatch(/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}$/);
+  });
+
+  it('should set selectedAgentId from query parameters', () => {
+    routeMock.queryParams = of({ agentId: 'agent-789' });
+    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
+    agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
+    agentServiceSpy.getSessions.and.returnValue(of(mockSessions));
+
+    component.ngOnInit();
+
+    expect(component.selectedAgentId).toBe('agent-789');
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', 'agent-789', 20, 0);
   });
 });

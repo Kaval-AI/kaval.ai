@@ -103,3 +103,23 @@
   height: 300px;
   position: relative;
 }
+
+.stats-actions {
+  margin-top: 15px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-conversations {
+  padding: 8px 16px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-conversations:hover {
+  background-color: #1565c0;
+}

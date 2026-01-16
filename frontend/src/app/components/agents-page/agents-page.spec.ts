@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AgentsPage } from './agents-page';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
+import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { Agent } from '../../models/agent';
 
@@ -10,16 +11,19 @@ describe('AgentsPage', () => {
   let fixture: ComponentFixture<AgentsPage>;
   let agentServiceSpy: jasmine.SpyObj<AgentService>;
   let userServiceSpy: jasmine.SpyObj<UserService>;
+  let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
     agentServiceSpy = jasmine.createSpyObj('AgentService', ['getAgentsByProject', 'getAgentSvgUrl', 'getAgentStats']);
     userServiceSpy = jasmine.createSpyObj('UserService', ['getActiveProjectId']);
+    routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     await TestBed.configureTestingModule({
       imports: [AgentsPage],
       providers: [
         { provide: AgentService, useValue: agentServiceSpy },
-        { provide: UserService, useValue: userServiceSpy }
+        { provide: UserService, useValue: userServiceSpy },
+        { provide: Router, useValue: routerSpy }
       ]
     }).compileComponents();
 
@@ -78,5 +82,11 @@ describe('AgentsPage', () => {
     fixture.detectChanges();
 
     expect(component.lineChartData.labels).toContain('25-01');
+  });
+
+  it('should navigate to conversations with agentId', () => {
+    component.selectedAgent = { id: 'agent-123', name: 'Agent 123' } as Agent;
+    component.goToConversations();
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/conversations'], { queryParams: { agentId: 'agent-123' } });
   });
 });

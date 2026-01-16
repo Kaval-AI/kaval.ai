@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { Agent } from '../../models/agent';
@@ -48,7 +49,8 @@ export class AgentsPage implements OnInit {
 
   constructor(
     private agentService: AgentService,
-    private userService: UserService
+    private userService: UserService,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
@@ -154,5 +156,11 @@ export class AgentsPage implements OnInit {
   getSvgUrl(agentId: string): string {
     if (!this.activeProjectId) return '';
     return this.agentService.getAgentSvgUrl(this.activeProjectId, agentId);
+  }
+
+  goToConversations(): void {
+    if (this.selectedAgent) {
+      this.router.navigate(['/conversations'], { queryParams: { agentId: this.selectedAgent.id } });
+    }
   }
 }
