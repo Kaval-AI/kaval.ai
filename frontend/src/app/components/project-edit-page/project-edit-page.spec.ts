@@ -1,0 +1,134 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ReactiveFormsModule } from '@angular/forms';
+import { CommonModule } from '@angular/common';
+import { of, throwError } from 'rxjs';
+import { ActivatedRoute, Router } from '@angular/router';
+import { ProjectEditPage } from './project-edit-page';
+import { ProjectService } from '../../services/project-service';
+import { UserService } from '../../services/user-service';
+import { Project } from '../../models/project';
+
+describe('ProjectEditPage', () => {
+  let component: ProjectEditPage;
+  let fixture: ComponentFixture<ProjectEditPage>;
+  let projectServiceSpy: jasmine.SpyObj<ProjectService>;
+  let userServiceSpy: jasmine.SpyObj<UserService>;
+  let routerSpy: jasmine.SpyObj<Router>;
+  let activatedRouteMock: any;
+
+  beforeEach(async () => {
+    projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll', 'create', 'update', 'testConnection', 'getMembers']);
+    userServiceSpy = jasmine.createSpyObj('UserService', ['setActiveProject', 'getIsAdmin', 'getUserDetailsValue']);
+    routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    activatedRouteMock = {
+      snapshot: {
+        paramMap: {
+          get: jasmine.createSpy('get').and.returnValue('new')
+        }
+      }
+    };
+
+    projectServiceSpy.getAll.and.returnValue(of([]));
+    userServiceSpy.getIsAdmin.and.returnValue(false);
+    userServiceSpy.getUserDetailsValue.and.returnValue(null);
+    projectServiceSpy.getMembers.and.returnValue(of([]));
+
+    await TestBed.configureTestingModule({
+      imports: [ProjectEditPage, ReactiveFormsModule, CommonModule],
+      providers: [
+        { provide: ProjectService, useValue: projectServiceSpy },
+        { provide: UserService, useValue: userServiceSpy },
+        { provide: Router, useValue: routerSpy },
+        { provide: ActivatedRoute, useValue: activatedRouteMock }
+      ]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ProjectEditPage);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should load project when id is provided', () => {
+    const mockProject = { id: '1', name: 'Test Project' } as Project;
+    activatedRouteMock.snapshot.paramMap.get.and.returnValue('1');
+    projectServiceSpy.getAll.and.returnValue(of([mockProject]));
+
+    component.ngOnInit();
+
+    expect(projectServiceSpy.getAll).toHaveBeenCalled();
+    expect(component.projectForm.get('name')?.value).toBe('Test Project');
+  });
+
+  it('should save new project and navigate home', () => {
+    const newProject = { id: '2', name: 'New Project' } as Project;
+    component.projectId = 'new';
+    component.projectForm.patchValue({ name: 'New Project' });
+    projectServiceSpy.create.and.returnValue(of(newProject));
+
+    component.saveProject();
+
+    expect(projectServiceSpy.create).toHaveBeenCalled();
+    expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('2');
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/']);
+  });
+
+  it('should update existing project and navigate home', () => {
+    component.projectId = '1';
+    component.projectForm.patchValue({ name: 'Updated Name' });
+    projectServiceSpy.update.and.returnValue(of({ id: '1', name: 'Updated Name' } as Project));
+
+    component.saveProject();
+
+    expect(projectServiceSpy.update).toHaveBeenCalledWith('1', jasmine.any(Object));
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/']);
+  });
+
+  it('should navigate home on cancel', () => {
+    component.cancel();
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/']);
+  });
+
+  it('should test connection', () => {
+    component.projectId = '1';
+    const mockRes = { status: 'success', message: 'Connected' };
+    projectServiceSpy.testConnection.and.returnValue(of(mockRes));
+
+    component.testConnection();
+
+    expect(projectServiceSpy.testConnection).toHaveBeenCalledWith('1');
+    expect(component.connectionStatus).toEqual(mockRes);
+  });
+
+  it('should handle test connection error', () => {
+    component.projectId = '1';
+    const errorResponse = { error: { message: 'Failed' } };
+    projectServiceSpy.testConnection.and.returnValue(throwError(() => errorResponse));
+
+    component.testConnection();
+
+    expect(component.connectionStatus?.status).toBe('error');
+    expect(component.connectionStatus?.message).toBe('Failed');
+  });
+
+  it('should disable save button when form is pristine', () => {
+    const mockProject = { id: '1', name: 'Test Project' } as Project;
+    activatedRouteMock.snapshot.paramMap.get.and.returnValue('1');
+    projectServiceSpy.getAll.and.returnValue(of([mockProject]));
+
+    component.ngOnInit();
+    fixture.detectChanges();
+
+    const saveButton = fixture.nativeElement.querySelector('button[type="submit"]');
+    expect(saveButton.disabled).toBeTrue();
+
+    component.projectForm.patchValue({ name: 'New Name' });
+    component.projectForm.markAsDirty();
+    fixture.detectChanges();
+
+    expect(saveButton.disabled).toBeFalse();
+  });
+});

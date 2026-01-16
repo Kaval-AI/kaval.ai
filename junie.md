@@ -17,8 +17,9 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
         - `db.py`: Database models for agents, sessions, runs, tasks, and messages.
     - `backoffice/`: API and logic for the management UI.
-        - `server.py`: FastAPI server for the backoffice API. Includes endpoints for agents, sessions, stats, and workflow visualization.
+        - `server.py`: FastAPI server for the backoffice API. Includes endpoints for agents, sessions, stats, projects (including membership management), and workflow visualization.
         - `db.py`: Backoffice-specific DB models (users, projects, memberships).
+        - `project_service.py`: Service for managing project-related data and membership.
     - `tools/`: Utility tools (e.g., RSS, OpenAPI parser).
     - `crud.py`: Shared database utility functions.
 - `frontend/`: Angular-based project for the backoffice UI.
@@ -46,6 +47,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 ## Backoffice Security
 - Role-based access (Owner, Viewer).
 - Project membership verification on API calls.
+- Protection against removing or demoting the last owner of a project.
 - Authentication via Google OAuth (configured in `server.py`).
 
 ## Important Files for Reference

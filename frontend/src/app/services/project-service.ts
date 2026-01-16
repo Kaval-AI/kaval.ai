@@ -33,4 +33,20 @@ export class ProjectService {
   testConnection(projectId: string): Observable<{status: string, message?: string}> {
     return this.http.post<{status: string, message?: string}>(`/api/projects/test-connection/${projectId}`, {});
   }
+
+  getMembers(projectId: string): Observable<any[]> {
+    return this.http.get<any[]>(`/api/projects/${projectId}/members`);
+  }
+
+  addMember(projectId: string, userId: string, role: string): Observable<any> {
+    return this.http.post<any>(`/api/projects/${projectId}/members/add`, { user_id: userId, role });
+  }
+
+  updateMember(projectId: string, userId: string, role: string): Observable<any> {
+    return this.http.put<any>(`/api/projects/${projectId}/members/update`, { user_id: userId, role });
+  }
+
+  removeMember(projectId: string, userId: string): Observable<any> {
+    return this.http.delete<any>(`/api/projects/${projectId}/members/remove/${userId}`);
+  }
 }

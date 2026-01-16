@@ -11,6 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
 from kavalai.backoffice import db
 from kavalai.backoffice.db import is_owner, is_member
+from kavalai.backoffice.project_service import ProjectService
 from kavalai.agents.db import db_manager, Agent
 from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions
@@ -173,23 +174,11 @@ async def set_active_project(project_id: UUID, request: Request):
 @app.post("/projects/create")
 async def projects_create(request: Request, data: dict = Body(...)):
     assert_logged_in(request)
-    # Check that user is admin.
+    assert_is_admin(request)
     user_session = request.session.get("user_info")
-    if not user_session.get("is_admin"):
-        raise HTTPException(
-            status_code=403, detail="Only administrators can create new projects."
-        )
     async with db.AsyncBackofficeSession() as session:
-        new_project = await insert(session, db.Project, data)
-        # Automatically make the creator the owner in ProjectMembership.
-        membership_data = {
-            "user_id": UUID(user_session["id"]),
-            "project_id": new_project.id,
-            "role": db.ProjectRole.owner,
-        }
-        await insert(session, db.ProjectMembership, membership_data)
-
-        return new_project
+        service = ProjectService(session)
+        return await service.create_project(data, UUID(user_session["id"]))
 
 
 @app.get("/projects/get/{project_id}")
@@ -203,18 +192,17 @@ async def projects_get_all(request: Request):
     assert_logged_in(request)
     user_id = UUID(request.session.get("user_info")["id"])
     async with db.AsyncBackofficeSession() as session:
-        # Instead of db.get_all, use the filtered join query
-        projects = await db.get_user_projects(session, user_id)
-        return projects
+        service = ProjectService(session)
+        return await service.get_user_projects(user_id)
 
 
 @app.put("/projects/update/{project_id}")
 async def projects_update(project_id: UUID, request: Request, data: dict = Body(...)):
     assert_logged_in(request)
-    print(data)
     async with db.AsyncBackofficeSession() as session:
         await assert_is_owner(session, request, project_id)
-        updated = await update(session, db.Project, project_id, data)
+        service = ProjectService(session)
+        updated = await service.update_project(project_id, data)
         if not updated:
             raise HTTPException(status_code=404, detail="Project not found.")
         return updated
@@ -225,7 +213,8 @@ async def projects_delete(project_id: UUID, request: Request):
     assert_logged_in(request)
     async with db.AsyncBackofficeSession() as session:
         await assert_is_owner(session, request, project_id)
-        success = await delete(session, db.Project, project_id)
+        service = ProjectService(session)
+        success = await service.delete_project(project_id)
         if not success:
             raise HTTPException(status_code=404, detail="Project not found")
         return {"status": "deleted"}
@@ -420,26 +409,68 @@ async def projects_test_connection(project_id: UUID, request: Request):
     """Test connection to the project database."""
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
+    async with db.AsyncBackofficeSession() as session:
+        service = ProjectService(session)
+        return await service.test_connection(project)
 
-    try:
-        project_session_maker = db_manager.get_sessionmaker(
-            user=project.db_user,
-            password=project.db_password,
-            host=project.db_host,
-            port=project.db_port,
-            db_name=project.db_name,
-        )
-        async with project_session_maker() as project_session:
-            # Attempt to execute a simple query to verify connection
-            from sqlalchemy import text
 
-            await project_session.execute(text("SELECT 1"))
-        return {"status": "success", "message": "Connection successful"}
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={"status": "error", "message": str(e)},
-        )
+@app.get("/projects/{project_id}/members")
+async def projects_get_members(project_id: UUID, request: Request):
+    assert_logged_in(request)
+    async with db.AsyncBackofficeSession() as session:
+        await assert_is_member(session, request, project_id)
+        service = ProjectService(session)
+        return await service.get_members(project_id)
+
+
+@app.post("/projects/{project_id}/members/add")
+async def projects_add_member(
+    project_id: UUID, request: Request, data: dict = Body(...)
+):
+    assert_logged_in(request)
+    user_id = UUID(data["user_id"])
+    role = db.ProjectRole(data["role"])
+
+    async with db.AsyncBackofficeSession() as session:
+        # Only owner or admin can add members
+        is_admin = request.session.get("user_info").get("is_admin")
+        if not is_admin:
+            await assert_is_owner(session, request, project_id)
+
+        service = ProjectService(session)
+        await service.add_member(project_id, user_id, role)
+        return {"status": "added"}
+
+
+@app.put("/projects/{project_id}/members/update")
+async def projects_update_member(
+    project_id: UUID, request: Request, data: dict = Body(...)
+):
+    assert_logged_in(request)
+    user_id = UUID(data["user_id"])
+    new_role = db.ProjectRole(data["role"])
+
+    async with db.AsyncBackofficeSession() as session:
+        is_admin = request.session.get("user_info").get("is_admin")
+        if not is_admin:
+            await assert_is_owner(session, request, project_id)
+
+        service = ProjectService(session)
+        await service.update_member_role(project_id, user_id, new_role)
+        return {"status": "updated"}
+
+
+@app.delete("/projects/{project_id}/members/remove/{user_id}")
+async def projects_remove_member(project_id: UUID, user_id: UUID, request: Request):
+    assert_logged_in(request)
+    async with db.AsyncBackofficeSession() as session:
+        is_admin = request.session.get("user_info").get("is_admin")
+        if not is_admin:
+            await assert_is_owner(session, request, project_id)
+
+        service = ProjectService(session)
+        await service.remove_member(project_id, user_id)
+        return {"status": "removed"}
 
 
 if __name__ == "__main__":

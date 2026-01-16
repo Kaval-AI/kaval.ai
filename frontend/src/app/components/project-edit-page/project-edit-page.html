@@ -65,9 +65,71 @@
       </fieldset>
 
       <div class="button-row">
-        <button type="submit" [disabled]="projectForm.invalid">Save</button>
+        <button type="submit" [disabled]="projectForm.invalid || projectForm.pristine">Save</button>
         <button type="button" (click)="cancel()">Cancel</button>
       </div>
+
+      @if (projectId && projectId !== 'new' && canManageMembers) {
+        <fieldset class="members-section">
+          <legend>Project Members</legend>
+
+          <div class="members-list">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (member of members; track member.id) {
+                  <tr>
+                    <td>{{ member.name }}</td>
+                    <td>{{ member.email }}</td>
+                    <td>
+                      <div class="role-dropdown-container">
+                        <button type="button" class="role-button" (click)="toggleRoleDropdown(member.id)">
+                          {{ member.role | titlecase }}
+                          <span class="arrow">▼</span>
+                        </button>
+                        @if (activeRoleDropdown === member.id) {
+                          <div class="role-dropdown-menu">
+                            <button type="button" (click)="changeRole(member, 'owner')">Owner</button>
+                            <button type="button" (click)="changeRole(member, 'viewer')">Viewer</button>
+                          </div>
+                        }
+                      </div>
+                    </td>
+                    <td>
+                      <button type="button" class="btn-danger" (click)="removeMember(member.id)">Remove</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div class="add-member-row">
+            <h4>Add Member</h4>
+            <div class="form-row">
+              <select [(ngModel)]="selectedUserId" [ngModelOptions]="{standalone: true}">
+                <option value="">Select a user...</option>
+                @for (user of filteredUsers; track user.id) {
+                  <option [value]="user.id">{{ user.name }} ({{ user.email }})</option>
+                }
+              </select>
+              <select [(ngModel)]="selectedRole" [ngModelOptions]="{standalone: true}">
+                <option value="owner">Owner</option>
+                <option value="viewer">Viewer</option>
+              </select>
+              <button type="button" (click)="addMember()" [disabled]="!selectedUserId">Add</button>
+            </div>
+          </div>
+        </fieldset>
+      }
+
     </form>
   </main>
 </div>
