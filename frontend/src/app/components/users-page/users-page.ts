@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { UserService } from '../../services/user-service';
 import { UserDetails } from '../../models/user-details';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-users-page',
@@ -14,10 +15,9 @@ import { UserDetails } from '../../models/user-details';
 export class UsersPage implements OnInit {
   private userService = inject(UserService);
   private fb = inject(FormBuilder);
+  private router = inject(Router);
 
   users: UserDetails[] = [];
-  selectedUser: UserDetails | null = null;
-  isEditing = false;
   showForm = false;
 
   userForm = this.fb.group({
@@ -38,22 +38,18 @@ export class UsersPage implements OnInit {
   }
 
   editUser(user: UserDetails) {
-    this.selectedUser = user;
-    this.isEditing = true;
-    this.showForm = true;
-    this.userForm.patchValue(user);
+    if (user.id) {
+      this.router.navigate(['/user-edit', user.id]);
+    }
   }
 
   addUser() {
-    this.selectedUser = null;
-    this.isEditing = false;
     this.showForm = true;
     this.userForm.reset({ is_admin: false });
   }
 
   cancelForm() {
     this.showForm = false;
-    this.selectedUser = null;
     this.userForm.reset();
   }
 
@@ -62,17 +58,10 @@ export class UsersPage implements OnInit {
 
     const userData = this.userForm.value as Partial<UserDetails>;
 
-    if (this.isEditing && this.selectedUser?.id) {
-      this.userService.updateUser(this.selectedUser.id, userData).subscribe(() => {
-        this.loadUsers();
-        this.showForm = false;
-      });
-    } else {
-      this.userService.createUser(userData).subscribe(() => {
-        this.loadUsers();
-        this.showForm = false;
-      });
-    }
+    this.userService.createUser(userData).subscribe(() => {
+      this.loadUsers();
+      this.showForm = false;
+    });
   }
 
   deleteUser(user: UserDetails) {

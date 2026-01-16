@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { DropdownMenuTriggerDirective } from '../dropdown-menu/dropdown-menu';
-import { MatButtonModule } from '@angular/material/button';
 import { UserDetails } from '../../models/user-details';
 import { UserService } from '../../services/user-service';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-user-info',
@@ -12,9 +12,10 @@ import { UserService } from '../../services/user-service';
   imports: [CommonModule, DropdownMenuTriggerDirective],
 })
 export class UserInfo implements OnInit {
-  userDetails: UserDetails | null = null;
+  private userService = inject(UserService);
+  private router = inject(Router);
 
-  constructor(private userService: UserService) {}
+  userDetails: UserDetails | null = null;
 
   ngOnInit(): void {
     this.userService.userDetails.subscribe((details: UserDetails | null) => {
@@ -26,5 +27,11 @@ export class UserInfo implements OnInit {
 
   logout(): void {
     this.userService.logout();
+  }
+
+  editProfile(): void {
+    if (this.userDetails?.id) {
+      this.router.navigate(['/user-edit', this.userDetails.id]);
+    }
   }
 }

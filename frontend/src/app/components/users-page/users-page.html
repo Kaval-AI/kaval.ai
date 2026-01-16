@@ -5,7 +5,7 @@
   </div>
 
   <div *ngIf="showForm" class="user-form">
-    <h2>{{ isEditing ? 'Edit User' : 'Add New User' }}</h2>
+    <h2>Add New User</h2>
     <form [formGroup]="userForm" (ngSubmit)="saveUser()">
       <div class="form-group">
         <label for="email">Email</label>

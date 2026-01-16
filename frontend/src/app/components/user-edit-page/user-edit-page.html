@@ -1,0 +1,26 @@
+<div class="user-edit-container">
+  <h2>Edit User</h2>
+  <form [formGroup]="userForm" (ngSubmit)="saveUser()">
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" formControlName="email" class="form-control" />
+    </div>
+    <div class="form-group">
+      <label for="name">Name</label>
+      <input type="text" id="name" formControlName="name" class="form-control" />
+    </div>
+    <div class="form-group">
+      <label for="picture">Picture URL</label>
+      <input type="text" id="picture" formControlName="picture" class="form-control" />
+    </div>
+    <div class="form-group checkbox" *ngIf="isAdmin">
+      <label>
+        <input type="checkbox" formControlName="is_admin" /> Is Admin
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="cancel()">Cancel</button>
+      <button type="submit" class="btn btn-primary" [disabled]="userForm.invalid">Save</button>
+    </div>
+  </form>
+</div>

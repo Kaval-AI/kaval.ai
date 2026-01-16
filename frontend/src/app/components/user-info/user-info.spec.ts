@@ -5,11 +5,14 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { UserService } from '../../services/user-service';
 import { of } from 'rxjs';
 import { UserDetails } from '../../models/user-details';
+import { provideRouter } from '@angular/router';
+import { Router } from '@angular/router';
 
 describe('UserInfo', () => {
   let component: UserInfo;
   let fixture: ComponentFixture<UserInfo>;
   let userService: UserService;
+  let router: Router;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -17,11 +20,13 @@ describe('UserInfo', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         UserService
       ]
     }).compileComponents();
 
     userService = TestBed.inject(UserService);
+    router = TestBed.inject(Router);
     fixture = TestBed.createComponent(UserInfo);
     component = fixture.componentInstance;
   });
@@ -50,5 +55,15 @@ describe('UserInfo', () => {
     const logoutSpy = spyOn(userService, 'logout');
     component.logout();
     expect(logoutSpy).toHaveBeenCalled();
+  });
+
+  it('should navigate to user-edit when editProfile is called', () => {
+    const mockUser: UserDetails = { id: '123', name: 'Test User' } as UserDetails;
+    component.userDetails = mockUser;
+    const navigateSpy = spyOn(router, 'navigate');
+
+    component.editProfile();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/user-edit', '123']);
   });
 });
