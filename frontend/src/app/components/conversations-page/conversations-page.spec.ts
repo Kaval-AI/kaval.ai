@@ -140,4 +140,13 @@ describe('ConversationsPage', () => {
 
     expect(component.hasMore).toBeFalse();
   });
+
+  it('should format date to DD-MM-YYYY HH:mm', () => {
+    const dateStr = '2023-12-31T23:59:59Z';
+    // Note: The result might depend on the timezone of the environment where tests run.
+    // However, 2023-12-31T23:59:59Z should always result in 31/12/2023 or 01/01/2024 depending on TZ.
+    // Let's use a more stable test that doesn't depend on TZ if possible, or just check the format.
+    const result = component.formatDate(dateStr);
+    expect(result).toMatch(/^\d{2}-\d{2}-\d{4} \d{2}:\d{2}$/);
+  });
 });

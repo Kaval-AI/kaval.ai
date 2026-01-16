@@ -63,4 +63,20 @@ describe('AgentsPage', () => {
     expect(component.error).toBe('Failed to load agents');
     expect(component.loading).toBeFalse();
   });
+
+  it('should prepare chart data with DD-MM labels', () => {
+    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
+    const mockAgents: Agent[] = [{ id: '1', name: 'Agent 1' } as Agent];
+    agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
+    const mockStats = {
+      runs: [{ date: '2023-01-25', count: 5 }],
+      sessions: [{ date: '2023-01-25', count: 2 }],
+      messages: [{ date: '2023-01-25', count: 10 }]
+    };
+    agentServiceSpy.getAgentStats.and.returnValue(of(mockStats));
+
+    fixture.detectChanges();
+
+    expect(component.lineChartData.labels).toContain('25-01');
+  });
 });

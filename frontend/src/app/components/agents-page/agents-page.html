@@ -37,8 +37,8 @@
         <div class="raw-data">
           <h4>Details</h4>
           <p><strong>ID:</strong> {{ selectedAgent.id }}</p>
-          <p><strong>Created At:</strong> {{ selectedAgent.created_at | date:'short' }}</p>
-          <p><strong>Updated At:</strong> {{ selectedAgent.updated_at | date:'short' }}</p>
+          <p><strong>Created At:</strong> {{ selectedAgent.created_at | date:'dd-MM-yyyy HH:mm' }}</p>
+          <p><strong>Updated At:</strong> {{ selectedAgent.updated_at | date:'dd-MM-yyyy HH:mm' }}</p>
 
           <div class="schemas">
             <div>
