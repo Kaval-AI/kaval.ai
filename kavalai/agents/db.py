@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import MetaData, TEXT, ForeignKey, DateTime
+from sqlalchemy import MetaData, TEXT, ForeignKey, DateTime, Integer, Numeric
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -70,6 +70,58 @@ class Agent(Base):
     chat_messages: Mapped[list["ChatMessage"]] = relationship(
         back_populates="agent", cascade="all, delete-orphan", passive_deletes=True
     )
+
+
+class LLMProfile(Base):
+    __tablename__ = "llm_profiles"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    name: Mapped[str] = mapped_column(TEXT, nullable=False)
+    provider: Mapped[str] = mapped_column(TEXT, nullable=False)
+    model_name: Mapped[str] = mapped_column(TEXT, nullable=False)
+    api_key: Mapped[str | None] = mapped_column(TEXT)
+    base_url: Mapped[str | None] = mapped_column(TEXT)
+    default_mode: Mapped[str | None] = mapped_column(TEXT)
+    credentials: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    call_stats: Mapped[list["LLMCallStat"]] = relationship(
+        back_populates="llm_profile", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class LLMCallStat(Base):
+    __tablename__ = "llm_call_stats"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    llm_profile_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("llm_profiles.id", ondelete="SET NULL")
+    )
+    name: Mapped[str | None] = mapped_column(TEXT)
+    response_code: Mapped[int | None] = mapped_column(Integer)
+    cost: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    currency: Mapped[str | None] = mapped_column(TEXT)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    llm_profile: Mapped["LLMProfile"] = relationship(back_populates="call_stats")
 
 
 class Session(Base):

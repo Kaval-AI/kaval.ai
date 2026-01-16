@@ -27,6 +27,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `src/app/services/`: Angular services for API interaction (`AgentService`, `UserService`).
     - `src/app/components/`: UI components (e.g., `ConversationsPage`, `LandingPage`, `ProjectEditPage`).
 - `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
+    - `app/V001__llm_profiles_and_stats.sql`: Defines `llm_profiles` (with `api_key`, `base_url`, `default_mode`) and `llm_call_stats`.
 - `scripts/`: Utility scripts (e.g., DB migration).
 - `tests/`: Backend tests.
 - `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data.

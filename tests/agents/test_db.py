@@ -1,7 +1,15 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage
+from kavalai.agents.db import (
+    Agent,
+    Session,
+    Run,
+    Task,
+    ChatMessage,
+    LLMProfile,
+    LLMCallStat,
+)
 from kavalai.crud import insert, delete, get_one
 
 
@@ -131,3 +139,55 @@ async def test_run_set_null_on_delete_for_messages(agents_db: AsyncSession):
 
     assert fetched_msg is not None
     assert fetched_msg.run_id is None  # Check ON DELETE SET NULL works
+
+
+@pytest.mark.asyncio
+async def test_llm_profile_and_stats(agents_db: AsyncSession):
+    """Test LLMProfile and LLMCallStat models and their relationship."""
+    # 1. Create LLM Profile
+    profile = await insert(
+        agents_db,
+        LLMProfile,
+        {
+            "name": "Test OpenAI",
+            "provider": "openai",
+            "model_name": "gpt-4",
+            "api_key": "sk-test",
+            "default_mode": "TOOLS",
+        },
+    )
+    assert profile.name == "Test OpenAI"
+
+    # 2. Create Call Stat linked to profile
+    stat = await insert(
+        agents_db,
+        LLMCallStat,
+        {
+            "llm_profile_id": profile.id,
+            "name": "test_call",
+            "response_code": 200,
+            "cost": 0.000123,
+        },
+    )
+    assert stat.llm_profile_id == profile.id
+
+    # 3. Test Relationship (LLMProfile -> LLMCallStat)
+    # Re-fetch profile to load relationship
+    await get_one(agents_db, LLMProfile, profile.id)
+
+    # 4. Test ON DELETE SET NULL
+    profile_id = profile.id
+    stat_id = stat.id
+
+    # Action: Delete ONLY the profile
+    await delete(agents_db, LLMProfile, profile_id)
+
+    # Clear session to force re-fetch from DB
+    agents_db.expire_all()
+
+    assert await get_one(agents_db, LLMProfile, profile_id) is None
+
+    # Re-fetch stat to see if it's still there but with llm_profile_id=None
+    fetched_stat = await get_one(agents_db, LLMCallStat, stat_id)
+    assert fetched_stat is not None
+    assert fetched_stat.llm_profile_id is None
