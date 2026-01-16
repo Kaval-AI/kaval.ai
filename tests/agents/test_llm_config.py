@@ -75,8 +75,9 @@ async def test_get_instructor_with_auto_import(agents_db, tmp_path, monkeypatch)
 @pytest.mark.asyncio
 async def test_get_instructor_fallback_no_session(tmp_path, monkeypatch):
     # Create dummy yaml profile
+    profile_name = "manual-load"
     p1 = {
-        "name": "manual-load",
+        "name": profile_name,
         "provider": "openai",
         "model_name": "gpt-4o",
     }
@@ -84,13 +85,14 @@ async def test_get_instructor_fallback_no_session(tmp_path, monkeypatch):
     profile_dir = tmp_path / "profiles"
     profile_dir.mkdir()
 
-    with open(profile_dir / "manual.yaml", "w") as f:
+    # The filename must match the profile name now
+    with open(profile_dir / f"{profile_name}.yaml", "w") as f:
         yaml.dump(p1, f)
 
     monkeypatch.setenv("LLM_PROFILES_PATH", str(profile_dir))
 
     # When no session is provided, it should load from the folder
-    client = await get_instructor("manual-load")
+    client = await get_instructor(profile_name)
     assert client is not None
 
 
@@ -104,23 +106,25 @@ async def test_get_instructor_not_found():
 async def test_load_profile_from_folder_invalid_yaml(tmp_path):
     from kavalai.agents.llm_config import load_profile_from_folder
 
+    profile_name = "invalid"
     profile_dir = tmp_path / "profiles"
     profile_dir.mkdir()
-    with open(profile_dir / "invalid.yaml", "w") as f:
+    with open(profile_dir / f"{profile_name}.yaml", "w") as f:
         f.write("invalid: yaml: :")
 
-    profile = load_profile_from_folder(str(profile_dir), "any")
+    profile = load_profile_from_folder(str(profile_dir), profile_name)
     assert profile is None
 
 
 @pytest.mark.asyncio
-async def test_load_profile_from_folder_no_name(tmp_path):
+async def test_load_profile_from_folder_mismatch_name(tmp_path):
     from kavalai.agents.llm_config import load_profile_from_folder
 
     profile_dir = tmp_path / "profiles"
     profile_dir.mkdir()
-    with open(profile_dir / "no_name.yaml", "w") as f:
-        yaml.dump({"provider": "openai"}, f)
+    # Filename matches, but 'name' inside doesn't
+    with open(profile_dir / "mismatch.yaml", "w") as f:
+        yaml.dump({"name": "something-else", "provider": "openai"}, f)
 
-    profile = load_profile_from_folder(str(profile_dir), "any")
+    profile = load_profile_from_folder(str(profile_dir), "mismatch")
     assert profile is None

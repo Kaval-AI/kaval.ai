@@ -1,12 +1,17 @@
 import os
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel
-from sqlalchemy import select, desc
-from sqlalchemy.ext.asyncio import AsyncSession
-import yaml
+
 import instructor
+import yaml
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from kavalai.crud import insert, update, get_all
 from kavalai.agents.db import LLMProfile
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class LLMProfileCreate(BaseModel):
@@ -33,9 +38,9 @@ class LLMProfileRead(BaseModel):
 async def get_llm_profiles(
     session: AsyncSession,
 ) -> list[LLMProfileRead]:
-    stmt = select(LLMProfile).order_by(desc(LLMProfile.updated_at))
-    result = await session.execute(stmt)
-    profiles = result.scalars().all()
+    profiles = await get_all(session, LLMProfile)
+    # Sort by updated_at desc manually since crud.get_all doesn't support ordering yet
+    profiles = sorted(profiles, key=lambda p: p.updated_at, reverse=True)
 
     return [
         LLMProfileRead(
@@ -69,71 +74,60 @@ async def import_llm_profiles_from_folder(
                 if not data or "name" not in data:
                     continue
 
-                profile_data = LLMProfileCreate(**data)
-                # Check if profile exists by name
-                stmt = select(LLMProfile).where(LLMProfile.name == profile_data.name)
-                result = await session.execute(stmt)
-                existing = result.scalar_one_or_none()
+                existing = await lookup_profile(data["name"], session)
 
                 if existing:
-                    existing.provider = profile_data.provider
-                    existing.model_name = profile_data.model_name
-                    existing.api_key = profile_data.api_key
-                    existing.base_url = profile_data.base_url
-                    existing.default_mode = profile_data.default_mode
-                    existing.credentials = profile_data.credentials
+                    # Update existing record using crud.update
+                    await update(session, LLMProfile, existing.id, data)
                 else:
-                    new_profile = LLMProfile(
-                        name=profile_data.name,
-                        provider=profile_data.provider,
-                        model_name=profile_data.model_name,
-                        api_key=profile_data.api_key,
-                        base_url=profile_data.base_url,
-                        default_mode=profile_data.default_mode,
-                        credentials=profile_data.credentials,
-                    )
-                    session.add(new_profile)
-
-    await session.commit()
+                    # Insert new record using crud.insert
+                    await insert(session, LLMProfile, data)
 
 
-def load_profile_from_folder(
-    folder_path: str, profile_name: str
-) -> LLMProfileCreate | None:
+def load_profile_from_folder(folder_path: str, profile_name: str) -> LLMProfile | None:
     if not os.path.exists(folder_path):
         return None
-
-    for filename in sorted(os.listdir(folder_path)):
-        if filename.endswith(".yaml") or filename.endswith(".yml"):
-            with open(os.path.join(folder_path, filename), "r") as f:
-                try:
-                    data = yaml.safe_load(f)
-                except yaml.YAMLError:
-                    continue
-                if not data or "name" not in data:
-                    continue
-
-                if data["name"] == profile_name:
-                    return LLMProfileCreate(**data)
+    profile_path = os.path.join(folder_path, f"{profile_name}.yaml")
+    if os.path.exists(profile_path):
+        with open(profile_path, "r") as f:
+            try:
+                data = yaml.safe_load(f)
+                if data and isinstance(data, dict):
+                    # Ensure the name in the file matches what we expect
+                    if data.get("name") == profile_name:
+                        logger.info(
+                            f"Loaded LLM profile '{profile_name}' from {profile_path}"
+                        )
+                        return LLMProfile(**data)
+            except yaml.YAMLError:
+                pass
+    logger.warning(f"Could not load '{profile_name}' from {profile_path}.")
     return None
+
+
+async def lookup_profile(profile_name: str, session: AsyncSession) -> LLMProfile:
+    result = await session.execute(
+        select(LLMProfile).where(LLMProfile.name == profile_name)
+    )
+    result = result.scalar_one_or_none()
+    if result:
+        logger.info(f"Found LLM profile '{profile_name}' in DB")
+    else:
+        logger.info(f"LLM profile '{profile_name}' not found in DB")
+    return result
 
 
 async def get_instructor(
     profile_name: str, session: AsyncSession | None = None
 ) -> instructor.Instructor:
-    async def lookup_profile() -> LLMProfile:
-        stmt = select(LLMProfile).where(LLMProfile.name == profile_name)
-        result = await session.execute(stmt)
-        return result.scalar_one_or_none()
-
     profile = None
     if session:
-        profile = await lookup_profile()
+        profile = await lookup_profile(profile_name, session)
         if not profile:
-            # Try to import from folder if not found
+            # Try to import from folder if not found and session is available
             profiles_path = os.getenv("LLM_PROFILES_PATH", "llm_profiles")
             await import_llm_profiles_from_folder(profiles_path, session)
-            profile = await lookup_profile()
+            profile = await lookup_profile(profile_name, session)
 
     if not profile:
         # Try to load from folder directly if no session or not found in DB
@@ -148,6 +142,7 @@ async def get_instructor(
         async_client=True,
         mode=instructor.Mode.JSON,
     )
+
     if profile.base_url:
         params["base_url"] = profile.base_url
     if profile.api_key:

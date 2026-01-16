@@ -9,34 +9,29 @@ import asyncio
 import urllib.parse
 from argparse import ArgumentParser
 from typing import Optional, List, Dict
-
+import logging
 import httpx
 import yaml
-from kavalai.agents.llm_config import get_instructor
 from json_schema_to_pydantic import create_model
 from pydantic import BaseModel, Field, HttpUrl
 from rich.console import Console
 
+from kavalai.agents.llm_config import get_instructor
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
+
+logger = logging.getLogger(__name__)
 
 
 class TaskConfig(BaseModel):
-    # The server URL of the agent. Must have POST /run_agent available.
     agent_server_url: HttpUrl
-
-    # Agent basic auth credentials.
     auth_username: str
     auth_password: str
-
-    # Task descriptions with number of turns the persona is supposed to talk with it.
     llm_profile_name: Optional[str] = None
     task: str
     max_turns: int = Field(gt=0, description="The maximum number of conversation turns")
 
 
 class PersonaConfig(BaseModel):
-    """Schema for the configuration YAML file."""
-
     name: str
     persona_description: str
     mood: str
@@ -46,7 +41,9 @@ console = Console()
 
 
 async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
-    # Load task and persona configurations.
+    logger.info(
+        f"Loading task config from {task_yaml_path} and persona config from {persona_yaml_path}"
+    )
     with open(task_yaml_path) as f:
         task_config = TaskConfig(**yaml.safe_load(f))
     with open(persona_yaml_path) as f:
@@ -114,6 +111,7 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
             2. Don't say things you have already said.
             3. If the agent can't help you, try to help them. Ask questions how you can present your task more clearly.
             4. If you have everything you need, terminate the conservation.
+            5. IMPORTANT: Do not terminate the conversation in the first turn unless the task is already fully completed without any interaction with the agent. Usually you need at least one interaction.
 
             Output instructions:
             1. Don't overshare details unless they are required.

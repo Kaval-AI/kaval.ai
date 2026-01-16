@@ -125,7 +125,7 @@ if __name__ == "__main__":
     app = create_agent_app(
         workflow=workflow,
         session_provider=db_manager.get_sessionmaker(
-            user=os.environ["AGENTS_DB_HOST"],
+            user=os.environ["AGENTS_DB_USER"],
             password=os.environ["AGENTS_DB_PASSWORD"],
             host=os.environ["AGENTS_DB_HOST"],
             port=int(os.environ["AGENTS_DB_PORT"]),
