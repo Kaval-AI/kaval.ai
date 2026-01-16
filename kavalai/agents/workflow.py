@@ -2,12 +2,12 @@ import logging
 from typing import Dict, Type, Optional, Literal
 from uuid import UUID
 
-import instructor
 import yaml
 from fastmcp import Client
 from pydantic import BaseModel
 
 from kavalai.agents.agent_service import AgentService
+from kavalai.agents.llm_config import get_instructor
 from kavalai.agents.schema_parser import SchemaParser
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class McpServer(BaseModel):
 class WorkflowModel(BaseModel):
     name: str
     description: str = ""
-    llm_provider: str
+    llm_profile_name: str
     data_types: dict[str, dict]
     mcp_servers: list[McpServer] = []
     tasks: list[Task]
@@ -111,10 +111,10 @@ class Workflow:
             input_name: run_context.data.get(input_name) for input_name in task.inputs
         }
         input_text = make_prompt(task.prompt, input_data)
-        client = instructor.from_provider(
-            self.workflow_model.llm_provider,
-            async_client=True,
-            mode=instructor.Mode.JSON,
+
+        session = self.agent_service.db if self.agent_service else None
+        client = await get_instructor(
+            self.workflow_model.llm_profile_name, session=session
         )
 
         system_message = dict(role="system", content=input_text)
@@ -127,14 +127,21 @@ class Workflow:
 
         # DB LOGGING: Record this prompt as a Task
         if self.agent_service and run_context.run_id:
+            task_output = response
+            if isinstance(response, dict):
+                output_type = self.get_data_type(task.output)
+                if output_type:
+                    task_output = output_type(**response)
+                    run_context.data[task.output] = task_output
+
             await self.agent_service.add_task(
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
                 inputs={"prompt": input_text},
-                output=response.model_dump()
-                if isinstance(response, BaseModel)
-                else {"result": response},
+                output=task_output.model_dump()
+                if isinstance(task_output, BaseModel)
+                else {"result": task_output},
             )
 
     async def run_tool(self, task: Task, run_context: RunContext):

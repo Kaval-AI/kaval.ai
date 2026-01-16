@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import select, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage
+from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, LLMProfile
 
 
 class AgentService:
@@ -126,3 +126,9 @@ class AgentService:
         await self.db.commit()
         await self.db.refresh(message)
         return message
+
+    async def get_llm_profile_by_name(self, name: str) -> Optional[LLMProfile]:
+        """Fetch an LLM profile by its name."""
+        stmt = select(LLMProfile).where(LLMProfile.name == name)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()

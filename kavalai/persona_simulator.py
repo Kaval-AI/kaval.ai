@@ -1,11 +1,18 @@
+"""
+Simulates a conversation as a persona user and an agent.
+
+Example usage:
+python -m kavalai.persona_simulator --task_config demo_tasks/chess.yaml --persona_config demo_personas/margit.yaml
+"""
+
 import asyncio
 import urllib.parse
 from argparse import ArgumentParser
 from typing import Optional, List, Dict
 
 import httpx
-import instructor
 import yaml
+from kavalai.agents.llm_config import get_instructor
 from json_schema_to_pydantic import create_model
 from pydantic import BaseModel, Field, HttpUrl
 from rich.console import Console
@@ -22,7 +29,7 @@ class TaskConfig(BaseModel):
     auth_password: str
 
     # Task descriptions with number of turns the persona is supposed to talk with it.
-    llm_provider: Optional[str] = None
+    llm_profile_name: Optional[str] = None
     task: str
     max_turns: int = Field(gt=0, description="The maximum number of conversation turns")
 
@@ -46,9 +53,7 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
         persona_config = PersonaConfig(**yaml.safe_load(f))
 
     # Setup the LLM client and chat history.
-    llm_client = instructor.from_provider(
-        task_config.llm_provider, async_client=True, mode=instructor.Mode.JSON
-    )
+    llm_client = await get_instructor(task_config.llm_profile_name)
     history: List[Dict[str, str]] = []
 
     # We'll keep track of the session_id given by the agent.

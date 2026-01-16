@@ -1,6 +1,6 @@
 name: Johnny Silverhand agent
 description: Basic configuration example of a chatbot with personality.
-llm_provider: openai/gpt-5-nano-2025-08-07
+llm_profile_name: openai/gpt-5-nano-2025-08-07
 data_types:
   input:
     type: object

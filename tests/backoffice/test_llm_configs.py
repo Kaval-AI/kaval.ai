@@ -1,14 +1,14 @@
 import uuid
 from unittest.mock import patch, MagicMock, AsyncMock
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from kavalai.backoffice import db as bo_db
+
 from kavalai.agents.db import LLMProfile
+from kavalai.backoffice import db as bo_db
 from kavalai.backoffice.server import app
 from kavalai.crud import insert
-
-# Import fixtures from agents tests
 
 
 @pytest_asyncio.fixture
@@ -22,7 +22,6 @@ async def client():
 @pytest.mark.asyncio
 async def test_projects_get_llm_configs(client, backoffice_db, agents_db):
     project_id = uuid.uuid4()
-    user_id = str(uuid.uuid4())
 
     # 1. Setup Project in Backoffice DB
     project = bo_db.Project(
@@ -51,11 +50,7 @@ async def test_projects_get_llm_configs(client, backoffice_db, agents_db):
     )
 
     # 3. Mock authentication and database connection
-    with patch("kavalai.backoffice.server.is_logged_in", return_value=True), patch(
-        "kavalai.backoffice.server.assert_logged_in"
-    ), patch(
-        "starlette.requests.Request.session", {"user_info": {"id": user_id}}
-    ), patch(
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
         "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
     ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_get_sessionmaker:
         # Mock the session maker to return our agents_db
@@ -66,8 +61,8 @@ async def test_projects_get_llm_configs(client, backoffice_db, agents_db):
             return_value=mock_session_context
         )
 
-    # 4. Call the endpoint
-    response = await client.get(f"/projects/{project_id}/llm-configs")
+        # 4. Call the endpoint
+        response = await client.get(f"/projects/{project_id}/llm-configs")
 
     # 5. Verify results
     assert response.status_code == 200

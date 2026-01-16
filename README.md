@@ -37,3 +37,12 @@ All of them should pass
 - Run `npm install`
 
 # Running agents
+
+Runs a demo agent on port 10000 with given access credentials.
+
+```
+HTTP_BASIC_AUTH_USER=user HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server demo_agents/silverhand.yaml --port 10000
+```
+
+Simulate a conversation with the agent using persona simulator.
+Give YAML definitions of a persona and a task they are trying to accomplish using the agent's help.

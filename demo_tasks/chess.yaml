@@ -2,6 +2,6 @@ agent_server_url: "http://localhost:10000"
 max_turns: 8
 auth_username: "user"
 auth_password: "password"
-llm_provider: openai/gpt-5.2-2025-12-11
+llm_profile_name: openai
 task: |
-  Kasutaja tahab niisam chattida ükskõik mis teemadel.
+  The user wants to play a game of chess. The user likes to play an aggressive style.

@@ -178,7 +178,7 @@ async def test_agents_get_svg_success(client, backoffice_db):
     agent.workflow = {
         "name": "Test Workflow",
         "description": "A test workflow",
-        "llm_provider": "openai",
+        "llm_profile_name": "openai",
         "data_types": {},
         "tasks": [],
     }

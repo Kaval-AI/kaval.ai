@@ -11,7 +11,7 @@ from kavalai.agents.workflow import Workflow
 SIMPLE_YAML = """
 name: BB King Agent
 description: Just talks about the blues.
-llm_provider: openai/gpt-4o
+llm_profile_name: openai/gpt-4o
 data_types:
   input:
     type: object
@@ -54,7 +54,18 @@ def test_run_agent_success(client):
         "data": {"user_message": "Tell me about your guitar."},
     }
 
-    response = client.post("/run_agent", json=payload, auth=("lucille", "blues123"))
+    from unittest.mock import AsyncMock, patch
+
+    # patch get_instructor to return a mock client that returns a dict
+    # the server will then validate this dict against its own OutputDataType
+    mock_response = {"agent_response": "Lucille is my lady."}
+
+    with patch("kavalai.agents.workflow.get_instructor") as mock_get_instructor:
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_get_instructor.return_value = mock_client
+
+        response = client.post("/run_agent", json=payload, auth=("lucille", "blues123"))
 
     assert response.status_code == 200
     data = response.json()

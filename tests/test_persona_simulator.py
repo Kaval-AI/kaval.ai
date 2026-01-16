@@ -13,7 +13,7 @@ def mock_task_config(tmp_path):
         "agent_server_url": "http://localhost:8000",
         "auth_username": "user",
         "auth_password": "password",
-        "llm_provider": "openai",
+        "llm_profile_name": "openai",
         "task": "Test Task",
         "max_turns": 2,
     }

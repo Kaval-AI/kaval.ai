@@ -11,9 +11,9 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `kavalai/`: Main Python package.
     - `agents/`: SDK and agent runtime logic.
         - `workflow.py`: Core workflow execution engine (YAML to execution).
-        - `agent_service.py`: Service for managing agent state, sessions, and runs in the DB.
+        - `agent_service.py`: Service for managing agent state, sessions, runs, and LLM profiles in the DB.
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages).
-        - `llm_config.py`: Logic for fetching LLM profiles and configurations (with data masking).
+        - `llm_config.py`: Pydantic models for LLM profiles and fetching configurations.
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
         - `db.py`: Database models for agents, sessions, runs, tasks, and messages.
@@ -29,6 +29,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `src/app/components/`: UI components (e.g., `ConversationsPage`, `LandingPage`, `ProjectEditPage`, `ConfigsPage`).
 - `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
     - `app/V001__llm_profiles_and_stats.sql`: Defines `llm_profiles` (with `api_key`, `base_url`, `default_mode`) and `llm_call_stats`.
+- `llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `scripts/`: Utility scripts (e.g., DB migration).
 - `tests/`: Backend tests.
 - `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data.

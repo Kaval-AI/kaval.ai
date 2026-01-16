@@ -8,7 +8,7 @@ def test_generate_workflow_svg(tmp_path):
     model_data = {
         "name": "Test Workflow",
         "description": "A test workflow",
-        "llm_provider": "openai",
+        "llm_profile_name": "openai",
         "data_types": {
             "input": {"properties": {"user_message": {"type": "string"}}},
             "output": {"properties": {"agent_response": {"type": "string"}}},
@@ -59,7 +59,7 @@ def test_generate_workflow_svg_content():
     model_data = {
         "name": "Test Workflow",
         "description": "A test workflow",
-        "llm_provider": "openai",
+        "llm_profile_name": "openai",
         "data_types": {},
         "tasks": [],
     }
