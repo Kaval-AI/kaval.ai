@@ -12,7 +12,7 @@ describe('AgentsPage', () => {
   let userServiceSpy: jasmine.SpyObj<UserService>;
 
   beforeEach(async () => {
-    agentServiceSpy = jasmine.createSpyObj('AgentService', ['getAgentsByProject']);
+    agentServiceSpy = jasmine.createSpyObj('AgentService', ['getAgentsByProject', 'getAgentSvgUrl', 'getAgentStats']);
     userServiceSpy = jasmine.createSpyObj('UserService', ['getActiveProjectId']);
 
     await TestBed.configureTestingModule({

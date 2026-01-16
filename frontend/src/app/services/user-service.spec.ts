@@ -25,7 +25,7 @@ describe('UserService', () => {
   });
 
   it('should update user details', () => {
-    const mockUser: UserDetails = { email: 'test@test.com', name: 'Test', picture: '', is_admin: true, active_project_id: 'proj1' };
+    const mockUser: UserDetails = { id: 'user1', email: 'test@test.com', name: 'Test', picture: '', is_admin: true, active_project_id: 'proj1' };
     service.updateUserDetails();
 
     const req = httpMock.expectOne('/api/user/get_details');
@@ -47,7 +47,7 @@ describe('UserService', () => {
   });
 
   it('should set active project', () => {
-    const mockUser: UserDetails = { email: 'test@test.com', name: 'Test', picture: '', is_admin: false, active_project_id: 'old' };
+    const mockUser: UserDetails = { id: 'user1', email: 'test@test.com', name: 'Test', picture: '', is_admin: false, active_project_id: 'old' };
 
     // Setup initial state
     service.updateUserDetails();

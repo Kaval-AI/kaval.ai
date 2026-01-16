@@ -13,14 +13,18 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `workflow.py`: Core workflow execution engine (YAML to execution).
         - `agent_service.py`: Service for managing agent state, sessions, and runs in the DB.
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages).
+        - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
         - `db.py`: Database models for agents, sessions, runs, tasks, and messages.
     - `backoffice/`: API and logic for the management UI.
-        - `server.py`: FastAPI server for the backoffice API.
+        - `server.py`: FastAPI server for the backoffice API. Includes endpoints for agents, sessions, stats, and workflow visualization.
         - `db.py`: Backoffice-specific DB models (users, projects, memberships).
     - `tools/`: Utility tools (e.g., RSS, OpenAPI parser).
     - `crud.py`: Shared database utility functions.
 - `frontend/`: Angular-based project for the backoffice UI.
+    - `src/app/models/`: TypeScript interfaces (e.g., `SessionSummary`, `Agent`).
+    - `src/app/services/`: Angular services for API interaction (`AgentService`, `UserService`).
+    - `src/app/components/`: UI components (e.g., `ConversationsPage` for viewing sessions).
 - `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
 - `scripts/`: Utility scripts (e.g., DB migration).
 - `tests/`: Backend tests.

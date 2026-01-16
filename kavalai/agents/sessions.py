@@ -3,12 +3,13 @@ from uuid import UUID
 from pydantic import BaseModel
 from sqlalchemy import func, select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from kavalai.agents.db import Session, Run, Task, ChatMessage
+from kavalai.agents.db import Session, Run, Task, ChatMessage, Agent
 
 
 class SessionSummary(BaseModel):
     session_id: UUID
     agent_id: UUID
+    agent_name: str
     runs_count: int
     tasks_count: int
     messages_count: int
@@ -53,12 +54,14 @@ async def get_sessions_summary(
         select(
             Session.id.label("session_id"),
             Session.agent_id,
+            Agent.name.label("agent_name"),
             func.coalesce(runs_count_sub.c.count, 0).label("runs_count"),
             func.coalesce(tasks_count_sub.c.count, 0).label("tasks_count"),
             func.coalesce(messages_count_sub.c.count, 0).label("messages_count"),
             Session.created_at,
             Session.updated_at,
         )
+        .join(Agent, Session.agent_id == Agent.id)
         .outerjoin(runs_count_sub, Session.id == runs_count_sub.c.session_id)
         .outerjoin(tasks_count_sub, Session.id == tasks_count_sub.c.session_id)
         .outerjoin(messages_count_sub, Session.id == messages_count_sub.c.session_id)
@@ -98,6 +101,7 @@ async def get_sessions_summary(
             SessionSummary(
                 session_id=row.session_id,
                 agent_id=row.agent_id,
+                agent_name=row.agent_name,
                 runs_count=row.runs_count,
                 tasks_count=row.tasks_count,
                 messages_count=row.messages_count,

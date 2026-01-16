@@ -59,6 +59,7 @@ async def test_get_sessions_summary(agents_db):
     # Ordered by updated_at desc, so s1 should be first
     summary1 = summaries[0]
     assert summary1.session_id == s1.id
+    assert summary1.agent_name == "Test Agent"
     assert summary1.runs_count == 1
     assert summary1.tasks_count == 1
     assert summary1.messages_count == 2

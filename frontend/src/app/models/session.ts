@@ -1,6 +1,7 @@
 export interface SessionSummary {
   session_id: string;
   agent_id: string;
+  agent_name: string;
   runs_count: number;
   tasks_count: number;
   messages_count: number;
