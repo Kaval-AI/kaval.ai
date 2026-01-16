@@ -6,17 +6,19 @@ import { ProjectsPage } from './projects-page';
 import { ProjectService } from '../../services/project-service';
 import { UserService } from '../../services/user-service';
 import { Project } from '../../models/project';
-import { throwError } from 'rxjs';
+import { Router } from '@angular/router';
 
 describe('ProjectsPage', () => {
   let component: ProjectsPage;
   let fixture: ComponentFixture<ProjectsPage>;
   let projectServiceSpy: jasmine.SpyObj<ProjectService>;
   let userServiceSpy: jasmine.SpyObj<UserService>;
+  let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
-    projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll', 'create', 'update', 'delete', 'testConnection']);
+    projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll', 'delete']);
     userServiceSpy = jasmine.createSpyObj('UserService', ['getIsAdmin', 'setActiveProject']);
+    routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     projectServiceSpy.getAll.and.returnValue(of([]));
     userServiceSpy.getIsAdmin.and.returnValue(true);
@@ -25,7 +27,8 @@ describe('ProjectsPage', () => {
       imports: [ProjectsPage, ReactiveFormsModule, CommonModule],
       providers: [
         { provide: ProjectService, useValue: projectServiceSpy },
-        { provide: UserService, useValue: userServiceSpy }
+        { provide: UserService, useValue: userServiceSpy },
+        { provide: Router, useValue: routerSpy }
       ]
     }).compileComponents();
 
@@ -49,49 +52,15 @@ describe('ProjectsPage', () => {
     expect(component.selectedProject).toEqual(mockProjects[0]);
   });
 
-  it('should toggle edit mode', () => {
-    expect(component.isEditing).toBeFalse();
-    component.toggleEdit();
-    expect(component.isEditing).toBeTrue();
-    expect(component.projectForm.enabled).toBeTrue();
-  });
-
-  it('should save a new project', () => {
-    const newProject = { name: 'New' } as Project;
-    component.startNewProject();
-    component.projectForm.patchValue({ name: 'New' });
-    projectServiceSpy.create.and.returnValue(of({ ...newProject, id: '2' } as Project));
-    projectServiceSpy.getAll.and.returnValue(of([{ ...newProject, id: '2' } as Project]));
-
-    component.saveProject();
-
-    expect(projectServiceSpy.create).toHaveBeenCalled();
-    expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('2');
-  });
-
-  it('should test connection', () => {
+  it('should navigate to edit page', () => {
     component.selectedProject = { id: '1' } as Project;
-    const mockRes = { status: 'success', message: 'Connected' };
-    projectServiceSpy.testConnection.and.returnValue(of(mockRes));
-
-    component.testConnection();
-
-    expect(projectServiceSpy.testConnection).toHaveBeenCalledWith('1');
-    expect(component.connectionStatus).toEqual(mockRes);
+    component.editProject();
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/project-edit', '1']);
   });
 
-  it('should update an existing project', () => {
-    const existingProject = { id: '1', name: 'Existing' } as Project;
-    component.selectedProject = existingProject;
-    component.isEditing = true;
-    component.projectForm.patchValue({ name: 'Updated' });
-    projectServiceSpy.update.and.returnValue(of({ ...existingProject, name: 'Updated' }));
-    projectServiceSpy.getAll.and.returnValue(of([{ ...existingProject, name: 'Updated' }]));
-
-    component.saveProject();
-
-    expect(projectServiceSpy.update).toHaveBeenCalledWith('1', jasmine.any(Object));
-    expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('1');
+  it('should navigate to create page', () => {
+    component.startNewProject();
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/project-edit', 'new']);
   });
 
   it('should delete a project after confirmation', () => {
@@ -130,44 +99,5 @@ describe('ProjectsPage', () => {
 
     expect(component.selectedProject?.id).toBe('2');
     expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('2');
-  });
-
-  it('should handle test connection error', () => {
-    component.selectedProject = { id: '1' } as Project;
-    const errorResponse = { error: { message: 'Failed' } };
-    projectServiceSpy.testConnection.and.returnValue(throwError(() => errorResponse));
-
-    component.testConnection();
-
-    expect(component.connectionStatus?.status).toBe('error');
-    expect(component.connectionStatus?.message).toBe('Failed');
-  });
-
-  it('should handle test connection error without message', () => {
-    component.selectedProject = { id: '1' } as Project;
-    projectServiceSpy.testConnection.and.returnValue(throwError(() => new Error('Generic error')));
-
-    component.testConnection();
-
-    expect(component.connectionStatus?.status).toBe('error');
-    expect(component.connectionStatus?.message).toBe('Generic error');
-  });
-
-  it('should not save if form is invalid', () => {
-    component.startNewProject();
-    component.projectForm.patchValue({ name: '' }); // name is required
-    component.saveProject();
-    expect(projectServiceSpy.create).not.toHaveBeenCalled();
-  });
-
-  it('should revert changes when cancelling edit', () => {
-    const existingProject = { id: '1', name: 'Original' } as Project;
-    component.selectProject(existingProject);
-    component.toggleEdit();
-    component.projectForm.patchValue({ name: 'Changed' });
-
-    component.toggleEdit(); // toggle back to false
-
-    expect(component.projectForm.get('name')?.value).toBe('Original');
   });
 });

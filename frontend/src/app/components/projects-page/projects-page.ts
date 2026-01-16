@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { ProjectService } from '../../services/project-service';
 import { Project } from '../../models/project';
 import { UserService } from '../../services/user-service';
@@ -16,23 +17,15 @@ export class ProjectsPage implements OnInit {
   private projectService = inject(ProjectService);
   private userService = inject(UserService);
   private fb = inject(FormBuilder);
+  private router = inject(Router);
 
   projects: Project[] = [];
   selectedProject: Project | null = null;
-  isEditing = false;
-  connectionStatus: { status: string; message?: string } | null = null;
-  isTestingConnection = false;
 
-  // Updated Form Controls to match the new DB columns
+  // Reduced Form Controls to only Name and Description for display
   projectForm = this.fb.group({
-    name: ['', [Validators.required]],
-    description: ['', []],
-    db_host: ['', []],
-    db_port: [5432, [Validators.min(1), Validators.max(65535)]],
-    db_user: ['', []],
-    db_password: ['', []],
-    db_name: ['', []],
-    db_schema: ['public', []]
+    name: [{value: '', disabled: true}],
+    description: [{value: '', disabled: true}]
   });
 
   ngOnInit() {
@@ -63,61 +56,20 @@ export class ProjectsPage implements OnInit {
     }
   }
 
-  private updateFormState() {
-    if (this.isEditing) {
-      this.projectForm.enable();
-    } else {
-      this.projectForm.disable();
-    }
-  }
-
-  toggleEdit() {
-    this.isEditing = !this.isEditing;
-    this.updateFormState();
-
-    if (!this.isEditing && this.selectedProject) {
-      // Revert changes if cancelling
-      this.projectForm.patchValue(this.selectedProject);
-    }
-  }
-
   selectProject(project: Project | null) {
     this.selectedProject = project;
-    this.isEditing = false;
-    this.connectionStatus = null;
 
     if (project) {
       // patchValue automatically maps matching keys from 'project' to form controls
       this.projectForm.patchValue(project);
     } else {
-      this.projectForm.reset({
-        db_port: 5432,
-        db_schema: 'public'
-      });
+      this.projectForm.reset();
     }
-    this.updateFormState();
   }
 
-  saveProject() {
-    if (this.projectForm.invalid) return;
-
-    const formValue = this.projectForm.value as Partial<Project>;
-
+  editProject() {
     if (this.selectedProject?.id) {
-      this.projectService.update(this.selectedProject.id, formValue).subscribe(() => {
-        this.isEditing = false;
-        this.loadProjects();
-        if (this.selectedProject?.id) {
-          this.userService.setActiveProject(this.selectedProject.id);
-        }
-      });
-    } else {
-      this.projectService.create(formValue).subscribe((newProj: Project) => {
-        this.isEditing = false;
-        this.loadProjects();
-        this.selectProject(newProj)
-        this.userService.setActiveProject(newProj.id);
-      });
+      this.router.navigate(['/project-edit', this.selectedProject.id]);
     }
   }
 
@@ -132,34 +84,6 @@ export class ProjectsPage implements OnInit {
   }
 
   startNewProject() {
-    this.selectedProject = null;
-    this.isEditing = true;
-    this.connectionStatus = null;
-    this.projectForm.reset({
-      db_port: 5432,
-      db_schema: 'public'
-    });
-    this.updateFormState();
-  }
-
-  testConnection() {
-    if (!this.selectedProject?.id) return;
-
-    this.isTestingConnection = true;
-    this.connectionStatus = null;
-
-    this.projectService.testConnection(this.selectedProject.id).subscribe({
-      next: (res) => {
-        this.connectionStatus = res;
-        this.isTestingConnection = false;
-      },
-      error: (err) => {
-        this.connectionStatus = {
-          status: 'error',
-          message: err.error?.message || err.message || 'Unknown error'
-        };
-        this.isTestingConnection = false;
-      }
-    });
+    this.router.navigate(['/project-edit', 'new']);
   }
 }

@@ -1,0 +1,93 @@
+div.centered {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  text-align: left;
+  gap: 10px;
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+fieldset {
+  border: 1px solid #ddd;
+  padding: 1.5rem;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+legend {
+  padding: 0 0.5rem;
+  font-weight: bold;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+  width: 100%;
+}
+
+.form-field label {
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.form-field input,
+.form-field textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.test-connection-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.status-msg {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.status-msg.success {
+  color: #28a745;
+}
+
+.status-msg.error {
+  color: #dc3545;
+}
+
+.button-row {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-start;
+}
+
+.button-row button {
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+}

@@ -24,7 +24,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `frontend/`: Angular-based project for the backoffice UI.
     - `src/app/models/`: TypeScript interfaces (e.g., `SessionSummary`, `Agent`).
     - `src/app/services/`: Angular services for API interaction (`AgentService`, `UserService`).
-    - `src/app/components/`: UI components (e.g., `ConversationsPage`, `LandingPage`).
+    - `src/app/components/`: UI components (e.g., `ConversationsPage`, `LandingPage`, `ProjectEditPage`).
 - `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
 - `scripts/`: Utility scripts (e.g., DB migration).
 - `tests/`: Backend tests.

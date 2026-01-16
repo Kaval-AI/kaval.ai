@@ -10,6 +10,10 @@ Always refer to `junie.md` in the project root for an up-to-date overview of the
 Before starting any task, check `junie.md` to understand the relevant modules and their roles.
 After unit testing, update the `junie.md` for any important changes.
 
+## Executing commands.
+
+When the developer denies a delete/remove or other dangerous command, ask them to manually perform the command.
+
 ## Unit Testing
 At the end of every coding task, you must update the relevant unit tests and run them to ensure that your changes haven't introduced any regressions and that the new functionality works as expected.
 

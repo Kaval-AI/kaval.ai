@@ -8,12 +8,14 @@ import { SessionDetailPage } from './components/session-detail-page/session-deta
 
 import { LandingPage } from './components/landing-page/landing-page';
 import { AgentsPage } from './components/agents-page/agents-page';
+import { ProjectEditPage } from './components/project-edit-page/project-edit-page';
 
 export const routes: Routes = [
   // Default route
   { path: '', component: LandingPage },
 
   { path: 'agents', component: AgentsPage },
+  { path: 'project-edit/:id', component: ProjectEditPage },
   { path: 'conversations', component: ConversationsPage },
   { path: 'conversations/:sessionId', component: SessionDetailPage },
   { path: 'tests', component: TestsPage },
