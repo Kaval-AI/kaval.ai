@@ -1,0 +1,42 @@
+<div class="session-detail-container">
+  <div class="header">
+    <div class="header-left">
+      <button class="back-button" (click)="goBack()">
+        <span class="icon">←</span> Back to Conversations
+      </button>
+      <h2>Conversation History</h2>
+    </div>
+    <div class="session-info" *ngIf="sessionId">
+      <span class="label">Session ID:</span>
+      <span class="value">{{ sessionId }}</span>
+    </div>
+  </div>
+
+  <div class="chat-area">
+    <div *ngIf="loading" class="loading-state">
+      Loading messages...
+    </div>
+
+    <div *ngIf="error" class="error-state">
+      {{ error }}
+    </div>
+
+    <div *ngIf="!loading && !error && messages.length === 0" class="empty-state">
+      No messages in this session.
+    </div>
+
+    <div *ngIf="messages.length > 0" class="message-list">
+      <div *ngFor="let msg of messages" class="message-wrapper" [ngClass]="msg.role">
+        <div class="message-bubble">
+          <div class="message-header">
+            <span class="role">{{ msg.role === 'user' ? 'User' : 'Agent' }}</span>
+            <span class="time">{{ formatDate(msg.created_at) }}</span>
+          </div>
+          <div class="message-content">
+            {{ msg.content }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

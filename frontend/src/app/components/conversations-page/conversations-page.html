@@ -24,7 +24,7 @@
     </div>
 
     <div *ngIf="sessions.length > 0" class="sessions-list">
-      <div *ngFor="let session of sessions" class="session-card">
+      <div *ngFor="let session of sessions" class="session-card" (click)="viewSession(session.session_id)">
         <div class="session-header">
           <span class="session-id">
             <strong>{{ session.agent_name }}</strong> | Session: {{ session.session_id }}

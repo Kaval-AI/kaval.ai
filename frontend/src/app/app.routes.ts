@@ -7,6 +7,7 @@ import { TestsPage } from './components/tests-page/tests-page';
 import { MetricsPage } from './components/metrics-page/metrics-page';
 import { ConfigsPage } from './components/configs-page/configs-page';
 import { RagPage } from './components/rag-page/rag-page';
+import { SessionDetailPage } from './components/session-detail-page/session-detail-page';
 
 export const routes: Routes = [
   // Default route (redirects empty path to projects)
@@ -16,6 +17,7 @@ export const routes: Routes = [
   { path: 'users', component: UsersPage },
   { path: 'agents', component: AgentsPage },
   { path: 'conversations', component: ConversationsPage },
+  { path: 'conversations/:sessionId', component: SessionDetailPage },
   { path: 'tests', component: TestsPage },
   { path: 'metrics', component: MetricsPage },
   { path: 'configs', component: ConfigsPage },

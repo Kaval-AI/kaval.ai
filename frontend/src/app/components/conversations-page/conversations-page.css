@@ -76,6 +76,14 @@ button:disabled {
   padding: 16px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   border: 1px solid #eee;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.session-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  border-color: #42A5F5;
 }
 
 .session-header {

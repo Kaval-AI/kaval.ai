@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel
-from sqlalchemy import func, select, desc
+from sqlalchemy import func, select, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from kavalai.agents.db import Session, Run, Task, ChatMessage, Agent
 
@@ -113,3 +113,16 @@ async def get_sessions_summary(
         )
 
     return summaries
+
+
+async def get_session_messages(
+    session: AsyncSession,
+    session_id: UUID,
+) -> list[ChatMessage]:
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(asc(ChatMessage.created_at))
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())

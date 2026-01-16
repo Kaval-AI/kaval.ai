@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Agent } from '../models/agent';
 import { SessionSummary } from '../models/session';
+import { ChatMessage } from '../models/chat-message';
 
 @Injectable({
   providedIn: 'root'
@@ -32,5 +33,9 @@ export class AgentService {
       url += `&agent_id=${agentId}`;
     }
     return this.http.get<SessionSummary[]>(url);
+  }
+
+  getSessionMessages(projectId: string, sessionId: string): Observable<ChatMessage[]> {
+    return this.http.get<ChatMessage[]>(`/api/agents/sessions/${projectId}/${sessionId}/messages`);
   }
 }

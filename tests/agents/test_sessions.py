@@ -2,7 +2,44 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage
-from kavalai.agents.sessions import get_sessions_summary
+from kavalai.agents.sessions import get_sessions_summary, get_session_messages
+
+
+@pytest.mark.asyncio
+async def test_get_session_messages(agents_db):
+    agent = Agent(id=uuid4(), name="Test Agent")
+    agents_db.add(agent)
+    await agents_db.commit()
+
+    now = datetime.now(timezone.utc)
+    s1 = Session(id=uuid4(), agent_id=agent.id, created_at=now, updated_at=now)
+
+    m1 = ChatMessage(
+        id=uuid4(),
+        agent_id=agent.id,
+        session_id=s1.id,
+        role="user",
+        content="Hello",
+        created_at=now - timedelta(minutes=2),
+    )
+    m2 = ChatMessage(
+        id=uuid4(),
+        agent_id=agent.id,
+        session_id=s1.id,
+        role="assistant",
+        content="Hi there!",
+        created_at=now - timedelta(minutes=1),
+    )
+
+    agents_db.add_all([s1, m1, m2])
+    await agents_db.commit()
+
+    messages = await get_session_messages(agents_db, s1.id)
+
+    assert len(messages) == 2
+    assert messages[0].content == "Hello"
+    assert messages[1].content == "Hi there!"
+    assert messages[0].created_at < messages[1].created_at
 
 
 @pytest.mark.asyncio

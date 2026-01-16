@@ -364,6 +364,29 @@ async def agents_get_sessions(
         )
 
 
+@app.get("/agents/sessions/{project_id}/{session_id}/messages")
+async def agents_get_session_messages(
+    project_id: UUID,
+    session_id: UUID,
+    request: Request,
+):
+    """Fetch all messages for a specific session."""
+    assert_logged_in(request)
+    project = await get_project_and_assert_access(request, project_id)
+
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        return await agent_sessions.get_session_messages(project_session, session_id)
+
+
 @app.get("/agents/svg/{project_id}/{agent_id}")
 async def agents_get_svg(project_id: UUID, agent_id: UUID, request: Request):
     """Fetch and return the workflow SVG for a specific agent."""

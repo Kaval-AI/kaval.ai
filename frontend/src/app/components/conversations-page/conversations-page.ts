@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { SessionSummary } from '../../models/session';
@@ -30,7 +30,8 @@ export class ConversationsPage implements OnInit {
   constructor(
     private agentService: AgentService,
     private userService: UserService,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
@@ -99,6 +100,10 @@ export class ConversationsPage implements OnInit {
 
   onAgentChange(): void {
     this.loadSessions(true);
+  }
+
+  viewSession(sessionId: string): void {
+    this.router.navigate(['/conversations', sessionId]);
   }
 
   formatDate(dateStr: string): string {
