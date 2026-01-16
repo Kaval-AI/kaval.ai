@@ -15,6 +15,7 @@ from kavalai.backoffice.project_service import ProjectService
 from kavalai.agents.db import db_manager, Agent
 from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions
+from kavalai.agents import llm_config as agent_llm_config
 from kavalai.agents.workflow import WorkflowModel
 from kavalai.backoffice.svg import generate_workflow_svg
 from fastapi.responses import Response
@@ -402,6 +403,25 @@ async def agents_get_svg(project_id: UUID, agent_id: UUID, request: Request):
         model = WorkflowModel(**agent.workflow)
         svg_content = generate_workflow_svg(model, return_content=True)
         return Response(content=svg_content, media_type="image/svg+xml")
+
+
+@app.get("/projects/{project_id}/llm-configs")
+async def projects_get_llm_configs(project_id: UUID, request: Request):
+    """Fetch all LLM profiles for a specific project."""
+    assert_logged_in(request)
+    project = await get_project_and_assert_access(request, project_id)
+
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        return await agent_llm_config.get_llm_profiles(project_session)
 
 
 @app.post("/projects/test-connection/{project_id}")

@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { Agent } from '../models/agent';
 import { SessionSummary } from '../models/session';
 import { ChatMessage } from '../models/chat-message';
+import { LLMConfig } from '../models/llm-config';
 
 @Injectable({
   providedIn: 'root'
@@ -13,6 +14,10 @@ export class AgentService {
 
   getAgentsByProject(projectId: string): Observable<Agent[]> {
     return this.http.get<Agent[]>(`/api/agents/all/${projectId}`);
+  }
+
+  getLLMConfigs(projectId: string): Observable<LLMConfig[]> {
+    return this.http.get<LLMConfig[]>(`/api/projects/${projectId}/llm-configs`);
   }
 
   getAgentSvgUrl(projectId: string, agentId: string): string {

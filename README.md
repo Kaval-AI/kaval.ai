@@ -35,3 +35,5 @@ All of them should pass
 - Next, go to the `frontend/` directory.
 - Install `npm install -g karma-cli`
 - Run `npm install`
+
+# Running agents

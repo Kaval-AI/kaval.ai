@@ -1,1 +1,44 @@
-<p>configs-page works!</p>
+<div class="configs-container">
+  <div class="header-section">
+    <h1>LLM Configurations</h1>
+    <p class="subtitle">View and manage LLM profiles for the current project. Sensitive data (API keys, credentials) are not displayed for security.</p>
+  </div>
+
+  <div *ngIf="loading" class="loading-state">
+    <p>Loading configurations...</p>
+  </div>
+
+  <div *ngIf="error" class="error-state">
+    <p>{{ error }}</p>
+    <button (click)="loadConfigs()" class="retry-btn">Retry</button>
+  </div>
+
+  <div *ngIf="!loading && !error" class="content-section">
+    <div *ngIf="configs.length === 0" class="empty-state">
+      <p>No LLM configurations found for this project.</p>
+    </div>
+
+    <table *ngIf="configs.length > 0" class="configs-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Provider</th>
+          <th>Model</th>
+          <th>Base URL</th>
+          <th>Default Mode</th>
+          <th>Last Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let config of configs">
+          <td>{{ config.name }}</td>
+          <td><span class="badge provider-badge">{{ config.provider }}</span></td>
+          <td>{{ config.model_name }}</td>
+          <td>{{ config.base_url || 'Default' }}</td>
+          <td>{{ config.default_mode || 'N/A' }}</td>
+          <td>{{ formatDate(config.updated_at) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

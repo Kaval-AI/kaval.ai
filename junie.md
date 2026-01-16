@@ -13,6 +13,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `workflow.py`: Core workflow execution engine (YAML to execution).
         - `agent_service.py`: Service for managing agent state, sessions, and runs in the DB.
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages).
+        - `llm_config.py`: Logic for fetching LLM profiles and configurations (with data masking).
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
         - `db.py`: Database models for agents, sessions, runs, tasks, and messages.
@@ -23,9 +24,9 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `tools/`: Utility tools (e.g., RSS, OpenAPI parser).
     - `crud.py`: Shared database utility functions.
 - `frontend/`: Angular-based project for the backoffice UI.
-    - `src/app/models/`: TypeScript interfaces (e.g., `SessionSummary`, `Agent`).
+    - `src/app/models/`: TypeScript interfaces (e.g., `SessionSummary`, `Agent`, `LLMConfig`).
     - `src/app/services/`: Angular services for API interaction (`AgentService`, `UserService`).
-    - `src/app/components/`: UI components (e.g., `ConversationsPage`, `LandingPage`, `ProjectEditPage`).
+    - `src/app/components/`: UI components (e.g., `ConversationsPage`, `LandingPage`, `ProjectEditPage`, `ConfigsPage`).
 - `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
     - `app/V001__llm_profiles_and_stats.sql`: Defines `llm_profiles` (with `api_key`, `base_url`, `default_mode`) and `llm_call_stats`.
 - `scripts/`: Utility scripts (e.g., DB migration).
