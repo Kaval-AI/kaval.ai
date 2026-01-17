@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
+from kavalai import crud
 from sqlalchemy import MetaData, TEXT, ForeignKey, DateTime, Integer, Numeric, select
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -138,6 +139,29 @@ async def get_llm_profile_by_name(
         raise Exception(f"LLM Profile '{profile_name}' not found in DB")
 
     return profile
+
+
+async def upsert_llm_profile(session: AsyncSession, profile: LLMProfile):
+    """Upsert LLM profile to the database by name."""
+    stmt = select(LLMProfile).where(LLMProfile.name == profile.name)
+    result = await session.execute(stmt)
+    existing = result.scalar_one_or_none()
+
+    profile_data = {
+        "name": profile.name,
+        "provider": profile.provider,
+        "model_name": profile.model_name,
+        "api_key": profile.api_key,
+        "base_url": profile.base_url,
+        "default_mode": profile.default_mode,
+        "credentials": profile.credentials,
+        "updated_at": datetime.now(timezone.utc),
+    }
+
+    if existing:
+        await crud.update(session, LLMProfile, existing.id, profile_data)
+    else:
+        await crud.insert(session, LLMProfile, profile_data)
 
 
 class Session(Base):

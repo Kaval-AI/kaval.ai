@@ -1,16 +1,15 @@
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import UUID
 
 import instructor
 import yaml
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from kavalai import crud
 from kavalai.agents.db import LLMProfile
-from kavalai.crud import get_all
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class LLMProfileView(BaseModel):
 async def get_llm_profiles_from_db(
     session: AsyncSession,
 ) -> list[LLMProfileView]:
-    profiles = await get_all(session, LLMProfile)
+    profiles = await crud.get_all(session, LLMProfile)
     # Sort by updated_at desc manually since crud.get_all doesn't support ordering yet
     profiles = sorted(profiles, key=lambda p: p.updated_at, reverse=True)
 
@@ -68,26 +67,6 @@ def load_profile_from_path(
             f"Error loading LLM profile '{profile_name}' from {profile_path}: {e}"
         )
         return None
-
-
-async def upsert_llm_profile(session: AsyncSession, profile: LLMProfile):
-    """Upsert LLM profile to the database by name."""
-    stmt = select(LLMProfile).where(LLMProfile.name == profile.name)
-    result = await session.execute(stmt)
-    existing = result.scalar_one_or_none()
-
-    if existing:
-        existing.provider = profile.provider
-        existing.model_name = profile.model_name
-        existing.api_key = profile.api_key
-        existing.base_url = profile.base_url
-        existing.default_mode = profile.default_mode
-        existing.credentials = profile.credentials
-        existing.updated_at = datetime.now(timezone.utc)
-    else:
-        session.add(profile)
-
-    await session.commit()
 
 
 def get_instructor(llm_profile: LLMProfile) -> instructor.Instructor:

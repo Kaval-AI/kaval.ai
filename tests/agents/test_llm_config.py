@@ -2,10 +2,9 @@ import pytest
 import yaml
 from kavalai.agents.llm_config import (
     get_instructor,
-    upsert_llm_profile,
     load_profile_from_path,
 )
-from kavalai.agents.db import LLMProfile, get_llm_profile_by_name
+from kavalai.agents.db import LLMProfile, get_llm_profile_by_name, upsert_llm_profile
 from sqlalchemy import select
 
 
@@ -38,7 +37,7 @@ async def test_get_instructor_with_auto_import(agents_db, tmp_path, monkeypatch)
     # Create dummy yaml profile
     p1 = {
         "name": "auto-imported",
-        "provider": "openai/gpt-4o",
+        "provider": "openai",
         "model_name": "gpt-4o",
     }
 
@@ -63,7 +62,7 @@ async def test_get_instructor_with_auto_import(agents_db, tmp_path, monkeypatch)
     result = await agents_db.execute(stmt)
     profile = result.scalar_one_or_none()
     assert profile is not None
-    assert profile.provider == "openai/gpt-4o"
+    assert profile.provider == "openai"
 
 
 @pytest.mark.asyncio

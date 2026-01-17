@@ -5,7 +5,7 @@ from kavalai.agents.agent_service import AgentService
 SIMPLE_YAML = """
 name: BB King Agent
 description: Just talks about the blues.
-llm_profile_name: openai/gpt-4o
+llm_profile_name: test-gpt-4o
 data_types:
   input:
     type: object
@@ -27,7 +27,7 @@ tasks:
 
 @pytest.mark.asyncio
 class TestBBKingWorkflow:
-    async def test_bb_king_full_integration(self, agents_db):
+    async def test_bb_king_full_integration(self, agents_db, tmp_path, monkeypatch):
         """
         Tests a real LLM call and verifies the data persistence
         hierarchy: Agent -> Session -> Run -> Task -> ChatMessage.
@@ -38,16 +38,12 @@ class TestBBKingWorkflow:
         wf.agent_service = service
 
         # Ensure LLM profile exists as a file for Workflow to load
-        import os
         import yaml
 
-        profile_name = "openai/gpt-4o"
-        profile_dir = "llm_profiles"
-        os.makedirs(profile_dir, exist_ok=True)
-        profile_path = os.path.join(profile_dir, f"{profile_name}.yaml")
-
-        # Ensure subdirectory exists if name contains slashes
-        os.makedirs(os.path.dirname(profile_path), exist_ok=True)
+        profile_name = "test-gpt-4o"
+        profile_dir = tmp_path / "llm_profiles"
+        profile_dir.mkdir()
+        profile_path = profile_dir / "test-gpt-4o.yaml"
 
         with open(profile_path, "w") as f:
             yaml.dump(
@@ -58,6 +54,8 @@ class TestBBKingWorkflow:
                 },
                 f,
             )
+
+        monkeypatch.setenv("LLM_PROFILES_PATH", str(profile_dir))
 
         user_input = {"user_message": "Tell me about Lucille, your guitar."}
 

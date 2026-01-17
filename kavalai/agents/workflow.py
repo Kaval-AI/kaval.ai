@@ -7,10 +7,10 @@ from fastmcp import Client
 from pydantic import BaseModel
 
 from kavalai.agents.agent_service import AgentService
+from kavalai.agents.db import upsert_llm_profile
 from kavalai.agents.llm_config import (
     get_instructor,
     load_profile_from_path,
-    upsert_llm_profile,
 )
 from kavalai.agents.schema_parser import SchemaParser
 

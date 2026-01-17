@@ -11,7 +11,7 @@ from kavalai.agents.workflow import Workflow
 SIMPLE_YAML = """
 name: BB King Agent
 description: Just talks about the blues.
-llm_profile_name: openai/gpt-4o
+llm_profile_name: test-gpt-4o
 data_types:
   input:
     type: object
@@ -45,11 +45,10 @@ def client(agents_session_maker, agents_db, tmp_path, monkeypatch):
     # Ensure LLM profile exists as a file
     import yaml
 
-    profile_name = "openai/gpt-4o"
+    profile_name = "test-gpt-4o"
     profile_dir = tmp_path / "llm_profiles"
     profile_dir.mkdir()
-    profile_path = profile_dir / "openai" / "gpt-4o.yaml"
-    profile_path.parent.mkdir(parents=True, exist_ok=True)
+    profile_path = profile_dir / "test-gpt-4o.yaml"
 
     with open(profile_path, "w") as f:
         yaml.dump(
