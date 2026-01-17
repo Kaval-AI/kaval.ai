@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import MetaData, TEXT, ForeignKey, DateTime, Integer, Numeric
+from sqlalchemy import MetaData, TEXT, ForeignKey, DateTime, Integer, Numeric, select
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -122,6 +122,22 @@ class LLMCallStat(Base):
     )
 
     llm_profile: Mapped["LLMProfile"] = relationship(back_populates="call_stats")
+
+
+async def get_llm_profile_by_name(
+    session: AsyncSession, profile_name: str
+) -> LLMProfile:
+    """
+    Get an LLM profile from DB by name.
+    """
+    stmt = select(LLMProfile).where(LLMProfile.name == profile_name)
+    result = await session.execute(stmt)
+    profile = result.scalar_one_or_none()
+
+    if not profile:
+        raise Exception(f"LLM Profile '{profile_name}' not found in DB")
+
+    return profile
 
 
 class Session(Base):

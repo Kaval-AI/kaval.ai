@@ -3,4 +3,3 @@ provider: ollama
 model_name: llama3
 api_key: ollama
 base_url: http://localhost:11434/v1
-default_mode: chat

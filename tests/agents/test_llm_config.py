@@ -1,45 +1,36 @@
 import pytest
 import yaml
 from kavalai.agents.llm_config import (
-    import_llm_profiles_from_folder,
     get_instructor,
+    upsert_llm_profile,
+    load_profile_from_path,
 )
-from kavalai.agents.db import LLMProfile
+from kavalai.agents.db import LLMProfile, get_llm_profile_by_name
 from sqlalchemy import select
 
 
 @pytest.mark.asyncio
-async def test_import_llm_profiles_from_folder(agents_db, tmp_path):
-    # Create dummy yaml profiles
-    p1 = {
-        "name": "test-openai",
-        "provider": "openai",
-        "model_name": "gpt-4o",
-    }
-    p2 = {
-        "name": "test-anthropic",
-        "provider": "anthropic",
-        "model_name": "claude-3-5-sonnet",
-    }
-
-    profile_dir = tmp_path / "profiles"
-    profile_dir.mkdir()
-
-    with open(profile_dir / "openai.yaml", "w") as f:
-        yaml.dump(p1, f)
-    with open(profile_dir / "anthropic.yaml", "w") as f:
-        yaml.dump(p2, f)
-
-    await import_llm_profiles_from_folder(str(profile_dir), agents_db)
+async def test_upsert_llm_profile(agents_db):
+    profile = LLMProfile(
+        name="test-upsert",
+        provider="openai",
+        model_name="gpt-4o",
+    )
+    await upsert_llm_profile(agents_db, profile)
 
     # Verify in DB
-    stmt = select(LLMProfile).order_by(LLMProfile.name)
+    stmt = select(LLMProfile).where(LLMProfile.name == "test-upsert")
     result = await agents_db.execute(stmt)
-    profiles = result.scalars().all()
+    db_profile = result.scalar_one()
+    assert db_profile.model_name == "gpt-4o"
 
-    assert len(profiles) == 2
-    assert profiles[0].name == "test-anthropic"
-    assert profiles[1].name == "test-openai"
+    # Update
+    profile.model_name = "gpt-4o-mini"
+    await upsert_llm_profile(agents_db, profile)
+
+    result = await agents_db.execute(stmt)
+    db_profile = result.scalar_one()
+    assert db_profile.model_name == "gpt-4o-mini"
 
 
 @pytest.mark.asyncio
@@ -54,13 +45,16 @@ async def test_get_instructor_with_auto_import(agents_db, tmp_path, monkeypatch)
     profile_dir = tmp_path / "profiles"
     profile_dir.mkdir()
 
-    with open(profile_dir / "imported.yaml", "w") as f:
+    with open(profile_dir / "auto-imported.yaml", "w") as f:
         yaml.dump(p1, f)
 
     monkeypatch.setenv("LLM_PROFILES_PATH", str(profile_dir))
 
-    # Try to get instructor for "auto-imported" which doesn't exist in DB yet
-    client = await get_instructor("auto-imported", session=agents_db)
+    # Try to get profile for "auto-imported" which doesn't exist in DB yet
+    profile = load_profile_from_path("auto-imported")
+    assert profile is not None
+    await upsert_llm_profile(agents_db, profile)
+    client = get_instructor(profile)
 
     assert client is not None
 
@@ -92,19 +86,21 @@ async def test_get_instructor_fallback_no_session(tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_PROFILES_PATH", str(profile_dir))
 
     # When no session is provided, it should load from the folder
-    client = await get_instructor(profile_name)
+    profile = load_profile_from_path(profile_name)
+    assert profile is not None
+    client = get_instructor(profile)
     assert client is not None
 
 
 @pytest.mark.asyncio
-async def test_get_instructor_not_found():
-    with pytest.raises(Exception, match="LLM Profile 'non-existent' not found"):
-        await get_instructor("non-existent")
+async def test_get_llm_profile_by_name_not_found(agents_db):
+    with pytest.raises(Exception, match="LLM Profile 'non-existent' not found in DB"):
+        await get_llm_profile_by_name(agents_db, "non-existent")
 
 
 @pytest.mark.asyncio
 async def test_load_profile_from_folder_invalid_yaml(tmp_path):
-    from kavalai.agents.llm_config import load_profile_from_folder
+    from kavalai.agents.llm_config import load_profile_from_path
 
     profile_name = "invalid"
     profile_dir = tmp_path / "profiles"
@@ -112,13 +108,13 @@ async def test_load_profile_from_folder_invalid_yaml(tmp_path):
     with open(profile_dir / f"{profile_name}.yaml", "w") as f:
         f.write("invalid: yaml: :")
 
-    profile = load_profile_from_folder(str(profile_dir), profile_name)
+    profile = load_profile_from_path(profile_name, folder_path=str(profile_dir))
     assert profile is None
 
 
 @pytest.mark.asyncio
 async def test_load_profile_from_folder_mismatch_name(tmp_path):
-    from kavalai.agents.llm_config import load_profile_from_folder
+    from kavalai.agents.llm_config import load_profile_from_path
 
     profile_dir = tmp_path / "profiles"
     profile_dir.mkdir()
@@ -126,5 +122,6 @@ async def test_load_profile_from_folder_mismatch_name(tmp_path):
     with open(profile_dir / "mismatch.yaml", "w") as f:
         yaml.dump({"name": "something-else", "provider": "openai"}, f)
 
-    profile = load_profile_from_folder(str(profile_dir), "mismatch")
-    assert profile is None
+    profile = load_profile_from_path("mismatch", folder_path=str(profile_dir))
+    assert profile is not None
+    assert profile.name == "something-else"

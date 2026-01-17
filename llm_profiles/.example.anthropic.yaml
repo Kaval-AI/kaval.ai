@@ -3,4 +3,3 @@ provider: anthropic/claude-3-5-sonnet-latest
 model_name: claude-3-5-sonnet-latest
 api_key:
 base_url:
-default_mode: chat

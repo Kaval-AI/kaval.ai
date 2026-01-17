@@ -34,7 +34,7 @@ tasks:
 
 
 @pytest.fixture(scope="function")
-def client(agents_session_maker, agents_db):
+def client(agents_session_maker, agents_db, tmp_path, monkeypatch):
     # Set dummy auth for testing
     os.environ["HTTP_BASIC_AUTH_USER"] = "lucille"
     os.environ["HTTP_BASIC_AUTH_PASSWORD"] = "blues123"
@@ -42,7 +42,28 @@ def client(agents_session_maker, agents_db):
     # Initialize real workflow from string/file
     workflow = Workflow.from_yaml(SIMPLE_YAML)
 
-    # Create the app (using None for session_provider if DB isn't required for this simple test)
+    # Ensure LLM profile exists as a file
+    import yaml
+
+    profile_name = "openai/gpt-4o"
+    profile_dir = tmp_path / "llm_profiles"
+    profile_dir.mkdir()
+    profile_path = profile_dir / "openai" / "gpt-4o.yaml"
+    profile_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(profile_path, "w") as f:
+        yaml.dump(
+            {
+                "name": profile_name,
+                "provider": "openai",
+                "model_name": "gpt-4o",
+            },
+            f,
+        )
+
+    monkeypatch.setenv("LLM_PROFILES_PATH", str(profile_dir))
+
+    # Create the app
     app = create_agent_app(workflow=workflow, session_provider=agents_session_maker)
     yield TestClient(app)
 

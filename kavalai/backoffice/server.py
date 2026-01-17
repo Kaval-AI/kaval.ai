@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 from kavalai.backoffice import db
 from kavalai.backoffice.db import is_owner, is_member
 from kavalai.backoffice.project_service import ProjectService
-from kavalai.agents.db import db_manager, Agent
+from kavalai.agents.db import db_manager, Agent, get_llm_profile_by_name
 from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions
 from kavalai.agents import llm_config as agent_llm_config
@@ -421,7 +421,29 @@ async def projects_get_llm_configs(project_id: UUID, request: Request):
     )
 
     async with project_session_maker() as project_session:
-        return await agent_llm_config.get_llm_profiles(project_session)
+        return await agent_llm_config.get_llm_profiles_from_db(project_session)
+
+
+@app.get("/projects/{project_id}/llm-configs/{profile_name}")
+async def projects_get_llm_config_by_name(
+    project_id: UUID, profile_name: str, request: Request
+):
+    """Fetch a specific LLM profile by name for a specific project."""
+    assert_logged_in(request)
+    project = await get_project_and_assert_access(request, project_id)
+
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        profile = await get_llm_profile_by_name(project_session, profile_name)
+        return profile
 
 
 @app.post("/projects/test-connection/{project_id}")

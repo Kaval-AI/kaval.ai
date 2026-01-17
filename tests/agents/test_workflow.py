@@ -37,6 +37,28 @@ class TestBBKingWorkflow:
         wf = Workflow.from_yaml(SIMPLE_YAML)
         wf.agent_service = service
 
+        # Ensure LLM profile exists as a file for Workflow to load
+        import os
+        import yaml
+
+        profile_name = "openai/gpt-4o"
+        profile_dir = "llm_profiles"
+        os.makedirs(profile_dir, exist_ok=True)
+        profile_path = os.path.join(profile_dir, f"{profile_name}.yaml")
+
+        # Ensure subdirectory exists if name contains slashes
+        os.makedirs(os.path.dirname(profile_path), exist_ok=True)
+
+        with open(profile_path, "w") as f:
+            yaml.dump(
+                {
+                    "name": profile_name,
+                    "provider": "openai",
+                    "model_name": "gpt-4o",
+                },
+                f,
+            )
+
         user_input = {"user_message": "Tell me about Lucille, your guitar."}
 
         # Mock the instructor client to avoid real LLM calls in tests

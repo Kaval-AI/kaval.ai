@@ -7,7 +7,11 @@ from fastmcp import Client
 from pydantic import BaseModel
 
 from kavalai.agents.agent_service import AgentService
-from kavalai.agents.llm_config import get_instructor
+from kavalai.agents.llm_config import (
+    get_instructor,
+    load_profile_from_path,
+    upsert_llm_profile,
+)
 from kavalai.agents.schema_parser import SchemaParser
 
 logger = logging.getLogger(__name__)
@@ -113,9 +117,17 @@ class Workflow:
         input_text = make_prompt(task.prompt, input_data)
 
         session = self.agent_service.db if self.agent_service else None
-        client = await get_instructor(
-            self.workflow_model.llm_profile_name, session=session
-        )
+
+        llm_profile = load_profile_from_path(self.workflow_model.llm_profile_name)
+        if not llm_profile:
+            raise Exception(
+                f"LLM Profile '{self.workflow_model.llm_profile_name}' not found"
+            )
+
+        if session:
+            await upsert_llm_profile(session, llm_profile)
+
+        client = get_instructor(llm_profile)
 
         system_message = dict(role="system", content=input_text)
         response = await client.chat.completions.create(
