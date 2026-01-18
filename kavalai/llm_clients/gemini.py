@@ -1,4 +1,5 @@
 import time
+import math
 from typing import Any, Dict, List, Optional, Type
 from pydantic import BaseModel
 from google import genai
@@ -142,3 +143,30 @@ class GeminiClient:
             return 0.0
 
         return pricing.calculate_cost(prompt_tokens, completion_tokens, cached_tokens)
+
+    async def compute_embeddings(
+        self,
+        model: str,
+        texts: List[str],
+        normalize: bool = False,
+        **kwargs,
+    ) -> List[List[float]]:
+        response = await self.client.aio.models.embed_content(
+            model=model,
+            contents=texts,
+            **kwargs,
+        )
+        # response.embeddings is a list of ContentEmbedding objects
+        embeddings = [emb.values for emb in response.embeddings]
+
+        if normalize:
+            normalized_embeddings = []
+            for emb in embeddings:
+                norm = math.sqrt(sum(x * x for x in emb))
+                if norm > 0:
+                    normalized_embeddings.append([x / norm for x in emb])
+                else:
+                    normalized_embeddings.append(emb)
+            return normalized_embeddings
+
+        return embeddings

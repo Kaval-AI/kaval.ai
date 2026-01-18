@@ -1,4 +1,5 @@
 import time
+import math
 from typing import Any, Dict, List, Optional, Type
 from pydantic import BaseModel
 from openai import AsyncOpenAI
@@ -90,3 +91,29 @@ class OpenAIClient:
             return 0.0
 
         return pricing.calculate_cost(prompt_tokens, completion_tokens, cached_tokens)
+
+    async def compute_embeddings(
+        self,
+        model: str,
+        texts: List[str],
+        normalize: bool = False,
+        **kwargs,
+    ) -> List[List[float]]:
+        response = await self.client.embeddings.create(
+            input=texts,
+            model=model,
+            **kwargs,
+        )
+        embeddings = [data.embedding for data in response.data]
+
+        if normalize:
+            normalized_embeddings = []
+            for emb in embeddings:
+                norm = math.sqrt(sum(x * x for x in emb))
+                if norm > 0:
+                    normalized_embeddings.append([x / norm for x in emb])
+                else:
+                    normalized_embeddings.append(emb)
+            return normalized_embeddings
+
+        return embeddings

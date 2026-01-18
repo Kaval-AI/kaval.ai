@@ -117,3 +117,21 @@ async def chat_completion_with_stats(
                 logger.error(f"Failed to save LLM call stats: {db_err}")
                 # We don't want to rollback the whole session if saving stats fails,
                 # but crud.insert might have already failed.
+
+
+async def compute_embeddings(
+    llm_profile: LLMProfile,
+    texts: list[str],
+    normalize: bool = False,
+    **kwargs,
+) -> list[list[float]]:
+    """
+    Compute embeddings for a list of texts using the specified LLM profile.
+    """
+    client = get_llm_client(llm_profile)
+    return await client.compute_embeddings(
+        model=llm_profile.model_name,
+        texts=texts,
+        normalize=normalize,
+        **kwargs,
+    )
