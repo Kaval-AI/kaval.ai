@@ -67,7 +67,7 @@ class TestBBKingWorkflow:
         mock_response = output_type(agent_response="Lucille is my lady.")
 
         with patch(
-            "kavalai.agents.workflow.chat_completion_with_stats"
+            "kavalai.llm_clients.common.chat_completion_with_stats"
         ) as mock_chat_completion:
             mock_chat_completion.return_value = mock_response
 

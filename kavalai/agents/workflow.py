@@ -8,10 +8,8 @@ from pydantic import BaseModel
 
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.db import upsert_llm_profile
-from kavalai.agents.llm_config import (
-    load_profile_from_path,
-    chat_completion_with_stats,
-)
+from kavalai.agents.llm_config import load_profile_from_path
+from kavalai.llm_clients.common import chat_completion_with_stats
 from kavalai.agents.schema_parser import SchemaParser
 
 logger = logging.getLogger(__name__)

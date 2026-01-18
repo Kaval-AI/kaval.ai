@@ -2,9 +2,9 @@ from unittest.mock import AsyncMock
 import pytest
 import yaml
 from pydantic import BaseModel
-from kavalai.agents.llm_config import (
+from kavalai.agents.llm_config import load_profile_from_path
+from kavalai.llm_clients.common import (
     get_llm_client,
-    load_profile_from_path,
     chat_completion_with_stats,
 )
 from kavalai.agents.db import (
@@ -168,7 +168,7 @@ async def test_chat_completion_with_stats(agents_db, monkeypatch):
     mock_client.chat_completion.return_value = mock_result
 
     monkeypatch.setattr(
-        "kavalai.agents.llm_config.get_llm_client", lambda _: mock_client
+        "kavalai.llm_clients.common.get_llm_client", lambda _: mock_client
     )
 
     messages = [{"role": "user", "content": "hi"}]
@@ -209,7 +209,7 @@ async def test_chat_completion_with_stats_error(agents_db, monkeypatch):
     mock_client.chat_completion.side_effect = Exception("API Error")
 
     monkeypatch.setattr(
-        "kavalai.agents.llm_config.get_llm_client", lambda _: mock_client
+        "kavalai.llm_clients.common.get_llm_client", lambda _: mock_client
     )
 
     with pytest.raises(Exception, match="API Error"):
@@ -242,7 +242,7 @@ async def test_chat_completion_with_stats_retry(agents_db, monkeypatch):
     mock_client.chat_completion.side_effect = Exception("Temporary Error")
 
     monkeypatch.setattr(
-        "kavalai.agents.llm_config.get_llm_client", lambda _: mock_client
+        "kavalai.llm_clients.common.get_llm_client", lambda _: mock_client
     )
 
     with pytest.raises(Exception, match="Temporary Error"):
