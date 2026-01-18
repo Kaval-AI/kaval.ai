@@ -1,162 +1,92 @@
 from typing import Dict, Any
+from kavalai.prices.common import ModelPricing, TokenPricing
 
 # Prices per 1M tokens in USD unless otherwise specified
-GEMINI_PRICES: Dict[str, Dict[str, Any]] = {
-    "gemini-3-pro-preview": {
-        "text": {
-            "input": {"<=200k": 1.00, ">200k": 2.00},
-            "output": {"<=200k": 6.00, ">200k": 9.00},
-            "context_caching": {
-                "<=200k": 0.20,
-                ">200k": 0.40,
-                "storage_per_1M_per_hour": 4.50,
-            },
-        },
-        "grounding": {"google_search": 14.00},  # per 1k queries
-    },
-    "gemini-3-flash-preview": {
-        "text_image_video": {
-            "input": 0.25,
-            "output": 1.50,
-            "context_caching": 0.05,
-        },
-        "audio": {
-            "input": 0.50,
-            "output": 1.50,  # Matches text output price
-            "context_caching": 0.10,
-        },
-        "context_caching_storage_per_1M_per_hour": 1.00,
-        "grounding": {"google_search": 14.00},  # per 1k queries
-    },
-    "gemini-3-pro-image-preview": {
-        "text": {
-            "input": 1.00,
-            "output": 6.00,
-        },
-        "image": {
-            "input_per_image": 0.0011,  # 560 tokens
-            "output_1k_2k": 0.067,
-            "output_4k": 0.12,
-        },
-    },
-    "gemini-2.5-pro": {
-        "text": {
-            "input": {"<=200k": 0.625, ">200k": 1.25},
-            "output": {"<=200k": 5.00, ">200k": 7.50},
-            "context_caching": {
-                "<=200k": 0.125,
-                ">200k": 0.25,
-                "storage_per_1M_per_hour": 4.50,
-            },
-        },
-        "grounding": {"google_search": 35.00},  # per 1k grounded prompts
-    },
-    "gemini-2.5-flash": {
-        "text_image_video": {
-            "input": 0.15,
-            "output": 1.25,
-            "context_caching": 0.03,
-        },
-        "audio": {
-            "input": 0.50,
-            "output": 1.25,
-            "context_caching": 0.10,
-        },
-        "context_caching_storage_per_1M_per_hour": 1.00,
-        "grounding": {"google_search": 35.00},  # per 1k grounded prompts
-    },
-    "gemini-2.5-flash-preview-09-2025": {
-        "text_image_video": {
-            "input": 0.15,
-            "output": 1.25,
-            "context_caching": 0.03,
-        },
-        "audio": {
-            "input": 0.50,
-            "output": 1.25,
-            "context_caching": 0.10,
-        },
-        "context_caching_storage_per_1M_per_hour": 1.00,
-        "grounding": {"google_search": 35.00},  # per 1k grounded prompts
-    },
-    "gemini-2.5-flash-lite": {
-        "text_image_video": {
-            "input": 0.05,
-            "output": 0.20,
-            "context_caching": 0.01,
-        },
-        "audio": {
-            "input": 0.15,
-            "output": 0.20,
-            "context_caching": 0.03,
-        },
-        "context_caching_storage_per_1M_per_hour": 1.00,
-        "grounding": {"google_search": 35.00},  # per 1k grounded prompts
-    },
-    "gemini-2.5-flash-lite-preview-09-2025": {
-        "text_image_video": {
-            "input": 0.05,
-            "output": 0.20,
-            "context_caching": 0.01,
-        },
-        "audio": {
-            "input": 0.15,
-            "output": 0.20,
-            "context_caching": 0.03,
-        },
-        "context_caching_storage_per_1M_per_hour": 1.00,
-        "grounding": {"google_search": 35.00},  # per 1k grounded prompts
-    },
-    "gemini-2.5-flash-native-audio-preview-12-2025": {
-        "text": {
-            "input": 0.50,
-            "output": 2.00,
-        },
-        "audio_video": {
-            "input": 3.00,
-            "output_audio": 12.00,
-        },
-    },
-    "gemini-2.5-flash-image": {
-        "text_image": {
-            "input": 0.15,
-            "output_per_image": 0.0195,
-        }
-    },
-    "gemini-2.5-flash-preview-tts": {
-        "text_input": 0.25,
-        "audio_output": 5.00,
-    },
-    "gemini-2.5-pro-preview-tts": {
-        "text_input": 0.50,
-        "audio_output": 10.00,
-    },
-    "gemini-2.0-flash": {
-        "text_image_video": {
-            "input": 0.05,
-            "output": 0.20,
-            "context_caching": 0.025,
-        },
-        "audio": {
-            "input": 0.35,
-            "output": 0.20,
-            "context_caching": 0.175,
-        },
-        "context_caching_storage_per_1M_per_hour": 1.00,
-        "image_generation_per_image": 0.0195,
-        "grounding": {"google_search": 35.00},  # per 1k grounded prompts
-    },
-    "gemini-2.0-flash-lite": {
-        "input": 0.0375,
-        "output": 0.15,
-    },
-    "gemini-embedding-001": {
-        "input": 0.075,
-    },
-    "gemini-2.5-computer-use-preview-10-2025": {
-        "input": {"<=200k": 1.25, ">200k": 2.50},
-        "output": {"<=200k": 10.00, ">200k": 15.00},
-    },
+GEMINI_PRICES: Dict[str, ModelPricing] = {
+    "gemini-3-pro-preview": ModelPricing(
+        model_name="gemini-3-pro-preview",
+        input=TokenPricing(tiered={"<=200k": 1.00, ">200k": 2.00}),
+        output=TokenPricing(tiered={"<=200k": 6.00, ">200k": 9.00}),
+        cached_input=TokenPricing(tiered={"<=200k": 0.20, ">200k": 0.40}),
+    ),
+    "gemini-3-flash-preview": ModelPricing(
+        model_name="gemini-3-flash-preview",
+        input=TokenPricing(price_per_1m=0.25),
+        output=TokenPricing(price_per_1m=1.50),
+        cached_input=TokenPricing(price_per_1m=0.05),
+    ),
+    "gemini-3-pro-image-preview": ModelPricing(
+        model_name="gemini-3-pro-image-preview",
+        input=TokenPricing(price_per_1m=1.00),
+        output=TokenPricing(price_per_1m=6.00),
+    ),
+    "gemini-2.5-pro": ModelPricing(
+        model_name="gemini-2.5-pro",
+        input=TokenPricing(tiered={"<=200k": 0.625, ">200k": 1.25}),
+        output=TokenPricing(tiered={"<=200k": 5.00, ">200k": 7.50}),
+        cached_input=TokenPricing(tiered={"<=200k": 0.125, ">200k": 0.25}),
+    ),
+    "gemini-2.5-flash": ModelPricing(
+        model_name="gemini-2.5-flash",
+        input=TokenPricing(price_per_1m=0.15),
+        output=TokenPricing(price_per_1m=1.25),
+        cached_input=TokenPricing(price_per_1m=0.03),
+    ),
+    "gemini-2.5-flash-preview-09-2025": ModelPricing(
+        model_name="gemini-2.5-flash-preview-09-2025",
+        input=TokenPricing(price_per_1m=0.15),
+        output=TokenPricing(price_per_1m=1.25),
+        cached_input=TokenPricing(price_per_1m=0.03),
+    ),
+    "gemini-2.5-flash-lite": ModelPricing(
+        model_name="gemini-2.5-flash-lite",
+        input=TokenPricing(price_per_1m=0.05),
+        output=TokenPricing(price_per_1m=0.20),
+        cached_input=TokenPricing(price_per_1m=0.01),
+    ),
+    "gemini-2.5-flash-lite-preview-09-2025": ModelPricing(
+        model_name="gemini-2.5-flash-lite-preview-09-2025",
+        input=TokenPricing(price_per_1m=0.05),
+        output=TokenPricing(price_per_1m=0.20),
+        cached_input=TokenPricing(price_per_1m=0.01),
+    ),
+    "gemini-2.5-flash-native-audio-preview-12-2025": ModelPricing(
+        model_name="gemini-2.5-flash-native-audio-preview-12-2025",
+        input=TokenPricing(price_per_1m=0.50),
+        output=TokenPricing(price_per_1m=2.00),
+    ),
+    "gemini-2.5-flash-image": ModelPricing(
+        model_name="gemini-2.5-flash-image",
+        input=TokenPricing(price_per_1m=0.15),
+    ),
+    "gemini-2.5-flash-preview-tts": ModelPricing(
+        model_name="gemini-2.5-flash-preview-tts",
+        input=TokenPricing(price_per_1m=0.25),
+    ),
+    "gemini-2.5-pro-preview-tts": ModelPricing(
+        model_name="gemini-2.5-pro-preview-tts",
+        input=TokenPricing(price_per_1m=0.50),
+    ),
+    "gemini-2.0-flash": ModelPricing(
+        model_name="gemini-2.0-flash",
+        input=TokenPricing(price_per_1m=0.05),
+        output=TokenPricing(price_per_1m=0.20),
+        cached_input=TokenPricing(price_per_1m=0.025),
+    ),
+    "gemini-2.0-flash-lite": ModelPricing(
+        model_name="gemini-2.0-flash-lite",
+        input=TokenPricing(price_per_1m=0.0375),
+        output=TokenPricing(price_per_1m=0.15),
+    ),
+    "gemini-embedding-001": ModelPricing(
+        model_name="gemini-embedding-001",
+        input=TokenPricing(price_per_1m=0.075),
+    ),
+    "gemini-2.5-computer-use-preview-10-2025": ModelPricing(
+        model_name="gemini-2.5-computer-use-preview-10-2025",
+        input=TokenPricing(tiered={"<=200k": 1.25, ">200k": 2.50}),
+        output=TokenPricing(tiered={"<=200k": 10.00, ">200k": 15.00}),
+    ),
 }
 
 # Image Generation - Prices per image in USD

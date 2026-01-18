@@ -74,16 +74,16 @@ def test_run_agent_success(client):
         "data": {"user_message": "Tell me about your guitar."},
     }
 
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import patch
 
-    # patch get_instructor to return a mock client that returns a dict
-    # the server will then validate this dict against its own OutputDataType
+    # patch chat_completion_with_stats to return a dict or BaseModel
+    # the server will then validate this against its own OutputDataType
     mock_response = {"agent_response": "Lucille is my lady."}
 
-    with patch("kavalai.agents.workflow.get_instructor") as mock_get_instructor:
-        mock_client = AsyncMock()
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_get_instructor.return_value = mock_client
+    with patch(
+        "kavalai.agents.workflow.chat_completion_with_stats"
+    ) as mock_chat_completion:
+        mock_chat_completion.return_value = mock_response
 
         response = client.post("/run_agent", json=payload, auth=("lucille", "blues123"))
 

@@ -1,9 +1,9 @@
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 import pytest
 import yaml
 from pydantic import BaseModel
 from kavalai.agents.llm_config import (
-    get_instructor,
+    get_llm_client,
     load_profile_from_path,
     chat_completion_with_stats,
 )
@@ -61,7 +61,7 @@ async def test_get_instructor_with_auto_import(agents_db, tmp_path, monkeypatch)
     profile = load_profile_from_path("auto-imported")
     assert profile is not None
     await upsert_llm_profile(agents_db, profile)
-    client = get_instructor(profile)
+    client = get_llm_client(profile)
 
     assert client is not None
 
@@ -95,7 +95,7 @@ async def test_get_instructor_fallback_no_session(tmp_path, monkeypatch):
     # When no session is provided, it should load from the folder
     profile = load_profile_from_path(profile_name)
     assert profile is not None
-    client = get_instructor(profile)
+    client = get_llm_client(profile)
     assert client is not None
 
 
@@ -147,25 +147,28 @@ async def test_chat_completion_with_stats(agents_db, monkeypatch):
     )
     await upsert_llm_profile(agents_db, profile)
 
-    # Mock instructor client
-    mock_instructor = MagicMock()
-    mock_create = AsyncMock()
-    mock_instructor.chat.completions.create = mock_create
+    # Mock client
+    mock_client = AsyncMock()
 
-    # Mock response with usage
-    mock_res_data = MockResponse(message="hello")
-    # Attach _raw_response to the model instance
-    raw_response = MagicMock()
-    raw_response.usage.prompt_tokens = 10
-    raw_response.usage.completion_tokens = 5
-    raw_response.usage.total_tokens = 15
-    raw_response.model_dump.return_value = {"id": "chat-123"}
-
-    mock_res_data.__dict__["_raw_response"] = raw_response
-    mock_create.return_value = mock_res_data
+    # Mock response
+    mock_content = MockResponse(message="hello")
+    mock_result = {
+        "content": mock_content,
+        "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15,
+            "cached_tokens": 0,
+        },
+        "duration": 0.5,
+        "cost": 0.0001,
+        "raw_response": {"id": "chat-123"},
+        "model": "gpt-4o",
+    }
+    mock_client.chat_completion.return_value = mock_result
 
     monkeypatch.setattr(
-        "kavalai.agents.llm_config.get_instructor", lambda _: mock_instructor
+        "kavalai.agents.llm_config.get_llm_client", lambda _: mock_client
     )
 
     messages = [{"role": "user", "content": "hi"}]
@@ -188,6 +191,7 @@ async def test_chat_completion_with_stats(agents_db, monkeypatch):
     assert stat.total_tokens == 15
     assert stat.response_code == 200
     assert stat.duration_ms >= 0
+    assert float(stat.cost) == 0.0001
     assert stat.request_data["requests"][0]["arguments"]["messages"] == messages
     assert stat.response_data == {"id": "chat-123"}
 
@@ -201,12 +205,11 @@ async def test_chat_completion_with_stats_error(agents_db, monkeypatch):
     )
     await upsert_llm_profile(agents_db, profile)
 
-    mock_instructor = MagicMock()
-    mock_create = AsyncMock(side_effect=Exception("API Error"))
-    mock_instructor.chat.completions.create = mock_create
+    mock_client = AsyncMock()
+    mock_client.chat_completion.side_effect = Exception("API Error")
 
     monkeypatch.setattr(
-        "kavalai.agents.llm_config.get_instructor", lambda _: mock_instructor
+        "kavalai.agents.llm_config.get_llm_client", lambda _: mock_client
     )
 
     with pytest.raises(Exception, match="API Error"):
@@ -235,17 +238,11 @@ async def test_chat_completion_with_stats_retry(agents_db, monkeypatch):
     )
     await upsert_llm_profile(agents_db, profile)
 
-    mock_instructor = MagicMock()
-    mock_create = AsyncMock()
-    mock_instructor.chat.completions.create = mock_create
-
-    # Mock first call failure, second success (if we were doing manual retries)
-    # But since we currently just re-raise, we test that it captures the failure.
-
-    mock_create.side_effect = Exception("Temporary Error")
+    mock_client = AsyncMock()
+    mock_client.chat_completion.side_effect = Exception("Temporary Error")
 
     monkeypatch.setattr(
-        "kavalai.agents.llm_config.get_instructor", lambda _: mock_instructor
+        "kavalai.agents.llm_config.get_llm_client", lambda _: mock_client
     )
 
     with pytest.raises(Exception, match="Temporary Error"):

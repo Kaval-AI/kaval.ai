@@ -13,13 +13,17 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `workflow.py`: Core workflow execution engine (YAML to execution).
         - `agent_service.py`: Service for managing agent state, sessions, runs, and LLM profiles in the DB.
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages).
-        - `llm_config.py`: Pydantic models for LLM profiles and fetching configurations. Includes `chat_completion_with_stats` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data). Improved to robustly handle DB transaction states and capture detailed error information.
+        - `llm_config.py`: Pydantic models for LLM profiles and fetching configurations. Includes `chat_completion_with_stats` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data, cost). Refactored to use native OpenAI and Gemini clients instead of instructor for better structured output and stats collection.
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
         - `db.py`: Database models for agents, sessions, runs, tasks, and messages.
-    - `prices/`: Pricing data for different LLM providers.
-        - `openai.py`: OpenAI pricing data.
-        - `gemini.py`: Gemini pricing data.
+    - `llm_clients/`: Native LLM client implementations.
+        - `openai.py`: Native OpenAI client wrapper. Supports structured outputs via `beta.chat.completions.parse`.
+        - `gemini.py`: Native Gemini client wrapper. Supports structured outputs via `response_schema` (with schema cleanup for compatibility).
+- `prices/`: Pricing data for different LLM providers.
+        - `common.py`: Unified Pydantic models (`ModelPricing`, `TokenPricing`) for LLM pricing and cost calculation logic.
+        - `openai.py`: OpenAI pricing data using the unified models.
+        - `gemini.py`: Gemini pricing data using the unified models.
     - `backoffice/`: API and logic for the management UI.
         - `server.py`: FastAPI server for the backoffice API. Includes endpoints for agents, sessions, stats, projects (including membership management), and workflow visualization.
         - `db.py`: Backoffice-specific DB models (users, projects, memberships).
@@ -35,6 +39,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `scripts/`: Utility scripts (e.g., DB migration).
 - `tests/`: Backend tests.
+    - `llm_clients/`: Integration tests for LLM providers.
 - `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data.
 
 ## Key Technical Details

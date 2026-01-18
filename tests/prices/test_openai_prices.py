@@ -16,10 +16,10 @@ from kavalai.prices.openai import (
 
 
 def test_openai_text_prices():
-    assert OPENAI_TEXT_PRICES["gpt-5.2"]["input"] == 1.75
-    assert OPENAI_TEXT_PRICES["gpt-4o"]["input"] == 2.50
-    assert OPENAI_TEXT_PRICES["o1"]["output"] == 60.00
-    assert OPENAI_TEXT_PRICES["gpt-image-1"]["output"] is None
+    assert OPENAI_TEXT_PRICES["gpt-5.2"].input.price_per_1m == 1.75
+    assert OPENAI_TEXT_PRICES["gpt-4o"].input.price_per_1m == 2.50
+    assert OPENAI_TEXT_PRICES["o1"].output.price_per_1m == 60.00
+    assert OPENAI_TEXT_PRICES["gpt-image-1"].output.price_per_1m == 0.0
 
 
 def test_openai_image_prices():
@@ -43,8 +43,8 @@ def test_openai_video_prices():
 
 
 def test_openai_fine_tuning_prices():
-    assert OPENAI_FINE_TUNING_PRICES["o4-mini-2025-04-16"]["training"] == 100.00
-    assert OPENAI_FINE_TUNING_PRICES["gpt-3.5-turbo"]["output"] == 6.00
+    assert OPENAI_FINE_TUNING_PRICES["o4-mini-2025-04-16"].training == 100.00
+    assert OPENAI_FINE_TUNING_PRICES["gpt-3.5-turbo"].output.price_per_1m == 6.00
 
 
 def test_openai_tool_prices():
@@ -76,5 +76,5 @@ def test_openai_embedding_prices():
 
 
 def test_openai_legacy_prices():
-    assert OPENAI_LEGACY_PRICES["gpt-4-turbo-2024-04-09"]["input"] == 10.00
-    assert OPENAI_LEGACY_PRICES["gpt-3.5-turbo"]["output"] == 1.50
+    assert OPENAI_LEGACY_PRICES["gpt-4-turbo-2024-04-09"].input.price_per_1m == 10.00
+    assert OPENAI_LEGACY_PRICES["gpt-3.5-turbo"].output.price_per_1m == 1.50

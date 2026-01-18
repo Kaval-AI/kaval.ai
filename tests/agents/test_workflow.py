@@ -59,17 +59,17 @@ class TestBBKingWorkflow:
 
         user_input = {"user_message": "Tell me about Lucille, your guitar."}
 
-        # Mock the instructor client to avoid real LLM calls in tests
-        from unittest.mock import AsyncMock, patch
+        # Mock chat_completion_with_stats to avoid real LLM calls in tests
+        from unittest.mock import patch
 
         # Get the output model class to create a real instance
         output_type = wf.get_data_type("output")
         mock_response = output_type(agent_response="Lucille is my lady.")
 
-        with patch("kavalai.agents.workflow.get_instructor") as mock_get_instructor:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create.return_value = mock_response
-            mock_get_instructor.return_value = mock_client
+        with patch(
+            "kavalai.agents.workflow.chat_completion_with_stats"
+        ) as mock_chat_completion:
+            mock_chat_completion.return_value = mock_response
 
             # 2. Execution
             result = await wf.run(input_data=user_input)

@@ -7,33 +7,25 @@ from kavalai.prices.gemini import (
 
 def test_gemini_prices():
     # Test gemini-3-pro-preview
-    assert GEMINI_PRICES["gemini-3-pro-preview"]["text"]["input"]["<=200k"] == 1.00
-    assert GEMINI_PRICES["gemini-3-pro-preview"]["text"]["output"][">200k"] == 9.00
-    assert GEMINI_PRICES["gemini-3-pro-preview"]["grounding"]["google_search"] == 14.00
+    assert GEMINI_PRICES["gemini-3-pro-preview"].input.tiered["<=200k"] == 1.00
+    assert GEMINI_PRICES["gemini-3-pro-preview"].output.tiered[">200k"] == 9.00
+    assert GEMINI_PRICES["gemini-3-pro-preview"].cached_input.tiered["<=200k"] == 0.20
 
     # Test gemini-3-flash-preview
-    assert GEMINI_PRICES["gemini-3-flash-preview"]["text_image_video"]["input"] == 0.25
-    assert GEMINI_PRICES["gemini-3-flash-preview"]["audio"]["input"] == 0.50
-    assert (
-        GEMINI_PRICES["gemini-3-flash-preview"][
-            "context_caching_storage_per_1M_per_hour"
-        ]
-        == 1.00
-    )
+    assert GEMINI_PRICES["gemini-3-flash-preview"].input.price_per_1m == 0.25
+    assert GEMINI_PRICES["gemini-3-flash-preview"].output.price_per_1m == 1.50
 
     # Test gemini-2.5-pro
-    assert GEMINI_PRICES["gemini-2.5-pro"]["text"]["input"]["<=200k"] == 0.625
-    assert GEMINI_PRICES["gemini-2.5-pro"]["text"]["output"][">200k"] == 7.50
-    assert GEMINI_PRICES["gemini-2.5-pro"]["grounding"]["google_search"] == 35.00
+    assert GEMINI_PRICES["gemini-2.5-pro"].input.tiered["<=200k"] == 0.625
+    assert GEMINI_PRICES["gemini-2.5-pro"].output.tiered[">200k"] == 7.50
 
     # Test gemini-2.0-flash
-    assert GEMINI_PRICES["gemini-2.0-flash"]["text_image_video"]["input"] == 0.05
-    assert GEMINI_PRICES["gemini-2.0-flash"]["audio"]["context_caching"] == 0.175
-    assert GEMINI_PRICES["gemini-2.0-flash"]["image_generation_per_image"] == 0.0195
+    assert GEMINI_PRICES["gemini-2.0-flash"].input.price_per_1m == 0.05
+    assert GEMINI_PRICES["gemini-2.0-flash"].output.price_per_1m == 0.20
 
     # Test computer use
     assert (
-        GEMINI_PRICES["gemini-2.5-computer-use-preview-10-2025"]["input"][">200k"]
+        GEMINI_PRICES["gemini-2.5-computer-use-preview-10-2025"].input.tiered[">200k"]
         == 2.50
     )
 

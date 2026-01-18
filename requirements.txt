@@ -5,7 +5,7 @@ fastmcp==2.14.2
 feedparser
 graphviz
 httpx
-instructor
+openai
 itsdangerous
 mcp
 psycopg2-binary
@@ -16,3 +16,4 @@ rich
 sqlalchemy
 json-schema-to-pydantic
 pytest-cov
+google-genai
