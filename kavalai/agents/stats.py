@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from kavalai.agents.db import Run, Session, ChatMessage
+from kavalai.agents.db import Run, Session, ChatMessage, LLMCallStat, LLMProfile
 
 
 async def get_daily_stats(
@@ -37,15 +37,67 @@ async def get_daily_stats(
         result = await session.execute(stmt)
         return {row.date: row.count for row in result.all()}
 
+    async def get_llm_stats():
+        profile_name_col = func.coalesce(LLMProfile.name, "Unknown").label(
+            "profile_name"
+        )
+        date_col = func.date(LLMCallStat.created_at).label("date")
+        stmt = (
+            select(
+                profile_name_col,
+                date_col,
+                func.count(LLMCallStat.id).label("count"),
+                func.sum(LLMCallStat.cost).label("cost"),
+                func.sum(LLMCallStat.duration_ms).label("duration_ms"),
+                func.sum(LLMCallStat.prompt_tokens).label("prompt_tokens"),
+                func.sum(LLMCallStat.completion_tokens).label("completion_tokens"),
+            )
+            .outerjoin(LLMProfile, LLMCallStat.llm_profile_id == LLMProfile.id)
+            .where(LLMCallStat.created_at >= start_date)
+            .group_by(profile_name_col, date_col)
+        )
+        result = await session.execute(stmt)
+
+        stats_by_profile = {}
+        for row in result.all():
+            if row.profile_name not in stats_by_profile:
+                stats_by_profile[row.profile_name] = {}
+            stats_by_profile[row.profile_name][row.date] = {
+                "count": row.count,
+                "cost": float(row.cost or 0),
+                "duration_ms": int(row.duration_ms or 0),
+                "prompt_tokens": int(row.prompt_tokens or 0),
+                "completion_tokens": int(row.completion_tokens or 0),
+            }
+        return stats_by_profile
+
     runs_counts = await get_counts_for_model(Run)
     sessions_counts = await get_counts_for_model(Session)
     messages_counts = await get_counts_for_model(ChatMessage)
+    llm_stats = await get_llm_stats()
 
     def format_series(counts):
         return [{"date": d.isoformat(), "count": counts.get(d, 0)} for d in dates]
+
+    def format_llm_series(profile_stats):
+        series = []
+        for d in dates:
+            day_stat = profile_stats.get(
+                d,
+                {
+                    "count": 0,
+                    "cost": 0.0,
+                    "duration_ms": 0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                },
+            )
+            series.append({"date": d.isoformat(), **day_stat})
+        return series
 
     return {
         "runs": format_series(runs_counts),
         "sessions": format_series(sessions_counts),
         "messages": format_series(messages_counts),
+        "llm": {name: format_llm_series(stats) for name, stats in llm_stats.items()},
     }

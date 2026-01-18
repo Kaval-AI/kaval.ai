@@ -23,21 +23,26 @@ async def test_upsert_llm_profile(agents_db):
         provider="openai",
         model_name="gpt-4o",
     )
-    await upsert_llm_profile(agents_db, profile)
+    db_profile = await upsert_llm_profile(agents_db, profile)
+    assert db_profile.id is not None
+    assert db_profile.name == "test-upsert"
 
     # Verify in DB
     stmt = select(LLMProfile).where(LLMProfile.name == "test-upsert")
     result = await agents_db.execute(stmt)
-    db_profile = result.scalar_one()
-    assert db_profile.model_name == "gpt-4o"
+    db_profile_verify = result.scalar_one()
+    assert db_profile_verify.model_name == "gpt-4o"
+    assert db_profile_verify.id == db_profile.id
 
     # Update
-    profile.model_name = "gpt-4o-mini"
-    await upsert_llm_profile(agents_db, profile)
+    db_profile.model_name = "gpt-4o-mini"
+    db_profile_updated = await upsert_llm_profile(agents_db, db_profile)
 
     result = await agents_db.execute(stmt)
-    db_profile = result.scalar_one()
-    assert db_profile.model_name == "gpt-4o-mini"
+    db_profile_verify = result.scalar_one()
+    assert db_profile_verify.model_name == "gpt-4o-mini"
+    assert db_profile_updated.id == db_profile.id
+    assert db_profile_updated.model_name == "gpt-4o-mini"
 
 
 @pytest.mark.asyncio

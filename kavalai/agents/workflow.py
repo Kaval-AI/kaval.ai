@@ -123,7 +123,7 @@ class Workflow:
             )
 
         if session:
-            await upsert_llm_profile(session, llm_profile)
+            llm_profile = await upsert_llm_profile(session, llm_profile)
 
         system_message = dict(role="system", content=input_text)
         response = await chat_completion_with_stats(

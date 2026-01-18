@@ -147,8 +147,8 @@ async def get_llm_profile_by_name(
     return profile
 
 
-async def upsert_llm_profile(session: AsyncSession, profile: LLMProfile):
-    """Upsert LLM profile to the database by name."""
+async def upsert_llm_profile(session: AsyncSession, profile: LLMProfile) -> LLMProfile:
+    """Upsert LLM profile to the database by name and return the profile with ID."""
     stmt = select(LLMProfile).where(LLMProfile.name == profile.name)
     result = await session.execute(stmt)
     existing = result.scalar_one_or_none()
@@ -165,9 +165,9 @@ async def upsert_llm_profile(session: AsyncSession, profile: LLMProfile):
     }
 
     if existing:
-        await crud.update(session, LLMProfile, existing.id, profile_data)
+        return await crud.update(session, LLMProfile, existing.id, profile_data)
     else:
-        await crud.insert(session, LLMProfile, profile_data)
+        return await crud.insert(session, LLMProfile, profile_data)
 
 
 class Session(Base):

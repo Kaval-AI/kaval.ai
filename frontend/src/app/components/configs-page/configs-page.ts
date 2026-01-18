@@ -3,11 +3,15 @@ import { CommonModule } from '@angular/common';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { LLMConfig } from '../../models/llm-config';
+import { BaseChartDirective } from 'ng2-charts';
+import { ChartConfiguration, ChartOptions, Chart, registerables } from 'chart.js';
+
+Chart.register(...registerables);
 
 @Component({
   selector: 'app-configs-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, BaseChartDirective],
   templateUrl: './configs-page.html',
   styleUrl: './configs-page.css',
 })
@@ -16,6 +20,27 @@ export class ConfigsPage implements OnInit {
   loading: boolean = false;
   error: string | null = null;
   activeProjectId: string | null = null;
+  stats: any = null;
+
+  public callsChartData: ChartConfiguration<'line'>['data'] = { datasets: [], labels: [] };
+  public costChartData: ChartConfiguration<'line'>['data'] = { datasets: [], labels: [] };
+  public tokensChartData: ChartConfiguration<'line'>['data'] = { datasets: [], labels: [] };
+  public durationChartData: ChartConfiguration<'line'>['data'] = { datasets: [], labels: [] };
+
+  public chartOptions: ChartOptions<'line'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: { beginAtZero: true }
+    },
+    plugins: {
+      legend: { display: true, position: 'bottom' }
+    }
+  };
+
+  private colors = [
+    '#42A5F5', '#FFA726', '#66BB6A', '#EF5350', '#AB47BC', '#26C6DA', '#FFCA28'
+  ];
 
   constructor(
     private agentService: AgentService,
@@ -25,6 +50,7 @@ export class ConfigsPage implements OnInit {
   ngOnInit(): void {
     this.activeProjectId = this.userService.getActiveProjectId();
     this.loadConfigs();
+    this.loadStats();
   }
 
   loadConfigs(): void {
@@ -47,6 +73,89 @@ export class ConfigsPage implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  loadStats(): void {
+    if (!this.activeProjectId) return;
+
+    this.agentService.getAgentStats(this.activeProjectId).subscribe({
+      next: (stats) => {
+        this.stats = stats;
+        this.prepareCharts();
+      },
+      error: (err) => {
+        console.error('Failed to load LLM stats', err);
+      }
+    });
+  }
+
+  private prepareCharts(): void {
+    if (!this.stats || !this.stats.llm) return;
+
+    const profileNames = Object.keys(this.stats.llm);
+    if (profileNames.length === 0) {
+      // Clear charts if no stats
+      this.callsChartData = { datasets: [], labels: [] };
+      this.costChartData = { datasets: [], labels: [] };
+      this.tokensChartData = { datasets: [], labels: [] };
+      this.durationChartData = { datasets: [], labels: [] };
+      return;
+    }
+
+    const firstProfile = this.stats.llm[profileNames[0]];
+    const labels = firstProfile.map((d: any) => {
+      const date = new Date(d.date);
+      return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    });
+
+    const callsDatasets: any[] = [];
+    const costDatasets: any[] = [];
+    const tokensDatasets: any[] = [];
+    const durationDatasets: any[] = [];
+
+    profileNames.forEach((name, index) => {
+      const profileStats = this.stats.llm[name];
+      const color = this.colors[index % this.colors.length];
+
+      callsDatasets.push({
+        data: profileStats.map((d: any) => d.count),
+        label: name,
+        borderColor: color,
+        backgroundColor: color,
+        tension: 0.3
+      });
+
+      costDatasets.push({
+        data: profileStats.map((d: any) => d.cost),
+        label: name,
+        borderColor: color,
+        backgroundColor: color,
+        tension: 0.3
+      });
+
+      durationDatasets.push({
+        data: profileStats.map((d: any) => d.duration_ms / 1000),
+        label: name,
+        borderColor: color,
+        backgroundColor: color,
+        tension: 0.3
+      });
+
+      // For tokens, we might want to show total tokens or split input/output
+      // Let's show total tokens per profile
+      tokensDatasets.push({
+        data: profileStats.map((d: any) => d.prompt_tokens + d.completion_tokens),
+        label: name,
+        borderColor: color,
+        backgroundColor: color,
+        tension: 0.3
+      });
+    });
+
+    this.callsChartData = { labels, datasets: callsDatasets };
+    this.costChartData = { labels, datasets: costDatasets };
+    this.durationChartData = { labels, datasets: durationDatasets };
+    this.tokensChartData = { labels, datasets: tokensDatasets };
   }
 
   formatDate(dateStr: string): string {

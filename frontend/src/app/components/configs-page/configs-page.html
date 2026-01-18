@@ -40,5 +40,43 @@
         </tr>
       </tbody>
     </table>
+
+    <div *ngIf="stats && stats.llm" class="charts-section">
+      <h3>LLM Statistics (Last 7 Days)</h3>
+      <div class="charts-grid">
+        <div class="chart-container">
+          <h4>LLM Calls</h4>
+          <canvas baseChart
+                  [data]="callsChartData"
+                  [options]="chartOptions"
+                  [type]="'line'">
+          </canvas>
+        </div>
+        <div class="chart-container">
+          <h4>LLM Cost (USD)</h4>
+          <canvas baseChart
+                  [data]="costChartData"
+                  [options]="chartOptions"
+                  [type]="'line'">
+          </canvas>
+        </div>
+        <div class="chart-container">
+          <h4>Avg Duration (seconds)</h4>
+          <canvas baseChart
+                  [data]="durationChartData"
+                  [options]="chartOptions"
+                  [type]="'line'">
+          </canvas>
+        </div>
+        <div class="chart-container">
+          <h4>Total Tokens</h4>
+          <canvas baseChart
+                  [data]="tokensChartData"
+                  [options]="chartOptions"
+                  [type]="'line'">
+          </canvas>
+        </div>
+      </div>
+    </div>
   </div>
 </div>

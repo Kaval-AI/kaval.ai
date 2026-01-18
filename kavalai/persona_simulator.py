@@ -125,12 +125,15 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
             """
             all_messages = [{"role": "system", "content": system_message}] + history
 
-            # console.print(f"Message history: {history}")
-
+            # We want to keep track of LLM call stats in the simulator as well,
+            # but we don't have a session to persist them to yet, unless we want to use a local sqlite?
+            # For now, persona simulator doesn't use a database session for LLMCallStat.
+            # However, chat_completion_with_stats expects LLMProfile which might not have an ID.
             resp = await chat_completion_with_stats(
                 llm_profile=llm_profile,
                 response_model=PersonaResponse,
                 messages=all_messages,
+                session=None,
             )
 
             console.print(f"[bold white][Turn {turn_idx + 1}][/bold white]")
