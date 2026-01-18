@@ -16,7 +16,10 @@ from json_schema_to_pydantic import create_model
 from pydantic import BaseModel, Field, HttpUrl
 from rich.console import Console
 
-from kavalai.agents.llm_config import get_instructor, load_profile_from_path
+from kavalai.agents.llm_config import (
+    load_profile_from_path,
+    chat_completion_with_stats,
+)
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
 
 logger = logging.getLogger(__name__)
@@ -52,7 +55,6 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
     llm_profile = load_profile_from_path(task_config.llm_profile_name)
     if not llm_profile:
         raise Exception(f"LLM Profile '{task_config.llm_profile_name}' not found")
-    llm_client = get_instructor(llm_profile)
     history: List[Dict[str, str]] = []
 
     # We'll keep track of the session_id given by the agent.
@@ -127,8 +129,10 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
 
             # console.print(f"Message history: {history}")
 
-            resp = await llm_client.chat.completions.create(
-                response_model=PersonaResponse, messages=all_messages
+            resp = await chat_completion_with_stats(
+                llm_profile=llm_profile,
+                response_model=PersonaResponse,
+                messages=all_messages,
             )
 
             console.print(f"[bold white][Turn {turn_idx + 1}][/bold white]")

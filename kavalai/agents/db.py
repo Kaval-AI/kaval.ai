@@ -111,6 +111,12 @@ class LLMCallStat(Base):
     )
     name: Mapped[str | None] = mapped_column(TEXT)
     response_code: Mapped[int | None] = mapped_column(Integer)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer)
+    total_tokens: Mapped[int | None] = mapped_column(Integer)
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    request_data: Mapped[dict | None] = mapped_column(JSONB)
+    response_data: Mapped[dict | None] = mapped_column(JSONB)
     cost: Mapped[float | None] = mapped_column(Numeric(10, 6))
     currency: Mapped[str | None] = mapped_column(TEXT)
     created_at: Mapped[datetime] = mapped_column(

@@ -13,10 +13,13 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `workflow.py`: Core workflow execution engine (YAML to execution).
         - `agent_service.py`: Service for managing agent state, sessions, runs, and LLM profiles in the DB.
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages).
-        - `llm_config.py`: Pydantic models for LLM profiles and fetching configurations.
+        - `llm_config.py`: Pydantic models for LLM profiles and fetching configurations. Includes `chat_completion_with_stats` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data). Improved to robustly handle DB transaction states and capture detailed error information.
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
         - `db.py`: Database models for agents, sessions, runs, tasks, and messages.
+    - `prices/`: Pricing data for different LLM providers.
+        - `openai.py`: OpenAI pricing data.
+        - `gemini.py`: Gemini pricing data.
     - `backoffice/`: API and logic for the management UI.
         - `server.py`: FastAPI server for the backoffice API. Includes endpoints for agents, sessions, stats, projects (including membership management), and workflow visualization.
         - `db.py`: Backoffice-specific DB models (users, projects, memberships).

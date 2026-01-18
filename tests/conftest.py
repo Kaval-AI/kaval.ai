@@ -17,32 +17,6 @@ TEST_DB_CONFIG = dict(
 )
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def setup_test_db():
-    """
-    Optional: Ensures the schema and tables exist before running any tests.
-    """
-    session_maker = db_manager.get_sessionmaker(
-        user=os.environ["AGENTS_DB_USER"],
-        password=os.environ["AGENTS_DB_PASSWORD"],
-        host=os.environ["AGENTS_DB_HOST"],
-        port=os.environ["AGENTS_DB_PORT"],
-        db_name=os.environ["AGENTS_DB_NAME"],
-    )
-
-    engine = session_maker.kw["bind"]
-
-    async with engine.begin() as conn:
-        # Create schema if it doesn't exist
-        await conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {AGENTS_SCHEMA}"))
-        # Set the search path for table creation
-        await conn.execute(text(f"SET search_path TO {AGENTS_SCHEMA}"))
-        # Create all tables defined in Base
-        await conn.run_sync(Base.metadata.create_all)
-
-    yield
-
-
 @pytest.fixture(scope="session")
 def agents_session_maker():
     return db_manager.get_sessionmaker(**TEST_DB_CONFIG)

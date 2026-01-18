@@ -9,8 +9,8 @@ from pydantic import BaseModel
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.db import upsert_llm_profile
 from kavalai.agents.llm_config import (
-    get_instructor,
     load_profile_from_path,
+    chat_completion_with_stats,
 )
 from kavalai.agents.schema_parser import SchemaParser
 
@@ -127,12 +127,12 @@ class Workflow:
         if session:
             await upsert_llm_profile(session, llm_profile)
 
-        client = get_instructor(llm_profile)
-
         system_message = dict(role="system", content=input_text)
-        response = await client.chat.completions.create(
+        response = await chat_completion_with_stats(
+            llm_profile=llm_profile,
             response_model=self.get_data_type(task.output),
             messages=[system_message],
+            session=session,
         )
 
         run_context.data[task.output] = response
