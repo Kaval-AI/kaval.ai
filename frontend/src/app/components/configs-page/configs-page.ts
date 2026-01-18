@@ -31,10 +31,24 @@ export class ConfigsPage implements OnInit {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
-      y: { beginAtZero: true }
+      y: {
+        beginAtZero: true,
+      }
     },
     plugins: {
       legend: { display: true, position: 'bottom' }
+    }
+  };
+
+  public callsChartOptions: ChartOptions<'line'> = {
+    ...this.chartOptions,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          stepSize: 1
+        }
+      }
     }
   };
 
@@ -105,7 +119,9 @@ export class ConfigsPage implements OnInit {
     const firstProfile = this.stats.llm[profileNames[0]];
     const labels = firstProfile.map((d: any) => {
       const date = new Date(d.date);
-      return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      return `${day}-${month}`;
     });
 
     const callsDatasets: any[] = [];
@@ -122,7 +138,11 @@ export class ConfigsPage implements OnInit {
         label: name,
         borderColor: color,
         backgroundColor: color,
-        tension: 0.3
+        fill: false,
+        tension: 0,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6
       });
 
       costDatasets.push({
@@ -130,7 +150,11 @@ export class ConfigsPage implements OnInit {
         label: name,
         borderColor: color,
         backgroundColor: color,
-        tension: 0.3
+        fill: false,
+        tension: 0,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6
       });
 
       durationDatasets.push({
@@ -138,17 +162,36 @@ export class ConfigsPage implements OnInit {
         label: name,
         borderColor: color,
         backgroundColor: color,
-        tension: 0.3
+        fill: false,
+        tension: 0,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6
       });
 
-      // For tokens, we might want to show total tokens or split input/output
-      // Let's show total tokens per profile
       tokensDatasets.push({
-        data: profileStats.map((d: any) => d.prompt_tokens + d.completion_tokens),
-        label: name,
+        data: profileStats.map((d: any) => d.prompt_tokens),
+        label: `${name} (Input)`,
         borderColor: color,
         backgroundColor: color,
-        tension: 0.3
+        borderDash: [5, 5],
+        fill: false,
+        tension: 0,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      });
+
+      tokensDatasets.push({
+        data: profileStats.map((d: any) => d.completion_tokens),
+        label: `${name} (Output)`,
+        borderColor: color,
+        backgroundColor: color,
+        fill: false,
+        tension: 0,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6
       });
     });
 

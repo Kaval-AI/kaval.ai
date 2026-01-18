@@ -26,6 +26,7 @@
           <th>Model</th>
           <th>Base URL</th>
           <th>Default Mode</th>
+          <th>Total Cost</th>
           <th>Last Updated</th>
         </tr>
       </thead>
@@ -36,6 +37,7 @@
           <td>{{ config.model_name }}</td>
           <td>{{ config.base_url || 'Default' }}</td>
           <td>{{ config.default_mode || 'N/A' }}</td>
+          <td>{{ config.total_cost | currency:'USD':'symbol':'1.2-6' }}</td>
           <td>{{ formatDate(config.updated_at) }}</td>
         </tr>
       </tbody>
@@ -48,7 +50,7 @@
           <h4>LLM Calls</h4>
           <canvas baseChart
                   [data]="callsChartData"
-                  [options]="chartOptions"
+                  [options]="callsChartOptions"
                   [type]="'line'">
           </canvas>
         </div>
