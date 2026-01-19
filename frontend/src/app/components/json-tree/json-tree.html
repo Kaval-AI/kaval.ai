@@ -10,6 +10,15 @@
     <span class="json-value" [ngClass]="'type-' + type">
       {{ formattedValue }}
     </span>
+
+    <div *ngIf="depth === 0 && isExpandable" class="tree-controls">
+      <button (click)="expandAll($event)" title="Expand All" class="control-btn">
+        <i class="fas fa-expand-arrows-alt"></i> Expand All
+      </button>
+      <button (click)="collapseAll($event)" title="Collapse All" class="control-btn">
+        <i class="fas fa-compress-arrows-alt"></i> Collapse All
+      </button>
+    </div>
   </div>
 
   <div *ngIf="isExpanded && isObject" class="json-children">

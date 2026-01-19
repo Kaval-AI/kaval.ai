@@ -15,6 +15,7 @@ div.page-container {
   bottom: 0;
   left: 200px;
   right: 0;
+  overflow-y: auto;
 }
 
 app-user-info {

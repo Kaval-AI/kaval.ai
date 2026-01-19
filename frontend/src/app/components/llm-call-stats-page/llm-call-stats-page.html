@@ -1,7 +1,12 @@
 <div class="stats-container">
   <div class="header-section">
-    <div class="breadcrumb">
-      <a routerLink="/configs">LLM Configurations</a> / LLM Call Details
+    <div class="header-top">
+      <div class="breadcrumb">
+        <a routerLink="/configs">LLM Configurations</a> / LLM Call Details
+      </div>
+      <a routerLink="/configs" class="back-btn">
+        <i class="fas fa-arrow-left"></i> Back to Profiles
+      </a>
     </div>
     <h1>LLM Call Details</h1>
     <p class="subtitle" *ngIf="llmProfileId">Filtered by profile: {{ llmProfileId }}</p>

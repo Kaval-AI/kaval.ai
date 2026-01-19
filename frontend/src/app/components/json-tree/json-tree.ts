@@ -1,4 +1,4 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, ViewChildren, QueryList } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -13,6 +13,8 @@ export class JsonTreeComponent implements OnInit {
   @Input() key: string | number | null = null;
   @Input() isExpanded: boolean = false;
   @Input() depth: number = 0;
+
+  @ViewChildren(JsonTreeComponent) childComponents!: QueryList<JsonTreeComponent>;
 
   isObject: boolean = false;
   isArray: boolean = false;
@@ -56,5 +58,24 @@ export class JsonTreeComponent implements OnInit {
       this.isExpanded = !this.isExpanded;
     }
     event.stopPropagation();
+  }
+
+  expandAll(event: Event) {
+    this.setExpandedRecursive(true);
+    event.stopPropagation();
+  }
+
+  collapseAll(event: Event) {
+    this.setExpandedRecursive(false);
+    event.stopPropagation();
+  }
+
+  private setExpandedRecursive(expanded: boolean) {
+    if (this.isExpandable) {
+      this.isExpanded = expanded;
+      setTimeout(() => {
+        this.childComponents.forEach(child => child.setExpandedRecursive(expanded));
+      });
+    }
   }
 }
