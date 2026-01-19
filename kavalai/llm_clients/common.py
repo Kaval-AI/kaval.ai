@@ -6,14 +6,16 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kavalai import crud
-from kavalai.agents.db import LLMProfile, LLMCallStat
+from kavalai.agents.db import LLMProfile, LLMCallStat, EmbeddingProfile
 from kavalai.llm_clients.openai import OpenAIClient
 from kavalai.llm_clients.gemini import GeminiClient
 
 logger = logging.getLogger(__name__)
 
 
-def get_llm_client(llm_profile: LLMProfile) -> OpenAIClient | GeminiClient:
+def get_llm_client(
+    llm_profile: LLMProfile | EmbeddingProfile,
+) -> OpenAIClient | GeminiClient:
     """
     Factory function to get the appropriate LLM client.
     """
@@ -123,13 +125,13 @@ async def chat_completion_with_stats(
 
 
 async def compute_embeddings(
-    llm_profile: LLMProfile,
+    llm_profile: LLMProfile | EmbeddingProfile,
     texts: list[str],
     normalize: bool = False,
     **kwargs,
 ) -> list[list[float]]:
     """
-    Compute embeddings for a list of texts using the specified LLM profile.
+    Compute embeddings for a list of texts using the specified LLM profile or embedding profile.
     """
     client = get_llm_client(llm_profile)
     return await client.compute_embeddings(

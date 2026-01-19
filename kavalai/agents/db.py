@@ -337,6 +337,7 @@ class RagIndex(Base):
     embedding_profile_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("embedding_profiles.id", ondelete="CASCADE")
     )
+    embedding_profile_name: Mapped[str | None] = mapped_column(TEXT)
     embedding_384: Mapped[list[float] | None] = mapped_column(VectorType(384))
     embedding_768: Mapped[list[float] | None] = mapped_column(VectorType(768))
     embedding_1536: Mapped[list[float] | None] = mapped_column(VectorType(1536))

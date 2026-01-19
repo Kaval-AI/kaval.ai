@@ -33,8 +33,8 @@ async def test_rag_service_indexing(agents_db):
         metadata = [{"id": 1}, {"id": 2}]
 
         items = await service.batch_index(texts, metadata)
-
         assert len(items) == 2
+        assert items[0].embedding_profile_name == "Test Embedder"
         assert items[0].text_content == "hello"
         assert items[0].embedding_1536 == [0.1] * 1536
         assert items[0].metadata_ == {"id": 1}
@@ -63,6 +63,7 @@ async def test_rag_service_query(agents_db):
         RagIndex,
         {
             "embedding_profile_id": profile.id,
+            "embedding_profile_name": "index1",
             "embedding_1536": [1.0] + [0.0] * 1535,
             "text_content": "match",
             "mime_type": "text/plain",
@@ -73,8 +74,20 @@ async def test_rag_service_query(agents_db):
         RagIndex,
         {
             "embedding_profile_id": profile.id,
-            "embedding_1536": [0.0] + [1.0] + [0.0] * 1534,
-            "text_content": "no match",
+            "embedding_profile_name": "index2",
+            "embedding_1536": [1.0] + [0.0] * 1535,
+            "text_content": "wrong index",
+            "mime_type": "text/plain",
+        },
+    )
+    await insert(
+        agents_db,
+        RagIndex,
+        {
+            "embedding_profile_id": profile.id,
+            "embedding_profile_name": "index1",
+            "embedding_1536": [1.0] + [0.0] * 1535,
+            "text_content": "other",
             "mime_type": "text/plain",
         },
     )
@@ -82,17 +95,26 @@ async def test_rag_service_query(agents_db):
     service = RagService(agents_db, profile)
 
     # 3. Mock query embedding
-    # We want to match the first item.
-    # [1.0, 0.0, ...]
     with patch(
         "kavalai.agents.rag_service.compute_embeddings", new_callable=AsyncMock
     ) as mock_compute:
-        mock_compute.return_value = [[0.9, 0.1] + [0.0] * 1534]
+        mock_compute.return_value = [[1.0] + [0.0] * 1535]
 
-        results = await service.query("some query", top_k=1)
+        # No filters
+        results = await service.query("some query")
+        assert len(results) == 3
 
-        assert len(results) == 1
-        assert results[0].text_content == "match"
+        # Filter by index
+        results = await service.query("some query", index="index1")
+        assert len(results) == 2
+        for r in results:
+            assert r.embedding_profile_name == "index1"
+
+        # Match specific content
+        results = await service.query("some query", index="index1")
+        assert any(r.text_content == "match" for r in results)
+        assert any(r.text_content == "other" for r in results)
+        assert results[0].embedding_profile_name == "index1"
 
 
 @pytest.mark.asyncio

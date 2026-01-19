@@ -6,7 +6,11 @@ from kavalai.llm_clients.common import compute_embeddings
 
 
 class RagService:
-    def __init__(self, db_session: AsyncSession, embedding_profile: EmbeddingProfile):
+    def __init__(
+        self,
+        db_session: AsyncSession,
+        embedding_profile: EmbeddingProfile,
+    ):
         self.db = db_session
         self.embedding_profile = embedding_profile
 
@@ -37,6 +41,7 @@ class RagService:
         for text, meta, emb in zip(texts, metadata_list, embeddings):
             item_data = {
                 "embedding_profile_id": self.embedding_profile.id,
+                "embedding_profile_name": self.embedding_profile.name,
                 embedding_field: emb,
                 "mime_type": "text/plain",
                 "text_content": text,
@@ -56,7 +61,12 @@ class RagService:
         """Index a single text blob with the metadata."""
         return (await self.batch_index([text], [metadata or {}]))[0]
 
-    async def query(self, text: str, top_k: int = 5) -> list[RagIndex]:
+    async def query(
+        self,
+        text: str,
+        top_k: int = 5,
+        index: Optional[str] = None,
+    ) -> list[RagIndex]:
         embeddings = await compute_embeddings(
             llm_profile=self.embedding_profile, texts=[text]
         )
@@ -81,13 +91,19 @@ class RagService:
             .limit(top_k)
         )
 
+        if index:
+            stmt = stmt.where(RagIndex.embedding_profile_name == index)
+
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
     async def batch_query(
-        self, texts: list[str], top_k: int = 5
+        self,
+        texts: list[str],
+        top_k: int = 5,
+        index: Optional[str] = None,
     ) -> list[list[RagIndex]]:
         results = []
         for text in texts:
-            results.append(await self.query(text, top_k=top_k))
+            results.append(await self.query(text, top_k=top_k, index=index))
         return results

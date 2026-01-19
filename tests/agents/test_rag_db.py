@@ -26,6 +26,7 @@ async def test_embedding_profile_and_rag_index(agents_db: AsyncSession):
         RagIndex,
         {
             "embedding_profile_id": profile.id,
+            "embedding_profile_name": profile.name,
             "embedding_1536": [0.1] * 1536,
             "mime_type": "text/plain",
             "text_content": "This is a test document for RAG.",
