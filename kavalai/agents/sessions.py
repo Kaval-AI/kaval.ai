@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from kavalai.agents.db import Session, Run, Task, ChatMessage, Agent
+from typing import TypedDict
 
 
 class SessionSummary(BaseModel):
@@ -19,12 +20,25 @@ class SessionSummary(BaseModel):
     updated_at: datetime
 
 
+class SessionsResponse(TypedDict):
+    sessions: list[SessionSummary]
+    total_count: int
+
+
 async def get_sessions_summary(
     session: AsyncSession,
     agent_id: UUID | None = None,
     limit: int = 50,
     offset: int = 0,
-) -> list[SessionSummary]:
+) -> SessionsResponse:
+    # Get total count first
+    count_stmt = select(func.count(Session.id))
+    if agent_id:
+        count_stmt = count_stmt.where(Session.agent_id == agent_id)
+
+    total_count_res = await session.execute(count_stmt)
+    total_count = total_count_res.scalar() or 0
+
     # Subquery for counts
     runs_count_sub = (
         select(Run.session_id, func.count(Run.id).label("count"))
@@ -112,7 +126,7 @@ async def get_sessions_summary(
             )
         )
 
-    return summaries
+    return {"sessions": summaries, "total_count": total_count}
 
 
 async def get_session_messages(

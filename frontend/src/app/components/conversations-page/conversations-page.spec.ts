@@ -57,7 +57,7 @@ describe('ConversationsPage', () => {
   it('should create', () => {
     userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of([]));
-    agentServiceSpy.getSessions.and.returnValue(of([]));
+    agentServiceSpy.getSessions.and.returnValue(of({ sessions: [], total_count: 0 }));
     fixture.detectChanges();
     expect(component).toBeTruthy();
   });
@@ -65,7 +65,7 @@ describe('ConversationsPage', () => {
   it('should load agents and sessions on init', () => {
     userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
-    agentServiceSpy.getSessions.and.returnValue(of(mockSessions));
+    agentServiceSpy.getSessions.and.returnValue(of({ sessions: mockSessions, total_count: 1 }));
 
     fixture.detectChanges();
 
@@ -74,12 +74,13 @@ describe('ConversationsPage', () => {
     expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, 20, 0);
     expect(component.agents).toEqual(mockAgents);
     expect(component.sessions).toEqual(mockSessions);
+    expect(component.totalSessions).toBe(1);
   });
 
   it('should filter by agent when agent selection changes', () => {
     userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
-    agentServiceSpy.getSessions.and.returnValue(of(mockSessions));
+    agentServiceSpy.getSessions.and.returnValue(of({ sessions: mockSessions, total_count: 1 }));
 
     fixture.detectChanges();
 
@@ -95,7 +96,7 @@ describe('ConversationsPage', () => {
 
     // Create exactly 'limit' (20) sessions
     const twentySessions = Array(20).fill(mockSessions[0]);
-    agentServiceSpy.getSessions.and.returnValue(of(twentySessions));
+    agentServiceSpy.getSessions.and.returnValue(of({ sessions: twentySessions, total_count: 20 }));
 
     fixture.detectChanges();
 
@@ -108,7 +109,7 @@ describe('ConversationsPage', () => {
 
     // Initial load returns exactly 'limit' sessions so hasMore remains true
     const twentySessions = Array(20).fill(mockSessions[0]);
-    agentServiceSpy.getSessions.and.returnValue(of(twentySessions));
+    agentServiceSpy.getSessions.and.returnValue(of({ sessions: twentySessions, total_count: 21 }));
 
     fixture.detectChanges();
 
@@ -116,13 +117,17 @@ describe('ConversationsPage', () => {
 
     // Reset spy to track second call
     agentServiceSpy.getSessions.calls.reset();
-    agentServiceSpy.getSessions.and.returnValue(of([{ ...mockSessions[0], session_id: 'sess21' }]));
+    agentServiceSpy.getSessions.and.returnValue(of({
+      sessions: [{ ...mockSessions[0], session_id: 'sess21' }],
+      total_count: 21
+    }));
 
     component.nextPage();
 
     expect(component.offset).toBe(20);
     expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, 20, 20);
     expect(component.sessions.length).toBe(21);
+    expect(component.totalSessions).toBe(21);
   });
 
   it('should handle error when loading sessions', () => {
@@ -140,7 +145,7 @@ describe('ConversationsPage', () => {
   it('should set hasMore to false if fewer than limit sessions are returned', () => {
     userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
-    agentServiceSpy.getSessions.and.returnValue(of(mockSessions)); // length 1 < limit 20
+    agentServiceSpy.getSessions.and.returnValue(of({ sessions: mockSessions, total_count: 1 })); // length 1 < limit 20
 
     fixture.detectChanges();
 
@@ -160,7 +165,7 @@ describe('ConversationsPage', () => {
     routeMock.queryParams = of({ agentId: 'agent-789' });
     userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
-    agentServiceSpy.getSessions.and.returnValue(of(mockSessions));
+    agentServiceSpy.getSessions.and.returnValue(of({ sessions: mockSessions, total_count: 1 }));
 
     component.ngOnInit();
 

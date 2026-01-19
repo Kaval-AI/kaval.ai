@@ -50,6 +50,22 @@ select {
   color: #333;
 }
 
+.title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.total-badge {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid #bbdefb;
+}
+
 button {
   padding: 8px 16px;
   background-color: #42A5F5;

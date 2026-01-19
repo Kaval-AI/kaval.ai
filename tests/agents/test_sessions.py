@@ -88,10 +88,13 @@ async def test_get_sessions_summary(agents_db):
     await agents_db.commit()
 
     # 2. Call the function
-    summaries = await get_sessions_summary(agents_db)
+    result = await get_sessions_summary(agents_db)
+    summaries = result["sessions"]
+    total_count = result["total_count"]
 
     # 3. Assertions
     assert len(summaries) == 2
+    assert total_count == 2
 
     # Ordered by updated_at desc, so s1 should be first
     summary1 = summaries[0]
@@ -120,8 +123,8 @@ async def test_get_sessions_summary(agents_db):
     agents_db.add(s3)
     await agents_db.commit()
 
-    summaries_filtered = await get_sessions_summary(
-        agents_db, agent_id=another_agent.id
-    )
+    result_filtered = await get_sessions_summary(agents_db, agent_id=another_agent.id)
+    summaries_filtered = result_filtered["sessions"]
     assert len(summaries_filtered) == 1
+    assert result_filtered["total_count"] == 1
     assert summaries_filtered[0].session_id == s3.id

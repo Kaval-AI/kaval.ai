@@ -20,6 +20,7 @@ export class ConversationsPage implements OnInit {
   loading: boolean = false;
   error: string | null = null;
   activeProjectId: string | null = null;
+  totalSessions: number = 0;
 
   // Pagination & Filtering
   selectedAgentId: string = '';
@@ -73,7 +74,9 @@ export class ConversationsPage implements OnInit {
     const agentId = this.selectedAgentId || undefined;
 
     this.agentService.getSessions(this.activeProjectId, agentId, this.limit, this.offset).subscribe({
-      next: (sessions) => {
+      next: (data) => {
+        const sessions = data.sessions;
+        this.totalSessions = data.total_count;
         if (reset) {
           this.sessions = sessions;
         } else {
