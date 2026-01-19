@@ -1,0 +1,4 @@
+name: gemini
+provider: gemini
+model_name: text-embedding-004
+api_key:

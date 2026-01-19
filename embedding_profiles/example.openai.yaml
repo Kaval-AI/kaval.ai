@@ -1,0 +1,4 @@
+name: openai
+provider: openai
+model_name: text-embedding-3-small
+api_key:
