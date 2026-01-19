@@ -2,11 +2,56 @@ import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import MetaData, TEXT, ForeignKey, DateTime, Integer, Numeric
+from sqlalchemy import (
+    MetaData,
+    TEXT,
+    ForeignKey,
+    DateTime,
+    Integer,
+    Numeric,
+    LargeBinary,
+    TypeDecorator,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.pool import NullPool
+
+
+class VectorType(TypeDecorator):
+    impl = TEXT
+    cache_ok = True
+
+    def __init__(self, dim=None):
+        super().__init__()
+        self.dim = dim
+
+    def load_dialect_impl(self, dialect):
+        from sqlalchemy.types import UserDefinedType
+
+        class Vector(UserDefinedType):
+            def __init__(self, dim=None):
+                self.dim = dim
+
+            def get_col_spec(self, **kw):
+                if self.dim:
+                    return f"public.vector({self.dim})"
+                return "public.vector"
+
+        return dialect.type_descriptor(Vector(self.dim))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return str(list(value))
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        # value is already a list or string depending on driver
+        if isinstance(value, str):
+            return [float(x) for x in value.strip("[]").split(",")]
+        return value
 
 
 class DatabaseManager:
@@ -116,6 +161,9 @@ class LLMCallStat(Base):
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     request_data: Mapped[dict | None] = mapped_column(JSONB)
     response_data: Mapped[dict | None] = mapped_column(JSONB)
+    agent_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE")
+    )
     cost: Mapped[float | None] = mapped_column(Numeric(10, 6))
     currency: Mapped[str | None] = mapped_column(TEXT)
     created_at: Mapped[datetime] = mapped_column(
@@ -128,6 +176,7 @@ class LLMCallStat(Base):
     )
 
     llm_profile: Mapped["LLMProfile"] = relationship(back_populates="call_stats")
+    agent: Mapped["Agent"] = relationship()
 
 
 class Session(Base):
@@ -249,3 +298,68 @@ class ChatMessage(Base):
     agent: Mapped["Agent"] = relationship(back_populates="chat_messages")
     session: Mapped["Session"] = relationship(back_populates="chat_messages")
     run: Mapped["Run"] = relationship(back_populates="chat_messages")
+
+
+class EmbeddingProfile(Base):
+    __tablename__ = "embedding_profiles"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    name: Mapped[str] = mapped_column(TEXT, nullable=False)
+    provider: Mapped[str] = mapped_column(TEXT, nullable=False)
+    model_name: Mapped[str] = mapped_column(TEXT, nullable=False)
+    api_key: Mapped[str | None] = mapped_column(TEXT)
+    base_url: Mapped[str | None] = mapped_column(TEXT)
+    credentials: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    rag_items: Mapped[list["RagIndex"]] = relationship(
+        back_populates="embedding_profile",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class RagIndex(Base):
+    __tablename__ = "rag_index"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    embedding_profile_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("embedding_profiles.id", ondelete="CASCADE")
+    )
+    embedding_384: Mapped[list[float] | None] = mapped_column(VectorType(384))
+    embedding_768: Mapped[list[float] | None] = mapped_column(VectorType(768))
+    embedding_1536: Mapped[list[float] | None] = mapped_column(VectorType(1536))
+    embedding_3072: Mapped[list[float] | None] = mapped_column(VectorType(3072))
+
+    mime_type: Mapped[str] = mapped_column(TEXT, nullable=False)
+    text_content: Mapped[str | None] = mapped_column(TEXT)
+    json_content: Mapped[dict | None] = mapped_column(JSONB)
+    binary_content: Mapped[bytes | None] = mapped_column(LargeBinary)
+
+    metadata_: Mapped[dict] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    embedding_profile: Mapped["EmbeddingProfile"] = relationship(
+        back_populates="rag_items"
+    )

@@ -130,6 +130,7 @@ class Workflow:
             response_model=self.get_data_type(task.output),
             messages=[system_message],
             session=session,
+            agent_id=run_context.agent_id,
         )
 
         run_context.data[task.output] = response

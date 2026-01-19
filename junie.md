@@ -15,7 +15,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages).
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
-        - `db.py`: Database models for agents, sessions, runs, tasks, and messages.
+        - `db.py`: Database models for agents, sessions, runs, tasks, messages, embedding profiles, and RAG index.
     - `llm_clients/`: Native LLM client implementations.
         - `common.py`: Common LLM client utilities. Includes `chat_completion_with_stats` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data, cost) and `compute_embeddings` for generating text embeddings. Refactored to use native OpenAI and Gemini clients instead of instructor for better structured output and stats collection. Includes `get_llm_client` factory.
         - `openai.py`: Native OpenAI client wrapper. Supports structured outputs via `beta.chat.completions.parse`.
@@ -56,6 +56,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `test_persona_simulator.py`: Tests for the persona simulation logic.
 - `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
     - `app/V001__llm_profiles_and_stats.sql`: Defines `llm_profiles` (with `api_key`, `base_url`, `default_mode`) and `llm_call_stats`.
+    - `app/V003__rag_system.sql`: Defines `embedding_profiles` and `rag_index` for the RAG system.
 - `llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `scripts/`: Utility scripts (e.g., DB migration).
 - `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data.

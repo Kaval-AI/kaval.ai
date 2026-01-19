@@ -1,6 +1,7 @@
 import logging
 import time
 from datetime import datetime, timezone
+from uuid import UUID
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +40,7 @@ async def chat_completion_with_stats(
     response_model: type[BaseModel],
     messages: list[dict],
     session: AsyncSession = None,
+    agent_id: UUID = None,
     **kwargs,
 ) -> any:
     """
@@ -100,6 +102,7 @@ async def chat_completion_with_stats(
             try:
                 stat_data = {
                     "llm_profile_id": llm_profile.id,
+                    "agent_id": agent_id,
                     "name": llm_profile.name,
                     "response_code": response_code,
                     "prompt_tokens": prompt_tokens,
