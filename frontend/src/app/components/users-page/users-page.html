@@ -1,7 +1,12 @@
 <div class="users-container">
-  <div class="header">
-    <h2>Users</h2>
-    <button class="btn btn-primary" (click)="addUser()" *ngIf="!showForm">Add User</button>
+  <div class="header-section">
+    <div class="header-top">
+      <h1>Users</h1>
+      <button class="add-btn" (click)="addUser()" *ngIf="!showForm">
+        <i class="fas fa-plus"></i> Add User
+      </button>
+    </div>
+    <p class="subtitle">Manage system users and their permissions.</p>
   </div>
 
   <div *ngIf="showForm" class="user-form">
@@ -31,29 +36,39 @@
     </form>
   </div>
 
-  <table class="users-table" *ngIf="!showForm">
-    <thead>
-      <tr>
-        <th>Picture</th>
-        <th>Name</th>
-        <th>Email</th>
-        <th>Admin</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let user of users">
-        <td>
-          <img [src]="user.picture || 'assets/default-avatar.png'" alt="avatar" class="avatar" />
-        </td>
-        <td>{{ user.name }}</td>
-        <td>{{ user.email }}</td>
-        <td>{{ user.is_admin ? 'Yes' : 'No' }}</td>
-        <td class="actions">
-          <button class="btn btn-sm" (click)="editUser(user)">Edit</button>
-          <button class="btn btn-sm btn-danger" (click)="deleteUser(user)">Delete</button>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="table-container" *ngIf="!showForm">
+    <table class="users-table">
+      <thead>
+        <tr>
+          <th>Picture</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Admin</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let user of users">
+          <td>
+            <img [src]="user.picture || 'assets/default-avatar.png'" alt="avatar" class="avatar" />
+          </td>
+          <td>{{ user.name }}</td>
+          <td>{{ user.email }}</td>
+          <td>
+            <span class="badge" [ngClass]="user.is_admin ? 'admin-badge' : 'user-badge'">
+              {{ user.is_admin ? 'Admin' : 'User' }}
+            </span>
+          </td>
+          <td class="actions">
+            <button class="action-btn edit-btn" (click)="editUser(user)" title="Edit">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="action-btn delete-btn" (click)="deleteUser(user)" title="Delete">
+              <i class="fas fa-trash"></i>
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>

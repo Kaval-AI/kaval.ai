@@ -1,13 +1,12 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ProjectsPage } from '../projects-page/projects-page';
-import { UsersPage } from '../users-page/users-page';
 import { UserService } from '../../services/user-service';
 
 @Component({
   selector: 'app-landing-page',
   standalone: true,
-  imports: [CommonModule, ProjectsPage, UsersPage],
+  imports: [CommonModule, ProjectsPage],
   templateUrl: './landing-page.html',
   styleUrl: './landing-page.css',
 })

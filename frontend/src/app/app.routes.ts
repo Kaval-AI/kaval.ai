@@ -11,12 +11,14 @@ import { LandingPage } from './components/landing-page/landing-page';
 import { AgentsPage } from './components/agents-page/agents-page';
 import { ProjectEditPage } from './components/project-edit-page/project-edit-page';
 import { UserEditPage } from './components/user-edit-page/user-edit-page';
+import { UsersPage } from './components/users-page/users-page';
 
 export const routes: Routes = [
   // Default route
   { path: '', component: LandingPage },
 
   { path: 'agents', component: AgentsPage },
+  { path: 'users', component: UsersPage },
   { path: 'project-edit/:id', component: ProjectEditPage },
   { path: 'user-edit/:id', component: UserEditPage },
   { path: 'conversations', component: ConversationsPage },

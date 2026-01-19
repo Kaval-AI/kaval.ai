@@ -1,12 +1,55 @@
 .users-container {
-  padding: 20px;
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
-.header {
+.header-section {
+  margin-bottom: 32px;
+}
+
+.header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
+}
+
+.header-top h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 14px;
+}
+
+.add-btn {
+  padding: 8px 16px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.2s;
+}
+
+.add-btn:hover {
+  background-color: #0056b3;
+}
+
+.table-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: hidden;
 }
 
 .users-table {
@@ -14,21 +57,49 @@
   border-collapse: collapse;
 }
 
-.users-table th, .users-table td {
-  border: 1px solid #ddd;
-  padding: 12px;
+.users-table th {
   text-align: left;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #dee2e6;
 }
 
-.users-table th {
-  background-color: #f2f2f2;
+.users-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #eee;
+  color: #333;
+  vertical-align: middle;
+}
+
+.users-table tr:hover {
+  background-color: #f8f9fa;
 }
 
 .avatar {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   object-fit: cover;
+  border: 1px solid #eee;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.admin-badge {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.user-badge {
+  background: #f5f5f5;
+  color: #666;
 }
 
 .actions {
@@ -36,37 +107,36 @@
   gap: 8px;
 }
 
-.btn {
-  padding: 8px 16px;
-  border: 1px solid #ccc;
+.action-btn {
+  padding: 6px;
   border-radius: 4px;
-  cursor: pointer;
+  border: 1px solid #e0e0e0;
   background: white;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s;
 }
 
-.btn-primary {
-  background-color: #007bff;
-  color: white;
+.edit-btn:hover {
+  color: #007bff;
   border-color: #007bff;
+  background-color: #f0f7ff;
 }
 
-.btn-danger {
-  background-color: #dc3545;
-  color: white;
+.delete-btn:hover {
+  color: #dc3545;
   border-color: #dc3545;
-}
-
-.btn-sm {
-  padding: 4px 8px;
-  font-size: 12px;
+  background-color: #fff5f5;
 }
 
 .user-form {
   max-width: 500px;
-  background: #f9f9f9;
-  padding: 20px;
+  background: white;
+  padding: 24px;
   border-radius: 8px;
-  border: 1px solid #ddd;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid #eee;
+  margin-top: 20px;
 }
 
 .form-group {
