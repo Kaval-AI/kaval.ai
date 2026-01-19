@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { LLMConfig } from '../../models/llm-config';
@@ -11,7 +12,7 @@ Chart.register(...registerables);
 @Component({
   selector: 'app-configs-page',
   standalone: true,
-  imports: [CommonModule, BaseChartDirective],
+  imports: [CommonModule, BaseChartDirective, RouterLink],
   templateUrl: './configs-page.html',
   styleUrl: './configs-page.css',
 })

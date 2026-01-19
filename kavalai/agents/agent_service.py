@@ -217,6 +217,27 @@ class AgentService:
             for p in profiles
         ]
 
+    async def get_llm_call_stats(
+        self,
+        llm_profile_id: Optional[UUID] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[LLMCallStat]:
+        """
+        Retrieves paginated LLM call stats, optionally filtered by LLM profile.
+        """
+        stmt = (
+            select(LLMCallStat)
+            .order_by(LLMCallStat.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        if llm_profile_id:
+            stmt = stmt.where(LLMCallStat.llm_profile_id == llm_profile_id)
+
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
 
 def load_profile_from_path(
     profile_name: str, folder_path: str = None

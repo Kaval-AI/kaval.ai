@@ -28,6 +28,7 @@
           <th>Default Mode</th>
           <th>Total Cost</th>
           <th>Last Updated</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -39,6 +40,11 @@
           <td>{{ config.default_mode || 'N/A' }}</td>
           <td>{{ config.total_cost | currency:'USD':'symbol':'1.2-6' }}</td>
           <td>{{ formatDate(config.updated_at) }}</td>
+          <td>
+            <a [routerLink]="['/llm-call-stats']" [queryParams]="{llm_profile_id: config.id}" class="view-calls-btn">
+              View Calls
+            </a>
+          </td>
         </tr>
       </tbody>
     </table>

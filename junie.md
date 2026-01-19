@@ -32,7 +32,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `crud.py`: Shared database utility functions.
 - `frontend/`: Angular-based project for the backoffice UI.
     - `src/app/models/`: TypeScript interfaces and data models.
-        - `agent.ts`, `session.ts`, `chat-message.ts`, `llm-config.ts`, `project.ts`, `user-details.ts`.
+        - `agent.ts`, `session.ts`, `chat-message.ts`, `llm-config.ts`, `llm-call-stat.ts`, `project.ts`, `user-details.ts`.
     - `src/app/services/`: Angular services for API interaction and state management.
         - `agent-service.ts`: Handles agent-related API calls.
         - `user-service.ts`: Manages user authentication and profiles.
@@ -41,6 +41,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `agents-page/`, `projects-page/`, `users-page/`: CRUD interfaces for main entities.
         - `conversations-page/`, `session-detail-page/`: Agent session monitoring and debugging.
         - `configs-page/`: LLM profile and provider configuration.
+        - `llm-call-stats-page/`: Detailed list of LLM calls with request/response data (paginated).
         - `metrics-page/`: Token usage and cost analytics.
         - `rag-page/`: RAG-related configuration and testing.
         - `sidebar-menu/`, `header/`, `dropdown-menu/`: Layout and navigation components.

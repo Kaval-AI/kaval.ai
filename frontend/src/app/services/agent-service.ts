@@ -5,6 +5,7 @@ import { Agent } from '../models/agent';
 import { SessionSummary } from '../models/session';
 import { ChatMessage } from '../models/chat-message';
 import { LLMConfig } from '../models/llm-config';
+import { LLMCallStat } from '../models/llm-call-stat';
 
 @Injectable({
   providedIn: 'root'
@@ -42,5 +43,13 @@ export class AgentService {
 
   getSessionMessages(projectId: string, sessionId: string): Observable<ChatMessage[]> {
     return this.http.get<ChatMessage[]>(`/api/agents/sessions/${projectId}/${sessionId}/messages`);
+  }
+
+  getLLMCallStats(projectId: string, llmProfileId?: string, limit: number = 50, offset: number = 0): Observable<LLMCallStat[]> {
+    let url = `/api/projects/${projectId}/llm-call-stats?limit=${limit}&offset=${offset}`;
+    if (llmProfileId) {
+      url += `&llm_profile_id=${llmProfileId}`;
+    }
+    return this.http.get<LLMCallStat[]>(url);
   }
 }

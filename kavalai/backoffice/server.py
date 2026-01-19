@@ -425,6 +425,34 @@ async def projects_get_llm_configs(project_id: UUID, request: Request):
         return await service.get_llm_profiles_from_db()
 
 
+@app.get("/projects/{project_id}/llm-call-stats")
+async def projects_get_llm_call_stats(
+    project_id: UUID,
+    request: Request,
+    llm_profile_id: UUID | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """Fetch paginated LLM call stats for a specific project."""
+    assert_logged_in(request)
+    project = await get_project_and_assert_access(request, project_id)
+
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        service = AgentService(project_session)
+        return await service.get_llm_call_stats(
+            llm_profile_id=llm_profile_id, limit=limit, offset=offset
+        )
+
+
 @app.get("/projects/{project_id}/llm-configs/{profile_name}")
 async def projects_get_llm_config_by_name(
     project_id: UUID, profile_name: str, request: Request
