@@ -41,6 +41,7 @@ class WorkflowModel(BaseModel):
     name: str
     description: str = ""
     llm_profile_name: str
+    llm_embedding_name: Optional[str] = None
     data_types: dict[str, dict]
     mcp_servers: list[McpServer] = []
     tasks: list[Task]

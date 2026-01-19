@@ -107,3 +107,31 @@ class TestBBKingWorkflow:
         assert len(tasks) == 1
         assert "BB King" in tasks[0].inputs["prompt"]
         assert tasks[0].output["agent_response"] == result.data.agent_response
+
+
+def test_workflow_model_embedding_name():
+    from kavalai.agents.workflow import WorkflowModel
+    import yaml
+
+    yaml_data = """
+name: Test Agent
+description: A test agent
+llm_profile_name: openai
+llm_embedding_name: openai-embed
+data_types:
+  input: {type: object, properties: {}}
+tasks: []
+"""
+    model = WorkflowModel(**yaml.safe_load(yaml_data))
+    assert model.llm_embedding_name == "openai-embed"
+
+    yaml_no_embed = """
+name: Test Agent
+description: A test agent
+llm_profile_name: openai
+data_types:
+  input: {type: object, properties: {}}
+tasks: []
+"""
+    model_no_embed = WorkflowModel(**yaml.safe_load(yaml_no_embed))
+    assert model_no_embed.llm_embedding_name is None
