@@ -10,21 +10,11 @@ async def get_summary_stats(session: AsyncSession, agent_id: str | None = None):
     start_date = end_date - timedelta(days=30)
 
     # Get total cost
-    # LLMCallStat might not have agent_id directly, if so we need to join Session
-    # Looking at LLMCallStat in db.py, it indeed does NOT have agent_id.
-    # It might be linked via some other table or we might need to skip agent_id filter for cost for now
-    # or join with Task/Session if possible.
-    # Actually, let's check if it has any link to agent.
-    # It doesn't seem to have a direct link in the provided snippet.
-
     stmt_cost = select(func.sum(LLMCallStat.cost)).where(
         LLMCallStat.created_at >= start_date
     )
-    # If agent_id is provided, we need to filter.
-    # Since LLMCallStat doesn't have agent_id, we'll need to join if possible.
-    # For now, let's keep it simple and only filter sessions if agent_id is present,
-    # and maybe cost too if we can find a path.
-    # In many implementations LLMCallStat has agent_id, but here it doesn't.
+    if agent_id:
+        stmt_cost = stmt_cost.where(LLMCallStat.agent_id == agent_id)
 
     # Get total sessions
     stmt_sessions = select(func.count(Session.id)).where(
@@ -66,6 +56,8 @@ async def get_daily_stats(
             if model == Run:
                 # Run doesn't have agent_id, it belongs to a Session
                 stmt = stmt.join(Session).where(Session.agent_id == agent_id)
+            elif model == LLMCallStat:
+                stmt = stmt.where(model.agent_id == agent_id)
             else:
                 stmt = stmt.where(model.agent_id == agent_id)
 
@@ -92,8 +84,11 @@ async def get_daily_stats(
             )
             .outerjoin(LLMProfile, LLMCallStat.llm_profile_id == LLMProfile.id)
             .where(LLMCallStat.created_at >= start_date)
-            .group_by(profile_name_col, date_col)
         )
+        if agent_id:
+            stmt = stmt.where(LLMCallStat.agent_id == agent_id)
+
+        stmt = stmt.group_by(profile_name_col, date_col)
         result = await session.execute(stmt)
 
         stats_by_profile = {}

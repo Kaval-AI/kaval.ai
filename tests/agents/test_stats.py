@@ -18,6 +18,7 @@ async def test_get_summary_stats(agents_db):
     s1 = Session(id=uuid4(), agent_id=agent.id, created_at=ten_days_ago)
     stat1 = LLMCallStat(
         id=uuid4(),
+        agent_id=agent.id,
         cost=0.05,
         created_at=ten_days_ago,
     )
@@ -27,6 +28,7 @@ async def test_get_summary_stats(agents_db):
     s2 = Session(id=uuid4(), agent_id=agent.id, created_at=forty_days_ago)
     stat2 = LLMCallStat(
         id=uuid4(),
+        agent_id=agent.id,
         cost=1.00,
         created_at=forty_days_ago,
     )
@@ -41,7 +43,6 @@ async def test_get_summary_stats(agents_db):
 
     # Test with agent_id filter
     stats_agent = await get_summary_stats(agents_db, agent_id=agent.id)
-    # Since cost is not filtered by agent_id in current implementation, it should still be 0.05
     assert stats_agent["total_cost"] == 0.05
     assert stats_agent["total_sessions"] == 1
 
