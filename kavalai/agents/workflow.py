@@ -6,9 +6,7 @@ import yaml
 from fastmcp import Client
 from pydantic import BaseModel
 
-from kavalai.agents.agent_service import AgentService
-from kavalai.agents.db import upsert_llm_profile
-from kavalai.agents.llm_config import load_profile_from_path
+from kavalai.agents.agent_service import AgentService, load_profile_from_path
 from kavalai.llm_clients.common import chat_completion_with_stats
 from kavalai.agents.schema_parser import SchemaParser
 
@@ -123,7 +121,8 @@ class Workflow:
             )
 
         if session:
-            llm_profile = await upsert_llm_profile(session, llm_profile)
+            service = AgentService(session)
+            llm_profile = await service.upsert_llm_profile(llm_profile)
 
         system_message = dict(role="system", content=input_text)
         response = await chat_completion_with_stats(

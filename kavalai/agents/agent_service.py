@@ -1,13 +1,38 @@
+import os
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from uuid import UUID
 
-from sqlalchemy import select, asc
+import yaml
+from pydantic import BaseModel
+from sqlalchemy import asc
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+import logging
+from kavalai import crud
+from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage
+from kavalai.agents.db import LLMProfile, LLMCallStat
 
-from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, LLMProfile
+logger = logging.getLogger(__name__)
+
+
+class LLMProfileView(BaseModel):
+    """LLM profile data without API key."""
+
+    id: UUID
+    name: str
+    provider: str
+    model_name: str
+    base_url: str | None
+    default_mode: str | None
+    total_cost: float = 0.0
+    created_at: datetime
+    updated_at: datetime
 
 
 class AgentService:
+    """Provider common database operation for Agents."""
+
     def __init__(self, db_session: AsyncSession):
         self.db = db_session
 
@@ -127,8 +152,87 @@ class AgentService:
         await self.db.refresh(message)
         return message
 
-    async def get_llm_profile_by_name(self, name: str) -> Optional[LLMProfile]:
-        """Fetch an LLM profile by its name."""
-        stmt = select(LLMProfile).where(LLMProfile.name == name)
+    async def get_llm_profile_by_name(self, profile_name: str) -> LLMProfile:
+        """
+        Get an LLM profile from DB by name.
+        """
+        stmt = select(LLMProfile).where(LLMProfile.name == profile_name)
         result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        profile = result.scalar_one_or_none()
+
+        if not profile:
+            raise Exception(f"LLM Profile '{profile_name}' not found in DB")
+
+        return profile
+
+    async def upsert_llm_profile(self, profile: LLMProfile) -> LLMProfile:
+        """Upsert LLM profile to the database by name and return the profile with ID."""
+        stmt = select(LLMProfile).where(LLMProfile.name == profile.name)
+        result = await self.db.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        profile_data = {
+            "name": profile.name,
+            "provider": profile.provider,
+            "model_name": profile.model_name,
+            "api_key": profile.api_key,
+            "base_url": profile.base_url,
+            "default_mode": profile.default_mode,
+            "credentials": profile.credentials,
+            "updated_at": datetime.now(timezone.utc),
+        }
+
+        if existing:
+            return await crud.update(self.db, LLMProfile, existing.id, profile_data)
+        else:
+            return await crud.insert(self.db, LLMProfile, profile_data)
+
+    async def get_llm_profiles_from_db(self) -> list[LLMProfileView]:
+        profiles = await crud.get_all(self.db, LLMProfile)
+
+        # Fetch total cost per profile
+        cost_stmt = select(
+            LLMCallStat.llm_profile_id, func.sum(LLMCallStat.cost).label("total_cost")
+        ).group_by(LLMCallStat.llm_profile_id)
+        cost_result = await self.db.execute(cost_stmt)
+        costs = {
+            row.llm_profile_id: float(row.total_cost or 0) for row in cost_result.all()
+        }
+
+        # Sort by updated_at desc manually since crud.get_all doesn't support ordering yet
+        profiles = sorted(profiles, key=lambda p: p.updated_at, reverse=True)
+
+        return [
+            LLMProfileView(
+                id=p.id,
+                name=p.name,
+                provider=p.provider,
+                model_name=p.model_name,
+                base_url=p.base_url,
+                default_mode=p.default_mode,
+                total_cost=costs.get(p.id, 0.0),
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+            )
+            for p in profiles
+        ]
+
+
+def load_profile_from_path(
+    profile_name: str, folder_path: str = None
+) -> LLMProfile | None:
+    if folder_path is None:
+        folder_path = os.getenv("LLM_PROFILES_PATH", "llm_profiles")
+    profile_path = os.path.join(folder_path, f"{profile_name}.yaml")
+    if not os.path.exists(profile_path):
+        return None
+
+    try:
+        with open(profile_path, "r") as f:
+            data = yaml.safe_load(f)
+            return LLMProfile(**data)
+    except Exception as e:
+        logger.error(
+            f"Error loading LLM profile '{profile_name}' from {profile_path}: {e}"
+        )
+        return None

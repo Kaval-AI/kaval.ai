@@ -1,19 +1,19 @@
 from unittest.mock import AsyncMock
+
 import pytest
 import yaml
 from pydantic import BaseModel
-from kavalai.agents.llm_config import load_profile_from_path
+from sqlalchemy import select
+
+from kavalai.agents.agent_service import AgentService, load_profile_from_path
+from kavalai.agents.db import (
+    LLMProfile,
+    LLMCallStat,
+)
 from kavalai.llm_clients.common import (
     get_llm_client,
     chat_completion_with_stats,
 )
-from kavalai.agents.db import (
-    LLMProfile,
-    get_llm_profile_by_name,
-    upsert_llm_profile,
-    LLMCallStat,
-)
-from sqlalchemy import select
 
 
 @pytest.mark.asyncio
@@ -23,7 +23,8 @@ async def test_upsert_llm_profile(agents_db):
         provider="openai",
         model_name="gpt-4o",
     )
-    db_profile = await upsert_llm_profile(agents_db, profile)
+    service = AgentService(agents_db)
+    db_profile = await service.upsert_llm_profile(profile)
     assert db_profile.id is not None
     assert db_profile.name == "test-upsert"
 
@@ -36,7 +37,8 @@ async def test_upsert_llm_profile(agents_db):
 
     # Update
     db_profile.model_name = "gpt-4o-mini"
-    db_profile_updated = await upsert_llm_profile(agents_db, db_profile)
+    service = AgentService(agents_db)
+    db_profile_updated = await service.upsert_llm_profile(db_profile)
 
     result = await agents_db.execute(stmt)
     db_profile_verify = result.scalar_one()
@@ -65,7 +67,8 @@ async def test_get_instructor_with_auto_import(agents_db, tmp_path, monkeypatch)
     # Try to get profile for "auto-imported" which doesn't exist in DB yet
     profile = load_profile_from_path("auto-imported")
     assert profile is not None
-    await upsert_llm_profile(agents_db, profile)
+    service = AgentService(agents_db)
+    await service.upsert_llm_profile(profile)
     client = get_llm_client(profile)
 
     assert client is not None
@@ -106,13 +109,14 @@ async def test_get_instructor_fallback_no_session(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_get_llm_profile_by_name_not_found(agents_db):
+    service = AgentService(agents_db)
     with pytest.raises(Exception, match="LLM Profile 'non-existent' not found in DB"):
-        await get_llm_profile_by_name(agents_db, "non-existent")
+        await service.get_llm_profile_by_name("non-existent")
 
 
 @pytest.mark.asyncio
 async def test_load_profile_from_folder_invalid_yaml(tmp_path):
-    from kavalai.agents.llm_config import load_profile_from_path
+    from kavalai.agents.agent_service import load_profile_from_path
 
     profile_name = "invalid"
     profile_dir = tmp_path / "profiles"
@@ -126,7 +130,7 @@ async def test_load_profile_from_folder_invalid_yaml(tmp_path):
 
 @pytest.mark.asyncio
 async def test_load_profile_from_folder_mismatch_name(tmp_path):
-    from kavalai.agents.llm_config import load_profile_from_path
+    from kavalai.agents.agent_service import load_profile_from_path
 
     profile_dir = tmp_path / "profiles"
     profile_dir.mkdir()
@@ -150,7 +154,8 @@ async def test_chat_completion_with_stats(agents_db, monkeypatch):
         provider="openai",
         model_name="gpt-4o",
     )
-    await upsert_llm_profile(agents_db, profile)
+    service = AgentService(agents_db)
+    await service.upsert_llm_profile(profile)
 
     # Mock client
     mock_client = AsyncMock()
@@ -208,7 +213,8 @@ async def test_chat_completion_with_stats_error(agents_db, monkeypatch):
         provider="openai",
         model_name="gpt-4o",
     )
-    await upsert_llm_profile(agents_db, profile)
+    service = AgentService(agents_db)
+    await service.upsert_llm_profile(profile)
 
     mock_client = AsyncMock()
     mock_client.chat_completion.side_effect = Exception("API Error")
@@ -241,7 +247,8 @@ async def test_chat_completion_with_stats_retry(agents_db, monkeypatch):
         provider="openai",
         model_name="gpt-4o",
     )
-    await upsert_llm_profile(agents_db, profile)
+    service = AgentService(agents_db)
+    await service.upsert_llm_profile(profile)
 
     mock_client = AsyncMock()
     mock_client.chat_completion.side_effect = Exception("Temporary Error")

@@ -16,7 +16,7 @@ from json_schema_to_pydantic import create_model
 from pydantic import BaseModel, Field, HttpUrl
 from rich.console import Console
 
-from kavalai.agents.llm_config import load_profile_from_path
+from kavalai.agents.agent_service import load_profile_from_path
 from kavalai.llm_clients.common import chat_completion_with_stats
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
 

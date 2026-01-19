@@ -2,8 +2,7 @@ import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from kavalai import crud
-from sqlalchemy import MetaData, TEXT, ForeignKey, DateTime, Integer, Numeric, select
+from sqlalchemy import MetaData, TEXT, ForeignKey, DateTime, Integer, Numeric
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -129,45 +128,6 @@ class LLMCallStat(Base):
     )
 
     llm_profile: Mapped["LLMProfile"] = relationship(back_populates="call_stats")
-
-
-async def get_llm_profile_by_name(
-    session: AsyncSession, profile_name: str
-) -> LLMProfile:
-    """
-    Get an LLM profile from DB by name.
-    """
-    stmt = select(LLMProfile).where(LLMProfile.name == profile_name)
-    result = await session.execute(stmt)
-    profile = result.scalar_one_or_none()
-
-    if not profile:
-        raise Exception(f"LLM Profile '{profile_name}' not found in DB")
-
-    return profile
-
-
-async def upsert_llm_profile(session: AsyncSession, profile: LLMProfile) -> LLMProfile:
-    """Upsert LLM profile to the database by name and return the profile with ID."""
-    stmt = select(LLMProfile).where(LLMProfile.name == profile.name)
-    result = await session.execute(stmt)
-    existing = result.scalar_one_or_none()
-
-    profile_data = {
-        "name": profile.name,
-        "provider": profile.provider,
-        "model_name": profile.model_name,
-        "api_key": profile.api_key,
-        "base_url": profile.base_url,
-        "default_mode": profile.default_mode,
-        "credentials": profile.credentials,
-        "updated_at": datetime.now(timezone.utc),
-    }
-
-    if existing:
-        return await crud.update(session, LLMProfile, existing.id, profile_data)
-    else:
-        return await crud.insert(session, LLMProfile, profile_data)
 
 
 class Session(Base):
