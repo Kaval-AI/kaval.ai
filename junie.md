@@ -13,7 +13,6 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `workflow.py`: Core workflow execution engine (YAML to execution).
         - `agent_service.py`: Service for managing agent state, sessions, runs, and LLM profiles in the DB.
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages).
-        - `llm_config.py`: Pydantic models for LLM profiles and fetching configurations.
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
         - `db.py`: Database models for agents, sessions, runs, tasks, and messages.
@@ -32,15 +31,31 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `tools/`: Utility tools (e.g., RSS, OpenAPI parser).
     - `crud.py`: Shared database utility functions.
 - `frontend/`: Angular-based project for the backoffice UI.
-    - `src/app/models/`: TypeScript interfaces (e.g., `SessionSummary`, `Agent`, `LLMConfig`).
-    - `src/app/services/`: Angular services for API interaction (`AgentService`, `UserService`).
-    - `src/app/components/`: UI components (e.g., `ConversationsPage`, `LandingPage`, `ProjectEditPage`, `ConfigsPage`).
+    - `src/app/models/`: TypeScript interfaces and data models.
+        - `agent.ts`, `session.ts`, `chat-message.ts`, `llm-config.ts`, `project.ts`, `user-details.ts`.
+    - `src/app/services/`: Angular services for API interaction and state management.
+        - `agent-service.ts`: Handles agent-related API calls.
+        - `user-service.ts`: Manages user authentication and profiles.
+        - `project-service.ts`: Manages project context and memberships.
+    - `src/app/components/`: UI components organized by feature.
+        - `agents-page/`, `projects-page/`, `users-page/`: CRUD interfaces for main entities.
+        - `conversations-page/`, `session-detail-page/`: Agent session monitoring and debugging.
+        - `configs-page/`: LLM profile and provider configuration.
+        - `metrics-page/`: Token usage and cost analytics.
+        - `rag-page/`: RAG-related configuration and testing.
+        - `sidebar-menu/`, `header/`, `dropdown-menu/`: Layout and navigation components.
+    - `src/styles/`: Global CSS styles and theme definitions.
+- `tests/`: Comprehensive backend test suite.
+    - `agents/`: Tests for core SDK, workflow execution, and agent database.
+    - `backoffice/`: Tests for management API, project isolation, and memberships.
+    - `llm_clients/`: Integration and unit tests for LLM providers (OpenAI, Gemini) and embeddings.
+    - `prices/`: Tests for pricing models and cost calculations.
+    - `tools/`: Tests for utility tools (RSS, OpenAPI parser).
+    - `test_persona_simulator.py`: Tests for the persona simulation logic.
 - `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
     - `app/V001__llm_profiles_and_stats.sql`: Defines `llm_profiles` (with `api_key`, `base_url`, `default_mode`) and `llm_call_stats`.
 - `llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `scripts/`: Utility scripts (e.g., DB migration).
-- `tests/`: Backend tests.
-    - `llm_clients/`: Integration tests for LLM providers.
 - `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data.
 
 ## Key Technical Details
