@@ -19,24 +19,33 @@
 @if (projects.length > 0) {
 <div class="centered">
   <main>
-    <form [formGroup]="projectForm" class="form-container">
-      <div class="form-field">
-        <label for="name">Project Name</label>
-        <input id="name" type="text" formControlName="name">
-      </div>
-
-      <div class="form-field">
-        <label for="desc">Description</label>
-        <textarea id="desc" formControlName="description" rows="2"></textarea>
-      </div>
-
-      <div class="button-row">
-          <button type="button" (click)="editProject()">Edit</button>
-          @if (selectedProject?.role === 'owner') {
-            <button type="button" class="btn-delete" (click)="deleteProject()">Delete</button>
+    <div class="project-details" *ngIf="selectedProject">
+      <div class="project-header">
+        <div class="title-section">
+          <h3>{{ selectedProject.name }}</h3>
+          <p class="project-role-badge">{{ selectedProject.role }}</p>
+        </div>
+        <div class="action-icons">
+          <button type="button" class="icon-btn edit-btn" (click)="editProject()" title="Edit Project">
+            <i class="fas fa-edit"></i>
+          </button>
+          @if (selectedProject.role === 'owner') {
+            <button type="button" class="icon-btn delete-btn" (click)="deleteProject()" title="Delete Project">
+              <i class="fas fa-trash"></i>
+            </button>
           }
+        </div>
       </div>
-    </form>
+
+      <div class="project-info">
+        <div class="info-group">
+          <label>Description</label>
+          <div class="info-content description-text">
+            {{ selectedProject.description || 'No description provided.' }}
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 } @else if (projects.length == 0) {

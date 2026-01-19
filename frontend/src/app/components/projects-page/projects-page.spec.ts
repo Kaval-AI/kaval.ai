@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { of } from 'rxjs';
 import { ProjectsPage } from './projects-page';
@@ -24,7 +23,7 @@ describe('ProjectsPage', () => {
     userServiceSpy.getIsAdmin.and.returnValue(true);
 
     await TestBed.configureTestingModule({
-      imports: [ProjectsPage, ReactiveFormsModule, CommonModule],
+      imports: [ProjectsPage, CommonModule],
       providers: [
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: UserService, useValue: userServiceSpy },

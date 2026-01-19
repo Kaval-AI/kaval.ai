@@ -1,5 +1,4 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { ProjectService } from '../../services/project-service';
@@ -9,24 +8,17 @@ import { UserService } from '../../services/user-service';
 @Component({
   selector: 'app-projects-page',
   standalone: true,
-  imports: [ReactiveFormsModule, CommonModule],
+  imports: [CommonModule],
   templateUrl: './projects-page.html',
   styleUrl: './projects-page.css',
 })
 export class ProjectsPage implements OnInit {
   private projectService = inject(ProjectService);
   private userService = inject(UserService);
-  private fb = inject(FormBuilder);
   private router = inject(Router);
 
   projects: Project[] = [];
   selectedProject: Project | null = null;
-
-  // Reduced Form Controls to only Name and Description for display
-  projectForm = this.fb.group({
-    name: [{value: '', disabled: true}],
-    description: [{value: '', disabled: true}]
-  });
 
   ngOnInit() {
     this.loadProjects();
@@ -58,13 +50,6 @@ export class ProjectsPage implements OnInit {
 
   selectProject(project: Project | null) {
     this.selectedProject = project;
-
-    if (project) {
-      // patchValue automatically maps matching keys from 'project' to form controls
-      this.projectForm.patchValue(project);
-    } else {
-      this.projectForm.reset();
-    }
   }
 
   editProject() {
@@ -77,7 +62,6 @@ export class ProjectsPage implements OnInit {
     if (this.selectedProject?.id && confirm('Delete this project?')) {
       this.projectService.delete(this.selectedProject.id).subscribe(() => {
         this.selectedProject = null;
-        this.projectForm.reset();
         this.loadProjects();
       });
     }
