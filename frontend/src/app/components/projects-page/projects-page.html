@@ -38,6 +38,17 @@
       </div>
 
       <div class="project-info">
+        <div class="stats-grid" *ngIf="summaryStats">
+          <div class="stat-card">
+            <span class="stat-label">Total Cost (30d)</span>
+            <span class="stat-value">{{ summaryStats.total_cost | currency }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Total Sessions (30d)</span>
+            <span class="stat-value">{{ summaryStats.total_sessions }}</span>
+          </div>
+        </div>
+
         <div class="info-group">
           <label>Description</label>
           <div class="info-content description-text">

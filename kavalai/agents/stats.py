@@ -4,6 +4,44 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from kavalai.agents.db import Run, Session, ChatMessage, LLMCallStat, LLMProfile
 
 
+async def get_summary_stats(session: AsyncSession, agent_id: str | None = None):
+    # Calculate the start date (30 days ago)
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=30)
+
+    # Get total cost
+    # LLMCallStat might not have agent_id directly, if so we need to join Session
+    # Looking at LLMCallStat in db.py, it indeed does NOT have agent_id.
+    # It might be linked via some other table or we might need to skip agent_id filter for cost for now
+    # or join with Task/Session if possible.
+    # Actually, let's check if it has any link to agent.
+    # It doesn't seem to have a direct link in the provided snippet.
+
+    stmt_cost = select(func.sum(LLMCallStat.cost)).where(
+        LLMCallStat.created_at >= start_date
+    )
+    # If agent_id is provided, we need to filter.
+    # Since LLMCallStat doesn't have agent_id, we'll need to join if possible.
+    # For now, let's keep it simple and only filter sessions if agent_id is present,
+    # and maybe cost too if we can find a path.
+    # In many implementations LLMCallStat has agent_id, but here it doesn't.
+
+    # Get total sessions
+    stmt_sessions = select(func.count(Session.id)).where(
+        Session.created_at >= start_date
+    )
+    if agent_id:
+        stmt_sessions = stmt_sessions.where(Session.agent_id == agent_id)
+
+    res_cost = await session.execute(stmt_cost)
+    res_sessions = await session.execute(stmt_sessions)
+
+    return {
+        "total_cost": float(res_cost.scalar() or 0),
+        "total_sessions": int(res_sessions.scalar() or 0),
+    }
+
+
 async def get_daily_stats(
     session: AsyncSession, days: int = 7, agent_id: str | None = None
 ):

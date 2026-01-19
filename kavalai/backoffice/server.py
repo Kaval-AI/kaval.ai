@@ -327,6 +327,27 @@ async def agents_get_stats(
         )
 
 
+@app.get("/agents/summary-stats/{project_id}")
+async def agents_get_summary_stats(
+    project_id: UUID, request: Request, agent_id: UUID | None = None
+):
+    """Fetch summary stats (last 30 days) for agents in a specific project."""
+    assert_logged_in(request)
+    project = await get_project_and_assert_access(request, project_id)
+
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        return await agent_stats.get_summary_stats(project_session, agent_id=agent_id)
+
+
 @app.get("/agents/sessions/{project_id}")
 async def agents_get_sessions(
     project_id: UUID,

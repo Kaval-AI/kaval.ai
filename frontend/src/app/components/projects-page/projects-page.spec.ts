@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { of } from 'rxjs';
 import { ProjectsPage } from './projects-page';
 import { ProjectService } from '../../services/project-service';
+import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { Project } from '../../models/project';
 import { Router } from '@angular/router';
@@ -11,21 +12,25 @@ describe('ProjectsPage', () => {
   let component: ProjectsPage;
   let fixture: ComponentFixture<ProjectsPage>;
   let projectServiceSpy: jasmine.SpyObj<ProjectService>;
+  let agentServiceSpy: jasmine.SpyObj<AgentService>;
   let userServiceSpy: jasmine.SpyObj<UserService>;
   let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
     projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll', 'delete']);
+    agentServiceSpy = jasmine.createSpyObj('AgentService', ['getSummaryStats']);
     userServiceSpy = jasmine.createSpyObj('UserService', ['getIsAdmin', 'setActiveProject']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     projectServiceSpy.getAll.and.returnValue(of([]));
+    agentServiceSpy.getSummaryStats.and.returnValue(of({ total_cost: 0, total_sessions: 0 }));
     userServiceSpy.getIsAdmin.and.returnValue(true);
 
     await TestBed.configureTestingModule({
       imports: [ProjectsPage, CommonModule],
       providers: [
         { provide: ProjectService, useValue: projectServiceSpy },
+        { provide: AgentService, useValue: agentServiceSpy },
         { provide: UserService, useValue: userServiceSpy },
         { provide: Router, useValue: routerSpy }
       ]

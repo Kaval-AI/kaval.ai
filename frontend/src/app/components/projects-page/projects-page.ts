@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { ProjectService } from '../../services/project-service';
+import { AgentService } from '../../services/agent-service';
 import { Project } from '../../models/project';
 import { UserService } from '../../services/user-service';
 
@@ -14,11 +15,13 @@ import { UserService } from '../../services/user-service';
 })
 export class ProjectsPage implements OnInit {
   private projectService = inject(ProjectService);
+  private agentService = inject(AgentService);
   private userService = inject(UserService);
   private router = inject(Router);
 
   projects: Project[] = [];
   selectedProject: Project | null = null;
+  summaryStats: any = null;
 
   ngOnInit() {
     this.loadProjects();
@@ -50,6 +53,16 @@ export class ProjectsPage implements OnInit {
 
   selectProject(project: Project | null) {
     this.selectedProject = project;
+    this.summaryStats = null;
+    if (project) {
+      this.loadSummaryStats(project.id);
+    }
+  }
+
+  loadSummaryStats(projectId: string) {
+    this.agentService.getSummaryStats(projectId).subscribe(stats => {
+      this.summaryStats = stats;
+    });
   }
 
   editProject() {

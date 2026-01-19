@@ -251,6 +251,52 @@ async def test_agents_get_stats(client, backoffice_db):
 
 
 @pytest.mark.asyncio
+async def test_agents_get_summary_stats(client, backoffice_db):
+    project_id = uuid.uuid4()
+    project = db.Project(
+        id=project_id,
+        name="P1",
+        db_user="u",
+        db_password="p",
+        db_host="h",
+        db_port=5432,
+        db_name="d",
+    )
+    backoffice_db.add(project)
+    await backoffice_db.commit()
+
+    mock_stats = {
+        "total_cost": 12.34,
+        "total_sessions": 56,
+    }
+
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
+        "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
+    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm:
+        mock_session = AsyncMock()
+        mock_sm.return_value = MagicMock(return_value=mock_session)
+        mock_session.__aenter__.return_value = mock_session
+
+        with patch(
+            "kavalai.backoffice.server.agent_stats.get_summary_stats",
+            return_value=mock_stats,
+        ) as mock_get_stats:
+            response = await client.get(f"/agents/summary-stats/{project_id}")
+
+            assert response.status_code == 200
+            assert response.json() == mock_stats
+            mock_get_stats.assert_called_once_with(mock_session, agent_id=None)
+
+            # Test with agent_id
+            agent_id = uuid.uuid4()
+            response = await client.get(
+                f"/agents/summary-stats/{project_id}?agent_id={agent_id}"
+            )
+            assert response.status_code == 200
+            mock_get_stats.assert_called_with(mock_session, agent_id=agent_id)
+
+
+@pytest.mark.asyncio
 async def test_users_all(client, backoffice_db):
     user_id = str(uuid.uuid4())
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(

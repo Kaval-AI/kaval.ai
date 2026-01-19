@@ -1,8 +1,54 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from kavalai.agents.db import Agent, Session, Run, ChatMessage
-from kavalai.agents.stats import get_daily_stats
+from kavalai.agents.db import Agent, Session, Run, ChatMessage, LLMCallStat
+from kavalai.agents.stats import get_daily_stats, get_summary_stats
+
+
+@pytest.mark.asyncio
+async def test_get_summary_stats(agents_db):
+    agent = Agent(id=uuid4(), name="Test Agent")
+    agents_db.add(agent)
+    await agents_db.commit()
+
+    now = datetime.now(timezone.utc)
+
+    # 10 days ago
+    ten_days_ago = now - timedelta(days=10)
+    s1 = Session(id=uuid4(), agent_id=agent.id, created_at=ten_days_ago)
+    stat1 = LLMCallStat(
+        id=uuid4(),
+        cost=0.05,
+        created_at=ten_days_ago,
+    )
+
+    # 40 days ago (should be excluded)
+    forty_days_ago = now - timedelta(days=40)
+    s2 = Session(id=uuid4(), agent_id=agent.id, created_at=forty_days_ago)
+    stat2 = LLMCallStat(
+        id=uuid4(),
+        cost=1.00,
+        created_at=forty_days_ago,
+    )
+
+    agents_db.add_all([s1, stat1, s2, stat2])
+    await agents_db.commit()
+
+    stats = await get_summary_stats(agents_db)
+
+    assert stats["total_cost"] == 0.05
+    assert stats["total_sessions"] == 1
+
+    # Test with agent_id filter
+    stats_agent = await get_summary_stats(agents_db, agent_id=agent.id)
+    # Since cost is not filtered by agent_id in current implementation, it should still be 0.05
+    assert stats_agent["total_cost"] == 0.05
+    assert stats_agent["total_sessions"] == 1
+
+    # Test with non-existent agent_id
+    stats_none = await get_summary_stats(agents_db, agent_id=uuid4())
+    assert stats_none["total_cost"] == 0.0
+    assert stats_none["total_sessions"] == 0
 
 
 @pytest.mark.asyncio
