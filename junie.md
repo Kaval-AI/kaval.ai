@@ -44,6 +44,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `metrics-page/`: Token usage and cost analytics.
         - `rag-page/`: RAG-related configuration and testing.
         - `sidebar-menu/`, `header/`, `dropdown-menu/`: Layout and navigation components.
+        - `json-tree/`: Tree-like component for displaying nested JSON data (IDE-style).
     - `src/styles/`: Global CSS styles and theme definitions.
 - `tests/`: Comprehensive backend test suite.
     - `agents/`: Tests for core SDK, workflow execution, and agent database.

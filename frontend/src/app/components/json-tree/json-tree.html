@@ -1,0 +1,24 @@
+<div class="json-node" [style.padding-left.px]="depth > 0 ? 20 : 0">
+  <div class="json-line" (click)="toggleExpand($event)" [class.expandable]="isExpandable">
+    <span *ngIf="isExpandable" class="toggle-icon">
+      {{ isExpanded ? '▼' : '▶' }}
+    </span>
+    <span *ngIf="!isExpandable" class="spacer"></span>
+
+    <span *ngIf="key !== null" class="json-key">{{ key }}: </span>
+
+    <span class="json-value" [ngClass]="'type-' + type">
+      {{ formattedValue }}
+    </span>
+  </div>
+
+  <div *ngIf="isExpanded && isObject" class="json-children">
+    <app-json-tree
+      *ngFor="let child of children"
+      [data]="child.value"
+      [key]="child.key"
+      [depth]="depth + 1"
+      [isExpanded]="false"
+    ></app-json-tree>
+  </div>
+</div>
