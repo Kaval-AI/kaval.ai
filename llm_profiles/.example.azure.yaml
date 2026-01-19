@@ -1,8 +1,0 @@
-name: azure
-provider: azure
-model_name: gpt-4o-2024-08-06
-api_key:
-base_url: https://your-resource.openai.azure.com/
-default_mode: chat
-credentials:
-api_version: 2024-08-01-preview

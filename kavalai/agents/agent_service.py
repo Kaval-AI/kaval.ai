@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 from kavalai import crud
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage
-from kavalai.agents.db import LLMProfile, LLMCallStat
+from kavalai.agents.db import LLMProfile, LLMCallStat, EmbeddingProfile
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,18 @@ class LLMProfileView(BaseModel):
     base_url: str | None
     default_mode: str | None
     total_cost: float = 0.0
+    created_at: datetime
+    updated_at: datetime
+
+
+class LLMEmbeddingView(BaseModel):
+    """Embedding profile data without API key."""
+
+    id: UUID
+    name: str
+    provider: str
+    model_name: str
+    base_url: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -217,6 +229,65 @@ class AgentService:
             for p in profiles
         ]
 
+    async def get_embedding_profile_by_name(
+        self, profile_name: str
+    ) -> EmbeddingProfile:
+        """
+        Get an embedding profile from DB by name.
+        """
+        stmt = select(EmbeddingProfile).where(EmbeddingProfile.name == profile_name)
+        result = await self.db.execute(stmt)
+        profile = result.scalar_one_or_none()
+
+        if not profile:
+            raise Exception(f"Embedding Profile '{profile_name}' not found in DB")
+
+        return profile
+
+    async def upsert_embedding_profile(
+        self, profile: EmbeddingProfile
+    ) -> EmbeddingProfile:
+        """Upsert embedding profile to the database by name and return the profile with ID."""
+        stmt = select(EmbeddingProfile).where(EmbeddingProfile.name == profile.name)
+        result = await self.db.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        profile_data = {
+            "name": profile.name,
+            "provider": profile.provider,
+            "model_name": profile.model_name,
+            "api_key": profile.api_key,
+            "base_url": profile.base_url,
+            "credentials": profile.credentials,
+            "updated_at": datetime.now(timezone.utc),
+        }
+
+        if existing:
+            return await crud.update(
+                self.db, EmbeddingProfile, existing.id, profile_data
+            )
+        else:
+            return await crud.insert(self.db, EmbeddingProfile, profile_data)
+
+    async def get_embedding_profiles_from_db(self) -> list[LLMEmbeddingView]:
+        profiles = await crud.get_all(self.db, EmbeddingProfile)
+
+        # Sort by updated_at desc manually since crud.get_all doesn't support ordering yet
+        profiles = sorted(profiles, key=lambda p: p.updated_at, reverse=True)
+
+        return [
+            LLMEmbeddingView(
+                id=p.id,
+                name=p.name,
+                provider=p.provider,
+                model_name=p.model_name,
+                base_url=p.base_url,
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+            )
+            for p in profiles
+        ]
+
     async def get_llm_call_stats(
         self,
         llm_profile_id: Optional[UUID] = None,
@@ -255,5 +326,25 @@ def load_profile_from_path(
     except Exception as e:
         logger.error(
             f"Error loading LLM profile '{profile_name}' from {profile_path}: {e}"
+        )
+        return None
+
+
+def load_embedding_profile_from_path(
+    profile_name: str, folder_path: str = None
+) -> EmbeddingProfile | None:
+    if folder_path is None:
+        folder_path = os.getenv("EMBEDDING_PROFILES_PATH", "embedding_profiles")
+    profile_path = os.path.join(folder_path, f"{profile_name}.yaml")
+    if not os.path.exists(profile_path):
+        return None
+
+    try:
+        with open(profile_path, "r") as f:
+            data = yaml.safe_load(f)
+            return EmbeddingProfile(**data)
+    except Exception as e:
+        logger.error(
+            f"Error loading embedding profile '{profile_name}' from {profile_path}: {e}"
         )
         return None

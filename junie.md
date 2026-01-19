@@ -11,7 +11,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `kavalai/`: Main Python package.
     - `agents/`: SDK and agent runtime logic.
         - `workflow.py`: Core workflow execution engine (YAML to execution).
-        - `agent_service.py`: Service for managing agent state, sessions, runs, and LLM profiles in the DB.
+        - `agent_service.py`: Service for managing agent state, sessions, runs, LLM profiles, and embedding profiles in the DB.
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages).
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
@@ -58,6 +58,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `app/V001__llm_profiles_and_stats.sql`: Defines `llm_profiles` (with `api_key`, `base_url`, `default_mode`) and `llm_call_stats`.
     - `app/V003__rag_system.sql`: Defines `embedding_profiles` and `rag_index` for the RAG system.
 - `llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
+- `embedding_profiles/`: Example YAML configurations for different embedding providers (OpenAI, Gemini).
 - `scripts/`: Utility scripts (e.g., DB migration).
 - `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data.
 

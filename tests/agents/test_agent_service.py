@@ -1,7 +1,7 @@
 import pytest
 from uuid import uuid4
-from kavalai.agents.agent_service import AgentService
-from kavalai.agents.db import LLMCallStat, LLMProfile
+from kavalai.agents.agent_service import AgentService, load_embedding_profile_from_path
+from kavalai.agents.db import LLMCallStat, LLMProfile, EmbeddingProfile
 
 
 @pytest.mark.asyncio
@@ -132,3 +132,122 @@ class TestAgentService:
         stats = await service.get_llm_call_stats(limit=5, offset=5)
         assert len(stats) == 5
         assert stats[0].name == "Call 4"
+
+    async def test_llm_profiles_logic(self, agents_db):
+        service = AgentService(agents_db)
+
+        # 1. Test upsert new profile
+        profile = LLMProfile(
+            name="TestLLM",
+            provider="openai",
+            model_name="gpt-4",
+            api_key="key1",
+            credentials={"some": "cred"},
+        )
+        saved = await service.upsert_llm_profile(profile)
+        assert saved.id is not None
+        assert saved.name == "TestLLM"
+
+        # 2. Test get by name
+        retrieved = await service.get_llm_profile_by_name("TestLLM")
+        assert retrieved.id == saved.id
+
+        # 3. Test upsert existing (update)
+        profile.api_key = "key2"
+        updated = await service.upsert_llm_profile(profile)
+        assert updated.id == saved.id
+        assert updated.api_key == "key2"
+
+        # 4. Test get all views
+        views = await service.get_llm_profiles_from_db()
+        assert len(views) == 1
+        assert views[0].name == "TestLLM"
+
+        # 5. Test get by name - not found
+        with pytest.raises(Exception) as excinfo:
+            await service.get_llm_profile_by_name("NonExistent")
+        assert "not found" in str(excinfo.value)
+
+    async def test_load_llm_profile_from_path(self, tmp_path):
+        from kavalai.agents.agent_service import load_profile_from_path
+
+        # Create a dummy yaml profile
+        d = tmp_path / "llm_profiles"
+        d.mkdir()
+        p = d / "test_llm_file.yaml"
+        p.write_text(
+            "name: test_llm_file\nprovider: openai\nmodel_name: gpt-4\napi_key: file-key\n"
+        )
+
+        # Test loading
+        profile = load_profile_from_path("test_llm_file", folder_path=str(d))
+        assert profile is not None
+        assert profile.name == "test_llm_file"
+        assert profile.api_key == "file-key"
+
+        # Test loading non-existent
+        assert load_profile_from_path("ghost", folder_path=str(d)) is None
+
+    async def test_embedding_profiles_logic(self, agents_db):
+        service = AgentService(agents_db)
+
+        # 1. Test upsert new profile
+        profile = EmbeddingProfile(
+            name="TestEmbed",
+            provider="openai",
+            model_name="text-embedding-3-small",
+            api_key="key1",
+            credentials={"some": "cred"},
+        )
+        saved = await service.upsert_embedding_profile(profile)
+        assert saved.id is not None
+        assert saved.name == "TestEmbed"
+
+        # 2. Test get by name
+        retrieved = await service.get_embedding_profile_by_name("TestEmbed")
+        assert retrieved.id == saved.id
+
+        # 3. Test upsert existing (update)
+        profile.api_key = "key2"
+        updated = await service.upsert_embedding_profile(profile)
+        assert updated.id == saved.id
+        assert updated.api_key == "key2"
+
+        # 4. Test get all views
+        views = await service.get_embedding_profiles_from_db()
+        assert len(views) == 1
+        assert views[0].name == "TestEmbed"
+        assert not hasattr(
+            views[0], "api_key"
+        )  # LLMEmbeddingView should not have api_key
+
+        # 5. Test get by name - not found
+        with pytest.raises(Exception) as excinfo:
+            await service.get_embedding_profile_by_name("NonExistent")
+        assert "not found" in str(excinfo.value)
+
+    async def test_load_embedding_profile_from_path(self, tmp_path, monkeypatch):
+        # Create a dummy yaml profile
+        d = tmp_path / "embedding_profiles"
+        d.mkdir()
+        p = d / "test_embed_file.yaml"
+        p.write_text(
+            "name: test_embed_file\nprovider: openai\nmodel_name: text-embedding-3-small\napi_key: file-key\n"
+        )
+
+        # Test loading with explicit path
+        profile = load_embedding_profile_from_path(
+            "test_embed_file", folder_path=str(d)
+        )
+        assert profile is not None
+        assert profile.name == "test_embed_file"
+        assert profile.api_key == "file-key"
+
+        # Test loading with env var
+        monkeypatch.setenv("EMBEDDING_PROFILES_PATH", str(d))
+        profile = load_embedding_profile_from_path("test_embed_file")
+        assert profile is not None
+        assert profile.name == "test_embed_file"
+
+        # Test loading non-existent
+        assert load_embedding_profile_from_path("ghost", folder_path=str(d)) is None
