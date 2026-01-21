@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kavalai"
+version = "0.1.0"
+description = "Kaval.AI Enterprise Agent Management System"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Kaval.AI Team" },
+]
+dependencies = [
+    "asyncpg",
+    "authlib",
+    "fastapi[standard]",
+    "fastmcp==2.14.2",
+    "feedparser",
+    "graphviz",
+    "httpx",
+    "openai",
+    "itsdangerous",
+    "mcp",
+    "psycopg2-binary",
+    "python-dotenv",
+    "rich",
+    "sqlalchemy",
+    "json-schema-to-pydantic",
+    "google-genai",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+]
+
+[tool.setuptools]
+packages = ["kavalai"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["kavalai"]
+
+[tool.coverage.report]
+show_missing = true
