@@ -6,13 +6,14 @@ import { UserService } from '../../services/user-service';
 import { Agent } from '../../models/agent';
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions, ChartType, Chart, registerables } from 'chart.js';
+import { JsonTreeComponent } from '../json-tree/json-tree';
 
 Chart.register(...registerables);
 
 @Component({
   selector: 'app-agents-page',
   standalone: true,
-  imports: [CommonModule, BaseChartDirective],
+  imports: [CommonModule, BaseChartDirective, JsonTreeComponent],
   templateUrl: './agents-page.html',
   styleUrl: './agents-page.css'
 })

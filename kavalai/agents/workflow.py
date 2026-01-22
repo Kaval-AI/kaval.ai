@@ -254,6 +254,8 @@ class Workflow:
             agent = await self.agent_service.get_or_create_agent(
                 name=self.workflow_model.name,
                 description=self.workflow_model.description,
+                input_schema=self.workflow_model.data_types.get("input"),
+                output_schema=self.workflow_model.data_types.get("output"),
                 workflow=self.workflow_model.model_dump(),
             )
             run_context.agent_id = agent.id

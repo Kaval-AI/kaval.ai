@@ -1,69 +1,87 @@
 <div class="agents-container">
   <h2>Agents</h2>
 
-  <div *ngIf="loading" class="loading">Loading agents...</div>
-  <div *ngIf="error" class="error">{{ error }}</div>
+  @if (loading) {
+    <div class="loading">Loading agents...</div>
+  }
+  @if (error) {
+    <div class="error">{{ error }}</div>
+  }
 
-  <div *ngIf="!loading && !error">
-    <div *ngIf="agents.length === 0" class="no-agents">
-      No agents found for this project.
-    </div>
-
-    <div *ngIf="agents.length > 0" class="agents-content">
-      <div class="agents-list">
-        <h3>Agents List</h3>
-        <table class="agents-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Description</th>
-              <th>Created At</th>
-              <th>Updated At</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let agent of agents" (click)="selectAgent(agent)" [class.selected]="selectedAgent?.id === agent.id">
-              <td>{{ agent.name }}</td>
-              <td>{{ agent.description }}</td>
-              <td>{{ agent.created_at | date:'dd-MM-yyyy HH:mm' }}</td>
-              <td>{{ agent.updated_at | date:'dd-MM-yyyy HH:mm' }}</td>
-            </tr>
-          </tbody>
-        </table>
+  @if (!loading && !error) {
+    @if (agents.length === 0) {
+      <div class="no-agents">
+        No agents found for this project.
       </div>
+    }
 
-      <div class="agent-details" *ngIf="selectedAgent">
-        <h3>Agent Workflow: {{ selectedAgent.name }}</h3>
-        <div class="workflow-chart">
-          <img [src]="getSvgUrl(selectedAgent.id)" [alt]="selectedAgent.name + ' workflow'" />
+    @if (agents.length > 0) {
+      <div class="agents-content">
+        <div class="agents-list">
+          <h3>Agents List</h3>
+          <table class="agents-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Created At</th>
+                <th>Updated At</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (agent of agents; track agent.id) {
+                <tr (click)="selectAgent(agent)" [class.selected]="selectedAgent?.id === agent.id">
+                  <td>{{ agent.name }}</td>
+                  <td>{{ agent.description }}</td>
+                  <td>{{ agent.created_at | date:'dd-MM-yyyy HH:mm' }}</td>
+                  <td>{{ agent.updated_at | date:'dd-MM-yyyy HH:mm' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
 
-        <div class="schemas">
-          <div>
-            <h5>Input Schema</h5>
-            <pre>{{ selectedAgent.input_schema | json }}</pre>
+        @if (selectedAgent) {
+          <div class="agent-details">
+            <h3>Agent Workflow: {{ selectedAgent.name }}</h3>
+            <div class="workflow-chart">
+              <img [src]="getSvgUrl(selectedAgent.id)" [alt]="selectedAgent.name + ' workflow'" />
+            </div>
+
+            <div class="schemas">
+              @if (selectedAgent.input_schema) {
+                <div>
+                  <h5>Input Schema</h5>
+                  <app-json-tree [data]="selectedAgent.input_schema" [isExpanded]="true"></app-json-tree>
+                </div>
+              }
+              @if (selectedAgent.output_schema) {
+                <div>
+                  <h5>Output Schema</h5>
+                  <app-json-tree [data]="selectedAgent.output_schema" [isExpanded]="true"></app-json-tree>
+                </div>
+              }
+            </div>
           </div>
-          <div>
-            <h5>Output Schema</h5>
-            <pre>{{ selectedAgent.output_schema | json }}</pre>
-          </div>
+        }
+      </div>
+    }
+
+    @if (selectedAgent && stats) {
+      <div class="stats-overview">
+        <h3>Agent Statistics: {{ selectedAgent.name }} (Last 7 Days)</h3>
+        <div class="chart-container">
+          <canvas baseChart
+            [data]="lineChartData"
+            [options]="lineChartOptions"
+            [legend]="lineChartLegend"
+            [type]="'line'">
+          </canvas>
+        </div>
+        <div class="stats-actions">
+          <button class="btn-conversations" (click)="goToConversations()">Conversations ...</button>
         </div>
       </div>
-    </div>
-
-    <div *ngIf="selectedAgent && stats" class="stats-overview">
-      <h3>Agent Statistics: {{ selectedAgent.name }} (Last 7 Days)</h3>
-      <div class="chart-container">
-        <canvas baseChart
-          [data]="lineChartData"
-          [options]="lineChartOptions"
-          [legend]="lineChartLegend"
-          [type]="'line'">
-        </canvas>
-      </div>
-      <div class="stats-actions">
-        <button class="btn-conversations" (click)="goToConversations()">Conversations ...</button>
-      </div>
-    </div>
-  </div>
+    }
+  }
 </div>

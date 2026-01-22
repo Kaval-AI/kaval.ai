@@ -72,6 +72,25 @@ class AgentService:
             self.db.add(agent)
             await self.db.commit()
             await self.db.refresh(agent)
+        else:
+            # Update existing agent if description, schemas or workflow have changed
+            # We only update if the new value is not None to avoid accidental overwrites
+            updates = {
+                "description": description,
+                "input_schema": input_schema,
+                "output_schema": output_schema,
+                "workflow": workflow,
+            }
+            logger.info(f"UPDATES: {updates}")
+            changed = False
+            for field, value in updates.items():
+                if value is not None and getattr(agent, field) != value:
+                    setattr(agent, field, value)
+                    changed = True
+            logger.info(f"CHANGED: {changed}")
+            if changed:
+                await self.db.commit()
+                await self.db.refresh(agent)
 
         return agent
 
