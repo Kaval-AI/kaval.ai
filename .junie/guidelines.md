@@ -20,3 +20,9 @@ At the end of every coding task, you must update the relevant unit tests and run
 ### Testing Goal
 - Aim for **100% test coverage** for all new and modified code.
 - Always run tests before submitting a task.
+
+## Coding guidelines
+
+- Dont use deprecated ngIf for Angular.
+- Try to refactor code blocks that perform specific tasks into dedicated functions.
+- Keep tests for a single file also in a single file e.g agent.py has just test_agent.py.
