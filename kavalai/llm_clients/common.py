@@ -5,7 +5,6 @@ from uuid import UUID
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai import crud
 from kavalai.agents.db import LLMProfile, LLMCallStat, EmbeddingProfile
 from kavalai.llm_clients.openai import OpenAIClient
 from kavalai.llm_clients.gemini import GeminiClient
@@ -37,6 +36,61 @@ def get_llm_client(
         raise ValueError(f"Unsupported provider: {llm_profile.provider}")
 
 
+async def _save_llm_stats(
+    llm_profile: LLMProfile,
+    agent_id: UUID,
+    response_code: int,
+    prompt_tokens: int,
+    completion_tokens: int,
+    total_tokens: int,
+    duration_ms: int,
+    cost: float,
+    request_info: dict,
+    response_data: any,
+    session: AsyncSession = None,
+):
+    """
+    Helper to save LLM call stats.
+    """
+    if not session:
+        return
+
+    try:
+        stat_data = {
+            "llm_profile_id": llm_profile.id,
+            "agent_id": agent_id,
+            "name": llm_profile.name,
+            "response_code": response_code,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "duration_ms": duration_ms,
+            "cost": cost,
+            "currency": "USD",
+            "request_data": {"requests": [request_info]},
+            "response_data": response_data,
+        }
+
+        if session.is_active:
+            instance = LLMCallStat(**stat_data)
+            session.add(instance)
+            await session.commit()
+        else:
+            logger.warning("Could not save LLM call stats: Session is not active.")
+    except Exception as db_err:
+        # If it's the "closed transaction" error, log it as a warning
+        if "closed transaction" in str(db_err):
+            logger.warning(
+                "Could not save LLM call stats: Session transaction is closed."
+            )
+        else:
+            logger.error(f"Failed to save LLM call stats: {db_err}")
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+
+
 async def chat_completion_with_stats(
     llm_profile: LLMProfile,
     response_model: type[BaseModel],
@@ -50,14 +104,6 @@ async def chat_completion_with_stats(
     """
     client = get_llm_client(llm_profile)
     start_time = time.perf_counter()
-
-    prompt_tokens = 0
-    completion_tokens = 0
-    total_tokens = 0
-    cost = 0.0
-    response_data = None
-    response_code = 200
-    error_message = None
 
     # We want to keep track of the request for stats
     request_info = {
@@ -78,50 +124,43 @@ async def chat_completion_with_stats(
             **kwargs,
         )
 
-        prompt_tokens = result["usage"]["prompt_tokens"]
-        completion_tokens = result["usage"]["completion_tokens"]
-        total_tokens = result["usage"]["total_tokens"]
-        cost = result["cost"]
-        response_data = result["raw_response"]
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
+        await _save_llm_stats(
+            llm_profile=llm_profile,
+            agent_id=agent_id,
+            response_code=200,
+            prompt_tokens=result["usage"]["prompt_tokens"],
+            completion_tokens=result["usage"]["completion_tokens"],
+            total_tokens=result["usage"]["total_tokens"],
+            duration_ms=duration_ms,
+            cost=result["cost"],
+            request_info=request_info,
+            response_data=result["raw_response"],
+            session=session,
+        )
 
         return result["content"]
 
     except Exception as e:
-        response_code = 500
-        error_message = str(e)
-        logger.error(f"Error in chat_completion_with_stats: {e}", exc_info=True)
-        response_data = {
-            "error": error_message,
-            "error_type": type(e).__name__,
-        }
-        request_info["error"] = error_message
-        request_info["error_type"] = type(e).__name__
-        raise e
-    finally:
         duration_ms = int((time.perf_counter() - start_time) * 1000)
+        logger.error(f"Error in chat_completion_with_stats: {e}", exc_info=True)
+        request_info["error"] = str(e)
+        request_info["error_type"] = type(e).__name__
 
-        if session:
-            try:
-                stat_data = {
-                    "llm_profile_id": llm_profile.id,
-                    "agent_id": agent_id,
-                    "name": llm_profile.name,
-                    "response_code": response_code,
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": total_tokens,
-                    "duration_ms": duration_ms,
-                    "cost": cost,
-                    "currency": "USD",
-                    "request_data": {"requests": [request_info]},
-                    "response_data": response_data,
-                }
-                async with session.begin_nested():
-                    await crud.insert(session, LLMCallStat, stat_data)
-            except Exception as db_err:
-                logger.error(f"Failed to save LLM call stats: {db_err}")
-                # We don't want to rollback the whole session if saving stats fails,
-                # but crud.insert might have already failed.
+        await _save_llm_stats(
+            llm_profile=llm_profile,
+            agent_id=agent_id,
+            response_code=500,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            duration_ms=duration_ms,
+            cost=0.0,
+            request_info=request_info,
+            response_data={"error": str(e), "error_type": type(e).__name__},
+            session=session,
+        )
+        raise e
 
 
 async def compute_embeddings(
