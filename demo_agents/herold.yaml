@@ -36,7 +36,7 @@ data_types:
         type: string
 rest_servers:
   - name: rss
-    url: http://localhost:10000
+    url: http://localhost:13001
     username: admin
     password: password
 tasks:
