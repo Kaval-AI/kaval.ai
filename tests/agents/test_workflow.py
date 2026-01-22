@@ -1,8 +1,7 @@
 import pytest
-import yaml
 import httpx
 from unittest.mock import patch
-from kavalai.agents.workflow import Workflow
+from kavalai.agents.workflow import Workflow, WorkflowModel
 from kavalai.agents.agent_service import AgentService
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -10,6 +9,7 @@ import uvicorn
 import threading
 import time
 import os
+import yaml
 
 # Simple Mock RSS Server using FastAPI
 rss_app = FastAPI()
@@ -47,7 +47,7 @@ def get_rss_feed(url: str, username: str = Depends(validate_auth)):
 
 
 def run_mock_server():
-    uvicorn.run(rss_app, host="127.0.0.1", port=10000, log_level="error")
+    uvicorn.run(rss_app, host="127.0.0.1", port=13005, log_level="error")
 
 
 @pytest.fixture(scope="module")
@@ -58,7 +58,7 @@ def rss_server():
     for _ in range(50):
         try:
             httpx.get(
-                "http://127.0.0.1:10000/get_rss_feed",
+                "http://127.0.0.1:13005/get_rss_feed",
                 params={"url": "test"},
                 auth=("admin", "password"),
             )
@@ -66,7 +66,6 @@ def rss_server():
         except httpx.ConnectError:
             time.sleep(0.1)
     yield
-    # No easy way to stop uvicorn in a thread, but daemon=True will handle it.
 
 
 @pytest.mark.asyncio
@@ -87,14 +86,18 @@ class TestWorkflowWithRestTools:
         with open(herold_yaml_path, "r") as f:
             herold_yaml_content = f.read()
 
-        # Override the rss server URL in the YAML for the test if needed
-        # (herold.yaml already uses http://localhost:10000)
+        # Override the rss server URL and rest servers in the YAML for the test if needed
+        # (herold.yaml already uses http://localhost:13001, but the mock server is at 13005)
+        yaml_dict = yaml.safe_load(herold_yaml_content)
+        for rs in yaml_dict.get("rest_servers", []):
+            if rs["name"] == "rss":
+                rs["url"] = "http://127.0.0.1:13005"
 
-        wf = Workflow.from_yaml(herold_yaml_content)
+        wf = Workflow(WorkflowModel(**yaml_dict))
         wf.agent_service = service
 
         # Ensure LLM profile exists
-        profile_name = "openai/gpt-5.2-2025-12-11"
+        profile_name = "openai"
         profile_dir = tmp_path / "llm_profiles"
         profile_dir.mkdir(parents=True, exist_ok=True)
         # Note: profile name in YAML has a slash, we need to handle that or change it.
@@ -167,7 +170,6 @@ class TestWorkflowWithRestTools:
 
 def test_workflow_model_embedding_name():
     from kavalai.agents.workflow import WorkflowModel
-    import yaml
 
     yaml_data = """
 name: Test Agent

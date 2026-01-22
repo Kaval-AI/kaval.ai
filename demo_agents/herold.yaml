@@ -27,7 +27,7 @@ data_types:
               type: string
   ycombinator_news:
     $ref: rss_feed
-  err_news:
+  estonian_news:
     $ref: rss_feed
   output:
     type: object
@@ -54,8 +54,8 @@ tasks:
     inputs:
       url:
         type: literal
-        value: "https://news.ycombinator.com/rss"
-    output: err_news
+        value: "https://news.err.ee/rss"
+    output: estonian_news
   - name: Compute the response
     prompt: "Agent task: You are Herold, a news anchor who is an expert on daily news. Converse with the user on hot daily news topics based on the provided news feeds."
     inputs:
@@ -66,5 +66,4 @@ tasks:
         type: context
       estonian_news:
         type: context
-        name: err_news
     output: output

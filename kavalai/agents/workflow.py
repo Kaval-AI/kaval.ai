@@ -91,6 +91,29 @@ class Workflow:
             server.name: server for server in workflow_model.rest_servers
         }
         self.tasks = {task.name: task for task in workflow_model.tasks}
+        self.validate_workflow()
+
+    def validate_workflow(self):
+        available_data = {"input"}
+        for task in self.workflow_model.tasks:
+            # Check outputs
+            if task.output not in self.workflow_model.data_types:
+                raise WorkflowException(
+                    f"output '{task.output}' in task '{task.name}' is not defined in data_types."
+                )
+
+            # Check inputs
+            for input_name, input_info in task.inputs.items():
+                if input_info.type == "context":
+                    # If 'name' is provided, that's what we look for in available_data
+                    actual_input_name = input_info.name or input_name
+                    if actual_input_name not in available_data:
+                        raise WorkflowException(
+                            f"input '{actual_input_name}' in task '{task.name}' is not available. "
+                            f"Available context: {sorted(list(available_data))}"
+                        )
+            # After task success, its output is available for next tasks
+            available_data.add(task.output)
 
     @classmethod
     def from_yaml_path(cls, yaml_path: str):
@@ -188,7 +211,8 @@ class Workflow:
             )
         else:
             result = result_data
-        logger.info(f"Setting {task.output} = {result}")
+        debug_data = str(result)[:50]
+        logger.info(f"Setting {task.output} = {debug_data}")
         run_context.data[task.output] = result
 
         # Store the tool run info.
