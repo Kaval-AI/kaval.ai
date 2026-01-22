@@ -28,6 +28,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `gemini.py`: Gemini pricing data using the unified models.
     - `backoffice/`: API and logic for the management UI.
         - `server.py`: FastAPI server for the backoffice API. Includes endpoints for agents, sessions, stats, projects (including membership management), and workflow visualization.
+        - `svg.py`: Utility for generating SVG visualizations of workflows using Graphviz. Supports rendering data nodes with schema properties and resolving reference chains.
         - `db.py`: Backoffice-specific DB models (users, projects, memberships).
         - `project_service.py`: Service for managing project-related data and membership.
     - `tools/`: Utility tools.
