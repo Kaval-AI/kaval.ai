@@ -3,7 +3,7 @@ from typing import Dict, Type, Optional, Literal
 from uuid import UUID
 
 import yaml
-from fastmcp import Client
+import httpx
 from pydantic import BaseModel
 
 from kavalai.agents.agent_service import AgentService, load_profile_from_path
@@ -25,12 +25,12 @@ class Task(BaseModel):
     output: str
     # LLM call
     prompt: Optional[str] = None
-    # MCP tool call
+    # REST tool call
     tool: Optional[str] = None
-    mcp_server: Optional[str] = None
+    rest_server: Optional[str] = None
 
 
-class McpServer(BaseModel):
+class RestServer(BaseModel):
     name: str
     url: str
     username: Optional[str] = None
@@ -43,7 +43,7 @@ class WorkflowModel(BaseModel):
     llm_profile_name: str
     llm_embedding_name: Optional[str] = None
     data_types: dict[str, dict]
-    mcp_servers: list[McpServer] = []
+    rest_servers: list[RestServer] = []
     tasks: list[Task]
 
 
@@ -74,6 +74,7 @@ class WorkflowException(Exception):
 class WorkflowRunResult(BaseModel):
     session_id: Optional[UUID] = None
     data: Optional[BaseModel] = None
+    run_context: Optional[RunContext] = None
 
 
 class Workflow:
@@ -86,8 +87,8 @@ class Workflow:
         self.agent_service = agent_service
         self.parser = SchemaParser(workflow_model.data_types)
         self.models: Dict[str, Type[BaseModel]] = self.parser.parse_all()
-        self.mcp_servers = {
-            server.name: server for server in workflow_model.mcp_servers
+        self.rest_servers = {
+            server.name: server for server in workflow_model.rest_servers
         }
         self.tasks = {task.name: task for task in workflow_model.tasks}
 
@@ -164,9 +165,19 @@ class Workflow:
                 # Fallback to the key name if info.name is not explicitly provided
                 inputs[name] = run_context.data.get(info.name or name)
 
-        server_url = self.mcp_servers[task.mcp_server].url
-        async with Client(server_url) as client:
-            result_data = await client.call_tool(task.tool, arguments=inputs)
+        rest_server = self.rest_servers[task.rest_server]
+        auth = (
+            (rest_server.username, rest_server.password)
+            if rest_server.username and rest_server.password
+            else None
+        )
+
+        async with httpx.AsyncClient(auth=auth) as client:
+            response = await client.get(
+                f"{rest_server.url}/{task.tool}", params=inputs, timeout=60.0
+            )
+            response.raise_for_status()
+            result_data = response.json()
 
         output_type = self.get_data_type(task.output)
         if output_type:
@@ -260,4 +271,8 @@ class Workflow:
                 content=agent_resp,
             )
 
-        return WorkflowRunResult(session_id=run_context.session_id, data=output_model)
+        return WorkflowRunResult(
+            session_id=run_context.session_id,
+            data=output_model,
+            run_context=run_context,
+        )

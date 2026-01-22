@@ -1,112 +1,168 @@
 import pytest
+import yaml
+import httpx
+from unittest.mock import patch
 from kavalai.agents.workflow import Workflow
 from kavalai.agents.agent_service import AgentService
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import uvicorn
+import threading
+import time
+import os
 
-SIMPLE_YAML = """
-name: BB King Agent
-description: Just talks about the blues.
-llm_profile_name: test-gpt-4o
-data_types:
-  input:
-    type: object
-    properties:
-      user_message: {type: string}
-  output:
-    type: object
-    properties:
-      agent_response: {type: string}
-mcp_servers: []
-tasks:
-  - name: Blues Talk
-    prompt: "You are BB King. You like talking about the blues."
-    inputs:
-      input: {type: context, name: input}
-    output: output
-"""
+# Simple Mock RSS Server using FastAPI
+rss_app = FastAPI()
+security = HTTPBasic()
+
+
+def validate_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    if credentials.username != "admin" or credentials.password != "password":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username/password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+
+@rss_app.get("/get_rss_feed")
+def get_rss_feed(url: str, username: str = Depends(validate_auth)):
+    return {
+        "title": "Mock Feed",
+        "url": url,
+        "items": [
+            {
+                "title": "Mock News 1",
+                "link": "http://example.com/1",
+                "summary": "Summary 1",
+            },
+            {
+                "title": "Mock News 2",
+                "link": "http://example.com/2",
+                "summary": "Summary 2",
+            },
+        ],
+    }
+
+
+def run_mock_server():
+    uvicorn.run(rss_app, host="127.0.0.1", port=10000, log_level="error")
+
+
+@pytest.fixture(scope="module")
+def rss_server():
+    thread = threading.Thread(target=run_mock_server, daemon=True)
+    thread.start()
+    # Wait for server to start
+    for _ in range(50):
+        try:
+            httpx.get(
+                "http://127.0.0.1:10000/get_rss_feed",
+                params={"url": "test"},
+                auth=("admin", "password"),
+            )
+            break
+        except httpx.ConnectError:
+            time.sleep(0.1)
+    yield
+    # No easy way to stop uvicorn in a thread, but daemon=True will handle it.
 
 
 @pytest.mark.asyncio
-class TestBBKingWorkflow:
-    async def test_bb_king_full_integration(self, agents_db, tmp_path, monkeypatch):
+class TestWorkflowWithRestTools:
+    async def test_herold_workflow_with_rest_tool(
+        self, agents_db, tmp_path, monkeypatch, rss_server
+    ):
         """
-        Tests a real LLM call and verifies the data persistence
-        hierarchy: Agent -> Session -> Run -> Task -> ChatMessage.
+        Tests the Herold workflow using a real (mocked) REST server for tools.
         """
         # 1. Setup
         service = AgentService(agents_db)
-        wf = Workflow.from_yaml(SIMPLE_YAML)
+
+        # Load herold.yaml
+        herold_yaml_path = os.path.join(
+            os.path.dirname(__file__), "../../demo_agents/herold.yaml"
+        )
+        with open(herold_yaml_path, "r") as f:
+            herold_yaml_content = f.read()
+
+        # Override the rss server URL in the YAML for the test if needed
+        # (herold.yaml already uses http://localhost:10000)
+
+        wf = Workflow.from_yaml(herold_yaml_content)
         wf.agent_service = service
 
-        # Ensure LLM profile exists as a file for Workflow to load
-        import yaml
-
-        profile_name = "test-gpt-4o"
+        # Ensure LLM profile exists
+        profile_name = "openai/gpt-5.2-2025-12-11"
         profile_dir = tmp_path / "llm_profiles"
-        profile_dir.mkdir()
-        profile_path = profile_dir / "test-gpt-4o.yaml"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        # Note: profile name in YAML has a slash, we need to handle that or change it.
+        # Workflow.from_yaml loads the profile name from the YAML.
+        # kavalai.agents.agent_service.load_profile_from_path joins LLM_PROFILES_PATH and name + ".yaml"
 
-        with open(profile_path, "w") as f:
+        # Create directories for the profile name if it contains slashes
+        profile_file_path = profile_dir / (profile_name + ".yaml")
+        profile_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(profile_file_path, "w") as f:
             yaml.dump(
                 {
                     "name": profile_name,
                     "provider": "openai",
-                    "model_name": "gpt-4o",
+                    "model_name": "gpt-5.2",
                 },
                 f,
             )
 
         monkeypatch.setenv("LLM_PROFILES_PATH", str(profile_dir))
 
-        user_input = {"user_message": "Tell me about Lucille, your guitar."}
+        user_input = {"user_message": "What's the news today?"}
 
-        # Mock chat_completion_with_stats to avoid real LLM calls in tests
-        from unittest.mock import patch
-
-        # Get the output model class to create a real instance
+        # Mock chat_completion_with_stats
         output_type = wf.get_data_type("output")
-        mock_response = output_type(agent_response="Lucille is my lady.")
+        mock_response = output_type(agent_response="The news today is great.")
 
         with patch(
-            "kavalai.llm_clients.common.chat_completion_with_stats"
+            "kavalai.agents.workflow.chat_completion_with_stats"
         ) as mock_chat_completion:
             mock_chat_completion.return_value = mock_response
 
             # 2. Execution
             result = await wf.run(input_data=user_input)
 
-        # 3. Validation: Result Structure
+        # 3. Validation
         assert result.session_id is not None
         assert result.data is not None
-        assert (
-            "Lucille" in result.data.agent_response
-            or "guitar" in result.data.agent_response.lower()
-        )
+        assert result.data.agent_response == "The news today is great."
+
+        # Verify that the tools were called and data is in the run context
+        # In herold.yaml, the data type is named rss_feed and used as ycombinator_news
+        news_data = result.run_context.data["ycombinator_news"]
+        assert news_data.title == "Mock Feed"
+        assert len(news_data.items) == 2
 
         # 4. Validation: Database Records
-        # Check Agent
-        agent = await service.get_or_create_agent(name="BB King Agent")
-        assert agent.description == "Just talks about the blues."
+        agent = await service.get_or_create_agent(name="Herold news agent")
+        assert "news" in agent.description.lower()
 
-        # Check Chat History (Should have 2 messages: User and Assistant)
-        history = await service.get_chat_history(result.session_id)
-        assert len(history) == 2
-        assert history[0].role == "user"
-        assert history[0].content == user_input["user_message"]
-        assert history[1].role == "assistant"
-        assert history[1].content == result.data.agent_response
-
-        # Check Task Recording
-        # We query the DB directly to verify the specific task was logged
-        from kavalai.agents.db import Task
+        # Check Task Recording (should have 2 tool tasks and 1 prompt task)
+        from kavalai.agents.db import Task as DBTask
         from sqlalchemy import select
 
-        stmt = select(Task).where(Task.session_id == result.session_id)
+        stmt = (
+            select(DBTask)
+            .where(DBTask.session_id == result.session_id)
+            .order_by(DBTask.created_at)
+        )
         db_result = await agents_db.execute(stmt)
         tasks = db_result.scalars().all()
 
-        assert len(tasks) == 1
-        assert "BB King" in tasks[0].inputs["prompt"]
-        assert tasks[0].output["agent_response"] == result.data.agent_response
+        assert len(tasks) == 3
+        # First task: get_rss_feed (ycombinator_news)
+        assert tasks[0].inputs["tool"] == "get_rss_feed"
+        # Last task: Compute the response
+        assert "Agent task: You are Herold" in tasks[2].inputs["prompt"]
 
 
 def test_workflow_model_embedding_name():

@@ -1,6 +1,9 @@
-import pytest
-from kavalai.tools.rss import get_rss_feed, Feed
+from fastapi.testclient import TestClient
+from kavalai.tools.rss import app, Feed
 from unittest.mock import MagicMock, patch
+
+client = TestClient(app)
+auth = ("admin", "password")
 
 
 def test_get_rss_feed_success():
@@ -12,13 +15,27 @@ def test_get_rss_feed_success():
     ]
 
     with patch("feedparser.parse", return_value=mock_feed):
-        result = get_rss_feed("http://example.com/rss")
+        response = client.get(
+            "/get_rss_feed",
+            params={"url": "http://example.com/rss"},
+            auth=auth,
+        )
 
-    assert isinstance(result, Feed)
+    assert response.status_code == 200
+    result = Feed(**response.json())
     assert result.title == "Test Feed"
     assert len(result.items) == 2
     assert result.items[0].title == "Entry 1"
     assert result.items[0].summary == "Summary 1"
+
+
+def test_get_rss_feed_unauthorized():
+    response = client.get(
+        "/get_rss_feed",
+        params={"url": "http://example.com/rss"},
+        auth=("wrong", "pass"),
+    )
+    assert response.status_code == 401
 
 
 def test_get_rss_feed_empty():
@@ -26,9 +43,14 @@ def test_get_rss_feed_empty():
     mock_feed.entries = []
 
     with patch("feedparser.parse", return_value=mock_feed):
-        result = get_rss_feed("http://example.com/rss")
+        response = client.get(
+            "/get_rss_feed",
+            params={"url": "http://example.com/rss"},
+            auth=auth,
+        )
 
-    assert isinstance(result, Feed)
+    assert response.status_code == 200
+    result = Feed(**response.json())
     assert result.title is None
     assert len(result.items) == 0
 
@@ -39,8 +61,14 @@ def test_get_rss_feed_max_results():
     mock_feed.entries = [{"title": f"Entry {i}"} for i in range(10)]
 
     with patch("feedparser.parse", return_value=mock_feed):
-        result = get_rss_feed("http://example.com/rss", max_results=3)
+        response = client.get(
+            "/get_rss_feed",
+            params={"url": "http://example.com/rss", "max_results": 3},
+            auth=auth,
+        )
 
+    assert response.status_code == 200
+    result = Feed(**response.json())
     assert len(result.items) == 3
 
 
@@ -50,8 +78,14 @@ def test_get_rss_feed_missing_fields():
     mock_feed.entries = [{"other": "field"}]
 
     with patch("feedparser.parse", return_value=mock_feed):
-        result = get_rss_feed("http://example.com/rss")
+        response = client.get(
+            "/get_rss_feed",
+            params={"url": "http://example.com/rss"},
+            auth=auth,
+        )
 
+    assert response.status_code == 200
+    result = Feed(**response.json())
     assert result.title is None
     assert result.items[0].title == "No Title"
     assert result.items[0].link == "No Link"
@@ -60,5 +94,10 @@ def test_get_rss_feed_missing_fields():
 
 def test_get_rss_feed_error():
     with patch("feedparser.parse", side_effect=Exception("Network error")):
-        with pytest.raises(Exception, match="Error parsing feed: Network error"):
-            get_rss_feed("http://example.com/rss")
+        response = client.get(
+            "/get_rss_feed",
+            params={"url": "http://example.com/rss"},
+            auth=auth,
+        )
+        assert response.status_code == 500
+        assert "Error parsing feed: Network error" in response.json()["detail"]

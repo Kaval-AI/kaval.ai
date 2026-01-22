@@ -62,6 +62,15 @@ class SchemaParser:
         if not schema:
             raise ValueError(f"Definition for '{type_name}' not found.")
 
+        # Handle top-level $ref
+        if "$ref" in schema:
+            ref_name = schema["$ref"]
+            ref_model = self.parse_type(ref_name)
+            # Create a subclass or alias? Subclass with the new name is better for clarity.
+            model = create_model(type_name, __base__=ref_model)
+            self.models[type_name] = model
+            return model
+
         properties = schema.get("properties", {})
         fields = {}
 

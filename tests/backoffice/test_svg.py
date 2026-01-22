@@ -25,7 +25,7 @@ def test_generate_workflow_svg(tmp_path):
                 "inputs": {"output": {"type": "context"}},
                 "output": "output",
                 "tool": "my_tool",
-                "mcp_server": "my_server",
+                "rest_server": "my_server",
             },
         ],
     }

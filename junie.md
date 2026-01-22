@@ -67,7 +67,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - **Backend**: Python with FastAPI, SQLAlchemy (Async), Pydantic.
 - **Frontend**: Angular.
 - **Database**: PostgreSQL (multiple schemas/databases).
-- **Workflows**: Defined in YAML, processed by `Workflow` class in `kavalai/agents/workflow.py`.
+- **Workflows**: Defined in YAML, processed by `Workflow` class in `kavalai/agents/workflow.py`. Supports REST tools with basic auth.
 - **Project Isolation**: The backoffice manages multiple "projects". Each project can point to a different agent database.
 
 ## Workflow Execution

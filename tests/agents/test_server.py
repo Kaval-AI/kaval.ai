@@ -23,7 +23,7 @@ data_types:
       agent_response:
         type: string
         max_length: 250
-mcp_servers: []
+rest_servers: []
 tasks:
   - name: Blues Talk
     prompt: "You are BB King. You like talking about the blues."

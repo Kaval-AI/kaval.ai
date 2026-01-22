@@ -1,5 +1,5 @@
-name: Demo agent
-description: Useful for testing basic agent workflows.
+name: Herold news agent
+description: An agent that can converse with the user on hot daily news topics.
 llm_profile_name: openai/gpt-5.2-2025-12-11
 data_types:
   input:
@@ -34,13 +34,15 @@ data_types:
     properties:
       agent_response:
         type: string
-mcp_servers:
+rest_servers:
   - name: rss
-    url: http://localhost:10000/sse
+    url: http://localhost:10000
+    username: admin
+    password: password
 tasks:
   - name: Get latest hacker news
     tool: get_rss_feed
-    mcp_server: rss
+    rest_server: rss
     inputs:
       url:
         type: literal
@@ -48,14 +50,14 @@ tasks:
     output: ycombinator_news
   - name: Get latest Estonian news
     tool: get_rss_feed
-    mcp_server: rss
+    rest_server: rss
     inputs:
       url:
         type: literal
         value: "https://news.ycombinator.com/rss"
     output: err_news
   - name: Compute the response
-    prompt: "Agent task: You are BB king reborn as a news anchor responding to user messages."
+    prompt: "Agent task: You are Herold, a news anchor who is an expert on daily news. Converse with the user on hot daily news topics based on the provided news feeds."
     inputs:
       input:
         type: context
