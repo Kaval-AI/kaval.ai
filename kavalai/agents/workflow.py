@@ -25,6 +25,7 @@ class Task(BaseModel):
     output: str
     # LLM call
     prompt: Optional[str] = None
+    use_history: bool = True
     # REST tool call
     tool: Optional[str] = None
     rest_server: Optional[str] = None
@@ -132,9 +133,13 @@ class Workflow:
         return self.models[name]
 
     async def run_prompt(self, task: Task, run_context: RunContext):
-        input_data = {
-            input_name: run_context.data.get(input_name) for input_name in task.inputs
-        }
+        input_data = {}
+        for name, info in task.inputs.items():
+            if info.type == "literal":
+                input_data[name] = info.value
+            else:
+                input_data[name] = run_context.data.get(info.name or name)
+
         input_text = make_prompt(task.prompt, input_data)
 
         session = self.agent_service.db if self.agent_service else None
@@ -150,10 +155,17 @@ class Workflow:
             llm_profile = await service.upsert_llm_profile(llm_profile)
 
         system_message = dict(role="system", content=input_text)
+        messages = [system_message]
+
+        if task.use_history and self.agent_service and run_context.session_id:
+            history = await self.agent_service.get_chat_history(run_context.session_id)
+            for msg in history:
+                messages.append(dict(role=msg.role, content=msg.content))
+
         response = await chat_completion_with_stats(
             llm_profile=llm_profile,
             response_model=self.get_data_type(task.output),
-            messages=[system_message],
+            messages=messages,
             session=session,
             agent_id=run_context.agent_id,
         )

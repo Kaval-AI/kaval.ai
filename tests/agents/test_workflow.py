@@ -168,6 +168,165 @@ class TestWorkflowWithRestTools:
         assert "Agent task: You are Herold" in tasks[2].inputs["prompt"]
 
 
+@pytest.mark.asyncio
+class TestWorkflowHistory:
+    async def test_run_prompt_with_history(self, agents_db, tmp_path, monkeypatch):
+        # 1. Setup
+        service = AgentService(agents_db)
+
+        # Define a simple workflow
+        workflow_yaml = """
+name: History Agent
+description: Test history
+llm_profile_name: openai
+data_types:
+  input:
+    type: object
+    properties:
+      user_message: {type: string}
+  output:
+    type: object
+    properties:
+      agent_response: {type: string}
+tasks:
+  - name: chat_task
+    prompt: "Respond to user."
+    use_history: true
+    inputs:
+      user_message: {type: context, name: input}
+    output: output
+"""
+        yaml_dict = yaml.safe_load(workflow_yaml)
+        wf = Workflow(WorkflowModel(**yaml_dict))
+        wf.agent_service = service
+
+        # Setup LLM profile
+        profile_name = "openai"
+        profile_dir = tmp_path / "llm_profiles"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        profile_file_path = profile_dir / (profile_name + ".yaml")
+        with open(profile_file_path, "w") as f:
+            yaml.dump(
+                {"name": profile_name, "provider": "openai", "model_name": "gpt-4"}, f
+            )
+        monkeypatch.setenv("LLM_PROFILES_PATH", str(profile_dir))
+
+        # 2. Add some history to a session
+        agent = await service.get_or_create_agent(name="History Agent")
+        session = await service.get_or_create_session(agent_id=agent.id)
+
+        await service.add_chat_message(
+            agent_id=agent.id, session_id=session.id, role="user", content="Hello"
+        )
+        await service.add_chat_message(
+            agent_id=agent.id,
+            session_id=session.id,
+            role="assistant",
+            content="Hi there!",
+        )
+
+        # 3. Execution
+        user_input = {"user_message": "How are you?"}
+        output_type = wf.get_data_type("output")
+        mock_response = output_type(agent_response="I am fine, thanks for asking.")
+
+        with patch("kavalai.agents.workflow.chat_completion_with_stats") as mock_chat:
+            mock_chat.return_value = mock_response
+
+            await wf.run(input_data=user_input, session_id=session.id)
+
+            # Check what messages were sent to LLM
+            called_messages = mock_chat.call_args.kwargs["messages"]
+
+            # messages should be:
+            # 1. system: Respond to user... (the current task prompt)
+            # 2. user: Hello (from history)
+            # 3. assistant: Hi there! (from history)
+            # 4. user: How are you? (added by Workflow.run before tasks)
+
+            assert len(called_messages) == 4
+            assert called_messages[0]["role"] == "system"
+            assert "Respond to user." in called_messages[0]["content"]
+            assert called_messages[1] == {"role": "user", "content": "Hello"}
+            assert called_messages[2] == {"role": "assistant", "content": "Hi there!"}
+            assert called_messages[3] == {"role": "user", "content": "How are you?"}
+
+    async def test_run_prompt_without_history(self, agents_db, tmp_path, monkeypatch):
+        # 1. Setup
+        service = AgentService(agents_db)
+
+        # Define a simple workflow with use_history: false
+        workflow_yaml = """
+name: No History Agent
+description: Test no history
+llm_profile_name: openai
+data_types:
+  input:
+    type: object
+    properties:
+      user_message: {type: string}
+  output:
+    type: object
+    properties:
+      agent_response: {type: string}
+tasks:
+  - name: chat_task
+    prompt: "Respond to user."
+    use_history: false
+    inputs:
+      user_message: {type: context, name: input}
+    output: output
+"""
+        yaml_dict = yaml.safe_load(workflow_yaml)
+        wf = Workflow(WorkflowModel(**yaml_dict))
+        wf.agent_service = service
+
+        # Setup LLM profile
+        profile_name = "openai"
+        profile_dir = tmp_path / "llm_profiles"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        profile_file_path = profile_dir / (profile_name + ".yaml")
+        with open(profile_file_path, "w") as f:
+            yaml.dump(
+                {"name": profile_name, "provider": "openai", "model_name": "gpt-4"}, f
+            )
+        monkeypatch.setenv("LLM_PROFILES_PATH", str(profile_dir))
+
+        # 2. Add some history to a session
+        agent = await service.get_or_create_agent(name="No History Agent")
+        session = await service.get_or_create_session(agent_id=agent.id)
+
+        await service.add_chat_message(
+            agent_id=agent.id, session_id=session.id, role="user", content="Hello"
+        )
+        await service.add_chat_message(
+            agent_id=agent.id,
+            session_id=session.id,
+            role="assistant",
+            content="Hi there!",
+        )
+
+        # 3. Execution
+        user_input = {"user_message": "How are you?"}
+        output_type = wf.get_data_type("output")
+        mock_response = output_type(agent_response="I am fine, thanks for asking.")
+
+        with patch("kavalai.agents.workflow.chat_completion_with_stats") as mock_chat:
+            mock_chat.return_value = mock_response
+
+            await wf.run(input_data=user_input, session_id=session.id)
+
+            # Check what messages were sent to LLM
+            called_messages = mock_chat.call_args.kwargs["messages"]
+
+            # messages should be ONLY:
+            # 1. system: Respond to user... (the current task prompt)
+
+            assert len(called_messages) == 1
+            assert called_messages[0]["role"] == "system"
+            assert "Respond to user." in called_messages[0]["content"]
+
+
 def test_workflow_model_embedding_name():
     from kavalai.agents.workflow import WorkflowModel
 
