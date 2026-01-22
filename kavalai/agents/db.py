@@ -348,8 +348,8 @@ class RagIndex(Base):
     json_content: Mapped[dict | None] = mapped_column(JSONB)
     binary_content: Mapped[bytes | None] = mapped_column(LargeBinary)
 
-    metadata_: Mapped[dict] = mapped_column(
-        "metadata", JSONB, nullable=False, default=dict
+    source_metadata: Mapped[dict] = mapped_column(
+        "source_metadata", JSONB, nullable=False, default=dict
     )
 
     created_at: Mapped[datetime] = mapped_column(

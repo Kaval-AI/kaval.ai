@@ -30,14 +30,14 @@ async def test_rag_service_indexing(agents_db):
 
         # 3. Test batch_index
         texts = ["hello", "world"]
-        metadata = [{"id": 1}, {"id": 2}]
+        source_metadata = [{"id": 1}, {"id": 2}]
 
-        items = await service.batch_index(texts, metadata)
+        items = await service.batch_index(texts, source_metadata)
         assert len(items) == 2
         assert items[0].embedding_profile_name == "Test Embedder"
         assert items[0].text_content == "hello"
         assert items[0].embedding_1536 == [0.1] * 1536
-        assert items[0].metadata_ == {"id": 1}
+        assert items[0].source_metadata == {"id": 1}
         assert items[1].text_content == "world"
         assert items[1].embedding_1536 == [0.2] * 1536
 

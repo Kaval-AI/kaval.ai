@@ -45,7 +45,7 @@ class RagService:
                 embedding_field: emb,
                 "mime_type": "text/plain",
                 "text_content": text,
-                "metadata_": meta,
+                "source_metadata": meta,
             }
             rag_item = RagIndex(**item_data)
             self.db.add(rag_item)
@@ -57,9 +57,9 @@ class RagService:
 
         return rag_items
 
-    async def index(self, text: str, metadata: Optional[dict] = None):
+    async def index(self, text: str, source_metadata: Optional[dict] = None):
         """Index a single text blob with the metadata."""
-        return (await self.batch_index([text], [metadata or {}]))[0]
+        return (await self.batch_index([text], [source_metadata or {}]))[0]
 
     async def query(
         self,
