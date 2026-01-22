@@ -1,3 +1,4 @@
+import argparse
 import html
 import os
 import secrets
@@ -13,16 +14,16 @@ app = FastAPI(title="RSS-Parser", version="1.0.0")
 security = HTTPBasic()
 
 
-def validate_auth(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
-    expected_username = os.environ.get("RSS_AUTH_USER", "admin")
-    expected_password = os.environ.get("RSS_AUTH_PASSWORD", "password")
+# These will be set from command line arguments
+AUTH_USER = os.environ.get("RSS_AUTH_USER", "admin")
+AUTH_PASSWORD = os.environ.get("RSS_AUTH_PASSWORD", "password")
 
-    is_correct_username = secrets.compare_digest(
-        credentials.username, expected_username
-    )
-    is_correct_password = secrets.compare_digest(
-        credentials.password, expected_password
-    )
+
+def validate_auth(
+    credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+):
+    is_correct_username = secrets.compare_digest(credentials.username, AUTH_USER)
+    is_correct_password = secrets.compare_digest(credentials.password, AUTH_PASSWORD)
 
     if not (is_correct_username and is_correct_password):
         raise HTTPException(
@@ -78,4 +79,25 @@ def get_rss_feed(
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+    parser = argparse.ArgumentParser(description="RSS-Parser Service")
+    parser.add_argument(
+        "--port", type=int, default=10000, help="Port to run the service on"
+    )
+    parser.add_argument(
+        "--user",
+        type=str,
+        default=os.environ.get("RSS_AUTH_USER", "admin"),
+        help="Basic auth username",
+    )
+    parser.add_argument(
+        "--password",
+        type=str,
+        default=os.environ.get("RSS_AUTH_PASSWORD", "password"),
+        help="Basic auth password",
+    )
+    args = parser.parse_args()
+
+    AUTH_USER = args.user
+    AUTH_PASSWORD = args.password
+
+    uvicorn.run(app, host="0.0.0.0", port=args.port)

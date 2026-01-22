@@ -1,9 +1,22 @@
 from fastapi.testclient import TestClient
 from kavalai.tools.rss import app, Feed
+import kavalai.tools.rss as rss_module
 from unittest.mock import MagicMock, patch
+import pytest
 
 client = TestClient(app)
 auth = ("admin", "password")
+
+
+@pytest.fixture(autouse=True)
+def reset_auth():
+    # Store original values
+    orig_user = rss_module.AUTH_USER
+    orig_password = rss_module.AUTH_PASSWORD
+    yield
+    # Restore original values after each test
+    rss_module.AUTH_USER = orig_user
+    rss_module.AUTH_PASSWORD = orig_password
 
 
 def test_get_rss_feed_success():
