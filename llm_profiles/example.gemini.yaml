@@ -1,0 +1,5 @@
+name: gemini
+provider: google
+model_name: gemini-1.5-pro-002
+api_key:
+base_url:
