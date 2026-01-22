@@ -1,7 +1,20 @@
+from typing import List, Dict, Set
 from graphviz import Digraph
-from kavalai.agents.workflow import (
-    WorkflowModel,
-)  # Assuming your classes are in workflow.py
+from pydantic import BaseModel
+from kavalai.agents.workflow import WorkflowModel
+
+
+class Node(BaseModel):
+    id: str
+    label: str
+    shape: str
+    color: str
+    style: str = "filled"
+
+
+class Edge(BaseModel):
+    source: str
+    target: str
 
 
 def generate_workflow_svg(
@@ -9,45 +22,109 @@ def generate_workflow_svg(
     output_filename: str = "workflow_graph",
     return_content: bool = False,
 ):
-    # Initialize the graph
-    dot = Digraph(name=model.name, comment=model.description)
-    dot.attr(rankdir="LR", size="10,10")
+    nodes: Dict[str, Node] = {}
+    edges: List[Edge] = []
 
-    # Global Styles
-    dot.attr("node", fontname="Arial", fontsize="12")
+    # 0. Identify used and base types
+    used_types: Set[str] = set()
+    # Always include "input" as it's the entry point
+    if "input" in model.data_types:
+        used_types.add("input")
 
-    # 1. Define Data Type Nodes (Rectangles)
-    if model.data_types:
-        for dt_name in model.data_types.keys():
-            dot.node(dt_name, dt_name, shape="box", style="filled", color="lightblue2")
-
-    # 2. Define Task Nodes (Rounded Rectangles)
     for task in model.tasks:
-        # Create a unique ID for the task node to avoid name collisions
-        task_id = f"task_{task.name.replace(' ', '_')}"
+        used_types.add(task.output)
+        for input_name, input_info in task.inputs.items():
+            if input_info.type == "context":
+                actual_name = input_info.name or input_info.value or input_name
+                used_types.add(actual_name)
 
-        # Determine label (Tool vs Prompt)
+    # Resolve $ref chains to find all types that should be mentioned in labels
+    added = True
+    while added:
+        added = False
+        for dt_name, dt_def in model.data_types.items():
+            if dt_name in used_types:
+                if isinstance(dt_def, dict) and "$ref" in dt_def:
+                    ref_type = dt_def["$ref"]
+                    if ref_type not in used_types:
+                        used_types.add(ref_type)
+                        added = True
+
+    # 1. Define Data Type Nodes
+    for dt_name, dt_def in model.data_types.items():
+        # Only render types that are directly used as inputs or outputs
+        is_directly_used = dt_name == "input"
+        for task in model.tasks:
+            if task.output == dt_name:
+                is_directly_used = True
+                break
+            for input_name, input_info in task.inputs.items():
+                if input_info.type == "context":
+                    if (input_info.name or input_info.value or input_name) == dt_name:
+                        is_directly_used = True
+                        break
+            if is_directly_used:
+                break
+
+        if not is_directly_used:
+            continue
+
+        label = dt_name
+        if isinstance(dt_def, dict) and "$ref" in dt_def:
+            label = f"{dt_name} : {dt_def['$ref']}"
+
+        nodes[dt_name] = Node(
+            id=dt_name,
+            label=label,
+            shape="box",
+            color="lightblue2",
+        )
+
+    # 2. Define Task Nodes and Edges
+    for task in model.tasks:
+        task_id = f"task_{task.name.replace(' ', '_')}"
         label = (
             f"{task.name}\n(Tool: {task.tool})"
             if task.tool
             else f"{task.name}\n(LLM Prompt)"
         )
 
-        dot.node(
-            task_id, label, shape="rect", style="filled,rounded", color="darkseagreen1"
+        nodes[task_id] = Node(
+            id=task_id,
+            label=label,
+            shape="rect",
+            style="filled,rounded",
+            color="darkseagreen1",
         )
 
-        # 3. Create Edges
-        # Inputs -> Task
-        for input_name in task.inputs:
-            if model.data_types and input_name in model.data_types:
-                dot.edge(input_name, task_id)
+        # Edges: Inputs -> Task
+        for input_name, input_info in task.inputs.items():
+            if input_info.type == "context":
+                source_id = input_info.name or input_info.value or input_name
+                if source_id in nodes:
+                    edges.append(Edge(source=source_id, target=task_id))
 
-        # Task -> Output
-        if model.data_types and task.output in model.data_types:
-            dot.edge(task_id, task.output)
+        # Edges: Task -> Output
+        if task.output in nodes:
+            edges.append(Edge(source=task_id, target=task.output))
 
-    # Render the graph
+    # 3. Render using Graphviz
+    dot = Digraph(name=model.name, comment=model.description)
+    dot.attr(rankdir="LR", size="10,10")
+    dot.attr("node", fontname="Arial", fontsize="12")
+
+    for node in nodes.values():
+        dot.node(
+            node.id,
+            node.label,
+            shape=node.shape,
+            style=node.style,
+            color=node.color,
+        )
+
+    for edge in edges:
+        dot.edge(edge.source, edge.target)
+
     if return_content:
         return dot.pipe(format="svg").decode("utf-8")
 

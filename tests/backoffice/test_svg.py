@@ -39,14 +39,29 @@ def test_generate_workflow_svg(tmp_path):
         MockDigraph.assert_called_once_with(name=model.name, comment=model.description)
 
         # Verify nodes were created
-        # 2 data types + 2 tasks
-        # Task 1 output is "output" which is NOT in model.data_types in my previous mock
-        # Let's fix the mock data to include "output" in data_types
+        # 2 data types (input, output) + 2 tasks = 4 nodes
+        # BUT "output" is produced by Task 1 and used by Task 2, and also produced by Task 2.
+        # It is directly used.
+        # Wait, why did it say 3 == 4?
+        # Nodes:
+        # Data types: input, output (2)
+        # Tasks: Task 1, Task 2 (2)
+        # Total should be 4.
+
+        # Let's check which one is missing.
+        # Task 1 output is "output". Task 2 output is "output".
+        # So "output" is directly used.
+        # "input" is directly used by Task 1.
+
+        # Ah! Task 1 and Task 2 have the same name in ID? No, they have "Task 1" and "Task 2".
+        # Let's see the calls.
+        # print(mock_dot.node.call_args_list)
+
         assert mock_dot.node.call_count == 4
 
         # Verify edges were created
-        # Task 1: input -> Task 1, Task 1 -> output
-        # Task 2: output -> Task 2, Task 2 -> output
+        # Task 1: input -> Task 1, Task 1 -> output (2)
+        # Task 2: output -> Task 2, Task 2 -> output (2)
         assert mock_dot.edge.call_count == 4
 
         # Verify render was called
