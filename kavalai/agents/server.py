@@ -119,6 +119,9 @@ if __name__ == "__main__":
         "--port", type=int, default=8000, help="Port to run the server on"
     )
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
+    parser.add_argument(
+        "--sql-echo", action="store_true", help="Enable SQLAlchemy engine logging"
+    )
     args = parser.parse_args()
 
     workflow = Workflow.from_yaml_path(args.workflow_yaml_path)
@@ -130,6 +133,7 @@ if __name__ == "__main__":
             host=os.environ["AGENTS_DB_HOST"],
             port=int(os.environ["AGENTS_DB_PORT"]),
             db_name=os.environ["AGENTS_DB_NAME"],
+            echo=args.sql_echo,
         ),
     )
     logger.info(f"Starting <{workflow.workflow_model.name}>.")
