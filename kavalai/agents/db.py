@@ -65,12 +65,12 @@ class DatabaseManager:
     def get_url(self, user, password, host, port, db_name) -> str:
         return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db_name}"
 
-    def get_sessionmaker(self, *, user, password, host, port, db_name):
+    def get_sessionmaker(self, *, user, password, host, port, db_name, echo=False):
         url = self.get_url(user, password, host, port, db_name)
 
         # Check cache first
         if url not in self._engines:
-            self._engines[url] = create_async_engine(url, echo=True, poolclass=NullPool)
+            self._engines[url] = create_async_engine(url, echo=echo, poolclass=NullPool)
 
         engine = self._engines[url]
         return async_sessionmaker(
