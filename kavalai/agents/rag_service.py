@@ -15,7 +15,10 @@ class RagService:
         self.embedding_profile = embedding_profile
 
     async def batch_index(
-        self, texts: list[str], metadata_list: list[dict]
+        self,
+        texts: list[str],
+        metadata_list: list[dict],
+        collection_name: str = "default",
     ) -> list[RagIndex]:
         if not texts:
             return []
@@ -31,21 +34,15 @@ class RagService:
 
         rag_items = []
         dim = len(embeddings[0])
-        embedding_field = f"embedding_{dim}"
-
-        if not hasattr(RagIndex, embedding_field):
-            raise ValueError(
-                f"Unsupported embedding dimension: {dim}. RagIndex does not have a column for it."
-            )
 
         for text, meta, emb in zip(texts, metadata_list, embeddings):
             item_data = {
                 "embedding_profile_id": self.embedding_profile.id,
-                "embedding_profile_name": self.embedding_profile.name,
-                embedding_field: emb,
-                "mime_type": "text/plain",
-                "text_content": text,
-                "source_metadata": meta,
+                "collection_name": collection_name,
+                "content": text,
+                "embedding_size": dim,
+                "embedding": emb,
+                "rag_metadata": meta,
             }
             rag_item = RagIndex(**item_data)
             self.db.add(rag_item)
@@ -57,42 +54,38 @@ class RagService:
 
         return rag_items
 
-    async def index(self, text: str, source_metadata: Optional[dict] = None):
+    async def index(
+        self,
+        text: str,
+        source_metadata: Optional[dict] = None,
+        collection_name: str = "default",
+    ):
         """Index a single text blob with the metadata."""
-        return (await self.batch_index([text], [source_metadata or {}]))[0]
+        return (
+            await self.batch_index([text], [source_metadata or {}], collection_name)
+        )[0]
 
     async def query(
         self,
         text: str,
         top_k: int = 5,
-        index: Optional[str] = None,
+        collection_name: Optional[str] = None,
     ) -> list[RagIndex]:
         embeddings = await compute_embeddings(
             llm_profile=self.embedding_profile, texts=[text]
         )
         query_embedding = embeddings[0]
-        dim = len(query_embedding)
-        embedding_field_name = f"embedding_{dim}"
-
-        if not hasattr(RagIndex, embedding_field_name):
-            raise ValueError(f"Unsupported embedding dimension: {dim}.")
-
-        embedding_col = getattr(RagIndex, embedding_field_name)
 
         # Using cosine distance <=> for pgvector
-        # We need to use func.public.cosine_distance or similar if we want to be explicit,
-        # but usually pgvector supports operators.
-        # However, in SQLAlchemy we can use op('<=>')
-
         stmt = (
             select(RagIndex)
             .where(RagIndex.embedding_profile_id == self.embedding_profile.id)
-            .order_by(embedding_col.op("<=>")(query_embedding))
+            .order_by(RagIndex.embedding.op("<=>")(query_embedding))
             .limit(top_k)
         )
 
-        if index:
-            stmt = stmt.where(RagIndex.embedding_profile_name == index)
+        if collection_name:
+            stmt = stmt.where(RagIndex.collection_name == collection_name)
 
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
@@ -101,9 +94,11 @@ class RagService:
         self,
         texts: list[str],
         top_k: int = 5,
-        index: Optional[str] = None,
+        collection_name: Optional[str] = None,
     ) -> list[list[RagIndex]]:
         results = []
         for text in texts:
-            results.append(await self.query(text, top_k=top_k, index=index))
+            results.append(
+                await self.query(text, top_k=top_k, collection_name=collection_name)
+            )
         return results

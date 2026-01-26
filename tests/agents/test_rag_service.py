@@ -32,14 +32,16 @@ async def test_rag_service_indexing(agents_db):
         texts = ["hello", "world"]
         source_metadata = [{"id": 1}, {"id": 2}]
 
-        items = await service.batch_index(texts, source_metadata)
+        items = await service.batch_index(
+            texts, source_metadata, collection_name="test_coll"
+        )
         assert len(items) == 2
-        assert items[0].embedding_profile_name == "Test Embedder"
-        assert items[0].text_content == "hello"
-        assert items[0].embedding_1536 == [0.1] * 1536
-        assert items[0].source_metadata == {"id": 1}
-        assert items[1].text_content == "world"
-        assert items[1].embedding_1536 == [0.2] * 1536
+        assert items[0].collection_name == "test_coll"
+        assert items[0].content == "hello"
+        assert items[0].embedding == [0.1] * 1536
+        assert items[0].rag_metadata == {"id": 1}
+        assert items[1].content == "world"
+        assert items[1].embedding == [0.2] * 1536
 
         mock_compute.assert_called_once_with(llm_profile=profile, texts=texts)
 
@@ -63,10 +65,11 @@ async def test_rag_service_query(agents_db):
         RagIndex,
         {
             "embedding_profile_id": profile.id,
-            "embedding_profile_name": "index1",
-            "embedding_1536": [1.0] + [0.0] * 1535,
-            "text_content": "match",
-            "mime_type": "text/plain",
+            "collection_name": "index1",
+            "embedding": [1.0] + [0.0] * 1535,
+            "embedding_size": 1536,
+            "content": "match",
+            "rag_metadata": {"foo": "bar"},
         },
     )
     await insert(
@@ -74,10 +77,10 @@ async def test_rag_service_query(agents_db):
         RagIndex,
         {
             "embedding_profile_id": profile.id,
-            "embedding_profile_name": "index2",
-            "embedding_1536": [1.0] + [0.0] * 1535,
-            "text_content": "wrong index",
-            "mime_type": "text/plain",
+            "collection_name": "index2",
+            "embedding": [1.0] + [0.0] * 1535,
+            "embedding_size": 1536,
+            "content": "wrong index",
         },
     )
     await insert(
@@ -85,10 +88,10 @@ async def test_rag_service_query(agents_db):
         RagIndex,
         {
             "embedding_profile_id": profile.id,
-            "embedding_profile_name": "index1",
-            "embedding_1536": [1.0] + [0.0] * 1535,
-            "text_content": "other",
-            "mime_type": "text/plain",
+            "collection_name": "index1",
+            "embedding": [1.0] + [0.0] * 1535,
+            "embedding_size": 1536,
+            "content": "other",
         },
     )
 
@@ -105,27 +108,27 @@ async def test_rag_service_query(agents_db):
         assert len(results) == 3
 
         # Filter by index
-        results = await service.query("some query", index="index1")
+        results = await service.query("some query", collection_name="index1")
         assert len(results) == 2
         for r in results:
-            assert r.embedding_profile_name == "index1"
+            assert r.collection_name == "index1"
 
         # Match specific content
-        results = await service.query("some query", index="index1")
-        assert any(r.text_content == "match" for r in results)
-        assert any(r.text_content == "other" for r in results)
-        assert results[0].embedding_profile_name == "index1"
+        results = await service.query("some query", collection_name="index1")
+        assert any(r.content == "match" for r in results)
+        assert any(r.content == "other" for r in results)
+        assert results[0].collection_name == "index1"
 
 
 @pytest.mark.asyncio
-async def test_rag_service_unsupported_dim(agents_db):
+async def test_rag_service_indexing_with_dim(agents_db):
     profile = await insert(
         agents_db,
         EmbeddingProfile,
         {
             "name": "Test Embedder",
             "provider": "openai",
-            "model_name": "unsupported",
+            "model_name": "text-embedding-3-small",
         },
     )
     service = RagService(agents_db, profile)
@@ -133,7 +136,7 @@ async def test_rag_service_unsupported_dim(agents_db):
     with patch(
         "kavalai.agents.rag_service.compute_embeddings", new_callable=AsyncMock
     ) as mock_compute:
-        mock_compute.return_value = [[0.1] * 100]  # Dim 100 not supported
+        mock_compute.return_value = [[0.1] * 100]
 
-        with pytest.raises(ValueError, match="Unsupported embedding dimension: 100"):
-            await service.batch_index(["test"], [{}])
+        await service.batch_index(["test"], [{}])
+        # Should work fine now as it's just a VECTOR column

@@ -9,7 +9,6 @@ from sqlalchemy import (
     DateTime,
     Integer,
     Numeric,
-    LargeBinary,
     TypeDecorator,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
@@ -128,8 +127,7 @@ class LLMProfile(Base):
     model_name: Mapped[str] = mapped_column(TEXT, nullable=False)
     api_key: Mapped[str | None] = mapped_column(TEXT)
     base_url: Mapped[str | None] = mapped_column(TEXT)
-    default_mode: Mapped[str | None] = mapped_column(TEXT)
-    credentials: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    config: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -153,17 +151,16 @@ class LLMCallStat(Base):
     llm_profile_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("llm_profiles.id", ondelete="SET NULL")
     )
-    name: Mapped[str | None] = mapped_column(TEXT)
+    agent_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL")
+    )
+    request_data: Mapped[dict | None] = mapped_column(JSONB)
+    response_data: Mapped[dict | None] = mapped_column(JSONB)
     response_code: Mapped[int | None] = mapped_column(Integer)
     prompt_tokens: Mapped[int | None] = mapped_column(Integer)
     completion_tokens: Mapped[int | None] = mapped_column(Integer)
     total_tokens: Mapped[int | None] = mapped_column(Integer)
-    duration_ms: Mapped[int | None] = mapped_column(Integer)
-    request_data: Mapped[dict | None] = mapped_column(JSONB)
-    response_data: Mapped[dict | None] = mapped_column(JSONB)
-    agent_id: Mapped[UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE")
-    )
+    duration_seconds: Mapped[float | None] = mapped_column(Numeric(10, 6))
     cost: Mapped[float | None] = mapped_column(Numeric(10, 6))
     currency: Mapped[str | None] = mapped_column(TEXT)
     created_at: Mapped[datetime] = mapped_column(
@@ -311,7 +308,8 @@ class EmbeddingProfile(Base):
     model_name: Mapped[str] = mapped_column(TEXT, nullable=False)
     api_key: Mapped[str | None] = mapped_column(TEXT)
     base_url: Mapped[str | None] = mapped_column(TEXT)
-    credentials: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    embedding_size: Mapped[int | None] = mapped_column(Integer)
+    config: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -324,8 +322,41 @@ class EmbeddingProfile(Base):
     rag_items: Mapped[list["RagIndex"]] = relationship(
         back_populates="embedding_profile",
         cascade="all, delete-orphan",
-        passive_deletes=True,
+        passive_deletes=False,
     )
+
+
+class EmbeddingCallStat(Base):
+    __tablename__ = "embedding_call_stats"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    embedding_profile_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("embedding_profiles.id", ondelete="SET NULL")
+    )
+    agent_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL")
+    )
+    request_data: Mapped[dict | None] = mapped_column(JSONB)
+    response_data: Mapped[dict | None] = mapped_column(JSONB)
+    response_code: Mapped[int | None] = mapped_column(Integer)
+    batch_size: Mapped[int | None] = mapped_column(Integer)
+    total_tokens: Mapped[int | None] = mapped_column(Integer)
+    duration_seconds: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    cost: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    currency: Mapped[str | None] = mapped_column(TEXT)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    embedding_profile: Mapped["EmbeddingProfile"] = relationship()
+    agent: Mapped["Agent"] = relationship()
 
 
 class RagIndex(Base):
@@ -337,20 +368,11 @@ class RagIndex(Base):
     embedding_profile_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("embedding_profiles.id", ondelete="CASCADE")
     )
-    embedding_profile_name: Mapped[str | None] = mapped_column(TEXT)
-    embedding_384: Mapped[list[float] | None] = mapped_column(VectorType(384))
-    embedding_768: Mapped[list[float] | None] = mapped_column(VectorType(768))
-    embedding_1536: Mapped[list[float] | None] = mapped_column(VectorType(1536))
-    embedding_3072: Mapped[list[float] | None] = mapped_column(VectorType(3072))
-
-    mime_type: Mapped[str] = mapped_column(TEXT, nullable=False)
-    text_content: Mapped[str | None] = mapped_column(TEXT)
-    json_content: Mapped[dict | None] = mapped_column(JSONB)
-    binary_content: Mapped[bytes | None] = mapped_column(LargeBinary)
-
-    source_metadata: Mapped[dict] = mapped_column(
-        "source_metadata", JSONB, nullable=False, default=dict
-    )
+    collection_name: Mapped[str] = mapped_column(TEXT, nullable=False)
+    content: Mapped[str | None] = mapped_column(TEXT)
+    embedding_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(VectorType())
+    rag_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

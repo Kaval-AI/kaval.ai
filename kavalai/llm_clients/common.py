@@ -43,7 +43,7 @@ async def _save_llm_stats(
     prompt_tokens: int,
     completion_tokens: int,
     total_tokens: int,
-    duration_ms: int,
+    duration_seconds: float,
     cost: float,
     request_info: dict,
     response_data: any,
@@ -59,12 +59,11 @@ async def _save_llm_stats(
         stat_data = {
             "llm_profile_id": llm_profile.id,
             "agent_id": agent_id,
-            "name": llm_profile.name,
             "response_code": response_code,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
-            "duration_ms": duration_ms,
+            "duration_seconds": duration_seconds,
             "cost": cost,
             "currency": "USD",
             "request_data": {"requests": [request_info]},
@@ -124,7 +123,7 @@ async def chat_completion_with_stats(
             **kwargs,
         )
 
-        duration_ms = int((time.perf_counter() - start_time) * 1000)
+        duration_seconds = time.perf_counter() - start_time
         await _save_llm_stats(
             llm_profile=llm_profile,
             agent_id=agent_id,
@@ -132,7 +131,7 @@ async def chat_completion_with_stats(
             prompt_tokens=result["usage"]["prompt_tokens"],
             completion_tokens=result["usage"]["completion_tokens"],
             total_tokens=result["usage"]["total_tokens"],
-            duration_ms=duration_ms,
+            duration_seconds=duration_seconds,
             cost=result["cost"],
             request_info=request_info,
             response_data=result["raw_response"],
@@ -142,7 +141,7 @@ async def chat_completion_with_stats(
         return result["content"]
 
     except Exception as e:
-        duration_ms = int((time.perf_counter() - start_time) * 1000)
+        duration_seconds = time.perf_counter() - start_time
         logger.error(f"Error in chat_completion_with_stats: {e}", exc_info=True)
         request_info["error"] = str(e)
         request_info["error_type"] = type(e).__name__
@@ -154,7 +153,7 @@ async def chat_completion_with_stats(
             prompt_tokens=0,
             completion_tokens=0,
             total_tokens=0,
-            duration_ms=duration_ms,
+            duration_seconds=duration_seconds,
             cost=0.0,
             request_info=request_info,
             response_data={"error": str(e), "error_type": type(e).__name__},

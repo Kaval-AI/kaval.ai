@@ -21,7 +21,7 @@
     <div *ngFor="let stat of stats" class="stat-card">
       <div class="stat-header">
         <div class="stat-title">
-          <span class="stat-name">{{ stat.name || 'Unnamed Call' }}</span>
+          <span class="stat-name">{{ 'Call' }}</span>
           <span class="stat-id">{{ stat.id }}</span>
         </div>
         <div class="stat-meta">
@@ -35,7 +35,8 @@
       <div class="stat-grid">
         <div class="stat-item">
           <label>Duration</label>
-          <span>{{ stat.duration_ms }} ms</span>
+          <span *ngIf="stat.duration_seconds !== null">{{ (stat.duration_seconds * 1000).toFixed(0) }} ms</span>
+          <span *ngIf="stat.duration_seconds === null">-</span>
         </div>
         <div class="stat-item">
           <label>Tokens</label>

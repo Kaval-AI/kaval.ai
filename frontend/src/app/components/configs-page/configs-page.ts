@@ -159,7 +159,7 @@ export class ConfigsPage implements OnInit {
       });
 
       durationDatasets.push({
-        data: profileStats.map((d: any) => d.duration_ms / 1000),
+        data: profileStats.map((d: any) => d.duration_seconds),
         label: name,
         borderColor: color,
         backgroundColor: color,

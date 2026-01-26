@@ -200,7 +200,7 @@ async def test_chat_completion_with_stats(agents_db, monkeypatch):
     assert stat.completion_tokens == 5
     assert stat.total_tokens == 15
     assert stat.response_code == 200
-    assert stat.duration_ms >= 0
+    assert stat.duration_seconds >= 0
     assert float(stat.cost) == 0.0001
     assert stat.request_data["requests"][0]["arguments"]["messages"] == messages
     assert stat.response_data == {"id": "chat-123"}

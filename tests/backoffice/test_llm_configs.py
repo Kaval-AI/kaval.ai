@@ -45,7 +45,7 @@ async def test_projects_get_llm_configs(client, backoffice_db, agents_db):
             "provider": "openai",
             "model_name": "gpt-4",
             "api_key": "secret-key",
-            "credentials": {"key": "secret"},
+            "config": {"key": "secret"},
         },
     )
 
@@ -78,6 +78,5 @@ async def test_projects_get_llm_configs(client, backoffice_db, agents_db):
     # Ensure sensitive data is NOT present in any item
     for d in data:
         assert "api_key" not in d
-        assert "credentials" not in d
         assert "secret-key" not in str(d)
         assert "secret" not in str(d)

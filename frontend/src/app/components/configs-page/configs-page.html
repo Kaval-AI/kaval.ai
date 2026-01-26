@@ -37,7 +37,7 @@
           <td><span class="badge provider-badge">{{ config.provider }}</span></td>
           <td>{{ config.model_name }}</td>
           <td>{{ config.base_url || 'Default' }}</td>
-          <td>{{ config.default_mode || 'N/A' }}</td>
+          <td>{{ config.config?.mode || 'N/A' }}</td>
           <td>{{ config.total_cost | currency:'USD':'symbol':'1.2-6' }}</td>
           <td>{{ formatDate(config.updated_at) }}</td>
           <td>

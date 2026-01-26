@@ -24,7 +24,7 @@ class LLMProfileView(BaseModel):
     provider: str
     model_name: str
     base_url: str | None
-    default_mode: str | None
+    config: dict | None
     total_cost: float = 0.0
     created_at: datetime
     updated_at: datetime
@@ -38,6 +38,8 @@ class LLMEmbeddingView(BaseModel):
     provider: str
     model_name: str
     base_url: str | None
+    embedding_size: int | None
+    config: dict | None
     created_at: datetime
     updated_at: datetime
 
@@ -208,8 +210,7 @@ class AgentService:
             "model_name": profile.model_name,
             "api_key": profile.api_key,
             "base_url": profile.base_url,
-            "default_mode": profile.default_mode,
-            "credentials": profile.credentials,
+            "config": profile.config,
             "updated_at": datetime.now(timezone.utc),
         }
 
@@ -240,7 +241,11 @@ class AgentService:
                 provider=p.provider,
                 model_name=p.model_name,
                 base_url=p.base_url,
-                default_mode=p.default_mode,
+                config={
+                    k: v
+                    for k, v in (p.config or {}).items()
+                    if "key" not in k.lower() and "secret" not in k.lower()
+                },
                 total_cost=costs.get(p.id, 0.0),
                 created_at=p.created_at,
                 updated_at=p.updated_at,
@@ -277,7 +282,8 @@ class AgentService:
             "model_name": profile.model_name,
             "api_key": profile.api_key,
             "base_url": profile.base_url,
-            "credentials": profile.credentials,
+            "embedding_size": profile.embedding_size,
+            "config": profile.config,
             "updated_at": datetime.now(timezone.utc),
         }
 
@@ -301,6 +307,12 @@ class AgentService:
                 provider=p.provider,
                 model_name=p.model_name,
                 base_url=p.base_url,
+                embedding_size=p.embedding_size,
+                config={
+                    k: v
+                    for k, v in (p.config or {}).items()
+                    if "key" not in k.lower() and "secret" not in k.lower()
+                },
                 created_at=p.created_at,
                 updated_at=p.updated_at,
             )

@@ -78,7 +78,7 @@ async def get_daily_stats(
                 date_col,
                 func.count(LLMCallStat.id).label("count"),
                 func.sum(LLMCallStat.cost).label("cost"),
-                func.sum(LLMCallStat.duration_ms).label("duration_ms"),
+                func.sum(LLMCallStat.duration_seconds).label("duration_seconds"),
                 func.sum(LLMCallStat.prompt_tokens).label("prompt_tokens"),
                 func.sum(LLMCallStat.completion_tokens).label("completion_tokens"),
             )
@@ -98,7 +98,7 @@ async def get_daily_stats(
             stats_by_profile[row.profile_name][row.date] = {
                 "count": row.count,
                 "cost": float(row.cost or 0),
-                "duration_ms": int(row.duration_ms or 0),
+                "duration_seconds": float(row.duration_seconds or 0),
                 "prompt_tokens": int(row.prompt_tokens or 0),
                 "completion_tokens": int(row.completion_tokens or 0),
             }
@@ -120,7 +120,7 @@ async def get_daily_stats(
                 {
                     "count": 0,
                     "cost": 0.0,
-                    "duration_ms": 0,
+                    "duration_seconds": 0.0,
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
                 },

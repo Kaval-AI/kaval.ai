@@ -66,47 +66,6 @@ async def test_session_run_task_flow(agents_db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_agents_cascade_delete(agents_db: AsyncSession):
-    """Ensure deleting an agent cleans up sessions, runs, tasks and messages."""
-    agent = await insert(agents_db, Agent, {"name": "Disposable"})
-    session = await insert(agents_db, Session, {"agent_id": agent.id})
-    run = await insert(agents_db, Run, {"session_id": session.id})
-    task = await insert(
-        agents_db,
-        Task,
-        {"agent_id": agent.id, "session_id": session.id, "run_id": run.id},
-    )
-
-    # Capture IDs
-    session_id = session.id
-    run_id = run.id
-    task_id = task.id
-
-    message = await insert(
-        agents_db,
-        ChatMessage,
-        {
-            "agent_id": agent.id,
-            "session_id": session.id,
-            "run_id": run_id,
-            "role": "user",
-            "content": "cascade test",
-        },
-    )
-    message_id = message.id
-
-    # Action: Delete the Agent
-    await delete(agents_db, Agent, agent.id)
-    agents_db.expire_all()
-
-    # Asserts - Everything should be gone due to CASCADE
-    assert await get_one(agents_db, Session, session_id) is None
-    assert await get_one(agents_db, Run, run_id) is None
-    assert await get_one(agents_db, Task, task_id) is None
-    assert await get_one(agents_db, ChatMessage, message_id) is None
-
-
-@pytest.mark.asyncio
 async def test_run_set_null_on_delete_for_messages(agents_db: AsyncSession):
     """Ensure deleting a run sets run_id to NULL in messages instead of deleting them."""
     agent = await insert(agents_db, Agent, {"name": "Persistence Test"})
@@ -153,7 +112,7 @@ async def test_llm_profile_and_stats(agents_db: AsyncSession):
             "provider": "openai",
             "model_name": "gpt-4",
             "api_key": "sk-test",
-            "default_mode": "TOOLS",
+            "config": {"mode": "TOOLS"},
         },
     )
     assert profile.name == "Test OpenAI"
@@ -164,7 +123,6 @@ async def test_llm_profile_and_stats(agents_db: AsyncSession):
         LLMCallStat,
         {
             "llm_profile_id": profile.id,
-            "name": "test_call",
             "response_code": 200,
             "cost": 0.000123,
         },

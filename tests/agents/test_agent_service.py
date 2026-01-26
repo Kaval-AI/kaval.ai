@@ -99,12 +99,11 @@ class TestAgentService:
         for i in range(10):
             stat = LLMCallStat(
                 llm_profile_id=profile.id,
-                name=f"Call {i}",
                 response_code=200,
                 prompt_tokens=10,
                 completion_tokens=5,
                 total_tokens=15,
-                duration_ms=100,
+                duration_seconds=0.1,
                 request_data={"query": f"test {i}"},
                 response_data={"answer": f"result {i}"},
                 cost=0.001,
@@ -127,11 +126,9 @@ class TestAgentService:
         # Test pagination
         stats = await service.get_llm_call_stats(limit=5, offset=0)
         assert len(stats) == 5
-        assert stats[0].name == "Call 9"  # Ordered by created_at desc
 
         stats = await service.get_llm_call_stats(limit=5, offset=5)
         assert len(stats) == 5
-        assert stats[0].name == "Call 4"
 
     async def test_llm_profiles_logic(self, agents_db):
         service = AgentService(agents_db)
@@ -142,7 +139,7 @@ class TestAgentService:
             provider="openai",
             model_name="gpt-4",
             api_key="key1",
-            credentials={"some": "cred"},
+            config={"some": "cred"},
         )
         saved = await service.upsert_llm_profile(profile)
         assert saved.id is not None
@@ -197,7 +194,7 @@ class TestAgentService:
             provider="openai",
             model_name="text-embedding-3-small",
             api_key="key1",
-            credentials={"some": "cred"},
+            config={"some": "cred"},
         )
         saved = await service.upsert_embedding_profile(profile)
         assert saved.id is not None
