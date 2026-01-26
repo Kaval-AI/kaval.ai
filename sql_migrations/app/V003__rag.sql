@@ -6,6 +6,7 @@ CREATE TABLE rag_index (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     embedding_profile_id UUID REFERENCES embedding_profiles(id) ON DELETE SET NULL,
     collection_name TEXT NOT NULL, -- Logical grouping (e.g., "kb_finance", "user_123_docs")
+    source_id TEXT NOT NULL, -- This represents for the unique identifier of the source document.
     content TEXT,
     embedding_size INTEGER NOT NULL,
     embedding VECTOR,
@@ -18,7 +19,7 @@ CREATE TABLE rag_index (
 CREATE INDEX idx_rag_index_embedding_profile_id ON rag_index(embedding_profile_id);
 CREATE INDEX idx_rag_index_collection ON rag_index (collection_name);
 CREATE INDEX idx_rag_index_metadata ON rag_index USING gin (metadata);
-
+CREATE INDEX idx_rag_source_id ON rag_index (source_id);
 
 -- Create indexes for popular embedding sizes.
 CREATE INDEX idx_rag_embedding_768 ON rag_index

@@ -35,6 +35,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `cli_chat.py`: Command line tool for chatting with agents.
         - `rss.py`: RSS feed parser tool.
         - `openapi_spec_parser.py`: Tool for parsing OpenAPI specifications.
+        - `index_csv.py`: Tool for indexing large CSV files into RAG.
     - `crud.py`: Shared database utility functions.
 - `frontend/`: Angular-based project for the backoffice UI.
     - `src/app/models/`: TypeScript interfaces and data models.
@@ -58,7 +59,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `backoffice/`: Tests for management API, project isolation, and memberships.
     - `llm_clients/`: Integration and unit tests for LLM providers (OpenAI, Gemini) and embeddings.
     - `prices/`: Tests for pricing models and cost calculations.
-    - `tools/`: Tests for utility tools (RSS, OpenAPI parser).
+    - `tools/`: Tests for utility tools (RSS, OpenAPI parser, CSV indexer).
     - `test_persona_simulator.py`: Tests for the persona simulation logic.
 - `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
     - `app/V000__agents.sql`: Initial schema for agents, sessions, runs, tasks, and chat messages.
