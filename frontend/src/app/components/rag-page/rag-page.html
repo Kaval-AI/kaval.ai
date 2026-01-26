@@ -1,1 +1,68 @@
-<p>rag-page works!</p>
+<div class="rag-container">
+  <h2>RAG Query Explorer</h2>
+
+  <div class="query-form card">
+    <div class="form-group mb-3">
+      <label for="queryText">Query Text</label>
+      <textarea id="queryText" [(ngModel)]="queryText" placeholder="Enter your query here..." rows="3" class="form-control"></textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group col-profile">
+        <label for="embeddingProfile">Embedding Profile</label>
+        <select id="embeddingProfile" [(ngModel)]="selectedEmbeddingProfileId" class="form-control">
+          <option *ngFor="let config of embeddingConfigs" [value]="config.id">
+            {{ config.name }} ({{ config.model_name }})
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group col-collection">
+        <label for="collectionName">Collection Name (Optional)</label>
+        <input type="text" id="collectionName" [(ngModel)]="collectionName" placeholder="default" class="form-control">
+      </div>
+
+      <div class="form-group col-topk">
+        <label for="topK">Top K</label>
+        <input type="number" id="topK" [(ngModel)]="topK" min="1" max="100" class="form-control">
+      </div>
+    </div>
+
+    <div class="form-actions mt-3">
+      <button class="btn-primary" (click)="onQuery()" [disabled]="loading || !queryText || !selectedEmbeddingProfileId">
+        <span *ngIf="!loading">Query</span>
+        <span *ngIf="loading">Querying...</span>
+      </button>
+    </div>
+  </div>
+
+  <div *ngIf="error" class="alert-error mt-3">
+    {{ error }}
+  </div>
+
+  <div class="results-section mt-4" *ngIf="results.length > 0">
+    <h3>Results ({{ results.length }})</h3>
+    <table class="results-table">
+      <thead>
+        <tr>
+          <th>Content</th>
+          <th>Collection</th>
+          <th class="metadata-col">Metadata</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let result of results">
+          <td class="content-cell">{{ result.content }}</td>
+          <td>{{ result.collection_name }}</td>
+          <td>
+            <pre class="metadata-pre">{{ result.rag_metadata | json }}</pre>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div *ngIf="!loading && results.length === 0 && !error" class="mt-4 text-muted">
+    Execute a query to see results.
+  </div>
+</div>
