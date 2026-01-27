@@ -134,7 +134,8 @@ async def test_projects_rag_query(client, backoffice_db, agents_db):
     ), patch(
         "kavalai.agents.db.db_manager.get_sessionmaker"
     ) as mock_get_sessionmaker, patch(
-        "kavalai.agents.rag_service.compute_embeddings", new_callable=AsyncMock
+        "kavalai.agents.rag_service.compute_embeddings_with_stats",
+        new_callable=AsyncMock,
     ) as mock_compute:
         mock_compute.return_value = [[0.1, 0.2, 0.3]]
 

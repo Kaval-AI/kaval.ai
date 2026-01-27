@@ -98,12 +98,17 @@ class OpenAIClient:
         texts: List[str],
         normalize: bool = False,
         **kwargs,
-    ) -> List[List[float]]:
+    ) -> Dict[str, Any]:
+        from kavalai.prices.openai import OPENAI_EMBEDDING_PRICES
+
+        start_time = time.perf_counter()
         response = await self.client.embeddings.create(
             input=texts,
             model=model,
             **kwargs,
         )
+        duration = time.perf_counter() - start_time
+
         embeddings = [data.embedding for data in response.data]
 
         if normalize:
@@ -114,6 +119,36 @@ class OpenAIClient:
                     normalized_embeddings.append([x / norm for x in emb])
                 else:
                     normalized_embeddings.append(emb)
-            return normalized_embeddings
+            embeddings = normalized_embeddings
 
-        return embeddings
+        total_tokens = response.usage.total_tokens if response.usage else 0
+
+        # Calculate cost
+        cost = 0.0
+        pricing = OPENAI_EMBEDDING_PRICES.get(model)
+        if not pricing:
+            # Try prefix match
+            for m, p in OPENAI_EMBEDDING_PRICES.items():
+                if model.startswith(m):
+                    pricing = p
+                    break
+
+        if pricing:
+            # We use standard pricing here.
+            # OPENAI_EMBEDDING_PRICES contains dicts like {"standard": 0.02, "batch": 0.01}
+            # where the price is per 1M tokens.
+            price_per_1m = pricing.get("standard", 0.0)
+            cost = (total_tokens * price_per_1m) / 1_000_000
+
+        return {
+            "embeddings": embeddings,
+            "usage": {
+                "total_tokens": total_tokens,
+            },
+            "duration": duration,
+            "cost": cost,
+            "raw_response": response.model_dump()
+            if hasattr(response, "model_dump")
+            else str(response),
+            "model": model,
+        }

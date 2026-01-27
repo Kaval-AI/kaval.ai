@@ -4,8 +4,8 @@ from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai.agents.db import EmbeddingProfile, RagIndex
-from kavalai.llm_clients.common import compute_embeddings
+from kavalai.agents.db import EmbeddingProfile, RagIndex, Agent
+from kavalai.llm_clients.common import compute_embeddings_with_stats
 
 
 class RagService:
@@ -13,9 +13,11 @@ class RagService:
         self,
         db_session: AsyncSession,
         embedding_profile: EmbeddingProfile,
+        agent: Optional[Agent] = None,
     ):
         self.db = db_session
         self.embedding_profile = embedding_profile
+        self.agent = agent
 
     async def batch_index(
         self,
@@ -35,8 +37,11 @@ class RagService:
         if source_ids and len(texts) != len(source_ids):
             raise ValueError("The number of texts and source_ids must be the same.")
 
-        embeddings = await compute_embeddings(
-            llm_profile=self.embedding_profile, texts=texts
+        embeddings = await compute_embeddings_with_stats(
+            llm_profile=self.embedding_profile,
+            texts=texts,
+            session=self.db,
+            agent_id=self.agent.id if self.agent else None,
         )
 
         rag_items = []
@@ -95,8 +100,11 @@ class RagService:
         top_k: int = 5,
         collection_name: Optional[str] = None,
     ) -> list[dict]:
-        embeddings = await compute_embeddings(
-            llm_profile=self.embedding_profile, texts=[text]
+        embeddings = await compute_embeddings_with_stats(
+            llm_profile=self.embedding_profile,
+            texts=[text],
+            session=self.db,
+            agent_id=self.agent.id if self.agent else None,
         )
         query_embedding = embeddings[0]
 

@@ -20,11 +20,12 @@ async def test_rag_service_indexing(agents_db):
 
     service = RagService(agents_db, profile)
 
-    # 2. Mock compute_embeddings
+    # 2. Mock compute_embeddings_with_stats
     mock_embeddings = [[0.1] * 1536, [0.2] * 1536]
 
     with patch(
-        "kavalai.agents.rag_service.compute_embeddings", new_callable=AsyncMock
+        "kavalai.agents.rag_service.compute_embeddings_with_stats",
+        new_callable=AsyncMock,
     ) as mock_compute:
         mock_compute.return_value = mock_embeddings
 
@@ -43,7 +44,9 @@ async def test_rag_service_indexing(agents_db):
         assert items[1].content == "world"
         assert items[1].embedding == [0.2] * 1536
 
-        mock_compute.assert_called_once_with(llm_profile=profile, texts=texts)
+        mock_compute.assert_called_once_with(
+            llm_profile=profile, texts=texts, session=agents_db, agent_id=None
+        )
 
 
 @pytest.mark.asyncio
@@ -66,6 +69,7 @@ async def test_rag_service_query(agents_db):
         {
             "embedding_profile_id": profile.id,
             "collection_name": "index1",
+            "source_id": "match",
             "embedding": [1.0] + [0.0] * 1535,
             "embedding_size": 1536,
             "content": "match",
@@ -78,6 +82,7 @@ async def test_rag_service_query(agents_db):
         {
             "embedding_profile_id": profile.id,
             "collection_name": "index2",
+            "source_id": "wrong",
             "embedding": [1.0] + [0.0] * 1535,
             "embedding_size": 1536,
             "content": "wrong index",
@@ -89,6 +94,7 @@ async def test_rag_service_query(agents_db):
         {
             "embedding_profile_id": profile.id,
             "collection_name": "index1",
+            "source_id": "other",
             "embedding": [1.0] + [0.0] * 1535,
             "embedding_size": 1536,
             "content": "other",
@@ -99,7 +105,8 @@ async def test_rag_service_query(agents_db):
 
     # 3. Mock query embedding
     with patch(
-        "kavalai.agents.rag_service.compute_embeddings", new_callable=AsyncMock
+        "kavalai.agents.rag_service.compute_embeddings_with_stats",
+        new_callable=AsyncMock,
     ) as mock_compute:
         mock_compute.return_value = [[1.0] + [0.0] * 1535]
 
@@ -111,13 +118,13 @@ async def test_rag_service_query(agents_db):
         results = await service.query("some query", collection_name="index1")
         assert len(results) == 2
         for r in results:
-            assert r.collection_name == "index1"
+            assert r["collection_name"] == "index1"
 
         # Match specific content
         results = await service.query("some query", collection_name="index1")
-        assert any(r.content == "match" for r in results)
-        assert any(r.content == "other" for r in results)
-        assert results[0].collection_name == "index1"
+        assert any(r["content"] == "match" for r in results)
+        assert any(r["content"] == "other" for r in results)
+        assert results[0]["collection_name"] == "index1"
 
 
 @pytest.mark.asyncio
@@ -134,7 +141,8 @@ async def test_rag_service_indexing_with_dim(agents_db):
     service = RagService(agents_db, profile)
 
     with patch(
-        "kavalai.agents.rag_service.compute_embeddings", new_callable=AsyncMock
+        "kavalai.agents.rag_service.compute_embeddings_with_stats",
+        new_callable=AsyncMock,
     ) as mock_compute:
         mock_compute.return_value = [[0.1] * 100]
 

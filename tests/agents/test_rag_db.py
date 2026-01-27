@@ -27,6 +27,7 @@ async def test_embedding_profile_and_rag_index(agents_db: AsyncSession):
         {
             "embedding_profile_id": profile.id,
             "collection_name": "default",
+            "source_id": "test-1",
             "embedding": [0.1] * 1536,
             "embedding_size": 1536,
             "content": "This is a test document for RAG.",
@@ -34,6 +35,7 @@ async def test_embedding_profile_and_rag_index(agents_db: AsyncSession):
         },
     )
     assert rag_item.embedding_profile_id == profile.id
+    assert rag_item.source_id == "test-1"
     assert len(rag_item.embedding) == 1536
     assert rag_item.content == "This is a test document for RAG."
 
@@ -44,6 +46,7 @@ async def test_embedding_profile_and_rag_index(agents_db: AsyncSession):
         {
             "embedding_profile_id": profile.id,
             "collection_name": "default",
+            "source_id": "test-2",
             "embedding": [0.5] * 768,
             "embedding_size": 768,
             "content": '{"key": "value", "nested": [1, 2, 3]}',
@@ -58,6 +61,7 @@ async def test_embedding_profile_and_rag_index(agents_db: AsyncSession):
         {
             "embedding_profile_id": profile.id,
             "collection_name": "default",
+            "source_id": "test-3",
             "embedding": [0.9] * 384,
             "embedding_size": 384,
             "content": "binary data",

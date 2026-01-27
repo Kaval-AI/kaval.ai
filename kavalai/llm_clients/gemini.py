@@ -150,12 +150,15 @@ class GeminiClient:
         texts: List[str],
         normalize: bool = False,
         **kwargs,
-    ) -> List[List[float]]:
+    ) -> Dict[str, Any]:
+        start_time = time.perf_counter()
         response = await self.client.aio.models.embed_content(
             model=model,
             contents=texts,
             **kwargs,
         )
+        duration = time.perf_counter() - start_time
+
         # response.embeddings is a list of ContentEmbedding objects
         embeddings = [emb.values for emb in response.embeddings]
 
@@ -167,6 +170,37 @@ class GeminiClient:
                     normalized_embeddings.append([x / norm for x in emb])
                 else:
                     normalized_embeddings.append(emb)
-            return normalized_embeddings
+            embeddings = normalized_embeddings
 
-        return embeddings
+        # Calculate cost
+        cost = 0.0
+        pricing = GEMINI_PRICES.get(model)
+        if not pricing:
+            # Try prefix match
+            for m, p in GEMINI_PRICES.items():
+                if model.startswith(m):
+                    pricing = p
+                    break
+
+        # Estimated tokens if not provided (Gemini embed_content doesn't always return usage in the same way as generate_content)
+        # However, let's check if it exists
+        total_tokens = 0
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            total_tokens = response.usage_metadata.total_token_count or 0
+        else:
+            # Fallback: estimate tokens (rough estimation: 1 token ~= 4 chars)
+            total_tokens = sum(len(t) for t in texts) // 4
+
+        if pricing:
+            cost = pricing.calculate_cost(total_tokens, 0)
+
+        return {
+            "embeddings": embeddings,
+            "usage": {
+                "total_tokens": total_tokens,
+            },
+            "duration": duration,
+            "cost": cost,
+            "raw_response": str(response),
+            "model": model,
+        }
