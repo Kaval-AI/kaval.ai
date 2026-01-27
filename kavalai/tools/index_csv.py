@@ -10,6 +10,7 @@ python -m kavalai.tools.index_csv local_data/song_lyrics.csv \
     --index-fields lyrics \
     --source-field id \
     --mode full \
+    --replace
     --limit 100
 
 Modes:
