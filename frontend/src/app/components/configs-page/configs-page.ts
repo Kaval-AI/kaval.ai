@@ -3,9 +3,10 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
-import { LLMConfig } from '../../models/llm-config';
+import { LLMConfig, LLMEmbeddingConfig } from '../../models/llm-config';
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions, Chart, registerables } from 'chart.js';
+import { forkJoin } from 'rxjs';
 
 Chart.register(...registerables);
 
@@ -18,6 +19,7 @@ Chart.register(...registerables);
 })
 export class ConfigsPage implements OnInit {
   configs: LLMConfig[] = [];
+  embeddingConfigs: LLMEmbeddingConfig[] = [];
   loading: boolean = false;
   error: string | null = null;
   activeProjectId: string | null = null;
@@ -77,13 +79,17 @@ export class ConfigsPage implements OnInit {
     this.loading = true;
     this.error = null;
 
-    this.agentService.getLLMConfigs(this.activeProjectId).subscribe({
-      next: (configs) => {
-        this.configs = configs;
+    forkJoin({
+      llm: this.agentService.getLLMConfigs(this.activeProjectId),
+      embedding: this.agentService.getEmbeddingConfigs(this.activeProjectId)
+    }).subscribe({
+      next: (res) => {
+        this.configs = res.llm;
+        this.embeddingConfigs = res.embedding;
         this.loading = false;
       },
       error: (err) => {
-        this.error = 'Failed to load LLM configurations';
+        this.error = 'Failed to load configurations';
         console.error(err);
         this.loading = false;
       }

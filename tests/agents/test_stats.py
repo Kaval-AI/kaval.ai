@@ -1,7 +1,14 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from kavalai.agents.db import Agent, Session, Run, ChatMessage, LLMCallStat
+from kavalai.agents.db import (
+    Agent,
+    Session,
+    Run,
+    ChatMessage,
+    LLMCallStat,
+    EmbeddingCallStat,
+)
 from kavalai.agents.stats import get_daily_stats, get_summary_stats
 
 
@@ -22,6 +29,12 @@ async def test_get_summary_stats(agents_db):
         cost=0.05,
         created_at=ten_days_ago,
     )
+    estat1 = EmbeddingCallStat(
+        id=uuid4(),
+        agent_id=agent.id,
+        cost=0.01,
+        created_at=ten_days_ago,
+    )
 
     # 40 days ago (should be excluded)
     forty_days_ago = now - timedelta(days=40)
@@ -33,17 +46,21 @@ async def test_get_summary_stats(agents_db):
         created_at=forty_days_ago,
     )
 
-    agents_db.add_all([s1, stat1, s2, stat2])
+    agents_db.add_all([s1, stat1, estat1, s2, stat2])
     await agents_db.commit()
 
     stats = await get_summary_stats(agents_db)
 
-    assert stats["total_cost"] == 0.05
+    assert pytest.approx(stats["total_cost"]) == 0.06
+    assert pytest.approx(stats["llm_cost"]) == 0.05
+    assert pytest.approx(stats["embedding_cost"]) == 0.01
     assert stats["total_sessions"] == 1
 
     # Test with agent_id filter
     stats_agent = await get_summary_stats(agents_db, agent_id=agent.id)
-    assert stats_agent["total_cost"] == 0.05
+    assert pytest.approx(stats_agent["total_cost"]) == 0.06
+    assert pytest.approx(stats_agent["llm_cost"]) == 0.05
+    assert pytest.approx(stats_agent["embedding_cost"]) == 0.01
     assert stats_agent["total_sessions"] == 1
 
     # Test with non-existent agent_id

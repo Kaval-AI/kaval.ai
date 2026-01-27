@@ -1,7 +1,13 @@
 import pytest
 from uuid import uuid4
 from kavalai.agents.agent_service import AgentService, load_embedding_profile_from_path
-from kavalai.agents.db import LLMCallStat, LLMProfile, EmbeddingProfile
+from kavalai.agents.db import (
+    Agent,
+    LLMCallStat,
+    LLMProfile,
+    EmbeddingProfile,
+    EmbeddingCallStat,
+)
 
 
 @pytest.mark.asyncio
@@ -188,6 +194,11 @@ class TestAgentService:
     async def test_embedding_profiles_logic(self, agents_db):
         service = AgentService(agents_db)
 
+        # 0. Setup agent for FK
+        agent = Agent(id=uuid4(), name="Test Agent")
+        agents_db.add(agent)
+        await agents_db.commit()
+
         # 1. Test upsert new profile
         profile = EmbeddingProfile(
             name="TestEmbed",
@@ -211,9 +222,19 @@ class TestAgentService:
         assert updated.api_key == "key2"
 
         # 4. Test get all views
+        # Add some stats to verify cost calculation
+        stat = EmbeddingCallStat(
+            embedding_profile_id=saved.id,
+            cost=0.005,
+            agent_id=agent.id,
+        )
+        agents_db.add(stat)
+        await agents_db.commit()
+
         views = await service.get_embedding_profiles_from_db()
         assert len(views) == 1
         assert views[0].name == "TestEmbed"
+        assert float(views[0].total_cost) == 0.005
         assert not hasattr(
             views[0], "api_key"
         )  # LLMEmbeddingView should not have api_key

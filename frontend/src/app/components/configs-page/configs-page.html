@@ -49,6 +49,39 @@
       </tbody>
     </table>
 
+    <div class="header-section" style="margin-top: 2rem;">
+      <h1>Embedding Configurations</h1>
+    </div>
+
+    <div *ngIf="embeddingConfigs.length === 0" class="empty-state">
+      <p>No embedding configurations found for this project.</p>
+    </div>
+
+    <table *ngIf="embeddingConfigs.length > 0" class="configs-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Provider</th>
+          <th>Model</th>
+          <th>Base URL</th>
+          <th>Embedding Size</th>
+          <th>Total Cost</th>
+          <th>Last Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let config of embeddingConfigs">
+          <td>{{ config.name }}</td>
+          <td><span class="badge provider-badge">{{ config.provider }}</span></td>
+          <td>{{ config.model_name }}</td>
+          <td>{{ config.base_url || 'Default' }}</td>
+          <td>{{ config.embedding_size || 'N/A' }}</td>
+          <td>{{ config.total_cost | currency:'USD':'symbol':'1.2-6' }}</td>
+          <td>{{ formatDate(config.updated_at) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
     <div *ngIf="stats && stats.llm" class="charts-section">
       <h3>LLM Statistics (Last 7 Days)</h3>
       <div class="charts-grid">

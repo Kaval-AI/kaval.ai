@@ -1,7 +1,14 @@
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from kavalai.agents.db import Run, Session, ChatMessage, LLMCallStat, LLMProfile
+from kavalai.agents.db import (
+    Run,
+    Session,
+    ChatMessage,
+    LLMCallStat,
+    LLMProfile,
+    EmbeddingCallStat,
+)
 
 
 async def get_summary_stats(session: AsyncSession, agent_id: str | None = None):
@@ -9,12 +16,21 @@ async def get_summary_stats(session: AsyncSession, agent_id: str | None = None):
     end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=30)
 
-    # Get total cost
-    stmt_cost = select(func.sum(LLMCallStat.cost)).where(
+    # Get LLM cost
+    stmt_llm_cost = select(func.sum(LLMCallStat.cost)).where(
         LLMCallStat.created_at >= start_date
     )
     if agent_id:
-        stmt_cost = stmt_cost.where(LLMCallStat.agent_id == agent_id)
+        stmt_llm_cost = stmt_llm_cost.where(LLMCallStat.agent_id == agent_id)
+
+    # Get Embedding cost
+    stmt_embedding_cost = select(func.sum(EmbeddingCallStat.cost)).where(
+        EmbeddingCallStat.created_at >= start_date
+    )
+    if agent_id:
+        stmt_embedding_cost = stmt_embedding_cost.where(
+            EmbeddingCallStat.agent_id == agent_id
+        )
 
     # Get total sessions
     stmt_sessions = select(func.count(Session.id)).where(
@@ -23,11 +39,17 @@ async def get_summary_stats(session: AsyncSession, agent_id: str | None = None):
     if agent_id:
         stmt_sessions = stmt_sessions.where(Session.agent_id == agent_id)
 
-    res_cost = await session.execute(stmt_cost)
+    res_llm_cost = await session.execute(stmt_llm_cost)
+    res_embedding_cost = await session.execute(stmt_embedding_cost)
     res_sessions = await session.execute(stmt_sessions)
 
+    llm_cost = float(res_llm_cost.scalar() or 0)
+    embedding_cost = float(res_embedding_cost.scalar() or 0)
+
     return {
-        "total_cost": float(res_cost.scalar() or 0),
+        "total_cost": llm_cost + embedding_cost,
+        "llm_cost": llm_cost,
+        "embedding_cost": embedding_cost,
         "total_sessions": int(res_sessions.scalar() or 0),
     }
 

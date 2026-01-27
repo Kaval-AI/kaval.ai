@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 from kavalai import crud
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage
-from kavalai.agents.db import LLMProfile, LLMCallStat, EmbeddingProfile
+from kavalai.agents.db import (
+    LLMProfile,
+    LLMCallStat,
+    EmbeddingProfile,
+    EmbeddingCallStat,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,7 @@ class LLMEmbeddingView(BaseModel):
     base_url: str | None
     embedding_size: int | None
     config: dict | None
+    total_cost: float = 0.0
     created_at: datetime
     updated_at: datetime
 
@@ -297,6 +303,17 @@ class AgentService:
     async def get_embedding_profiles_from_db(self) -> list[LLMEmbeddingView]:
         profiles = await crud.get_all(self.db, EmbeddingProfile)
 
+        # Fetch total cost per profile
+        cost_stmt = select(
+            EmbeddingCallStat.embedding_profile_id,
+            func.sum(EmbeddingCallStat.cost).label("total_cost"),
+        ).group_by(EmbeddingCallStat.embedding_profile_id)
+        cost_result = await self.db.execute(cost_stmt)
+        costs = {
+            row.embedding_profile_id: float(row.total_cost or 0)
+            for row in cost_result.all()
+        }
+
         # Sort by updated_at desc manually since crud.get_all doesn't support ordering yet
         profiles = sorted(profiles, key=lambda p: p.updated_at, reverse=True)
 
@@ -313,6 +330,7 @@ class AgentService:
                     for k, v in (p.config or {}).items()
                     if "key" not in k.lower() and "secret" not in k.lower()
                 },
+                total_cost=costs.get(p.id, 0.0),
                 created_at=p.created_at,
                 updated_at=p.updated_at,
             )
