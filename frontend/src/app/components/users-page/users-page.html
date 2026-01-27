@@ -2,73 +2,79 @@
   <div class="header-section">
     <div class="header-top">
       <h1>Users</h1>
-      <button class="add-btn" (click)="addUser()" *ngIf="!showForm">
-        <i class="fas fa-plus"></i> Add User
-      </button>
+      @if (!showForm) {
+        <button class="add-btn" (click)="addUser()">
+          <i class="fas fa-plus"></i> Add User
+        </button>
+      }
     </div>
     <p class="subtitle">Manage system users and their permissions.</p>
   </div>
 
-  <div *ngIf="showForm" class="user-form">
-    <h2>Add New User</h2>
-    <form [formGroup]="userForm" (ngSubmit)="saveUser()">
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input type="email" id="email" formControlName="email" class="form-control" />
-      </div>
-      <div class="form-group">
-        <label for="name">Name</label>
-        <input type="text" id="name" formControlName="name" class="form-control" />
-      </div>
-      <div class="form-group">
-        <label for="picture">Picture URL</label>
-        <input type="text" id="picture" formControlName="picture" class="form-control" />
-      </div>
-      <div class="form-group checkbox">
-        <label>
-          <input type="checkbox" formControlName="is_admin" /> Is Admin
-        </label>
-      </div>
-      <div class="form-actions">
-        <button type="button" class="btn" (click)="cancelForm()">Cancel</button>
-        <button type="submit" class="btn btn-primary" [disabled]="userForm.invalid">Save</button>
-      </div>
-    </form>
-  </div>
-
-  <div class="table-container" *ngIf="!showForm">
-    <table class="users-table">
-      <thead>
-        <tr>
-          <th>Picture</th>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Admin</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let user of users">
-          <td>
-            <img [src]="user.picture || 'assets/default-avatar.png'" alt="avatar" class="avatar" />
-          </td>
-          <td>{{ user.name }}</td>
-          <td>{{ user.email }}</td>
-          <td>
-            <span class="badge" [ngClass]="user.is_admin ? 'admin-badge' : 'user-badge'">
-              {{ user.is_admin ? 'Admin' : 'User' }}
-            </span>
-          </td>
-          <td class="actions">
-            <button class="action-btn edit-btn" (click)="editUser(user)" title="Edit">
-              <i class="fas fa-edit"></i>
-            </button>
-            <button class="action-btn delete-btn" (click)="deleteUser(user)" title="Delete">
-              <i class="fas fa-trash"></i>
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  @if (showForm) {
+    <div class="user-form">
+      <h2>Add New User</h2>
+      <form [formGroup]="userForm" (ngSubmit)="saveUser()">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" formControlName="email" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label for="name">Name</label>
+          <input type="text" id="name" formControlName="name" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label for="picture">Picture URL</label>
+          <input type="text" id="picture" formControlName="picture" class="form-control" />
+        </div>
+        <div class="form-group checkbox">
+          <label>
+            <input type="checkbox" formControlName="is_admin" /> Is Admin
+          </label>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn" (click)="cancelForm()">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="userForm.invalid">Save</button>
+        </div>
+      </form>
+    </div>
+  } @else {
+    <div class="table-container">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>Picture</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Admin</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of users; track user.id) {
+            <tr>
+              <td>
+                <img [src]="user.picture || 'assets/default-avatar.png'" alt="avatar" class="avatar" />
+              </td>
+              <td>{{ user.name }}</td>
+              <td>{{ user.email }}</td>
+              <td>
+                <span class="badge" [ngClass]="user.is_admin ? 'admin-badge' : 'user-badge'">
+                  {{ user.is_admin ? 'Admin' : 'User' }}
+                </span>
+              </td>
+              <td class="actions">
+                <button class="action-btn edit-btn" (click)="editUser(user)" title="Edit">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="action-btn delete-btn" (click)="deleteUser(user)" title="Delete">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
 </div>

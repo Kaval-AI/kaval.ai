@@ -19,52 +19,56 @@
 @if (projects.length > 0) {
 <div class="centered">
   <main>
-    <div class="project-details" *ngIf="selectedProject">
-      <div class="project-header">
-        <div class="title-section">
-          <h3>{{ selectedProject.name }}</h3>
-          <p class="project-role-badge">{{ selectedProject.role }}</p>
-        </div>
-        <div class="action-icons">
-          <button type="button" class="icon-btn edit-btn" (click)="editProject()" title="Edit Project">
-            <i class="fas fa-edit"></i>
-          </button>
-          @if (selectedProject.role === 'owner') {
-            <button type="button" class="icon-btn delete-btn" (click)="deleteProject()" title="Delete Project">
-              <i class="fas fa-trash"></i>
+    @if (selectedProject) {
+      <div class="project-details">
+        <div class="project-header">
+          <div class="title-section">
+            <h3>{{ selectedProject.name }}</h3>
+            <p class="project-role-badge">{{ selectedProject.role }}</p>
+          </div>
+          <div class="action-icons">
+            <button type="button" class="icon-btn edit-btn" (click)="editProject()" title="Edit Project">
+              <i class="fas fa-edit"></i>
             </button>
+            @if (selectedProject.role === 'owner') {
+              <button type="button" class="icon-btn delete-btn" (click)="deleteProject()" title="Delete Project">
+                <i class="fas fa-trash"></i>
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="project-info">
+          @if (summaryStats) {
+            <div class="stats-grid">
+              <div class="stat-card">
+                <span class="stat-label">Total Cost (30d)</span>
+                <span class="stat-value">{{ summaryStats.total_cost | currency }}</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">LLM Cost (30d)</span>
+                <span class="stat-value">{{ summaryStats.llm_cost | currency }}</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Embedding Cost (30d)</span>
+                <span class="stat-value">{{ summaryStats.embedding_cost | currency }}</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Total Sessions (30d)</span>
+                <span class="stat-value">{{ summaryStats.total_sessions }}</span>
+              </div>
+            </div>
           }
-        </div>
-      </div>
 
-      <div class="project-info">
-        <div class="stats-grid" *ngIf="summaryStats">
-          <div class="stat-card">
-            <span class="stat-label">Total Cost (30d)</span>
-            <span class="stat-value">{{ summaryStats.total_cost | currency }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">LLM Cost (30d)</span>
-            <span class="stat-value">{{ summaryStats.llm_cost | currency }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Embedding Cost (30d)</span>
-            <span class="stat-value">{{ summaryStats.embedding_cost | currency }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Total Sessions (30d)</span>
-            <span class="stat-value">{{ summaryStats.total_sessions }}</span>
-          </div>
-        </div>
-
-        <div class="info-group">
-          <label>Description</label>
-          <div class="info-content description-text">
-            {{ selectedProject.description || 'No description provided.' }}
+          <div class="info-group">
+            <label>Description</label>
+            <div class="info-content description-text">
+              {{ selectedProject.description || 'No description provided.' }}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    }
   </main>
 </div>
 } @else if (projects.length == 0) {

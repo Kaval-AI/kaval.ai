@@ -9,71 +9,86 @@
       </a>
     </div>
     <h1>LLM Call Details</h1>
-    <p class="subtitle" *ngIf="llmProfileId">Filtered by profile: {{ llmProfileId }}</p>
+    @if (llmProfileId) {
+      <p class="subtitle">Filtered by profile: {{ llmProfileId }}</p>
+    }
   </div>
 
-  <div *ngIf="error" class="error-state">
-    <p>{{ error }}</p>
-    <button (click)="loadStats()" class="retry-btn">Retry</button>
-  </div>
+  @if (error) {
+    <div class="error-state">
+      <p>{{ error }}</p>
+      <button (click)="loadStats()" class="retry-btn">Retry</button>
+    </div>
+  }
 
   <div class="stats-list">
-    <div *ngFor="let stat of stats" class="stat-card">
-      <div class="stat-header">
-        <div class="stat-title">
-          <span class="stat-name">{{ 'Call' }}</span>
-          <span class="stat-id">{{ stat.id }}</span>
-        </div>
-        <div class="stat-meta">
-          <span class="badge" [ngClass]="{'status-success': stat.response_code === 200, 'status-error': stat.response_code !== 200}">
-            {{ stat.response_code }}
-          </span>
-          <span class="stat-time">{{ formatDate(stat.created_at) }}</span>
-        </div>
-      </div>
-
-      <div class="stat-grid">
-        <div class="stat-item">
-          <label>Duration</label>
-          <span *ngIf="stat.duration_seconds !== null">{{ (stat.duration_seconds * 1000).toFixed(0) }} ms</span>
-          <span *ngIf="stat.duration_seconds === null">-</span>
-        </div>
-        <div class="stat-item">
-          <label>Tokens</label>
-          <span>{{ stat.total_tokens }} ({{ stat.prompt_tokens }} in / {{ stat.completion_tokens }} out)</span>
-        </div>
-        <div class="stat-item">
-          <label>Cost</label>
-          <span>{{ stat.cost | currency:(stat.currency || 'USD') }}</span>
-        </div>
-      </div>
-
-      <div class="stat-details">
-        <div class="stat-section">
-          <label>Request Data</label>
-          <div class="json-viewer">
-            <app-json-tree [data]="stat.request_data" [isExpanded]="false"></app-json-tree>
+    @for (stat of stats; track stat.id) {
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-title">
+            <span class="stat-name">{{ 'Call' }}</span>
+            <span class="stat-id">{{ stat.id }}</span>
+          </div>
+          <div class="stat-meta">
+            <span class="badge" [ngClass]="{'status-success': stat.response_code === 200, 'status-error': stat.response_code !== 200}">
+              {{ stat.response_code }}
+            </span>
+            <span class="stat-time">{{ formatDate(stat.created_at) }}</span>
           </div>
         </div>
-        <div class="stat-section">
-          <label>Response Data</label>
-          <div class="json-viewer">
-            <app-json-tree [data]="stat.response_data" [isExpanded]="false"></app-json-tree>
+
+        <div class="stat-grid">
+          <div class="stat-item">
+            <label>Duration</label>
+            @if (stat.duration_seconds !== null) {
+              <span>{{ (stat.duration_seconds * 1000).toFixed(0) }} ms</span>
+            } @else {
+              <span>-</span>
+            }
+          </div>
+          <div class="stat-item">
+            <label>Tokens</label>
+            <span>{{ stat.total_tokens }} ({{ stat.prompt_tokens }} in / {{ stat.completion_tokens }} out)</span>
+          </div>
+          <div class="stat-item">
+            <label>Cost</label>
+            <span>{{ stat.cost | currency:(stat.currency || 'USD') }}</span>
+          </div>
+        </div>
+
+        <div class="stat-details">
+          <div class="stat-section">
+            <label>Request Data</label>
+            <div class="json-viewer">
+              <app-json-tree [data]="stat.request_data" [isExpanded]="false"></app-json-tree>
+            </div>
+          </div>
+          <div class="stat-section">
+            <label>Response Data</label>
+            <div class="json-viewer">
+              <app-json-tree [data]="stat.response_data" [isExpanded]="false"></app-json-tree>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    }
 
-    <div *ngIf="loading" class="loading-state">
-      <p>Loading calls...</p>
-    </div>
+    @if (loading) {
+      <div class="loading-state">
+        <p>Loading calls...</p>
+      </div>
+    }
 
-    <div *ngIf="!loading && stats.length === 0" class="empty-state">
-      <p>No LLM calls found.</p>
-    </div>
+    @if (!loading && stats.length === 0) {
+      <div class="empty-state">
+        <p>No LLM calls found.</p>
+      </div>
+    }
 
-    <div *ngIf="hasMore && !loading" class="load-more-section">
-      <button (click)="loadMore()" class="load-more-btn">Load More</button>
-    </div>
+    @if (hasMore && !loading) {
+      <div class="load-more-section">
+        <button (click)="loadMore()" class="load-more-btn">Load More</button>
+      </div>
+    }
   </div>
 </div>

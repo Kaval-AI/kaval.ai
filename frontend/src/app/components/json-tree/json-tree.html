@@ -1,33 +1,43 @@
 <div class="json-node" [style.padding-left.px]="depth > 0 ? 20 : 0">
   <div class="json-line" (click)="toggleExpand($event)" [class.expandable]="isExpandable">
-    <span *ngIf="isExpandable" class="toggle-icon">
-      {{ isExpanded ? '▼' : '▶' }}
-    </span>
-    <span *ngIf="!isExpandable" class="spacer"></span>
+    @if (isExpandable) {
+      <span class="toggle-icon">
+        {{ isExpanded ? '▼' : '▶' }}
+      </span>
+    } @else {
+      <span class="spacer"></span>
+    }
 
-    <span *ngIf="key !== null" class="json-key">{{ key }}: </span>
+    @if (key !== null) {
+      <span class="json-key">{{ key }}: </span>
+    }
 
     <span class="json-value" [ngClass]="'type-' + type">
       {{ formattedValue }}
     </span>
 
-    <div *ngIf="depth === 0 && isExpandable" class="tree-controls">
-      <button (click)="expandAll($event)" title="Expand All" class="control-btn">
-        <i class="fas fa-expand-arrows-alt"></i> Expand All
-      </button>
-      <button (click)="collapseAll($event)" title="Collapse All" class="control-btn">
-        <i class="fas fa-compress-arrows-alt"></i> Collapse All
-      </button>
-    </div>
+    @if (depth === 0 && isExpandable) {
+      <div class="tree-controls">
+        <button (click)="expandAll($event)" title="Expand All" class="control-btn">
+          <i class="fas fa-expand-arrows-alt"></i> Expand All
+        </button>
+        <button (click)="collapseAll($event)" title="Collapse All" class="control-btn">
+          <i class="fas fa-compress-arrows-alt"></i> Collapse All
+        </button>
+      </div>
+    }
   </div>
 
-  <div *ngIf="isExpanded && isObject" class="json-children">
-    <app-json-tree
-      *ngFor="let child of children"
-      [data]="child.value"
-      [key]="child.key"
-      [depth]="depth + 1"
-      [isExpanded]="false"
-    ></app-json-tree>
-  </div>
+  @if (isExpanded && isObject) {
+    <div class="json-children">
+      @for (child of children; track child.key) {
+        <app-json-tree
+          [data]="child.value"
+          [key]="child.key"
+          [depth]="depth + 1"
+          [isExpanded]="false"
+        ></app-json-tree>
+      }
+    </div>
+  }
 </div>

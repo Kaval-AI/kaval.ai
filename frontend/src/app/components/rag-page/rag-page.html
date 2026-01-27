@@ -1,17 +1,19 @@
 <div class="rag-container">
   <h2>RAG Query Explorer</h2>
-  <div class="stats-overview mb-4" *ngIf="ragStats">
-    <div class="stats-grid">
-      <div class="stat-card card">
-        <div class="stat-value">{{ ragStats.total_collections }}</div>
-        <div class="stat-label">Collections</div>
-      </div>
-      <div class="stat-card card">
-        <div class="stat-value">{{ ragStats.total_entries }}</div>
-        <div class="stat-label">Total Entries</div>
+  @if (ragStats) {
+    <div class="stats-overview mb-4">
+      <div class="stats-grid">
+        <div class="stat-card card">
+          <div class="stat-value">{{ ragStats.total_collections }}</div>
+          <div class="stat-label">Collections</div>
+        </div>
+        <div class="stat-card card">
+          <div class="stat-value">{{ ragStats.total_entries }}</div>
+          <div class="stat-label">Total Entries</div>
+        </div>
       </div>
     </div>
-  </div>
+  }
 
   <div class="query-form card">
     <div class="form-group mb-3">
@@ -23,9 +25,11 @@
       <div class="form-group col-profile">
         <label for="embeddingProfile">Embedding Profile</label>
         <select id="embeddingProfile" [(ngModel)]="selectedEmbeddingProfileId" class="form-control">
-          <option *ngFor="let config of embeddingConfigs" [value]="config.id">
-            {{ config.name }} ({{ config.model_name }})
-          </option>
+          @for (config of embeddingConfigs; track config.id) {
+            <option [value]="config.id">
+              {{ config.name }} ({{ config.model_name }})
+            </option>
+          }
         </select>
       </div>
 
@@ -33,9 +37,11 @@
         <label for="collectionName">Collection</label>
         <select id="collectionName" [(ngModel)]="collectionName" class="form-control">
           <option value="">All Collections</option>
-          <option *ngFor="let col of ragStats?.collections" [value]="col">
-            {{ col }}
-          </option>
+          @for (col of ragStats?.collections; track col) {
+            <option [value]="col">
+              {{ col }}
+            </option>
+          }
         </select>
       </div>
 
@@ -47,43 +53,54 @@
 
     <div class="form-actions mt-3">
       <button class="btn-primary" (click)="onQuery()" [disabled]="loading || !queryText || !selectedEmbeddingProfileId">
-        <span *ngIf="!loading">Query</span>
-        <span *ngIf="loading">Querying...</span>
+        @if (!loading) {
+          <span>Query</span>
+        } @else {
+          <span>Querying...</span>
+        }
       </button>
     </div>
   </div>
 
-  <div *ngIf="error" class="alert-error mt-3">
-    {{ error }}
-  </div>
+  @if (error) {
+    <div class="alert-error mt-3">
+      {{ error }}
+    </div>
+  }
 
-  <div class="results-section mt-4" *ngIf="results.length > 0">
-    <h3>Results ({{ results.length }})</h3>
-    <table class="results-table">
-      <thead>
-        <tr>
-          <th>Similarity</th>
-          <th>Source ID</th>
-          <th>Content</th>
-          <th>Collection</th>
-          <th class="metadata-col">Metadata</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let result of results">
-          <td class="similarity-cell">{{ result.similarity | percent:'1.2-2' }}</td>
-          <td><code class="source-id">{{ result.source_id }}</code></td>
-          <td class="content-cell">{{ result.content }}</td>
-          <td>{{ result.collection_name }}</td>
-          <td>
-            <pre class="metadata-pre">{{ result.rag_metadata | json }}</pre>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  @if (results.length > 0) {
+    <div class="results-section mt-4">
+      <h3>Results ({{ results.length }})</h3>
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Similarity</th>
+            <th>Source ID</th>
+            <th>Content</th>
+            <th>Collection</th>
+            <th class="metadata-col">Metadata</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (result of results; track $index) {
+            <tr>
+              <td class="similarity-cell">{{ result.similarity | percent:'1.2-2' }}</td>
+              <td><code class="source-id">{{ result.source_id }}</code></td>
+              <td class="content-cell">{{ result.content }}</td>
+              <td>{{ result.collection_name }}</td>
+              <td>
+                <pre class="metadata-pre">{{ result.rag_metadata | json }}</pre>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
 
-  <div *ngIf="!loading && results.length === 0 && !error" class="mt-4 text-muted">
-    Execute a query to see results.
-  </div>
+  @if (!loading && results.length === 0 && !error) {
+    <div class="mt-4 text-muted">
+      Execute a query to see results.
+    </div>
+  }
 </div>

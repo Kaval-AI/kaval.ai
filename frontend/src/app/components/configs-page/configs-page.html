@@ -4,120 +4,132 @@
     <p class="subtitle">View and manage LLM profiles for the current project. Sensitive data (API keys, credentials) are not displayed for security.</p>
   </div>
 
-  <div *ngIf="loading" class="loading-state">
-    <p>Loading configurations...</p>
-  </div>
-
-  <div *ngIf="error" class="error-state">
-    <p>{{ error }}</p>
-    <button (click)="loadConfigs()" class="retry-btn">Retry</button>
-  </div>
-
-  <div *ngIf="!loading && !error" class="content-section">
-    <div *ngIf="configs.length === 0" class="empty-state">
-      <p>No LLM configurations found for this project.</p>
+  @if (loading) {
+    <div class="loading-state">
+      <p>Loading configurations...</p>
     </div>
-
-    <table *ngIf="configs.length > 0" class="configs-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Provider</th>
-          <th>Model</th>
-          <th>Base URL</th>
-          <th>Default Mode</th>
-          <th>Total Cost</th>
-          <th>Last Updated</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let config of configs">
-          <td>{{ config.name }}</td>
-          <td><span class="badge provider-badge">{{ config.provider }}</span></td>
-          <td>{{ config.model_name }}</td>
-          <td>{{ config.base_url || 'Default' }}</td>
-          <td>{{ config.config?.mode || 'N/A' }}</td>
-          <td>{{ config.total_cost | currency:'USD':'symbol':'1.2-6' }}</td>
-          <td>{{ formatDate(config.updated_at) }}</td>
-          <td>
-            <a [routerLink]="['/llm-call-stats']" [queryParams]="{llm_profile_id: config.id}" class="view-calls-btn">
-              View Calls
-            </a>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <div class="header-section" style="margin-top: 2rem;">
-      <h1>Embedding Configurations</h1>
+  } @else if (error) {
+    <div class="error-state">
+      <p>{{ error }}</p>
+      <button (click)="loadConfigs()" class="retry-btn">Retry</button>
     </div>
+  } @else {
+    <div class="content-section">
+      @if (configs.length === 0) {
+        <div class="empty-state">
+          <p>No LLM configurations found for this project.</p>
+        </div>
+      } @else {
+        <table class="configs-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Provider</th>
+              <th>Model</th>
+              <th>Base URL</th>
+              <th>Default Mode</th>
+              <th>Total Cost</th>
+              <th>Last Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (config of configs; track config.id) {
+              <tr>
+                <td>{{ config.name }}</td>
+                <td><span class="badge provider-badge">{{ config.provider }}</span></td>
+                <td>{{ config.model_name }}</td>
+                <td>{{ config.base_url || 'Default' }}</td>
+                <td>{{ config.config?.mode || 'N/A' }}</td>
+                <td>{{ config.total_cost | currency:'USD':'symbol':'1.2-6' }}</td>
+                <td>{{ formatDate(config.updated_at) }}</td>
+                <td>
+                  <a [routerLink]="['/llm-call-stats']" [queryParams]="{llm_profile_id: config.id}" class="view-calls-btn">
+                    View Calls
+                  </a>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
 
-    <div *ngIf="embeddingConfigs.length === 0" class="empty-state">
-      <p>No embedding configurations found for this project.</p>
-    </div>
-
-    <table *ngIf="embeddingConfigs.length > 0" class="configs-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Provider</th>
-          <th>Model</th>
-          <th>Base URL</th>
-          <th>Embedding Size</th>
-          <th>Total Cost</th>
-          <th>Last Updated</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let config of embeddingConfigs">
-          <td>{{ config.name }}</td>
-          <td><span class="badge provider-badge">{{ config.provider }}</span></td>
-          <td>{{ config.model_name }}</td>
-          <td>{{ config.base_url || 'Default' }}</td>
-          <td>{{ config.embedding_size || 'N/A' }}</td>
-          <td>{{ config.total_cost | currency:'USD':'symbol':'1.2-6' }}</td>
-          <td>{{ formatDate(config.updated_at) }}</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <div *ngIf="stats && stats.llm" class="charts-section">
-      <h3>LLM Statistics (Last 7 Days)</h3>
-      <div class="charts-grid">
-        <div class="chart-container">
-          <h4>LLM Calls</h4>
-          <canvas baseChart
-                  [data]="callsChartData"
-                  [options]="callsChartOptions"
-                  [type]="'line'">
-          </canvas>
-        </div>
-        <div class="chart-container">
-          <h4>LLM Cost (USD)</h4>
-          <canvas baseChart
-                  [data]="costChartData"
-                  [options]="chartOptions"
-                  [type]="'line'">
-          </canvas>
-        </div>
-        <div class="chart-container">
-          <h4>Avg Duration (milliseconds)</h4>
-          <canvas baseChart
-                  [data]="durationChartData"
-                  [options]="chartOptions"
-                  [type]="'line'">
-          </canvas>
-        </div>
-        <div class="chart-container">
-          <h4>Total Tokens</h4>
-          <canvas baseChart
-                  [data]="tokensChartData"
-                  [options]="chartOptions"
-                  [type]="'line'">
-          </canvas>
-        </div>
+      <div class="header-section" style="margin-top: 2rem;">
+        <h1>Embedding Configurations</h1>
       </div>
+
+      @if (embeddingConfigs.length === 0) {
+        <div class="empty-state">
+          <p>No embedding configurations found for this project.</p>
+        </div>
+      } @else {
+        <table class="configs-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Provider</th>
+              <th>Model</th>
+              <th>Base URL</th>
+              <th>Embedding Size</th>
+              <th>Total Cost</th>
+              <th>Last Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (config of embeddingConfigs; track config.id) {
+              <tr>
+                <td>{{ config.name }}</td>
+                <td><span class="badge provider-badge">{{ config.provider }}</span></td>
+                <td>{{ config.model_name }}</td>
+                <td>{{ config.base_url || 'Default' }}</td>
+                <td>{{ config.embedding_size || 'N/A' }}</td>
+                <td>{{ config.total_cost | currency:'USD':'symbol':'1.2-6' }}</td>
+                <td>{{ formatDate(config.updated_at) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      @if (stats && stats.llm) {
+        <div class="charts-section">
+          <h3>LLM Statistics (Last 7 Days)</h3>
+          <div class="charts-grid">
+            <div class="chart-container">
+              <h4>LLM Calls</h4>
+              <canvas baseChart
+                      [data]="callsChartData"
+                      [options]="callsChartOptions"
+                      [type]="'line'">
+              </canvas>
+            </div>
+            <div class="chart-container">
+              <h4>LLM Cost (USD)</h4>
+              <canvas baseChart
+                      [data]="costChartData"
+                      [options]="chartOptions"
+                      [type]="'line'">
+              </canvas>
+            </div>
+            <div class="chart-container">
+              <h4>Avg Duration (milliseconds)</h4>
+              <canvas baseChart
+                      [data]="durationChartData"
+                      [options]="chartOptions"
+                      [type]="'line'">
+              </canvas>
+            </div>
+            <div class="chart-container">
+              <h4>Total Tokens</h4>
+              <canvas baseChart
+                      [data]="tokensChartData"
+                      [options]="chartOptions"
+                      [type]="'line'">
+              </canvas>
+            </div>
+          </div>
+        </div>
+      }
     </div>
-  </div>
+  }
 </div>
