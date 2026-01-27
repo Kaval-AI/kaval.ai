@@ -120,6 +120,7 @@ async def test_projects_rag_query(client, backoffice_db, agents_db):
         {
             "embedding_profile_id": profile.id,
             "collection_name": "test-collection",
+            "source_id": "test-source",
             "content": "Relevant content",
             "embedding_size": 3,
             "embedding": [0.1, 0.2, 0.3],
@@ -163,3 +164,88 @@ async def test_projects_rag_query(client, backoffice_db, agents_db):
     assert data[0]["content"] == "Relevant content"
     assert data[0]["collection_name"] == "test-collection"
     assert data[0]["rag_metadata"] == {"source": "test"}
+    assert "similarity" in data[0]
+    assert data[0]["similarity"] == 1.0  # Since distance should be 0 for exact match
+
+
+@pytest.mark.asyncio
+async def test_projects_rag_stats(client, backoffice_db, agents_db):
+    project_id = uuid.uuid4()
+
+    # 1. Setup Project in Backoffice DB
+    project = bo_db.Project(
+        id=project_id,
+        name="Test Project",
+        db_user="user",
+        db_password="password",
+        db_host="localhost",
+        db_port=5432,
+        db_name="test_db",
+    )
+    backoffice_db.add(project)
+    await backoffice_db.commit()
+
+    # 2. Setup Embedding Profile in Agents DB
+    profile = await insert(
+        agents_db,
+        EmbeddingProfile,
+        {
+            "name": "Test Embedding",
+            "provider": "openai",
+            "model_name": "text-embedding-3-small",
+            "api_key": "secret-key",
+            "embedding_size": 3,
+            "config": {},
+        },
+    )
+
+    # 3. Add some RAG data
+    await insert(
+        agents_db,
+        RagIndex,
+        {
+            "embedding_profile_id": profile.id,
+            "collection_name": "collection-1",
+            "source_id": "src-1",
+            "content": "Content 1",
+            "embedding_size": 3,
+            "embedding": [0.1, 0.2, 0.3],
+            "rag_metadata": {},
+        },
+    )
+    await insert(
+        agents_db,
+        RagIndex,
+        {
+            "embedding_profile_id": profile.id,
+            "collection_name": "collection-2",
+            "source_id": "src-2",
+            "content": "Content 2",
+            "embedding_size": 3,
+            "embedding": [0.1, 0.2, 0.3],
+            "rag_metadata": {},
+        },
+    )
+
+    # 4. Mock authentication and database connection
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
+        "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
+    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_get_sessionmaker:
+        # Mock the session maker to return our agents_db
+        mock_session_context = MagicMock()
+        mock_session_context.__aenter__ = AsyncMock(return_value=agents_db)
+        mock_session_context.__aexit__ = AsyncMock(return_value=None)
+        mock_get_sessionmaker.return_value = MagicMock(
+            return_value=mock_session_context
+        )
+
+        # 5. Call the endpoint
+        response = await client.get(f"/projects/{project_id}/rag/stats")
+
+    # 6. Verify results
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_entries"] == 2
+    assert data["total_collections"] == 2
+    assert "collection-1" in data["collections"]
+    assert "collection-2" in data["collections"]

@@ -90,12 +90,55 @@
   margin-bottom: 15px;
 }
 
+.mb-4 {
+  margin-bottom: 25px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.stat-card {
+  text-align: center;
+  padding: 15px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #1976d2;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 5px;
+}
+
+.source-id {
+  background: #e3f2fd;
+  color: #0d47a1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
 .alert-error {
   padding: 12px;
   background-color: #fee;
   color: #c00;
   border: 1px solid #fcc;
   border-radius: 4px;
+}
+
+.similarity-cell {
+  font-weight: bold;
+  color: #2e7d32;
+  white-space: nowrap;
 }
 
 .results-table {

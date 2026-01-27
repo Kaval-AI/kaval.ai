@@ -6,7 +6,6 @@ import { SessionSummary } from '../models/session';
 import { ChatMessage } from '../models/chat-message';
 import { LLMConfig } from '../models/llm-config';
 import { LLMCallStat } from '../models/llm-call-stat';
-import { EmbeddingConfig, RagResult } from '../models/rag';
 
 @Injectable({
   providedIn: 'root'
@@ -60,18 +59,5 @@ export class AgentService {
       url += `&llm_profile_id=${llmProfileId}`;
     }
     return this.http.get<LLMCallStat[]>(url);
-  }
-
-  getEmbeddingConfigs(projectId: string): Observable<EmbeddingConfig[]> {
-    return this.http.get<EmbeddingConfig[]>(`/api/projects/${projectId}/embedding-configs`);
-  }
-
-  queryRag(projectId: string, queryData: {
-    embedding_profile_id: string,
-    text: string,
-    collection_name?: string,
-    top_k?: number
-  }): Observable<RagResult[]> {
-    return this.http.post<RagResult[]>(`/api/projects/${projectId}/rag/query`, queryData);
   }
 }

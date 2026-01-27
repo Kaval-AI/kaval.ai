@@ -1,9 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { AgentService } from '../../services/agent-service';
+import { RagService } from '../../services/rag-service';
 import { UserService } from '../../services/user-service';
-import { EmbeddingConfig, RagResult } from '../../models/rag';
+import { EmbeddingConfig, RagResult, RagStats } from '../../models/rag';
 
 @Component({
   selector: 'app-rag-page',
@@ -16,17 +16,18 @@ export class RagPage implements OnInit {
   projectId: string | null = null;
   embeddingConfigs: EmbeddingConfig[] = [];
   results: RagResult[] = [];
+  ragStats: RagStats | null = null;
 
   queryText: string = '';
   selectedEmbeddingProfileId: string = '';
   collectionName: string = '';
-  topK: number = 5;
+  topK: number = 10;
 
   loading: boolean = false;
   error: string | null = null;
 
   constructor(
-    private agentService: AgentService,
+    private ragService: RagService,
     private userService: UserService
   ) {}
 
@@ -34,13 +35,27 @@ export class RagPage implements OnInit {
     this.projectId = this.userService.getActiveProjectId();
     if (this.projectId) {
       this.loadEmbeddingConfigs();
+      this.loadRagStats();
     }
+  }
+
+  loadRagStats(): void {
+    if (!this.projectId) return;
+
+    this.ragService.getRagStats(this.projectId).subscribe({
+      next: (stats) => {
+        this.ragStats = stats;
+      },
+      error: (err) => {
+        console.error('Error loading RAG stats', err);
+      }
+    });
   }
 
   loadEmbeddingConfigs(): void {
     if (!this.projectId) return;
 
-    this.agentService.getEmbeddingConfigs(this.projectId).subscribe({
+    this.ragService.getEmbeddingConfigs(this.projectId).subscribe({
       next: (configs) => {
         this.embeddingConfigs = configs;
         if (configs.length > 0) {
@@ -61,7 +76,7 @@ export class RagPage implements OnInit {
 
     this.loading = true;
     this.error = null;
-    this.agentService.queryRag(this.projectId, {
+    this.ragService.queryRag(this.projectId, {
       embedding_profile_id: this.selectedEmbeddingProfileId,
       text: this.queryText,
       collection_name: this.collectionName || undefined,

@@ -94,17 +94,19 @@ class RagService:
         text: str,
         top_k: int = 5,
         collection_name: Optional[str] = None,
-    ) -> list[RagIndex]:
+    ) -> list[dict]:
         embeddings = await compute_embeddings(
             llm_profile=self.embedding_profile, texts=[text]
         )
         query_embedding = embeddings[0]
 
         # Using cosine distance <=> for pgvector
+        # Similarity = 1 - distance
+        distance_col = RagIndex.embedding.op("<=>")(query_embedding).label("distance")
         stmt = (
-            select(RagIndex)
+            select(RagIndex, distance_col)
             .where(RagIndex.embedding_profile_id == self.embedding_profile.id)
-            .order_by(RagIndex.embedding.op("<=>")(query_embedding))
+            .order_by(distance_col)
             .limit(top_k)
         )
 
@@ -112,14 +114,35 @@ class RagService:
             stmt = stmt.where(RagIndex.collection_name == collection_name)
 
         result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        rows = result.all()
+
+        results = []
+        for row in rows:
+            item = row[0]
+            distance = row[1]
+            # Convert RagIndex object to dict and add similarity
+            item_dict = {
+                "id": str(item.id),
+                "embedding_profile_id": str(item.embedding_profile_id),
+                "collection_name": item.collection_name,
+                "source_id": item.source_id,
+                "content": item.content,
+                "embedding_size": item.embedding_size,
+                "rag_metadata": item.rag_metadata,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+                "similarity": 1.0 - float(distance) if distance is not None else 0.0,
+            }
+            results.append(item_dict)
+
+        return results
 
     async def batch_query(
         self,
         texts: list[str],
         top_k: int = 5,
         collection_name: Optional[str] = None,
-    ) -> list[list[RagIndex]]:
+    ) -> list[list[dict]]:
         results = []
         for text in texts:
             results.append(

@@ -563,6 +563,49 @@ async def projects_rag_query(
         return results
 
 
+@app.get("/projects/{project_id}/rag/stats")
+async def projects_rag_stats(project_id: UUID, request: Request):
+    """Fetch RAG statistics for a specific project."""
+    assert_logged_in(request)
+    project = await get_project_and_assert_access(request, project_id)
+
+    # Connect to the project database
+    project_session_maker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+
+    async with project_session_maker() as project_session:
+        from sqlalchemy import func
+        from kavalai.agents.db import RagIndex
+
+        # Total entries
+        stmt_entries = select(func.count(RagIndex.id))
+        result_entries = await project_session.execute(stmt_entries)
+        total_entries = result_entries.scalar()
+
+        # Collections count
+        stmt_collections_count = select(
+            func.count(func.distinct(RagIndex.collection_name))
+        )
+        result_collections_count = await project_session.execute(stmt_collections_count)
+        total_collections = result_collections_count.scalar()
+
+        # Collection names
+        stmt_names = select(func.distinct(RagIndex.collection_name))
+        result_names = await project_session.execute(stmt_names)
+        collections = result_names.scalars().all()
+
+        return {
+            "total_entries": total_entries,
+            "total_collections": total_collections,
+            "collections": collections,
+        }
+
+
 @app.post("/projects/test-connection/{project_id}")
 async def projects_test_connection(project_id: UUID, request: Request):
     """Test connection to the project database."""
