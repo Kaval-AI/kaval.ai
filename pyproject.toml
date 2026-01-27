@@ -37,8 +37,17 @@ test = [
     "pytest-cov",
 ]
 
-[tool.setuptools]
-packages = ["kavalai"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kavalai*"]
+[tool.setuptools.data-files]
+"sql_migrations" = ["sql_migrations/**/*.sql"]
+"llm_profiles" = ["llm_profiles/**/*.yaml", "llm_profiles/**/*.yml"]
+"embedding_profiles" = ["embedding_profiles/**/*.yaml", "embedding_profiles/**/*.yml"]
+"demo_tasks" = ["demo_tasks/**/*.yaml", "demo_tasks/**/*.yml"]
+"demo_personas" = ["demo_personas/**/*.yaml", "demo_personas/**/*.yml"]
+"demo_agents" = ["demo_agents/**/*.yaml", "demo_agents/**/*.yml"]
+
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
