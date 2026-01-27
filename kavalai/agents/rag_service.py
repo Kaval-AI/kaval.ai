@@ -1,7 +1,10 @@
-from kavalai.agents.db import EmbeddingProfile, RagIndex
 from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from sqlalchemy import delete
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from kavalai.agents.db import EmbeddingProfile, RagIndex
 from kavalai.llm_clients.common import compute_embeddings
 
 
@@ -19,6 +22,7 @@ class RagService:
         texts: list[str],
         metadata_list: list[dict],
         collection_name: str = "default",
+        source_ids: Optional[list[str]] = None,
     ) -> list[RagIndex]:
         if not texts:
             return []
@@ -28,6 +32,9 @@ class RagService:
                 "The number of texts and metadata dictionaries must be the same."
             )
 
+        if source_ids and len(texts) != len(source_ids):
+            raise ValueError("The number of texts and source_ids must be the same.")
+
         embeddings = await compute_embeddings(
             llm_profile=self.embedding_profile, texts=texts
         )
@@ -35,10 +42,11 @@ class RagService:
         rag_items = []
         dim = len(embeddings[0])
 
-        for text, meta, emb in zip(texts, metadata_list, embeddings):
+        for i, (text, meta, emb) in enumerate(zip(texts, metadata_list, embeddings)):
             item_data = {
                 "embedding_profile_id": self.embedding_profile.id,
                 "collection_name": collection_name,
+                "source_id": source_ids[i] if source_ids else "default",
                 "content": text,
                 "embedding_size": dim,
                 "embedding": emb,
@@ -54,15 +62,31 @@ class RagService:
 
         return rag_items
 
+    async def delete_by_source_ids(
+        self,
+        collection_name: str,
+        source_ids: list[str],
+    ):
+        """Delete items from a collection by their source_ids."""
+        stmt = delete(RagIndex).where(
+            RagIndex.collection_name == collection_name,
+            RagIndex.source_id.in_(source_ids),
+        )
+        await self.db.execute(stmt)
+        await self.db.commit()
+
     async def index(
         self,
         text: str,
         source_metadata: Optional[dict] = None,
         collection_name: str = "default",
+        source_id: str = "default",
     ):
         """Index a single text blob with the metadata."""
         return (
-            await self.batch_index([text], [source_metadata or {}], collection_name)
+            await self.batch_index(
+                [text], [source_metadata or {}], collection_name, source_ids=[source_id]
+            )
         )[0]
 
     async def query(

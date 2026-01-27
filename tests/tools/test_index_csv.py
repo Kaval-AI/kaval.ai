@@ -79,6 +79,7 @@ async def test_index_csv_index_fields(temp_csv):
             embedding_profile_name="test-profile",
             metadata_fields=["id"],
             index_fields=["bio"],
+            source_field="id",
             mode="full",
             limit=None,
             batch_size=1,
@@ -89,11 +90,13 @@ async def test_index_csv_index_fields(temp_csv):
         call_args = mock_rag_service.batch_index.call_args_list[0]
         texts = call_args[0][0]
         metas = call_args[0][1]
+        source_ids = call_args[1]["source_ids"]
 
         assert texts[0] == "Hello Alice"
         assert "name:" not in texts[0]
         assert "id:" not in texts[0]
         assert metas[0] == {"id": "1"}
+        assert source_ids[0] == "1"
 
 
 import os
@@ -147,6 +150,7 @@ async def test_index_csv_success(temp_csv):
             embedding_profile_name="test-profile",
             metadata_fields=["id", "name"],
             index_fields=["bio"],
+            source_field="id",
             mode="full",
             limit=None,
             batch_size=2,
@@ -159,14 +163,17 @@ async def test_index_csv_success(temp_csv):
         # Content: "Hello Alice" (only bio is indexed)
         # Meta: {"id": "1", "name": "Alice"}
         call_args = mock_rag_service.batch_index.call_args_list[0]
-        texts, metas, collection_name = (
+        texts, metas, collection_name, source_ids = (
             call_args[0][0],
             call_args[0][1],
             call_args[1]["collection_name"],
+            call_args[1]["source_ids"],
         )
         assert texts[0] == "Hello Alice"
         assert metas[0] == {"id": "1", "name": "Alice"}
         assert collection_name == "test_collection"
+        assert source_ids[0] == "1"
+        assert source_ids[1] == "2"
 
 
 @pytest.mark.asyncio
@@ -214,6 +221,7 @@ async def test_index_csv_limit(temp_csv):
             embedding_profile_name="test-profile",
             metadata_fields=[],
             index_fields=["bio"],
+            source_field="id",
             mode="full",
             limit=1,
             batch_size=10,
@@ -270,6 +278,7 @@ async def test_index_csv_split_mode_lines(temp_csv):
             embedding_profile_name="test-profile",
             metadata_fields=[],
             index_fields=["bio"],
+            source_field="id",
             mode="lines",
             limit=1,
             batch_size=1,
@@ -291,6 +300,8 @@ def test_main_arg_parsing(temp_csv):
             "test-prof",
             "--index-fields",
             "bio",
+            "--source-field",
+            "id",
         ],
     ), patch("kavalai.tools.index_csv.asyncio.run") as mock_run:
         main()
@@ -309,6 +320,8 @@ def test_main_file_not_found():
             "test-prof",
             "--index-fields",
             "bio",
+            "--source-field",
+            "id",
         ],
     ), patch("sys.exit") as mock_exit:
         main()
@@ -365,6 +378,7 @@ async def test_index_csv_batch_by_rows(multi_row_csv):
             embedding_profile_name="test-profile",
             metadata_fields=["id"],
             index_fields=["bio"],
+            source_field="id",
             mode="lines",
             limit=None,
             batch_size=2,
@@ -400,6 +414,7 @@ async def test_index_csv_profile_not_found(temp_csv):
             embedding_profile_name="non-existent",
             metadata_fields=[],
             index_fields=["bio"],
+            source_field="id",
             mode="full",
             limit=None,
             batch_size=1,
@@ -460,6 +475,7 @@ async def test_index_csv_lines_split(tmp_path):
             embedding_profile_name="test-profile",
             metadata_fields=["id"],
             index_fields=["bio"],
+            source_field="id",
             mode="lines",
             limit=None,
             batch_size=10,
@@ -474,3 +490,65 @@ async def test_index_csv_lines_split(tmp_path):
         assert len(texts) == 3
         assert texts == ["Line 1", "Line 2", "Line 3"]
         assert all(m == {"id": "1"} for m in metas)
+
+
+@pytest.mark.asyncio
+async def test_index_csv_replace(temp_csv):
+    mock_profile = EmbeddingProfile(
+        id="00000000-0000-0000-0000-000000000000",
+        name="test-profile",
+        provider="openai",
+        model_name="text-embedding-3-small",
+    )
+
+    with patch(
+        "kavalai.tools.index_csv.load_embedding_profile_from_path",
+        return_value=mock_profile,
+    ), patch("kavalai.tools.index_csv.db_manager") as mock_db_manager, patch(
+        "kavalai.tools.index_csv.AgentService"
+    ) as mock_agent_service_cls, patch(
+        "kavalai.tools.index_csv.RagService"
+    ) as mock_rag_service_cls, patch.dict(
+        os.environ,
+        {
+            "AGENTS_DB_USER": "user",
+            "AGENTS_DB_PASSWORD": "pass",
+            "AGENTS_DB_HOST": "host",
+            "AGENTS_DB_PORT": "5432",
+            "AGENTS_DB_NAME": "db",
+        },
+    ):
+        mock_session = AsyncMock()
+        mock_db_manager.get_sessionmaker.return_value.return_value.__aenter__.return_value = mock_session
+
+        mock_agent_service = MagicMock()
+        mock_agent_service.upsert_embedding_profile = AsyncMock(
+            return_value=mock_profile
+        )
+        mock_agent_service_cls.return_value = mock_agent_service
+
+        mock_rag_service = MagicMock()
+        mock_rag_service.batch_index = AsyncMock()
+        mock_rag_service.delete_by_source_ids = AsyncMock()
+        mock_rag_service_cls.return_value = mock_rag_service
+
+        await index_csv(
+            csv_path=temp_csv,
+            collection_name="test_collection",
+            embedding_profile_name="test-profile",
+            metadata_fields=[],
+            index_fields=["bio"],
+            source_field="id",
+            mode="full",
+            limit=None,
+            replace=True,
+            batch_size=10,
+        )
+
+        # Verify delete_by_source_ids was called with the source_ids
+        assert mock_rag_service.delete_by_source_ids.call_count == 1
+        call_args = mock_rag_service.delete_by_source_ids.call_args
+        assert call_args[0][0] == "test_collection"
+        assert set(call_args[0][1]) == {"1", "2"}
+
+        assert mock_rag_service.batch_index.call_count == 1

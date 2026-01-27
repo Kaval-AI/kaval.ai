@@ -8,7 +8,8 @@ python -m kavalai.tools.index_csv local_data/song_lyrics.csv \
     --embedding-profile openai \
     --metadata-fields id title artist \
     --index-fields lyrics \
-    --mode lines \
+    --source-field id \
+    --mode full \
     --limit 100
 
 Modes:
@@ -50,11 +51,13 @@ def content_splitter_generator(
     rows: Generator[Dict[str, str], None, None],
     index_fields: List[str],
     metadata_fields: List[str],
+    source_field: str,
     mode: str,
 ) -> Generator[Dict[str, any], None, None]:
     """Generator that splits row content based on the mode."""
     for row in rows:
         row_meta = {col: val for col, val in row.items() if col in metadata_fields}
+        source_id = row.get(source_field, "default")
 
         for field in index_fields:
             if field not in row:
@@ -64,9 +67,13 @@ def content_splitter_generator(
             if mode == "lines":
                 for line in content.splitlines():
                     if line.strip():
-                        yield {"text": line.strip(), "meta": row_meta}
+                        yield {
+                            "text": line.strip(),
+                            "meta": row_meta,
+                            "source_id": source_id,
+                        }
             else:  # full
-                yield {"text": content, "meta": row_meta}
+                yield {"text": content, "meta": row_meta, "source_id": source_id}
 
 
 async def index_csv(
@@ -75,8 +82,10 @@ async def index_csv(
     embedding_profile_name: str,
     metadata_fields: List[str],
     index_fields: List[str],
+    source_field: str,
     mode: str,
     limit: Optional[int],
+    replace: bool = False,
     batch_size: int = 10,
 ):
     # Load embedding profile
@@ -118,21 +127,30 @@ async def index_csv(
 
             texts = []
             metas = []
+            source_ids = []
 
             for entry in content_splitter_generator(
-                iter(batch_rows), index_fields, metadata_fields, mode
+                iter(batch_rows), index_fields, metadata_fields, source_field, mode
             ):
                 texts.append(entry["text"])
                 metas.append(entry["meta"])
+                source_ids.append(entry["source_id"])
 
             if texts:
+                if replace:
+                    # Collect unique source_ids in this batch to delete them
+                    unique_source_ids = list(set(source_ids))
+                    await rag_service.delete_by_source_ids(
+                        collection_name, unique_source_ids
+                    )
+
                 rows_processed += len(batch_rows)
                 total_chunks += len(texts)
                 logger.info(
                     f"Indexing batch of {len(batch_rows)} rows generating {len(texts)} chunks (Total rows: {rows_processed}, total chunks: {total_chunks})..."
                 )
                 await rag_service.batch_index(
-                    texts, metas, collection_name=collection_name
+                    texts, metas, collection_name=collection_name, source_ids=source_ids
                 )
             else:
                 rows_processed += len(batch_rows)
@@ -161,6 +179,16 @@ def main():
         help="Fields to include in indexed content",
     )
     parser.add_argument(
+        "--source-field",
+        required=True,
+        help="Field to store in source_id of the rag_index table",
+    )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="Delete matching rows (collection_name, source_id) before updating",
+    )
+    parser.add_argument(
         "--mode",
         choices=["full", "lines"],
         default="full",
@@ -185,8 +213,10 @@ def main():
             args.embedding_profile,
             args.metadata_fields,
             args.index_fields,
+            args.source_field,
             args.mode,
             args.limit,
+            args.replace,
             args.batch_size,
         )
     )
