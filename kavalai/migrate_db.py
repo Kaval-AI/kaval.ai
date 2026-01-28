@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import sys
+import time
 from typing import List, Tuple
 
 import psycopg2
@@ -88,10 +89,32 @@ def migrate(
     schema: str,
 ):
     conn = None
+    max_wait = 60
+    start_time = time.time()
+    retry_interval = 1
+
+    while True:
+        try:
+            conn = psycopg2.connect(
+                host=host, port=port, user=user, password=password, dbname=database
+            )
+            break
+        except psycopg2.OperationalError:
+            elapsed = time.time() - start_time
+            if elapsed > max_wait:
+                logger.error(f"Failed to connect to database after {max_wait} seconds.")
+                raise
+            logger.info(
+                f"Database connection failed, retrying in {retry_interval}s... ({int(elapsed)}s elapsed)"
+            )
+            time.sleep(retry_interval)
+            retry_interval = min(
+                retry_interval * 2, max_wait - (time.time() - start_time)
+            )
+            if retry_interval <= 0:
+                retry_interval = 0.1
+
     try:
-        conn = psycopg2.connect(
-            host=host, port=port, user=user, password=password, dbname=database
-        )
         conn.autocommit = False
         cur = conn.cursor()
 

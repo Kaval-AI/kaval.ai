@@ -1,6 +1,7 @@
 import os
 import pytest
 import psycopg2
+from unittest.mock import patch, MagicMock
 from testcontainers.postgres import PostgresContainer
 from kavalai.migrate_db import migrate
 from kavalai import SQL_MIGRATIONS_PATH
@@ -137,3 +138,36 @@ def test_migrate_checksum_mismatch_real_db(db_config, tmp_path):
     # Should raise ValueError
     with pytest.raises(ValueError, match="Checksum mismatch"):
         migrate(str(m_dir), schema=schema, **db_config)
+
+
+def test_migrate_retries_on_connection_failure():
+    """
+    Test that migrate function retries connection on failure.
+    We mock psycopg2.connect to fail a few times and then succeed.
+    """
+    with patch("psycopg2.connect") as mock_connect:
+        # Mock failure then success
+        mock_connect.side_effect = [
+            psycopg2.OperationalError("Connection refused"),
+            psycopg2.OperationalError("Connection refused"),
+            MagicMock(),  # Success on 3rd attempt
+        ]
+
+        # We also need to mock other things that migrate calls after successful connection
+        with patch("kavalai.migrate_db.ensure_schema_and_table"), patch(
+            "kavalai.migrate_db.get_applied_migrations", return_value={}
+        ), patch("kavalai.migrate_db.get_migrations", return_value=[]), patch(
+            "time.sleep"
+        ) as mock_sleep:  # Mock sleep to speed up test
+            migrate(
+                migrations_dir="fake_dir",
+                host="localhost",
+                port=5432,
+                user="user",
+                password="password",
+                database="db",
+                schema="public",
+            )
+
+            assert mock_connect.call_count == 3
+            assert mock_sleep.call_count == 2

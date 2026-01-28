@@ -2,6 +2,24 @@
 
 This document serves as a guide for Junie (AI Agent) to understand the Kaval.AI project structure, components, and workflow.
 
+## Docker Usage
+Kaval.AI can be run using Docker. The provided `Dockerfile` and `entrypoint.sh` support multiple commands:
+- `backoffice-migrations`: Run database migrations for the backoffice.
+- `agent-migrations`: Run database migrations for the agents.
+- `backoffice-server`: Start the backoffice Nginx and FastAPI server.
+- `agent-server`: Start an agent REST server (requires `WORKFLOW_YAML_PATH` and agent DB environment variables).
+- `all-in-one`: Runs both migrations and starts both servers (for development/demo purposes).
+
+In production, Nginx serves the built Angular frontend from `/usr/share/nginx/html`.
+The `FRONTEND_URL` environment variable should be set (e.g., `http://localhost:8000`) for correct OAuth redirects.
+The server uses `ProxyHeadersMiddleware` to correctly handle `X-Forwarded-Proto` and `X-Forwarded-For` headers when running behind a proxy or in Docker.
+
+Example:
+```bash
+docker build -t kavalai .
+docker run -e BACKOFFICE_DB_HOST=... kavalai backoffice-server
+```
+
 ## Project Overview
 Kaval.AI is an AI agent writing framework where agent steps are defined using YAML. It consists of two main parts:
 - **kavalai.agents**: The core SDK/runtime that runs on client infrastructure. It handles agent logic, workflows, and its own database.

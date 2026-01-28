@@ -13,6 +13,70 @@ services:
       - ./local_data/pgdata:/var/lib/postgresql/pgdata
     networks:
       - kavalai
+
+  backoffice-migrations:
+    build:
+      context: .
+      dockerfile: dockerfiles/backoffice.Dockerfile
+    command: backoffice-migrations
+    env_file: .env
+    environment:
+      - BACKOFFICE_DB_HOST=postgres_db
+      - BACKOFFICE_DB_PORT=5432
+    depends_on:
+      - postgres_db
+    networks:
+      - kavalai
+
+  backoffice:
+    build:
+      context: .
+      dockerfile: dockerfiles/backoffice.Dockerfile
+    command: backoffice-server
+    ports:
+      - "8000:80"
+    env_file: .env
+    environment:
+      - BACKOFFICE_DB_HOST=postgres_db
+      - BACKOFFICE_DB_PORT=5432
+      - FRONTEND_URL=http://localhost:8000
+    depends_on:
+      - backoffice-migrations
+    networks:
+      - kavalai
+
+  agent-migrations:
+    build:
+      context: .
+      dockerfile: dockerfiles/agent.Dockerfile
+    command: agent-migrations
+    env_file: .env
+    environment:
+      - AGENTS_DB_HOST=postgres_db
+      - AGENTS_DB_PORT=5432
+    depends_on:
+      - postgres_db
+    networks:
+      - kavalai
+
+  socrates-agent:
+    build:
+      context: .
+      dockerfile: dockerfiles/agent.Dockerfile
+    command: agent-server
+    ports:
+      - "8001:8001"
+    env_file: .env
+    environment:
+      - AGENTS_DB_HOST=postgres_db
+      - AGENTS_DB_PORT=5432
+      - WORKFLOW_YAML_PATH=demo_agents/socrates.yaml
+      - AGENT_PORT=8001
+    depends_on:
+      - agent-migrations
+    networks:
+      - kavalai
+
 networks:
   kavalai:
     driver: bridge

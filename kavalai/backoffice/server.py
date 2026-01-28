@@ -18,8 +18,9 @@ from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions
 from kavalai.agents.workflow import WorkflowModel
 from kavalai.backoffice.svg import generate_workflow_svg
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
 from kavalai.agents.rag_service import RagService
+from fastapi.staticfiles import StaticFiles
 
 # Set up the app logger
 logger = logging.getLogger(__name__)
@@ -29,6 +30,11 @@ app = FastAPI()
 
 # OAuth setup
 oauth = OAuth()
+
+# Enable forwarding for proxy/Docker
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 oauth.register(
     name="google",
@@ -148,7 +154,7 @@ async def google_auth_callback(request: Request):
             "is_admin": db_user.is_admin,
             "active_project_id": str(db_user.active_project_id),
         }
-        return RedirectResponse(url="http://localhost:4200")
+        return RedirectResponse(url=os.getenv("FRONTEND_URL", "http://localhost:4200"))
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -675,9 +681,31 @@ async def projects_remove_member(project_id: UUID, user_id: UUID, request: Reque
         return {"status": "removed"}
 
 
+# Serve frontend static files
+frontend_path = os.getenv("FRONTEND_PATH")
+if frontend_path and os.path.exists(frontend_path):
+    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # If it looks like an API call or a static file, don't serve index.html here
+        # (Though /api should be handled by other routes already)
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404)
+
+        # Check if the file exists in the static directory
+        file_path = os.path.join(frontend_path, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+
+        # Fallback to index.html for SPA routing
+        return FileResponse(os.path.join(frontend_path, "index.html"))
+
+
 if __name__ == "__main__":
     config = uvicorn.Config(
         "kavalai.backoffice.server:app",
+        host="0.0.0.0",
         port=8000,
         log_level="info",
         reload=True,
