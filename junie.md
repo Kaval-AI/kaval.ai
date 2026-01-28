@@ -73,7 +73,8 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `backoffice/V002__active_project.sql`: Adds `active_project_id` to users.
 - `llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `embedding_profiles/`: Example YAML configurations for different embedding providers (OpenAI, Gemini).
-- `scripts/`: Utility scripts (e.g., DB migration).
+- `scripts/`: Utility scripts.
+    - `migrate_db.py`: Flyway-like database migration tool. It tracks applied migrations in `kavalai_migrations` table with checksum verification and applies them in a single transaction.
 - `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data. Now includes `socrates.yaml` example.
 
 ## Key Technical Details
@@ -108,7 +109,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - **Location**: `tests/`
 - **Command**: `pytest`
 - **Coverage Command**: `pytest --cov=kavalai tests/`
-- **Notes**: Backend tests use `pytest-asyncio` for async database operations.
+- **Notes**: Backend tests use `pytest-asyncio` for async database operations. Some tests (like `test_migrate_db.py`) use `testcontainers` for integration testing with real PostgreSQL.
 
 ## Frontend Testing (Angular)
 - **Framework**: `Jasmine` + `Karma`
