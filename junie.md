@@ -10,6 +10,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 ## Directory Structure
 - `kavalai/`: Main Python package.
     - `agents/`: SDK and agent runtime logic.
+        - `__init__.py`: Package initialization, defines `PACKAGE_PATH` and `MIGRATIONS_PATH`.
         - `workflow.py`: Core workflow execution engine (YAML to execution).
         - `client.py`: Client for interacting with agent servers, handles schema discovery and session management.
         - `agent_service.py`: Service for managing agent state, sessions, runs, LLM profiles, and embedding profiles in the DB. `get_or_create_agent` updates existing agents if description, schemas or workflow changed. Now includes `total_cost` in LLM and embedding profile views.
@@ -27,6 +28,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `openai.py`: OpenAI pricing data using the unified models.
         - `gemini.py`: Gemini pricing data using the unified models.
     - `backoffice/`: API and logic for the management UI.
+        - `__init__.py`: Package initialization, defines `PACKAGE_PATH` and `MIGRATIONS_PATH`.
         - `server.py`: FastAPI server for the backoffice API. Includes endpoints for agents, sessions, stats, projects (including membership management), and workflow visualization.
         - `svg.py`: Utility for generating SVG visualizations of workflows using Graphviz. Supports rendering data nodes with schema properties and resolving reference chains.
         - `db.py`: Backoffice-specific DB models (users, projects, memberships).
