@@ -72,7 +72,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `embedding_profiles/`: Example YAML configurations for different embedding providers (OpenAI, Gemini).
 - `scripts/`: Utility scripts (e.g., DB migration).
-- `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data.
+- `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data. Now includes `socrates.yaml` example.
 
 ## Key Technical Details
 - **Backend**: Python with FastAPI, SQLAlchemy (Async), Pydantic.
