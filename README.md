@@ -15,6 +15,25 @@ kavalai@git+ssh://git@github.com/Kaval-AI/kaval.ai.git@main
 
 Run `pip install -r requirements.txt`.
 
+## Database migrations
+
+We use Flyway for database migrations. You can run migrations using the provided script which runs Flyway in a Docker container:
+
+You can also run the migrations directly using `docker run`. For example, to migrate the `agents` schema using the local database settings:
+
+```bash
+docker run --rm \
+  -v "$(pwd)/sql_migrations/app:/flyway/sql" \
+  flyway/flyway \
+  -url="jdbc:postgresql://postgres_db:5432/kavalai_dev" \
+  -schemas="agents" \
+  -user="kavalai_dev" \
+  -password="kavalai_dev" \
+  -connectRetries=1 \
+  migrate
+```
+
+
 ## LLM profiles
 
 LLM profiles define how to connect to various LLM providers. They are YAML files stored in the `llm_profiles/` directory (or passed to the agent server).
@@ -84,8 +103,6 @@ While the server is running, you can use the CLI chat tool to talk to Socrates:
 python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admin --password password
 ```
 
-
-
 ## Local development
 
 **Backend setup**
@@ -98,18 +115,7 @@ python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admi
 - Run `docker compose up -D` to bring up Postgres database.
 - Apply database migrations to local and test databases.
 
-```
-./scripts/migrate_db.sh scripts/local_db.env
-./scripts/migrate_db.sh scripts/test_db.env
-```
 
-- Run backend unit tests
-
-```
-pytest tests/
-```
-
-All of them should pass
 
 **Frontend setup**
 
