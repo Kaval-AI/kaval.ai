@@ -3,6 +3,7 @@ import pytest
 import psycopg2
 from testcontainers.postgres import PostgresContainer
 from kavalai.migrate_db import migrate
+from kavalai import SQL_MIGRATIONS_PATH
 
 
 @pytest.fixture(scope="module")
@@ -23,7 +24,7 @@ def db_config(postgres_container):
 
 
 def test_migrate_app_migrations(db_config):
-    migrations_dir = os.path.join("sql_migrations", "app")
+    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
     schema = "app_schema"
 
     # Run migrations
@@ -58,7 +59,7 @@ def test_migrate_app_migrations(db_config):
 
 
 def test_migrate_backoffice_migrations(db_config):
-    migrations_dir = os.path.join("sql_migrations", "backoffice")
+    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "backoffice")
     schema = "backoffice_schema"
 
     # Run migrations
@@ -93,7 +94,7 @@ def test_migrate_backoffice_migrations(db_config):
 
 
 def test_migrate_idempotency(db_config):
-    migrations_dir = os.path.join("sql_migrations", "app")
+    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
     schema = "idempotency_schema"
 
     # First run
