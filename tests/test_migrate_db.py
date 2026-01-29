@@ -62,7 +62,7 @@ def test_migrate_app_migrations(db_config):
 
 def test_migrate_backoffice_migrations(db_config):
     migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "backoffice")
-    schema = "KAVALAI_BO_DB_SCHEMA"
+    schema = "test_backoffice"
     uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
 
     # Run migrations
