@@ -81,7 +81,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `prices/`: Tests for pricing models and cost calculations.
     - `tools/`: Tests for utility tools (RSS, OpenAPI parser, CSV indexer).
     - `test_persona_simulator.py`: Tests for the persona simulation logic.
-- `sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
+- `kavalai/sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
     - `app/V000__agents.sql`: Initial schema for agents, sessions, runs, tasks, and chat messages.
     - `app/V001__llm_profiles_and_stats.sql`: Defines `llm_profiles` (with `api_key`, `base_url`, `config`) and `llm_call_stats` (with `duration_seconds`).
     - `app/V002__embedding_profiles_and_stats.sql`: Defines `embedding_profiles` and `embedding_call_stats`.
@@ -89,11 +89,11 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `backoffice/V000__users__projects.sql`: Initial schema for users, projects, and project memberships.
     - `backoffice/V001__project_details.sql`: Adds database connection details to projects.
     - `backoffice/V002__active_project.sql`: Adds `active_project_id` to users.
-- `llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
-- `embedding_profiles/`: Example YAML configurations for different embedding providers (OpenAI, Gemini).
+- `kavalai/llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
+- `kavalai/embedding_profiles/`: Example YAML configurations for different embedding providers (OpenAI, Gemini).
 - `scripts/`: Utility scripts.
     - `migrate_db.py`: Flyway-like database migration tool. It tracks applied migrations in `kavalai_migrations` table with checksum verification and applies them in a single transaction.
-- `demo_agents/`, `demo_tasks/`, `personas/`: Sample configurations and data. Now includes `socrates.yaml` example.
+- `kavalai/demo_agents/`, `kavalai/demo_tasks/`, `kavalai/demo_personas/`: Sample configurations and data. Now includes `socrates.yaml` example.
 
 ## Key Technical Details
 - **Backend**: Python with FastAPI, SQLAlchemy (Async), Pydantic.

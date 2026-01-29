@@ -1,7 +1,7 @@
 """Launch Kaval.AI agent REST server.
 
 Example usage:
-HTTP_BASIC_AUTH_USER=user HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server demo_agents/silverhand.yaml --port 10000
+HTTP_BASIC_AUTH_USER=user HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server kavalai/demo_agents/silverhand.yaml --port 10000
 """
 
 import logging

@@ -5,7 +5,7 @@ set -e
 run_backoffice_migrations() {
     echo "Running backoffice migrations..."
     python -m kavalai.migrate_db \
-        --migrations sql_migrations/backoffice \
+        --migrations kavalai/sql_migrations/backoffice \
         --host "$BACKOFFICE_DB_HOST" \
         --port "${BACKOFFICE_DB_PORT:-5432}" \
         --user "$BACKOFFICE_DB_USER" \

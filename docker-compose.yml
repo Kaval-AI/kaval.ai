@@ -70,7 +70,7 @@ services:
     environment:
       - AGENTS_DB_HOST=postgres_db
       - AGENTS_DB_PORT=5432
-      - WORKFLOW_YAML_PATH=demo_agents/socrates.yaml
+      - WORKFLOW_YAML_PATH=kavalai/demo_agents/socrates.yaml
       - AGENT_PORT=8001
     depends_on:
       - agent-migrations

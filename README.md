@@ -23,7 +23,7 @@ You can also run the migrations directly using `docker run`. For example, to mig
 
 ```bash
 docker run --rm \
-  -v "$(pwd)/sql_migrations/app:/flyway/sql" \
+  -v "$(pwd)/kavalai/sql_migrations/app:/flyway/sql" \
   flyway/flyway \
   -url="jdbc:postgresql://postgres_db:5432/kavalai_dev" \
   -schemas="agents" \
@@ -36,9 +36,9 @@ docker run --rm \
 
 ## LLM profiles
 
-LLM profiles define how to connect to various LLM providers. They are YAML files stored in the `llm_profiles/` directory (or passed to the agent server).
+LLM profiles define how to connect to various LLM providers. They are YAML files stored in the `kavalai/llm_profiles/` directory (or passed to the agent server).
 
-**OpenAI example (`llm_profiles/openai.yaml`)**
+**OpenAI example (`kavalai/llm_profiles/openai.yaml`)**
 
 ```yaml
 name: openai
@@ -47,7 +47,7 @@ model_name: gpt-4o
 api_key: your-api-key-here
 ```
 
-**Gemini example (`llm_profiles/gemini.yaml`)**
+**Gemini example (`kavalai/llm_profiles/gemini.yaml`)**
 
 ```yaml
 name: gemini
@@ -58,7 +58,7 @@ api_key: your-api-key-here
 
 ## Socrates Chatbot Example
 
-We have included a Socrates chatbot example in `demo_agents/socrates.yaml`. This agent is configured to use the Socratic method in its conversations.
+We have included a Socrates chatbot example in `kavalai/demo_agents/socrates.yaml`. This agent is configured to use the Socratic method in its conversations.
 
 **socrates.yaml**
 
@@ -92,7 +92,7 @@ tasks:
 To run the Socrates chatbot server, use the following command:
 
 ```bash
-HTTP_BASIC_AUTH_USER=admin HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server demo_agents/socrates.yaml --port 10000
+HTTP_BASIC_AUTH_USER=admin HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server kavalai/demo_agents/socrates.yaml --port 10000
 ```
 
 ### Talking to the Chatbot via CLI
@@ -131,7 +131,7 @@ python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admi
 Runs a demo agent on port 10000 with given access credentials.
 
 ```bash
-HTTP_BASIC_AUTH_USER=user HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server demo_agents/silverhand.yaml --port 10000
+HTTP_BASIC_AUTH_USER=user HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server kavalai/demo_agents/silverhand.yaml --port 10000
 ```
 
 ## Persona simulation

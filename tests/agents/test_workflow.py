@@ -81,7 +81,7 @@ class TestWorkflowWithRestTools:
 
         # Load herold.yaml
         herold_yaml_path = os.path.join(
-            os.path.dirname(__file__), "../../demo_agents/herold.yaml"
+            os.path.dirname(__file__), "../../kavalai/demo_agents/herold.yaml"
         )
         with open(herold_yaml_path, "r") as f:
             herold_yaml_content = f.read()

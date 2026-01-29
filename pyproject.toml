@@ -41,13 +41,21 @@ test = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["kavalai*"]
-[tool.setuptools.data-files]
-"sql_migrations" = ["sql_migrations/**/*.sql"]
-"llm_profiles" = ["llm_profiles/**/*.yaml", "llm_profiles/**/*.yml"]
-"embedding_profiles" = ["embedding_profiles/**/*.yaml", "embedding_profiles/**/*.yml"]
-"demo_tasks" = ["demo_tasks/**/*.yaml", "demo_tasks/**/*.yml"]
-"demo_personas" = ["demo_personas/**/*.yaml", "demo_personas/**/*.yml"]
-"demo_agents" = ["demo_agents/**/*.yaml", "demo_agents/**/*.yml"]
+
+[tool.setuptools.package-data]
+"kavalai" = [
+    "sql_migrations/**/*.sql",
+    "llm_profiles/**/*.yaml",
+    "llm_profiles/**/*.yml",
+    "embedding_profiles/**/*.yaml",
+    "embedding_profiles/**/*.yml",
+    "demo_tasks/**/*.yaml",
+    "demo_tasks/**/*.yml",
+    "demo_personas/**/*.yaml",
+    "demo_personas/**/*.yml",
+    "demo_agents/**/*.yaml",
+    "demo_agents/**/*.yml",
+]
 
 
 [tool.pytest.ini_options]

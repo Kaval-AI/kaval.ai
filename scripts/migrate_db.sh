@@ -15,7 +15,7 @@ export $(grep -v '^#' "$ENV_FILE" | xargs)
 # Backoffice migrations
 docker run --rm \
   --network kavalai_kavalai \
-  -v "$(pwd)/sql_migrations/backoffice:/flyway/sql" \
+  -v "$(pwd)/kavalai/sql_migrations/backoffice:/flyway/sql" \
   flyway/flyway \
   -url="jdbc:postgresql://${BACKOFFICE_DB_HOST}:${BACKOFFICE_DB_PORT}/${BACKOFFICE_DB_NAME}" \
   -schemas="${BACKOFFICE_DB_SCHEMA}" \
@@ -27,7 +27,7 @@ docker run --rm \
 # App migrations
 docker run --rm \
   --network kavalai_kavalai \
-  -v "$(pwd)/sql_migrations/app:/flyway/sql" \
+  -v "$(pwd)/kavalai/sql_migrations/app:/flyway/sql" \
   flyway/flyway \
   -url="jdbc:postgresql://${AGENTS_DB_HOST}:${AGENTS_DB_PORT}/${AGENTS_DB_NAME}" \
   -schemas="${AGENTS_DB_SCHEMA}" \

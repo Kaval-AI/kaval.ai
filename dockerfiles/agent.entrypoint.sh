@@ -5,7 +5,7 @@ set -e
 run_agent_migrations() {
     echo "Running agent migrations..."
     python -m kavalai.migrate_db \
-        --migrations sql_migrations/app \
+        --migrations kavalai/sql_migrations/app \
         --host "$AGENTS_DB_HOST" \
         --port "${AGENTS_DB_PORT:-5432}" \
         --user "$AGENTS_DB_USER" \

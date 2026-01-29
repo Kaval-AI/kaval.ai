@@ -363,7 +363,11 @@ def load_profile_from_path(
     profile_name: str, folder_path: str = None
 ) -> LLMProfile | None:
     if folder_path is None:
-        folder_path = os.getenv("LLM_PROFILES_PATH", "llm_profiles")
+        folder_path = os.getenv("LLM_PROFILES_PATH")
+        if folder_path is None:
+            # Default to the llm_profiles folder within the package
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            folder_path = os.path.join(base_dir, "llm_profiles")
     profile_path = os.path.join(folder_path, f"{profile_name}.yaml")
     if not os.path.exists(profile_path):
         return None
@@ -383,7 +387,11 @@ def load_embedding_profile_from_path(
     profile_name: str, folder_path: str = None
 ) -> EmbeddingProfile | None:
     if folder_path is None:
-        folder_path = os.getenv("EMBEDDING_PROFILES_PATH", "embedding_profiles")
+        folder_path = os.getenv("EMBEDDING_PROFILES_PATH")
+        if folder_path is None:
+            # Default to the embedding_profiles folder within the package
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            folder_path = os.path.join(base_dir, "embedding_profiles")
     profile_path = os.path.join(folder_path, f"{profile_name}.yaml")
     if not os.path.exists(profile_path):
         return None

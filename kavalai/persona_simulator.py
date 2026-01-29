@@ -2,7 +2,7 @@
 Simulates a conversation as a persona user and an agent.
 
 Example usage:
-python -m kavalai.persona_simulator --task_config demo_tasks/chess.yaml --persona_config demo_personas/margit.yaml
+python -m kavalai.persona_simulator --task_config kavalai/demo_tasks/chess.yaml --persona_config kavalai/demo_personas/margit.yaml
 """
 
 import asyncio
