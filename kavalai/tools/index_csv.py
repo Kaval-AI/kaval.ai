@@ -26,7 +26,6 @@ import sys
 from typing import List, Optional, Generator, Dict
 
 from kavalai.agents.db import db_manager
-from kavalai.agents.agent_service import load_embedding_profile_from_path, AgentService
 from kavalai.agents.rag_service import RagService
 import logging
 
@@ -89,19 +88,10 @@ async def index_csv(
     replace: bool = False,
     batch_size: int = 10,
 ):
-    # Load embedding profile
-    profile = load_embedding_profile_from_path(embedding_profile_name)
-    if not profile:
-        print(f"Error: Embedding profile '{embedding_profile_name}' not found.")
-        return
-
     async_session = db_manager.get_sessionmaker(uri=os.environ["KAVALAI_DB_URI"])
     async with async_session() as session:
         # Upsert profile to DB to get ID
-        agent_service = AgentService(session)
-        profile = await agent_service.upsert_embedding_profile(profile)
-
-        rag_service = RagService(session, profile)
+        rag_service = RagService(session, os.environ["DEFAULT_EMBEDDING_MODEL"])
 
         rows_processed = 0
         total_chunks = 0

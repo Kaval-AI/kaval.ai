@@ -2,15 +2,12 @@
   <div class="header-section">
     <div class="header-top">
       <div class="breadcrumb">
-        <a routerLink="/configs">LLM Configurations</a> / LLM Call Details
+        Model Call Details
       </div>
-      <a routerLink="/configs" class="back-btn">
-        <i class="fas fa-arrow-left"></i> Back to Profiles
-      </a>
     </div>
-    <h1>LLM Call Details</h1>
-    @if (llmProfileId) {
-      <p class="subtitle">Filtered by profile: {{ llmProfileId }}</p>
+    <h1>Model Call Details</h1>
+    @if (callType) {
+      <p class="subtitle">Filtered by type: {{ callType }}</p>
     }
   </div>
 
@@ -26,7 +23,8 @@
       <div class="stat-card">
         <div class="stat-header">
           <div class="stat-title">
-            <span class="stat-name">{{ 'Call' }}</span>
+            <span class="stat-name">{{ stat.model }}</span>
+            <span class="badge call-type-badge">{{ stat.call_type }}</span>
             <span class="stat-id">{{ stat.id }}</span>
           </div>
           <div class="stat-meta">

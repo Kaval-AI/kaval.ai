@@ -6,7 +6,7 @@ import yaml
 import httpx
 from pydantic import BaseModel
 
-from kavalai.agents.agent_service import AgentService, load_profile_from_path
+from kavalai.agents.agent_service import AgentService
 from kavalai.agents.db import ModelCallStat
 from kavalai.llm_clients.common import chat_completions
 from kavalai.agents.schema_parser import SchemaParser
@@ -43,8 +43,7 @@ class RestServer(BaseModel):
 class WorkflowModel(BaseModel):
     name: str
     description: str = ""
-    llm_profile_name: str
-    llm_embedding_name: Optional[str] = None
+    llm_model: str
     data_types: dict[str, dict]
     rest_servers: list[RestServer] = []
     tasks: list[Task]
@@ -146,16 +145,6 @@ class Workflow:
 
         session = self.agent_service.db if self.agent_service else None
 
-        llm_profile = load_profile_from_path(self.workflow_model.llm_profile_name)
-        if not llm_profile:
-            raise Exception(
-                f"LLM Profile '{self.workflow_model.llm_profile_name}' not found"
-            )
-
-        if session:
-            service = AgentService(session)
-            llm_profile = await service.upsert_llm_profile(llm_profile)
-
         system_message = dict(role="system", content=input_text)
         messages = [system_message]
 
@@ -165,7 +154,7 @@ class Workflow:
                 messages.append(dict(role=msg.role, content=msg.content))
 
         response, stats = await chat_completions(
-            model=llm_profile.model,
+            model=self.workflow_model.llm_model,
             response_model=self.get_data_type(task.output),
             messages=messages,
         )
@@ -288,7 +277,7 @@ class Workflow:
             )
 
         # 3. Execute Workflow Steps
-        for task in self.workflow_model.tasks:
+        for task in self.workflow1_model.tasks:
             logger.info("Running task <%s>", task.name)
             if task.prompt:
                 await self.run_prompt(task, run_context)

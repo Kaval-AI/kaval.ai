@@ -1,6 +1,8 @@
 export interface LLMCallStat {
   id: string;
-  llm_profile_id: string | null;
+  call_type: string;
+  model: string;
+  agent_id: string | null;
   response_code: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;

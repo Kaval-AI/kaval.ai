@@ -4,7 +4,6 @@ import { Observable } from 'rxjs';
 import { Agent } from '../models/agent';
 import { SessionSummary } from '../models/session';
 import { ChatMessage } from '../models/chat-message';
-import { LLMConfig } from '../models/llm-config';
 import { LLMCallStat } from '../models/llm-call-stat';
 
 @Injectable({
@@ -15,10 +14,6 @@ export class AgentService {
 
   getAgentsByProject(projectId: string): Observable<Agent[]> {
     return this.http.get<Agent[]>(`/api/agents/all/${projectId}`);
-  }
-
-  getLLMConfigs(projectId: string): Observable<LLMConfig[]> {
-    return this.http.get<LLMConfig[]>(`/api/projects/${projectId}/llm-configs`);
   }
 
   getAgentSvgUrl(projectId: string, agentId: string): string {
@@ -53,10 +48,10 @@ export class AgentService {
     return this.http.get<ChatMessage[]>(`/api/agents/sessions/${projectId}/${sessionId}/messages`);
   }
 
-  getLLMCallStats(projectId: string, llmProfileId?: string, limit: number = 50, offset: number = 0): Observable<LLMCallStat[]> {
+  getLLMCallStats(projectId: string, callType?: string, limit: number = 50, offset: number = 0): Observable<LLMCallStat[]> {
     let url = `/api/projects/${projectId}/llm-call-stats?limit=${limit}&offset=${offset}`;
-    if (llmProfileId) {
-      url += `&llm_profile_id=${llmProfileId}`;
+    if (callType) {
+      url += `&call_type=${callType}`;
     }
     return this.http.get<LLMCallStat[]>(url);
   }

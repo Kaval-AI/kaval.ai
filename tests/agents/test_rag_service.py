@@ -5,7 +5,7 @@ from kavalai.agents.rag_service import RagService, RagServiceResult
 
 @pytest.fixture
 def embedding_model():
-    return "text-embedding-3-small"
+    return "openai/text-embedding-3-small"
 
 
 @pytest.mark.asyncio

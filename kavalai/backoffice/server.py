@@ -17,9 +17,8 @@ from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions
 from kavalai.agents.workflow import WorkflowModel
 from kavalai.backoffice.svg import generate_workflow_svg
-from fastapi.responses import Response, FileResponse
+from fastapi.responses import Response
 from kavalai.agents.rag_service import RagService
-from fastapi.staticfiles import StaticFiles
 
 # Set up the app logger
 logger = logging.getLogger(__name__)
@@ -128,26 +127,7 @@ async def get_project_and_assert_access(
 
 @app.get("/login")
 async def login(request: Request):
-    # Ensure any old state is cleared before starting a new login flow
-    if "_google_authlib_state_" in request.session:
-        del request.session["_google_authlib_state_"]
-
-    redirect_uri = str(request.url_for("google_auth_callback"))
-    frontend_url = os.getenv("FRONTEND_URL")
-    if frontend_url:
-        from urllib.parse import urlparse, urlunparse
-
-        parsed_frontend = urlparse(frontend_url)
-        parsed_redirect = urlparse(redirect_uri)
-        # Replace scheme and netloc with those from FRONTEND_URL
-        new_redirect = parsed_redirect._replace(
-            scheme=parsed_frontend.scheme, netloc=parsed_frontend.netloc
-        )
-        redirect_uri = urlunparse(new_redirect)
-
-    if "0.0.0.0" in redirect_uri:
-        redirect_uri = redirect_uri.replace("0.0.0.0", "localhost")
-
+    redirect_uri = request.url_for("google_auth_callback")
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
@@ -183,7 +163,7 @@ async def google_auth_callback(request: Request):
         if "_google_authlib_state_" in request.session:
             del request.session["_google_authlib_state_"]
 
-        return RedirectResponse(url=os.getenv("FRONTEND_URL", "http://localhost:8000"))
+        return RedirectResponse(url=os.environ["FRONTEND_URL"])
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -465,31 +445,11 @@ async def agents_get_svg(project_id: UUID, agent_id: UUID, request: Request):
         return Response(content=svg_content, media_type="image/svg+xml")
 
 
-@app.get("/projects/{project_id}/llm-configs")
-async def projects_get_llm_configs(project_id: UUID, request: Request):
-    """Fetch all LLM profiles for a specific project."""
-    assert_logged_in(request)
-    project = await get_project_and_assert_access(request, project_id)
-
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
-        service = AgentService(project_session)
-        return await service.get_llm_profiles_from_db()
-
-
 @app.get("/projects/{project_id}/llm-call-stats")
 async def projects_get_llm_call_stats(
     project_id: UUID,
     request: Request,
-    llm_profile_id: UUID | None = None,
+    call_type: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ):
@@ -508,32 +468,9 @@ async def projects_get_llm_call_stats(
 
     async with project_session_maker() as project_session:
         service = AgentService(project_session)
-        return await service.get_llm_call_stats(
-            llm_profile_id=llm_profile_id, limit=limit, offset=offset
+        return await service.get_model_call_stats(
+            call_type=call_type, limit=limit, offset=offset
         )
-
-
-@app.get("/projects/{project_id}/llm-configs/{profile_name}")
-async def projects_get_llm_config_by_name(
-    project_id: UUID, profile_name: str, request: Request
-):
-    """Fetch a specific LLM profile by name for a specific project."""
-    assert_logged_in(request)
-    project = await get_project_and_assert_access(request, project_id)
-
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
-        service = AgentService(project_session)
-        profile = await service.get_llm_profile_by_name(profile_name)
-        return profile
 
 
 @app.post("/projects/{project_id}/rag/query")
@@ -683,31 +620,9 @@ async def projects_remove_member(project_id: UUID, user_id: UUID, request: Reque
         return {"status": "removed"}
 
 
-# Serve frontend static files
-frontend_path = os.getenv("FRONTEND_PATH")
-if frontend_path and os.path.exists(frontend_path):
-    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
-
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        # If it looks like an API call or a static file, don't serve index.html here
-        # (Though /api should be handled by other routes already)
-        if full_path.startswith("api/"):
-            raise HTTPException(status_code=404)
-
-        # Check if the file exists in the static directory
-        file_path = os.path.join(frontend_path, full_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
-
-        # Fallback to index.html for SPA routing
-        return FileResponse(os.path.join(frontend_path, "index.html"))
-
-
 if __name__ == "__main__":
     config = uvicorn.Config(
         "kavalai.backoffice.server:app",
-        host="0.0.0.0",
         port=8000,
         log_level="info",
         reload=True,

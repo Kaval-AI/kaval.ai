@@ -27,8 +27,18 @@ async def client():
 @pytest.mark.asyncio
 async def test_login(client, mock_google_oauth):
     mock_google_oauth.authorize_redirect = AsyncMock(return_value=Response())
-    response = await client.get("/login")
-    assert response.status_code == 200
+    with patch(
+        "os.getenv",
+        side_effect=lambda k, d=None: "http://localhost:4200"
+        if k == "FRONTEND_URL"
+        else d,
+    ):
+        response = await client.get("/login")
+        assert response.status_code == 200
+        # Check if redirect_uri was called with /api/ prefix
+        args, kwargs = mock_google_oauth.authorize_redirect.call_args
+        redirect_uri = args[1]
+        assert "http://localhost:4200/api/auth/google/callback" in redirect_uri
 
 
 @pytest.mark.asyncio
@@ -179,6 +189,7 @@ async def test_agents_get_svg_success(client, backoffice_db):
         "name": "Test Workflow",
         "description": "A test workflow",
         "llm_profile_name": "openai",
+        "llm_model": "gpt-4",
         "data_types": {},
         "tasks": [],
     }

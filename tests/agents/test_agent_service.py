@@ -1,7 +1,7 @@
 import pytest
 from uuid import uuid4
 from kavalai.agents.agent_service import AgentService
-from kavalai.agents.db import LLMProfile, LLMCallStat
+from kavalai.agents.db import ModelCallStat
 
 
 @pytest.mark.asyncio
@@ -81,24 +81,14 @@ class TestAgentService:
         assert history[1].role == "assistant"
         assert history[1].content == "Response 1"
 
-    async def test_get_llm_call_stats(self, agents_db):
+    async def test_get_model_call_stats(self, agents_db):
         service = AgentService(agents_db)
-
-        # Create an LLM profile
-        profile = LLMProfile(
-            name="TestProfile",
-            provider="openai",
-            model_name="gpt-4o",
-            api_key="fake-key",
-        )
-        agents_db.add(profile)
-        await agents_db.commit()
-        await agents_db.refresh(profile)
 
         # Create some call stats
         for i in range(10):
-            stat = LLMCallStat(
-                llm_profile_id=profile.id,
+            stat = ModelCallStat(
+                call_type="llm",
+                model="gpt-4o",
                 response_code=200,
                 prompt_tokens=10,
                 completion_tokens=5,
@@ -112,75 +102,20 @@ class TestAgentService:
         await agents_db.commit()
 
         # Test retrieval all
-        stats = await service.get_llm_call_stats()
+        stats = await service.get_model_call_stats()
         assert len(stats) == 10
 
-        # Test filter by profile
-        stats = await service.get_llm_call_stats(llm_profile_id=profile.id)
+        # Test filter by type
+        stats = await service.get_model_call_stats(call_type="llm")
         assert len(stats) == 10
 
-        # Test filter by non-existent profile
-        stats = await service.get_llm_call_stats(llm_profile_id=uuid4())
+        # Test filter by non-existent type
+        stats = await service.get_model_call_stats(call_type="embedding")
         assert len(stats) == 0
 
         # Test pagination
-        stats = await service.get_llm_call_stats(limit=5, offset=0)
+        stats = await service.get_model_call_stats(limit=5, offset=0)
         assert len(stats) == 5
 
-        stats = await service.get_llm_call_stats(limit=5, offset=5)
+        stats = await service.get_model_call_stats(limit=5, offset=5)
         assert len(stats) == 5
-
-    async def test_llm_profiles_logic(self, agents_db):
-        service = AgentService(agents_db)
-
-        # 1. Test upsert new profile
-        profile = LLMProfile(
-            name="TestLLM",
-            provider="openai",
-            model_name="gpt-4",
-            api_key="key1",
-            config={"some": "cred"},
-        )
-        saved = await service.upsert_llm_profile(profile)
-        assert saved.id is not None
-        assert saved.name == "TestLLM"
-
-        # 2. Test get by name
-        retrieved = await service.get_llm_profile_by_name("TestLLM")
-        assert retrieved.id == saved.id
-
-        # 3. Test upsert existing (update)
-        profile.api_key = "key2"
-        updated = await service.upsert_llm_profile(profile)
-        assert updated.id == saved.id
-        assert updated.api_key == "key2"
-
-        # 4. Test get all views
-        views = await service.get_llm_profiles_from_db()
-        assert len(views) == 1
-        assert views[0].name == "TestLLM"
-
-        # 5. Test get by name - not found
-        with pytest.raises(Exception) as excinfo:
-            await service.get_llm_profile_by_name("NonExistent")
-        assert "not found" in str(excinfo.value)
-
-    async def test_load_llm_profile_from_path(self, tmp_path):
-        from kavalai.agents.agent_service import load_profile_from_path
-
-        # Create a dummy yaml profile
-        d = tmp_path / "llm_profiles"
-        d.mkdir()
-        p = d / "test_llm_file.yaml"
-        p.write_text(
-            "name: test_llm_file\nprovider: openai\nmodel_name: gpt-4\napi_key: file-key\n"
-        )
-
-        # Test loading
-        profile = load_profile_from_path("test_llm_file", folder_path=str(d))
-        assert profile is not None
-        assert profile.name == "test_llm_file"
-        assert profile.api_key == "file-key"
-
-        # Test loading non-existent
-        assert load_profile_from_path("ghost", folder_path=str(d)) is None

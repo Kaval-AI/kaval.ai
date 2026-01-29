@@ -14,7 +14,7 @@ import { JsonTreeComponent } from '../json-tree/json-tree';
   styleUrl: './llm-call-stats-page.css'
 })
 export class LlmCallStatsPage implements OnInit {
-  llmProfileId: string | null = null;
+  callType: string | null = null;
   projectId: string | null = null;
   stats: LLMCallStat[] = [];
   loading = false;
@@ -31,7 +31,7 @@ export class LlmCallStatsPage implements OnInit {
 
   ngOnInit(): void {
     this.route.queryParams.subscribe(params => {
-      this.llmProfileId = params['llm_profile_id'] || null;
+      this.callType = params['call_type'] || null;
       this.userService.userDetails.subscribe(user => {
         if (user && user.active_project_id) {
           this.projectId = user.active_project_id;
@@ -47,7 +47,7 @@ export class LlmCallStatsPage implements OnInit {
     if (!this.projectId) return;
 
     this.loading = true;
-    this.agentService.getLLMCallStats(this.projectId, this.llmProfileId || undefined, this.limit, this.offset)
+    this.agentService.getLLMCallStats(this.projectId, this.callType || undefined, this.limit, this.offset)
       .subscribe({
         next: (data) => {
           this.stats = [...this.stats, ...data];

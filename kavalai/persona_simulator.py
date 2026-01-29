@@ -6,6 +6,7 @@ python -m kavalai.persona_simulator --task_config kavalai/demo_tasks/chess.yaml 
 """
 
 import asyncio
+import os
 import urllib.parse
 from argparse import ArgumentParser
 from typing import Optional, List, Dict
@@ -16,7 +17,6 @@ from json_schema_to_pydantic import create_model
 from pydantic import BaseModel, Field, HttpUrl
 from rich.console import Console
 
-from kavalai.agents.agent_service import load_profile_from_path
 from kavalai.llm_clients.common import chat_completions
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
 
@@ -50,9 +50,6 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
     with open(persona_yaml_path) as f:
         persona_config = PersonaConfig(**yaml.safe_load(f))
 
-    llm_profile = load_profile_from_path(task_config.llm_profile_name)
-    if not llm_profile:
-        raise Exception(f"LLM Profile '{task_config.llm_profile_name}' not found")
     history: List[Dict[str, str]] = []
 
     # We'll keep track of the session_id given by the agent.
@@ -125,11 +122,8 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
             """
             all_messages = [{"role": "system", "content": system_message}] + history
 
-            # We want to keep track of LLM call stats in the simulator as well,
-            # but we don't have a session to persist them to yet, unless we want to use a local sqlite?
-            # For now, persona simulator doesn't use a database session for LLMCallStat.
             resp, stats = await chat_completions(
-                model=llm_profile.model,
+                model=os.environ["DEFAULT_LLM_MODEL"],
                 response_model=PersonaResponse,
                 messages=all_messages,
             )

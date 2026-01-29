@@ -8,8 +8,7 @@ from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai.agents.db import RagIndex, Agent, db_manager, ModelCallStat
-from kavalai.crud import insert
+from kavalai.agents.db import RagIndex, Agent, db_manager
 from kavalai.llm_clients.common import compute_embeddings
 
 logger = logging.getLogger(__name__)
@@ -72,7 +71,7 @@ class RagService:
                 model=self.model,
                 texts=texts,
             )
-            await insert(session, ModelCallStat, stats)
+            session.add(stats)
 
             rag_items = []
             dim = len(embeddings[0])
@@ -138,7 +137,7 @@ class RagService:
                 model=self.model,
                 texts=[text],
             )
-            await insert(session, ModelCallStat, stats)
+            session.add(stats)
             query_embedding = embeddings[0]
 
             # Using cosine distance <=> for pgvector

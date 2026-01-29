@@ -2,7 +2,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import BaseModel
-from sqlalchemy import select
 
 from kavalai.agents.db import (
     ModelCallStat,
@@ -47,19 +46,13 @@ async def test_chat_completions_with_stats(agents_db, monkeypatch):
 
     assert response.message == "hello"
 
-    # Verify stats in DB
-    stmt = select(ModelCallStat).where(ModelCallStat.call_type == "llm")
-    result = await agents_db.execute(stmt)
-    stat = result.scalar_one()
-
-    assert stat.prompt_tokens == 10
-    assert stat.completion_tokens == 5
-    assert stat.total_tokens == 15
-    assert stat.response_code == 200
-    assert stat.duration_seconds >= 0
-    assert float(stat.cost) == 0.0001
-    assert stat.request_data["requests"][0]["arguments"]["messages"] == messages
-    assert stat.response_data == {"id": "chat-123"}
+    assert stats.completion_tokens == 5
+    assert stats.total_tokens == 15
+    assert stats.response_code == 200
+    assert stats.duration_seconds >= 0
+    assert float(stats.cost) == 0.0001
+    assert stats.request_data["requests"][0]["arguments"]["messages"] == messages
+    assert stats.response_data == {"id": "chat-123"}
 
 
 @pytest.mark.asyncio
