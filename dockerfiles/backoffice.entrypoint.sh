@@ -11,7 +11,7 @@ run_backoffice_migrations() {
         --user "$BACKOFFICE_DB_USER" \
         --password "$BACKOFFICE_DB_PASSWORD" \
         --database "$BACKOFFICE_DB_NAME" \
-        --schema "${BACKOFFICE_DB_SCHEMA:-public}"
+        --schema "${KAVALAI_BO_DB_SCHEMA:-public}"
 }
 
 # Function to run backoffice server

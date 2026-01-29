@@ -12,42 +12,23 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.pool import NullPool
 
-
-def get_backoffice_db_url():
-    return f"postgresql+asyncpg://{os.environ['BACKOFFICE_DB_USER']}:{os.environ['BACKOFFICE_DB_PASSWORD']}@{os.environ['BACKOFFICE_DB_HOST']}:{os.environ['BACKOFFICE_DB_PORT']}/{os.environ['BACKOFFICE_DB_NAME']}"
-
-
-class DatabaseManager:
-    def __init__(self):
-        self._engine = None
-        self._sessionmaker = None
-
-    @property
-    def engine(self):
-        if self._engine is None:
-            self._engine = create_async_engine(
-                get_backoffice_db_url(), echo=False, poolclass=NullPool
-            )
-        return self._engine
-
-    @property
-    def sessionmaker(self):
-        if self._sessionmaker is None:
-            self._sessionmaker = async_sessionmaker(
-                bind=self.engine, class_=AsyncSession, expire_on_commit=False
-            )
-        return self._sessionmaker
-
-
-db_manager = DatabaseManager()
+from kavalai.agents.db import ensure_async_scheme
 
 
 def AsyncBackofficeSession():
-    return db_manager.sessionmaker()
+    return async_sessionmaker(
+        bind=create_async_engine(
+            ensure_async_scheme(os.environ["KAVALAI_BO_DB_URI"]),
+            echo=False,
+            poolclass=NullPool,
+        ),
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )()
 
 
 class Base(DeclarativeBase):
-    metadata = MetaData(schema=os.environ["BACKOFFICE_DB_SCHEMA"])
+    metadata = MetaData(schema=os.environ["KAVALAI_BO_DB_SCHEMA"])
 
 
 class User(Base):
@@ -126,7 +107,7 @@ class ProjectMembership(Base):
         ENUM(
             ProjectRole,
             name="project_role",
-            schema=os.environ.get("BACKOFFICE_DB_SCHEMA"),
+            schema=os.environ["KAVALAI_BO_DB_SCHEMA"],
             create_type=False,
         ),
         nullable=False,

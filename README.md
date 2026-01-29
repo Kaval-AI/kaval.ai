@@ -22,7 +22,7 @@ It supports two types of migrations: `app` (for agents) and `backoffice`.
 
 The script uses environment variables for database connection:
 - `AGENTS_DB_HOST`, `AGENTS_DB_PORT`, `AGENTS_DB_USER`, `AGENTS_DB_PASSWORD`, `AGENTS_DB_NAME`, `AGENTS_DB_SCHEMA` for `app`.
-- `BACKOFFICE_DB_HOST`, `BACKOFFICE_DB_PORT`, `BACKOFFICE_DB_USER`, `BACKOFFICE_DB_PASSWORD`, `BACKOFFICE_DB_NAME`, `BACKOFFICE_DB_SCHEMA` for `backoffice`.
+- `BACKOFFICE_DB_HOST`, `BACKOFFICE_DB_PORT`, `BACKOFFICE_DB_USER`, `BACKOFFICE_DB_PASSWORD`, `BACKOFFICE_DB_NAME`, `KAVALAI_BO_DB_SCHEMA` for `backoffice`.
 
 For example, to migrate the `agents` schema using environment variables:
 
@@ -137,7 +137,7 @@ python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admi
   export BACKOFFICE_DB_USER=kavalai_dev
   export BACKOFFICE_DB_PASSWORD=kavalai_dev
   export BACKOFFICE_DB_NAME=kavalai_dev
-  export BACKOFFICE_DB_SCHEMA=backoffice
+  export KAVALAI_BO_DB_SCHEMA=backoffice
   python -m kavalai.migrate_db backoffice
   ```
 

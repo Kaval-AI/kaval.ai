@@ -6,8 +6,8 @@ This document serves as a guide for Junie (AI Agent) to understand the Kaval.AI 
 Kaval.AI can be run using Docker. The provided `Dockerfile` and `entrypoint.sh` support multiple commands:
 - `backoffice-migrations`: Run database migrations for the backoffice.
 - `agent-migrations`: Run database migrations for the agents.
-- `backoffice-server`: Start the backoffice Nginx and FastAPI server.
-- `agent-server`: Start an agent REST server (requires `WORKFLOW_YAML_PATH` and agent DB environment variables).
+- `backoffice-server`: Start the backoffice Nginx and FastAPI server (requires `KAVALAI_BO_DB_URI` / `KAVALAI_BO_DB_SCHEMA`).
+- `agent-server`: Start an agent REST server (requires `WORKFLOW_YAML_PATH` and `KAVALAI_DB_URI` / `KAVALAI_DB_SCHEMA`).
 - `all-in-one`: Runs both migrations and starts both servers (for development/demo purposes).
 
 In production, Nginx serves the built Angular frontend from `/usr/share/nginx/html`.
@@ -36,7 +36,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages). `get_summary_stats` now provides cost breakdown (total, LLM, embedding).
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
-        - `db.py`: Database models for agents, sessions, runs, tasks, messages, embedding profiles, and RAG index.
+        - `db.py`: Database models for agents, sessions, runs, tasks, messages, embedding profiles, and RAG index. Includes `parse_db_uri` and `DatabaseManager` for handling `postgresql+asyncpg` and `KAVALAI_DB_URI`.
     - `llm_clients/`: Native LLM client implementations.
         - `common.py`: Common LLM client utilities. Includes `chat_completion_with_stats` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data, cost) and `compute_embeddings` for generating text embeddings. Refactored to use native OpenAI and Gemini clients instead of instructor for better structured output and stats collection. Includes `get_llm_client` factory.
         - `openai.py`: Native OpenAI client wrapper. Supports structured outputs via `beta.chat.completions.parse`.
@@ -49,7 +49,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `__init__.py`: Package initialization, defines `PACKAGE_PATH` and `MIGRATIONS_PATH`.
         - `server.py`: FastAPI server for the backoffice API. Includes endpoints for agents, sessions, stats, projects (including membership management), and workflow visualization.
         - `svg.py`: Utility for generating SVG visualizations of workflows using Graphviz. Supports rendering data nodes with schema properties and resolving reference chains.
-        - `db.py`: Backoffice-specific DB models (users, projects, memberships).
+        - `db.py`: Backoffice-specific DB models (users, projects, memberships). Includes `DatabaseManager` for handling `postgresql+asyncpg` and `KAVALAI_BO_DB_URI`.
         - `project_service.py`: Service for managing project-related data and membership.
     - `tools/`: Utility tools.
         - `cli_chat.py`: Command line tool for chatting with agents.
@@ -92,7 +92,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `kavalai/llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `kavalai/embedding_profiles/`: Example YAML configurations for different embedding providers (OpenAI, Gemini).
 - `scripts/`: Utility scripts.
-    - `migrate_db.py`: Database migration tool. It supports `app` and `backoffice` migration types and uses environment variables for database connections by default. It prints the masked connection URI before starting. It tracks applied migrations in `kavalai_migrations` table with checksum verification and applies them in a single transaction.
+    - `migrate_db.py`: Database migration tool. It supports `app` and `backoffice` migration types and uses environment variables (`KAVALAI_DB_URI`, `KAVALAI_DB_SCHEMA` for agents and `KAVALAI_BO_DB_URI`, `KAVALAI_BO_DB_SCHEMA` for backoffice) for database connections by default. It prints the masked connection URI before starting. It tracks applied migrations in `kavalai_migrations` table with checksum verification and applies them in a single transaction.
 - `kavalai/demo_agents/`, `kavalai/demo_tasks/`, `kavalai/demo_personas/`: Sample configurations and data. Now includes `socrates.yaml` example.
 
 ## Key Technical Details

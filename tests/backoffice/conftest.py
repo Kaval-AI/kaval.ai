@@ -4,27 +4,28 @@ import pytest_asyncio
 from sqlalchemy import text
 from kavalai.migrate_db import migrate
 from kavalai import SQL_MIGRATIONS_PATH
+from kavalai.agents.db import build_db_uri
 
-BACKOFFICE_SCHEMA = "test_backoffice"
-os.environ["BACKOFFICE_DB_SCHEMA"] = BACKOFFICE_SCHEMA
+
+os.environ["KAVALAI_BO_DB_SCHEMA"] = "test_backoffice"
+os.environ["KAVALAI_BO_DB_SCHEMA"] = "test_backoffice"
 
 
 @pytest.fixture(scope="session")
 def backoffice_db_config(postgres_container):
     config = dict(
-        user=postgres_container.username,
-        password=postgres_container.password,
-        host=postgres_container.get_container_host_ip(),
-        port=int(postgres_container.get_exposed_port(5432)),
-        db_name=postgres_container.dbname,
+        uri=build_db_uri(
+            user=postgres_container.username,
+            password=postgres_container.password,
+            host=postgres_container.get_container_host_ip(),
+            port=int(postgres_container.get_exposed_port(5432)),
+            db_name=postgres_container.dbname,
+        ),
+        schema="test_backoffice",
     )
     # Set environment variables BEFORE importing kavalai.backoffice.db
-    os.environ["BACKOFFICE_DB_USER"] = config["user"]
-    os.environ["BACKOFFICE_DB_PASSWORD"] = config["password"]
-    os.environ["BACKOFFICE_DB_HOST"] = config["host"]
-    os.environ["BACKOFFICE_DB_PORT"] = str(config["port"])
-    os.environ["BACKOFFICE_DB_NAME"] = config["db_name"]
-    os.environ["BACKOFFICE_DB_SCHEMA"] = BACKOFFICE_SCHEMA
+    os.environ["KAVALAI_BO_DB_URI"] = config["uri"]
+    os.environ["KAVALAI_BO_DB_SCHEMA"] = "test_backoffice"
     return config
 
 
@@ -33,12 +34,8 @@ def migrated_backoffice_db(backoffice_db_config):
     migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "backoffice")
     migrate(
         migrations_dir=migrations_dir,
-        host=backoffice_db_config["host"],
-        port=backoffice_db_config["port"],
-        user=backoffice_db_config["user"],
-        password=backoffice_db_config["password"],
-        database=backoffice_db_config["db_name"],
-        schema=BACKOFFICE_SCHEMA,
+        uri=backoffice_db_config["uri"],
+        schema="test_backoffice",
     )
 
 
@@ -50,7 +47,7 @@ async def backoffice_db(migrated_backoffice_db, backoffice_db_config):
     async with AsyncBackofficeSession() as session:
         # Get all table names from the Base metadata to truncate them
         tables = ", ".join(
-            f"{BACKOFFICE_SCHEMA}.{table.name}"
+            f"test_backoffice.{table.name}"
             for table in reversed(Base.metadata.sorted_tables)
         )
 

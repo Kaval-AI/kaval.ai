@@ -9,6 +9,8 @@ import psycopg2
 from psycopg2 import sql
 
 from kavalai import SQL_MIGRATIONS_PATH
+from kavalai.agents.db import parse_db_uri
+
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -54,8 +56,8 @@ def ensure_schema_and_table(cur, schema: str):
     cur.execute(f"""
         CREATE TABLE IF NOT EXISTS {schema}.kavalai_migrations (
             id SERIAL PRIMARY KEY,
-            filename VARCHAR(255) UNIQUE NOT NULL,
-            checksum VARCHAR(64) NOT NULL,
+            filename TEXT UNIQUE NOT NULL,
+            checksum TEXT NOT NULL,
             applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -82,14 +84,9 @@ def apply_migration(cur, schema: str, filename: str, file_path: str, checksum: s
 
 def migrate(
     migrations_dir: str,
-    host: str,
-    port: int,
-    user: str,
-    password: str,
-    database: str,
+    uri: str,
     schema: str,
 ):
-    uri = f"postgresql://{user}:***@{host}:{port}/{database}?options=-csearch_path%3D{schema}"
     logger.info(f"Connecting to database: {uri}")
 
     conn = None
@@ -99,8 +96,13 @@ def migrate(
 
     while True:
         try:
+            components = parse_db_uri(uri)
             conn = psycopg2.connect(
-                host=host, port=port, user=user, password=password, dbname=database
+                host=components["host"],
+                port=components["port"],
+                user=components["user"],
+                password=components["password"],
+                dbname=components["db_name"],
             )
             break
         except psycopg2.OperationalError:
@@ -172,33 +174,17 @@ def main():
     args = parser.parse_args()
 
     if args.type == "backoffice":
-        host = os.environ.get("BACKOFFICE_DB_HOST")
-        port = int(os.environ.get("BACKOFFICE_DB_PORT", 5432))
-        user = os.environ.get("BACKOFFICE_DB_USER")
-        password = os.environ.get("BACKOFFICE_DB_PASSWORD")
-        database = os.environ.get("BACKOFFICE_DB_NAME")
-        schema = os.environ.get("BACKOFFICE_DB_SCHEMA")
+        uri = os.environ["KAVALAI_BO_DB_URI"]
+        schema = os.environ["KAVALAI_BO_DB_SCHEMA"]
         migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "backoffice")
     elif args.type == "app":
-        host = os.environ.get("AGENTS_DB_HOST")
-        port = int(os.environ.get("AGENTS_DB_PORT", 5432))
-        user = os.environ.get("AGENTS_DB_USER")
-        password = os.environ.get("AGENTS_DB_PASSWORD")
-        database = os.environ.get("AGENTS_DB_NAME")
-        schema = os.environ.get("AGENTS_DB_SCHEMA")
+        uri = os.environ["KAVALAI_DB_URI"]
+        schema = os.environ.get("KAVALAI_DB_SCHEMA")
         migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
     else:
         raise ValueError(f"Invalid migration type: {args.type}")
 
-    migrate(
-        migrations_dir,
-        host,
-        port,
-        user,
-        password,
-        database,
-        schema,
-    )
+    migrate(migrations_dir, uri, schema)
 
 
 if __name__ == "__main__":

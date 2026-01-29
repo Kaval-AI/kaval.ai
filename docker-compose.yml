@@ -21,8 +21,8 @@ services:
     command: backoffice-migrations
     env_file: .env
     environment:
-      - BACKOFFICE_DB_HOST=postgres_db
-      - BACKOFFICE_DB_PORT=5432
+      - KAVALAI_BO_DB_URI=postgresql://kavalai_dev:kavalai_dev@postgres_db:5432/kavalai_dev
+      - KAVALAI_BO_DB_SCHEMA=backoffice
     depends_on:
       - postgres_db
     networks:
@@ -37,8 +37,8 @@ services:
       - "8000:80"
     env_file: .env
     environment:
-      - BACKOFFICE_DB_HOST=postgres_db
-      - BACKOFFICE_DB_PORT=5432
+      - KAVALAI_BO_DB_URI=postgresql://kavalai_dev:kavalai_dev@postgres_db:5432/kavalai_dev
+      - KAVALAI_BO_DB_SCHEMA=backoffice
       - FRONTEND_URL=http://localhost:8000
     depends_on:
       - backoffice-migrations
@@ -52,8 +52,8 @@ services:
     command: agent-migrations
     env_file: .env
     environment:
-      - AGENTS_DB_HOST=postgres_db
-      - AGENTS_DB_PORT=5432
+      - KAVALAI_DB_URI=postgresql://kavalai_dev:kavalai_dev@postgres_db:5432/kavalai_dev
+      - KAVALAI_DB_SCHEMA=agents
     depends_on:
       - postgres_db
     networks:
@@ -68,8 +68,8 @@ services:
       - "8001:8001"
     env_file: .env
     environment:
-      - AGENTS_DB_HOST=postgres_db
-      - AGENTS_DB_PORT=5432
+      - KAVALAI_DB_URI=postgresql://kavalai_dev:kavalai_dev@postgres_db:5432/kavalai_dev
+      - KAVALAI_DB_SCHEMA=agents
       - WORKFLOW_YAML_PATH=kavalai/demo_agents/socrates.yaml
       - AGENT_PORT=8001
     depends_on:

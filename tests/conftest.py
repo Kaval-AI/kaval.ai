@@ -1,4 +1,7 @@
 import os
+
+os.environ["KAVALAI_DB_SCHEMA"] = "test_agents"
+
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
@@ -6,10 +9,7 @@ from testcontainers.postgres import PostgresContainer
 from kavalai.migrate_db import migrate
 from kavalai import SQL_MIGRATIONS_PATH
 
-AGENTS_SCHEMA = "test_agents"
-os.environ["AGENTS_DB_SCHEMA"] = AGENTS_SCHEMA
-
-from kavalai.agents.db import db_manager, Base
+from kavalai.agents.db import Base, build_db_uri, db_manager
 
 
 @pytest.fixture(scope="session")
@@ -21,19 +21,16 @@ def postgres_container():
 @pytest.fixture(scope="session")
 def agents_db_config(postgres_container):
     config = dict(
-        user=postgres_container.username,
-        password=postgres_container.password,
-        host=postgres_container.get_container_host_ip(),
-        port=int(postgres_container.get_exposed_port(5432)),
-        db_name=postgres_container.dbname,
+        uri=build_db_uri(
+            user=postgres_container.username,
+            password=postgres_container.password,
+            host=postgres_container.get_container_host_ip(),
+            port=int(postgres_container.get_exposed_port(5432)),
+            db_name=postgres_container.dbname,
+        ),
+        schema=os.environ["KAVALAI_DB_SCHEMA"],
     )
-    # Set environment variables for the SDK to pick up
-    os.environ["AGENTS_DB_USER"] = config["user"]
-    os.environ["AGENTS_DB_PASSWORD"] = config["password"]
-    os.environ["AGENTS_DB_HOST"] = config["host"]
-    os.environ["AGENTS_DB_PORT"] = str(config["port"])
-    os.environ["AGENTS_DB_NAME"] = config["db_name"]
-    os.environ["AGENTS_DB_SCHEMA"] = AGENTS_SCHEMA
+    os.environ["KAVALAI_DB_URI"] = config["uri"]
     return config
 
 
@@ -42,25 +39,21 @@ def migrated_agents_db(agents_db_config):
     migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
     migrate(
         migrations_dir=migrations_dir,
-        host=agents_db_config["host"],
-        port=agents_db_config["port"],
-        user=agents_db_config["user"],
-        password=agents_db_config["password"],
-        database=agents_db_config["db_name"],
-        schema=AGENTS_SCHEMA,
+        uri=agents_db_config["uri"],
+        schema="test_agents",
     )
 
 
 @pytest.fixture(scope="session")
-def agents_session_maker(migrated_agents_db, agents_db_config):
-    return db_manager.get_sessionmaker(**agents_db_config)
+def agents_session_maker(agents_db_config, migrated_agents_db):
+    return db_manager.get_sessionmaker(uri=agents_db_config["uri"])
 
 
 @pytest_asyncio.fixture(scope="function")
 async def agents_db(agents_session_maker):
     async with agents_session_maker() as session:
         tables = ", ".join(
-            f"{AGENTS_SCHEMA}.{table.name}"
+            f"test_agents.{table.name}"
             for table in reversed(Base.metadata.sorted_tables)
         )
 

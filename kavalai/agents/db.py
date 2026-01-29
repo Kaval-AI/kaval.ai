@@ -15,6 +15,19 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.pool import NullPool
+from sqlalchemy.engine import make_url
+
+
+def parse_db_uri(uri: str) -> dict:
+    """Parses a database URI into tokens."""
+    url = make_url(uri)
+    return {
+        "user": url.username,
+        "password": url.password,
+        "host": url.host,
+        "port": url.port,
+        "db_name": url.database,
+    }
 
 
 class VectorType(TypeDecorator):
@@ -53,19 +66,43 @@ class VectorType(TypeDecorator):
         return value
 
 
+def ensure_async_scheme(uri: str) -> str:
+    """Ensures the URI uses the postgresql+asyncpg driver."""
+    if uri and "://" in uri:
+        scheme, rest = uri.split("://", 1)
+        if scheme == "postgresql":
+            return f"postgresql+asyncpg://{rest}"
+    return uri
+
+
+def build_db_uri(
+    user, password, host, port, db_name, scheme="postgresql+asyncpg"
+) -> str:
+    """Builds a database URI from components."""
+    return f"{scheme}://{user}:{password}@{host}:{port}/{db_name}"
+
+
 class DatabaseManager:
     """Manages dynamic engine creation and session factories."""
 
     def __init__(self):
-        # Optional: Cache engines by a unique key (e.g., host+db_name)
-        # to avoid the overhead of re-creating engines constantly.
         self._engines = {}
 
-    def get_url(self, user, password, host, port, db_name) -> str:
-        return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db_name}"
-
-    def get_sessionmaker(self, *, user, password, host, port, db_name, echo=False):
-        url = self.get_url(user, password, host, port, db_name)
+    def get_sessionmaker(
+        self,
+        *,
+        user=None,
+        password=None,
+        host=None,
+        port=None,
+        db_name=None,
+        uri=None,
+        echo=False,
+    ):
+        if uri:
+            url = ensure_async_scheme(uri)
+        else:
+            url = build_db_uri(user, password, host, port, db_name)
 
         # Check cache first
         if url not in self._engines:
@@ -82,7 +119,7 @@ db_manager = DatabaseManager()
 
 
 class Base(DeclarativeBase):
-    metadata = MetaData(schema=os.environ.get("AGENTS_DB_SCHEMA"))
+    metadata = MetaData(schema=os.environ["KAVALAI_DB_SCHEMA"])
 
 
 class Agent(Base):

@@ -1,23 +1,32 @@
+import logging
 from typing import Optional
 
+import yaml
 from sqlalchemy import delete
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai.agents.db import EmbeddingProfile, RagIndex, Agent
+from kavalai.agents.db import EmbeddingProfile, RagIndex, Agent, db_manager
 from kavalai.llm_clients.common import compute_embeddings_with_stats
+
+logger = logging.getLogger(__name__)
 
 
 class RagService:
     def __init__(
         self,
-        db_session: AsyncSession,
+        uri: str,
         embedding_profile: EmbeddingProfile,
         agent: Optional[Agent] = None,
     ):
-        self.db = db_session
+        self.session_maker = db_manager.get_sessionmaker(uri=uri)
         self.embedding_profile = embedding_profile
         self.agent = agent
+
+    @classmethod
+    def from_uri_and_path(cls, uri: str, embedding_profile_path: str):
+        with open(embedding_profile_path, "r") as f:
+            data = yaml.safe_load(f)
+            return cls(uri, EmbeddingProfile(**data))
 
     async def batch_index(
         self,
@@ -37,35 +46,38 @@ class RagService:
         if source_ids and len(texts) != len(source_ids):
             raise ValueError("The number of texts and source_ids must be the same.")
 
-        embeddings = await compute_embeddings_with_stats(
-            llm_profile=self.embedding_profile,
-            texts=texts,
-            session=self.db,
-            agent_id=self.agent.id if self.agent else None,
-        )
+        async with self.session_maker() as session:
+            embeddings = await compute_embeddings_with_stats(
+                embedding_profile=self.embedding_profile,
+                texts=texts,
+                session=session,
+                agent_id=self.agent.id if self.agent else None,
+            )
 
-        rag_items = []
-        dim = len(embeddings[0])
+            rag_items = []
+            dim = len(embeddings[0])
 
-        for i, (text, meta, emb) in enumerate(zip(texts, metadata_list, embeddings)):
-            item_data = {
-                "embedding_profile_id": self.embedding_profile.id,
-                "collection_name": collection_name,
-                "source_id": source_ids[i] if source_ids else "default",
-                "content": text,
-                "embedding_size": dim,
-                "embedding": emb,
-                "rag_metadata": meta,
-            }
-            rag_item = RagIndex(**item_data)
-            self.db.add(rag_item)
-            rag_items.append(rag_item)
+            for i, (text, meta, emb) in enumerate(
+                zip(texts, metadata_list, embeddings)
+            ):
+                item_data = {
+                    "embedding_profile_id": self.embedding_profile.id,
+                    "collection_name": collection_name,
+                    "source_id": source_ids[i] if source_ids else "default",
+                    "content": text,
+                    "embedding_size": dim,
+                    "embedding": emb,
+                    "rag_metadata": meta,
+                }
+                rag_item = RagIndex(**item_data)
+                session.add(rag_item)
+                rag_items.append(rag_item)
 
-        await self.db.commit()
-        for item in rag_items:
-            await self.db.refresh(item)
+            await session.commit()
+            for item in rag_items:
+                await session.refresh(item)
 
-        return rag_items
+            return rag_items
 
     async def delete_by_source_ids(
         self,
@@ -101,7 +113,7 @@ class RagService:
         collection_name: Optional[str] = None,
     ) -> list[dict]:
         embeddings = await compute_embeddings_with_stats(
-            llm_profile=self.embedding_profile,
+            embedding_profile=self.embedding_profile,
             texts=[text],
             session=self.db,
             agent_id=self.agent.id if self.agent else None,

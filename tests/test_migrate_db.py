@@ -27,9 +27,10 @@ def db_config(postgres_container):
 def test_migrate_app_migrations(db_config):
     migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
     schema = "app_schema"
+    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
 
     # Run migrations
-    migrate(migrations_dir, schema=schema, **db_config)
+    migrate(migrations_dir, uri, schema=schema)
 
     # Verify migrations were applied
     conn = psycopg2.connect(**db_config)
@@ -61,10 +62,11 @@ def test_migrate_app_migrations(db_config):
 
 def test_migrate_backoffice_migrations(db_config):
     migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "backoffice")
-    schema = "backoffice_schema"
+    schema = "KAVALAI_BO_DB_SCHEMA"
+    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
 
     # Run migrations
-    migrate(migrations_dir, schema=schema, **db_config)
+    migrate(migrations_dir, uri, schema=schema)
 
     # Verify migrations were applied
     conn = psycopg2.connect(**db_config)
@@ -97,12 +99,13 @@ def test_migrate_backoffice_migrations(db_config):
 def test_migrate_idempotency(db_config):
     migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
     schema = "idempotency_schema"
+    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
 
     # First run
-    migrate(migrations_dir, schema=schema, **db_config)
+    migrate(migrations_dir, uri, schema=schema)
 
     # Second run should not fail and should not add new entries
-    migrate(migrations_dir, schema=schema, **db_config)
+    migrate(migrations_dir, uri, schema=schema)
 
     conn = psycopg2.connect(**db_config)
     cur = conn.cursor()
@@ -122,6 +125,7 @@ def test_migrate_idempotency(db_config):
 
 def test_migrate_checksum_mismatch_real_db(db_config, tmp_path):
     schema = "checksum_schema"
+    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
 
     # Create a temporary migration file
     m_dir = tmp_path / "migrations"
@@ -130,25 +134,22 @@ def test_migrate_checksum_mismatch_real_db(db_config, tmp_path):
     m1.write_text("CREATE TABLE test (id INT);")
 
     # Apply it
-    migrate(str(m_dir), schema=schema, **db_config)
+    migrate(str(m_dir), uri, schema=schema)
 
     # Change the file content
     m1.write_text("CREATE TABLE test (id INT); -- modified")
 
     # Should raise ValueError
     with pytest.raises(ValueError, match="Checksum mismatch"):
-        migrate(str(m_dir), schema=schema, **db_config)
+        migrate(str(m_dir), uri, schema=schema)
 
 
 def test_migrate_main_with_env_vars(db_config):
     schema = "main_env_schema"
+    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
     env = {
-        "AGENTS_DB_HOST": db_config["host"],
-        "AGENTS_DB_PORT": str(db_config["port"]),
-        "AGENTS_DB_USER": db_config["user"],
-        "AGENTS_DB_PASSWORD": db_config["password"],
-        "AGENTS_DB_NAME": db_config["database"],
-        "AGENTS_DB_SCHEMA": schema,
+        "KAVALAI_DB_URI": uri,
+        "KAVALAI_DB_SCHEMA": schema,
     }
 
     with patch.dict(os.environ, env), patch("sys.argv", ["migrate_db.py", "app"]):

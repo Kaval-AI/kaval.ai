@@ -125,16 +125,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     workflow = Workflow.from_yaml_path(args.workflow_yaml_path)
-    app = create_agent_app(
-        workflow=workflow,
-        session_provider=db_manager.get_sessionmaker(
+    uri = os.environ.get("KAVALAI_DB_URI")
+    if uri:
+        session_provider = db_manager.get_sessionmaker(uri=uri, echo=args.sql_echo)
+    else:
+        session_provider = db_manager.get_sessionmaker(
             user=os.environ["AGENTS_DB_USER"],
             password=os.environ["AGENTS_DB_PASSWORD"],
             host=os.environ["AGENTS_DB_HOST"],
             port=int(os.environ["AGENTS_DB_PORT"]),
             db_name=os.environ["AGENTS_DB_NAME"],
             echo=args.sql_echo,
-        ),
+        )
+
+    app = create_agent_app(
+        workflow=workflow,
+        session_provider=session_provider,
     )
     logger.info(f"Starting <{workflow.workflow_model.name}>.")
     uvicorn.run(app, host=args.host, port=args.port)

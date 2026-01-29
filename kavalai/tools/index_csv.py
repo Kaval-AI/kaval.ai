@@ -95,14 +95,7 @@ async def index_csv(
         print(f"Error: Embedding profile '{embedding_profile_name}' not found.")
         return
 
-    async_session = db_manager.get_sessionmaker(
-        user=os.environ["AGENTS_DB_USER"],
-        password=os.environ["AGENTS_DB_PASSWORD"],
-        host=os.environ["AGENTS_DB_HOST"],
-        port=os.environ["AGENTS_DB_PORT"],
-        db_name=os.environ["AGENTS_DB_NAME"],
-    )
-
+    async_session = db_manager.get_sessionmaker(uri=os.environ["KAVALAI_DB_URI"])
     async with async_session() as session:
         # Upsert profile to DB to get ID
         agent_service = AgentService(session)

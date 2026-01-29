@@ -240,7 +240,7 @@ async def compute_embeddings(
 
 
 async def compute_embeddings_with_stats(
-    llm_profile: EmbeddingProfile,
+    embedding_profile: EmbeddingProfile,
     texts: list[str],
     session: AsyncSession = None,
     agent_id: UUID = None,
@@ -250,13 +250,13 @@ async def compute_embeddings_with_stats(
     """
     Compute embeddings and collect metrics.
     """
-    client = get_llm_client(llm_profile)
+    client = get_llm_client(embedding_profile)
     start_time = time.perf_counter()
 
     request_info = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "arguments": {
-            "model": llm_profile.model_name,
+            "model": embedding_profile.model_name,
             "texts_count": len(texts),
             "normalize": normalize,
             **kwargs,
@@ -265,7 +265,7 @@ async def compute_embeddings_with_stats(
 
     try:
         result = await client.compute_embeddings(
-            model=llm_profile.model_name,
+            model=embedding_profile.model_name,
             texts=texts,
             normalize=normalize,
             **kwargs,
@@ -273,7 +273,7 @@ async def compute_embeddings_with_stats(
 
         duration_seconds = time.perf_counter() - start_time
         await _save_embedding_stats(
-            embedding_profile=llm_profile,
+            embedding_profile=embedding_profile,
             agent_id=agent_id,
             response_code=200,
             batch_size=len(texts),
@@ -294,7 +294,7 @@ async def compute_embeddings_with_stats(
         request_info["error_type"] = type(e).__name__
 
         await _save_embedding_stats(
-            embedding_profile=llm_profile,
+            embedding_profile=embedding_profile,
             agent_id=agent_id,
             response_code=500,
             batch_size=len(texts),
