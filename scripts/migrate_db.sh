@@ -13,21 +13,7 @@ fi
 export $(grep -v '^#' "$ENV_FILE" | xargs)
 
 # Backoffice migrations
-python -m kavalai.migrate_db \
-  --migrations kavalai/sql_migrations/backoffice \
-  --host "${BACKOFFICE_DB_HOST}" \
-  --port "${BACKOFFICE_DB_PORT}" \
-  --user "${BACKOFFICE_DB_USER}" \
-  --password "${BACKOFFICE_DB_PASSWORD}" \
-  --database "${BACKOFFICE_DB_NAME}" \
-  --schema "${BACKOFFICE_DB_SCHEMA}"
+python -m kavalai.migrate_db backoffice
 
 # App migrations
-python -m kavalai.migrate_db \
-  --migrations kavalai/sql_migrations/app \
-  --host "${AGENTS_DB_HOST}" \
-  --port "${AGENTS_DB_PORT}" \
-  --user "${AGENTS_DB_USER}" \
-  --password "${AGENTS_DB_PASSWORD}" \
-  --database "${AGENTS_DB_NAME}" \
-  --schema "${AGENTS_DB_SCHEMA}"
+python -m kavalai.migrate_db app

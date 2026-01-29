@@ -18,18 +18,22 @@ Run `pip install -r requirements.txt`.
 ## Database migrations
 
 We use a custom migration script to manage database schemas. You can run migrations using the `kavalai.migrate_db` module.
+It supports two types of migrations: `app` (for agents) and `backoffice`.
 
-For example, to migrate the `agents` schema:
+The script uses environment variables for database connection:
+- `AGENTS_DB_HOST`, `AGENTS_DB_PORT`, `AGENTS_DB_USER`, `AGENTS_DB_PASSWORD`, `AGENTS_DB_NAME`, `AGENTS_DB_SCHEMA` for `app`.
+- `BACKOFFICE_DB_HOST`, `BACKOFFICE_DB_PORT`, `BACKOFFICE_DB_USER`, `BACKOFFICE_DB_PASSWORD`, `BACKOFFICE_DB_NAME`, `BACKOFFICE_DB_SCHEMA` for `backoffice`.
+
+For example, to migrate the `agents` schema using environment variables:
 
 ```bash
-python -m kavalai.migrate_db \
-  --migrations kavalai/sql_migrations/app \
-  --host localhost \
-  --port 5432 \
-  --user kavalai_dev \
-  --password kavalai_dev \
-  --database kavalai_dev \
-  --schema agents
+export AGENTS_DB_HOST=localhost
+export AGENTS_DB_PORT=5432
+export AGENTS_DB_USER=kavalai_dev
+export AGENTS_DB_PASSWORD=kavalai_dev
+export AGENTS_DB_NAME=kavalai_dev
+export AGENTS_DB_SCHEMA=agents
+python -m kavalai.migrate_db app
 ```
 
 Alternatively, you can use the provided script to run all migrations using an environment file:
@@ -120,23 +124,21 @@ python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admi
 - Run `docker compose up -D` to bring up Postgres database.
 - Apply database migrations to local and test databases:
   ```bash
-  python -m kavalai.migrate_db \
-    --migrations kavalai/sql_migrations/app \
-    --host localhost \
-    --port 5432 \
-    --user kavalai_dev \
-    --password kavalai_dev \
-    --database kavalai_dev \
-    --schema agents
+  export AGENTS_DB_HOST=localhost
+  export AGENTS_DB_PORT=5432
+  export AGENTS_DB_USER=kavalai_dev
+  export AGENTS_DB_PASSWORD=kavalai_dev
+  export AGENTS_DB_NAME=kavalai_dev
+  export AGENTS_DB_SCHEMA=agents
+  python -m kavalai.migrate_db app
 
-  python -m kavalai.migrate_db \
-    --migrations kavalai/sql_migrations/backoffice \
-    --host localhost \
-    --port 5432 \
-    --user kavalai_dev \
-    --password kavalai_dev \
-    --database kavalai_dev \
-    --schema backoffice
+  export BACKOFFICE_DB_HOST=localhost
+  export BACKOFFICE_DB_PORT=5432
+  export BACKOFFICE_DB_USER=kavalai_dev
+  export BACKOFFICE_DB_PASSWORD=kavalai_dev
+  export BACKOFFICE_DB_NAME=kavalai_dev
+  export BACKOFFICE_DB_SCHEMA=backoffice
+  python -m kavalai.migrate_db backoffice
   ```
 
 

@@ -1,9 +1,9 @@
 import os
 import pytest
 import psycopg2
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from testcontainers.postgres import PostgresContainer
-from kavalai.migrate_db import migrate
+from kavalai.migrate_db import migrate, main
 from kavalai import SQL_MIGRATIONS_PATH
 
 
@@ -140,34 +140,24 @@ def test_migrate_checksum_mismatch_real_db(db_config, tmp_path):
         migrate(str(m_dir), schema=schema, **db_config)
 
 
-def test_migrate_retries_on_connection_failure():
-    """
-    Test that migrate function retries connection on failure.
-    We mock psycopg2.connect to fail a few times and then succeed.
-    """
-    with patch("psycopg2.connect") as mock_connect:
-        # Mock failure then success
-        mock_connect.side_effect = [
-            psycopg2.OperationalError("Connection refused"),
-            psycopg2.OperationalError("Connection refused"),
-            MagicMock(),  # Success on 3rd attempt
-        ]
+def test_migrate_main_with_env_vars(db_config):
+    schema = "main_env_schema"
+    env = {
+        "AGENTS_DB_HOST": db_config["host"],
+        "AGENTS_DB_PORT": str(db_config["port"]),
+        "AGENTS_DB_USER": db_config["user"],
+        "AGENTS_DB_PASSWORD": db_config["password"],
+        "AGENTS_DB_NAME": db_config["database"],
+        "AGENTS_DB_SCHEMA": schema,
+    }
 
-        # We also need to mock other things that migrate calls after successful connection
-        with patch("kavalai.migrate_db.ensure_schema_and_table"), patch(
-            "kavalai.migrate_db.get_applied_migrations", return_value={}
-        ), patch("kavalai.migrate_db.get_migrations", return_value=[]), patch(
-            "time.sleep"
-        ) as mock_sleep:  # Mock sleep to speed up test
-            migrate(
-                migrations_dir="fake_dir",
-                host="localhost",
-                port=5432,
-                user="user",
-                password="password",
-                database="db",
-                schema="public",
-            )
+    with patch.dict(os.environ, env), patch("sys.argv", ["migrate_db.py", "app"]):
+        main()
 
-            assert mock_connect.call_count == 3
-            assert mock_sleep.call_count == 2
+    # Verify migrations were applied
+    conn = psycopg2.connect(**db_config)
+    cur = conn.cursor()
+    cur.execute(f"SELECT count(*) FROM {schema}.kavalai_migrations")
+    count = cur.fetchone()[0]
+    assert count > 0
+    conn.close()

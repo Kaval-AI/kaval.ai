@@ -2,12 +2,13 @@ import argparse
 import hashlib
 import logging
 import os
-import sys
 import time
 from typing import List, Tuple
 
 import psycopg2
 from psycopg2 import sql
+
+from kavalai import SQL_MIGRATIONS_PATH
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -163,29 +164,38 @@ def migrate(
 def main():
     parser = argparse.ArgumentParser(description="Kaval.AI Database Migration Tool")
     parser.add_argument(
-        "--migrations", required=True, help="Path to SQL migrations folder"
+        "type", choices=["app", "backoffice"], help="Type of migrations to run."
     )
-    parser.add_argument("--host", required=True, help="Database host")
-    parser.add_argument("--port", type=int, default=5432, help="Database port")
-    parser.add_argument("--user", required=True, help="Database user")
-    parser.add_argument("--password", required=True, help="Database password")
-    parser.add_argument("--database", required=True, help="Database name")
-    parser.add_argument("--schema", required=True, help="Database schema")
-
     args = parser.parse_args()
 
-    try:
-        migrate(
-            args.migrations,
-            args.host,
-            args.port,
-            args.user,
-            args.password,
-            args.database,
-            args.schema,
-        )
-    except Exception:
-        sys.exit(1)
+    if args.type == "backoffice":
+        host = os.environ.get("BACKOFFICE_DB_HOST")
+        port = int(os.environ.get("BACKOFFICE_DB_PORT", 5432))
+        user = os.environ.get("BACKOFFICE_DB_USER")
+        password = os.environ.get("BACKOFFICE_DB_PASSWORD")
+        database = os.environ.get("BACKOFFICE_DB_NAME")
+        schema = os.environ.get("BACKOFFICE_DB_SCHEMA")
+        migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "backoffice")
+    elif args.type == "app":
+        host = os.environ.get("AGENTS_DB_HOST")
+        port = int(os.environ.get("AGENTS_DB_PORT", 5432))
+        user = os.environ.get("AGENTS_DB_USER")
+        password = os.environ.get("AGENTS_DB_PASSWORD")
+        database = os.environ.get("AGENTS_DB_NAME")
+        schema = os.environ.get("AGENTS_DB_SCHEMA")
+        migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
+    else:
+        raise ValueError(f"Invalid migration type: {args.type}")
+
+    migrate(
+        migrations_dir,
+        host,
+        port,
+        user,
+        password,
+        database,
+        schema,
+    )
 
 
 if __name__ == "__main__":
