@@ -9,6 +9,7 @@ from kavalai.agents.db import (
     ChatMessage,
     LLMProfile,
     LLMCallStat,
+    ensure_async_scheme,
 )
 from kavalai.crud import insert, delete, get_one
 
@@ -149,3 +150,32 @@ async def test_llm_profile_and_stats(agents_db: AsyncSession):
     fetched_stat = await get_one(agents_db, LLMCallStat, stat_id)
     assert fetched_stat is not None
     assert fetched_stat.llm_profile_id is None
+
+
+def test_ensure_async_scheme():
+    """Test the ensure_async_scheme utility function."""
+    # Test converting standard postgresql scheme
+    assert (
+        ensure_async_scheme("postgresql://user:pass@host:5432/db")
+        == "postgresql+asyncpg://user:pass@host:5432/db"
+    )
+
+    # Test with already correct scheme
+    assert (
+        ensure_async_scheme("postgresql+asyncpg://user:pass@host:5432/db")
+        == "postgresql+asyncpg://user:pass@host:5432/db"
+    )
+
+    # Test with other postgresql variations
+    assert (
+        ensure_async_scheme("postgresql+psycopg2://user:pass@host:5432/db")
+        == "postgresql+asyncpg://user:pass@host:5432/db"
+    )
+
+    # Test with non-postgresql scheme
+    assert ensure_async_scheme("sqlite:///:memory:") == "sqlite:///:memory:"
+
+    # Test with invalid URI
+    assert ensure_async_scheme("not_a_uri") == "not_a_uri"
+    assert ensure_async_scheme("") == ""
+    assert ensure_async_scheme(None) is None

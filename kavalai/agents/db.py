@@ -70,7 +70,7 @@ def ensure_async_scheme(uri: str) -> str:
     """Ensures the URI uses the postgresql+asyncpg driver."""
     if uri and "://" in uri:
         scheme, rest = uri.split("://", 1)
-        if scheme == "postgresql":
+        if scheme.startswith("postgresql"):
             return f"postgresql+asyncpg://{rest}"
     return uri
 
