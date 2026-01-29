@@ -92,7 +92,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `kavalai/llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `kavalai/embedding_profiles/`: Example YAML configurations for different embedding providers (OpenAI, Gemini).
 - `scripts/`: Utility scripts.
-    - `migrate_db.py`: Database migration tool. It supports `app` and `backoffice` migration types and uses environment variables for database connections by default. It tracks applied migrations in `kavalai_migrations` table with checksum verification and applies them in a single transaction.
+    - `migrate_db.py`: Database migration tool. It supports `app` and `backoffice` migration types and uses environment variables for database connections by default. It prints the masked connection URI before starting. It tracks applied migrations in `kavalai_migrations` table with checksum verification and applies them in a single transaction.
 - `kavalai/demo_agents/`, `kavalai/demo_tasks/`, `kavalai/demo_personas/`: Sample configurations and data. Now includes `socrates.yaml` example.
 
 ## Key Technical Details

@@ -89,6 +89,9 @@ def migrate(
     database: str,
     schema: str,
 ):
+    uri = f"postgresql://{user}:***@{host}:{port}/{database}?options=-csearch_path%3D{schema}"
+    logger.info(f"Connecting to database: {uri}")
+
     conn = None
     max_wait = 60
     start_time = time.time()
