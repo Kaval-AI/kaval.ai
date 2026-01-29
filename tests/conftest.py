@@ -28,7 +28,7 @@ def agents_db_config(postgres_container):
             port=int(postgres_container.get_exposed_port(5432)),
             db_name=postgres_container.dbname,
         ),
-        schema=os.environ["KAVALAI_DB_SCHEMA"],
+        schema="test_agents",
     )
     os.environ["KAVALAI_DB_URI"] = config["uri"]
     return config

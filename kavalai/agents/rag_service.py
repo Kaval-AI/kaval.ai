@@ -1,9 +1,13 @@
 import logging
+from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 import yaml
+from pydantic import BaseModel
 from sqlalchemy import delete
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from kavalai.agents.db import EmbeddingProfile, RagIndex, Agent, db_manager
 from kavalai.llm_clients.common import compute_embeddings_with_stats
@@ -11,14 +15,38 @@ from kavalai.llm_clients.common import compute_embeddings_with_stats
 logger = logging.getLogger(__name__)
 
 
+class RagServiceResult(BaseModel):
+    id: UUID
+    embedding_profile_id: Optional[UUID] = None
+    collection_name: str
+    source_id: str
+    content: Optional[str] = None
+    embedding_size: int
+    rag_metadata: dict
+    similarity: float
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
 class RagService:
     def __init__(
         self,
-        uri: str,
+        uri_or_session: str | AsyncSession,
         embedding_profile: EmbeddingProfile,
         agent: Optional[Agent] = None,
     ):
-        self.session_maker = db_manager.get_sessionmaker(uri=uri)
+        if isinstance(uri_or_session, str):
+            self.session_maker = db_manager.get_sessionmaker(uri=uri_or_session)
+        else:
+            # Create a context manager factory that returns this session
+            from contextlib import asynccontextmanager
+
+            @asynccontextmanager
+            async def session_factory():
+                yield uri_or_session
+
+            self.session_maker = session_factory
+
         self.embedding_profile = embedding_profile
         self.agent = agent
 
@@ -89,8 +117,9 @@ class RagService:
             RagIndex.collection_name == collection_name,
             RagIndex.source_id.in_(source_ids),
         )
-        await self.db.execute(stmt)
-        await self.db.commit()
+        async with self.session_maker() as session:
+            await session.execute(stmt)
+            await session.commit()
 
     async def index(
         self,
@@ -111,61 +140,51 @@ class RagService:
         text: str,
         top_k: int = 5,
         collection_name: Optional[str] = None,
-    ) -> list[dict]:
-        embeddings = await compute_embeddings_with_stats(
-            embedding_profile=self.embedding_profile,
-            texts=[text],
-            session=self.db,
-            agent_id=self.agent.id if self.agent else None,
-        )
-        query_embedding = embeddings[0]
-
-        # Using cosine distance <=> for pgvector
-        # Similarity = 1 - distance
-        distance_col = RagIndex.embedding.op("<=>")(query_embedding).label("distance")
-        stmt = (
-            select(RagIndex, distance_col)
-            .where(RagIndex.embedding_profile_id == self.embedding_profile.id)
-            .order_by(distance_col)
-            .limit(top_k)
-        )
-
-        if collection_name:
-            stmt = stmt.where(RagIndex.collection_name == collection_name)
-
-        result = await self.db.execute(stmt)
-        rows = result.all()
-
-        results = []
-        for row in rows:
-            item = row[0]
-            distance = row[1]
-            # Convert RagIndex object to dict and add similarity
-            item_dict = {
-                "id": str(item.id),
-                "embedding_profile_id": str(item.embedding_profile_id),
-                "collection_name": item.collection_name,
-                "source_id": item.source_id,
-                "content": item.content,
-                "embedding_size": item.embedding_size,
-                "rag_metadata": item.rag_metadata,
-                "created_at": item.created_at.isoformat() if item.created_at else None,
-                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
-                "similarity": 1.0 - float(distance) if distance is not None else 0.0,
-            }
-            results.append(item_dict)
-
-        return results
-
-    async def batch_query(
-        self,
-        texts: list[str],
-        top_k: int = 5,
-        collection_name: Optional[str] = None,
-    ) -> list[list[dict]]:
-        results = []
-        for text in texts:
-            results.append(
-                await self.query(text, top_k=top_k, collection_name=collection_name)
+    ) -> list[RagServiceResult]:
+        async with self.session_maker() as session:
+            embeddings = await compute_embeddings_with_stats(
+                embedding_profile=self.embedding_profile,
+                texts=[text],
+                session=session,
+                agent_id=self.agent.id if self.agent else None,
             )
-        return results
+            query_embedding = embeddings[0]
+
+            # Using cosine distance <=> for pgvector
+            # Similarity = 1 - distance
+            distance_col = RagIndex.embedding.op("<=>")(query_embedding).label(
+                "distance"
+            )
+            stmt = (
+                select(RagIndex, distance_col)
+                .where(RagIndex.embedding_profile_id == self.embedding_profile.id)
+                .order_by(distance_col)
+                .limit(top_k)
+            )
+
+            if collection_name:
+                stmt = stmt.where(RagIndex.collection_name == collection_name)
+
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            results = []
+            for row in rows:
+                item = row[0]
+                distance = row[1]
+                # Convert RagIndex object to RagServiceResult and add similarity
+                res = RagServiceResult(
+                    id=item.id,
+                    embedding_profile_id=item.embedding_profile_id,
+                    collection_name=item.collection_name,
+                    source_id=item.source_id,
+                    content=item.content,
+                    embedding_size=item.embedding_size,
+                    rag_metadata=item.rag_metadata or {},
+                    similarity=1.0 - float(distance) if distance is not None else 0.0,
+                    created_at=item.created_at,
+                    updated_at=item.updated_at,
+                )
+                results.append(res)
+
+            return results
