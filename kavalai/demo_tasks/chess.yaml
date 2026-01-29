@@ -2,6 +2,5 @@ agent_server_url: "http://localhost:10000"
 max_turns: 8
 auth_username: user
 auth_password: password
-llm_profile_name: openai
 task: |
   Play a game of chess. Don't tell your opponent your plans, play for the win.

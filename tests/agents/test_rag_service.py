@@ -1,23 +1,18 @@
 import pytest
 
-from kavalai.agents.db import EmbeddingProfile
 from kavalai.agents.rag_service import RagService, RagServiceResult
 
 
 @pytest.fixture
-def embedding_profile():
-    return EmbeddingProfile(
-        name="Test Embedder",
-        provider="openai",
-        model_name="text-embedding-3-small",
-    )
+def embedding_model():
+    return "text-embedding-3-small"
 
 
 @pytest.mark.asyncio
 async def test_rag_service_indexing(
-    agents_db_config, migrated_agents_db, embedding_profile
+    agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService(agents_db_config["uri"], embedding_profile)
+    service = RagService(agents_db_config["uri"], embedding_model)
 
     texts = ["hello", "world"]
     source_metadata = [{"id": 1}, {"id": 2}]
@@ -42,9 +37,9 @@ async def test_rag_service_indexing(
 
 @pytest.mark.asyncio
 async def test_rag_service_deletion(
-    agents_db_config, migrated_agents_db, embedding_profile
+    agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService(agents_db_config["uri"], embedding_profile)
+    service = RagService(agents_db_config["uri"], embedding_model)
 
     texts = ["item 1", "item 2", "item 3"]
     source_ids = ["sid1", "sid2", "sid3"]

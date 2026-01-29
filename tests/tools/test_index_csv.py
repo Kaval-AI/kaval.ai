@@ -1,9 +1,8 @@
 import csv
 import pytest
-import os
 from sqlalchemy import select
 from kavalai.tools.index_csv import index_csv, main
-from kavalai.agents.db import EmbeddingProfile, RagIndex
+from kavalai.agents.db import RagIndex
 from unittest.mock import patch
 
 
@@ -34,16 +33,6 @@ def multi_row_csv(tmp_path):
         writer.writeheader()
         writer.writerows(content)
     return str(csv_file)
-
-
-@pytest.fixture
-def test_profile_obj():
-    return EmbeddingProfile(
-        name="test-openai",
-        provider="openai",
-        model_name="text-embedding-3-small",
-        api_key=os.environ.get("OPENAI_API_KEY", "sk-test"),
-    )
 
 
 @pytest.fixture(autouse=True)

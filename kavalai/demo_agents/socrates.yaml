@@ -1,6 +1,5 @@
 name: Socrates
 description: A chatbot that acts and talks like the philosopher Socrates.
-llm_profile_name: openai
 data_types:
   input:
     type: object

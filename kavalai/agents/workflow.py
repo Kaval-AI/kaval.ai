@@ -7,8 +7,10 @@ import httpx
 from pydantic import BaseModel
 
 from kavalai.agents.agent_service import AgentService, load_profile_from_path
-from kavalai.llm_clients.common import chat_completion_with_stats
+from kavalai.agents.db import ModelCallStat
+from kavalai.llm_clients.common import chat_completions
 from kavalai.agents.schema_parser import SchemaParser
+from kavalai.crud import insert
 
 logger = logging.getLogger(__name__)
 
@@ -162,13 +164,13 @@ class Workflow:
             for msg in history:
                 messages.append(dict(role=msg.role, content=msg.content))
 
-        response = await chat_completion_with_stats(
-            llm_profile=llm_profile,
+        response, stats = await chat_completions(
+            model=llm_profile.model,
             response_model=self.get_data_type(task.output),
             messages=messages,
-            session=session,
-            agent_id=run_context.agent_id,
         )
+        if session:
+            await insert(session, ModelCallStat, stats)
 
         run_context.data[task.output] = response
 

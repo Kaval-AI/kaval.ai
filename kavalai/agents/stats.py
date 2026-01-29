@@ -5,9 +5,7 @@ from kavalai.agents.db import (
     Run,
     Session,
     ChatMessage,
-    LLMCallStat,
-    LLMProfile,
-    EmbeddingCallStat,
+    ModelCallStat,
 )
 
 
@@ -17,19 +15,19 @@ async def get_summary_stats(session: AsyncSession, agent_id: str | None = None):
     start_date = end_date - timedelta(days=30)
 
     # Get LLM cost
-    stmt_llm_cost = select(func.sum(LLMCallStat.cost)).where(
-        LLMCallStat.created_at >= start_date
+    stmt_llm_cost = select(func.sum(ModelCallStat.cost)).where(
+        ModelCallStat.call_type == "llm", ModelCallStat.created_at >= start_date
     )
     if agent_id:
-        stmt_llm_cost = stmt_llm_cost.where(LLMCallStat.agent_id == agent_id)
+        stmt_llm_cost = stmt_llm_cost.where(ModelCallStat.agent_id == agent_id)
 
     # Get Embedding cost
-    stmt_embedding_cost = select(func.sum(EmbeddingCallStat.cost)).where(
-        EmbeddingCallStat.created_at >= start_date
+    stmt_embedding_cost = select(func.sum(ModelCallStat.cost)).where(
+        ModelCallStat.call_type == "embedding", ModelCallStat.created_at >= start_date
     )
     if agent_id:
         stmt_embedding_cost = stmt_embedding_cost.where(
-            EmbeddingCallStat.agent_id == agent_id
+            ModelCallStat.agent_id == agent_id
         )
 
     # Get total sessions
@@ -78,8 +76,6 @@ async def get_daily_stats(
             if model == Run:
                 # Run doesn't have agent_id, it belongs to a Session
                 stmt = stmt.join(Session).where(Session.agent_id == agent_id)
-            elif model == LLMCallStat:
-                stmt = stmt.where(model.agent_id == agent_id)
             else:
                 stmt = stmt.where(model.agent_id == agent_id)
 
@@ -90,41 +86,37 @@ async def get_daily_stats(
         return {row.date: row.count for row in result.all()}
 
     async def get_llm_stats():
-        profile_name_col = func.coalesce(LLMProfile.name, "Unknown").label(
-            "profile_name"
-        )
-        date_col = func.date(LLMCallStat.created_at).label("date")
-        stmt = (
-            select(
-                profile_name_col,
-                date_col,
-                func.count(LLMCallStat.id).label("count"),
-                func.sum(LLMCallStat.cost).label("cost"),
-                func.sum(LLMCallStat.duration_seconds).label("duration_seconds"),
-                func.sum(LLMCallStat.prompt_tokens).label("prompt_tokens"),
-                func.sum(LLMCallStat.completion_tokens).label("completion_tokens"),
-            )
-            .outerjoin(LLMProfile, LLMCallStat.llm_profile_id == LLMProfile.id)
-            .where(LLMCallStat.created_at >= start_date)
+        model_name_col = ModelCallStat.model.label("model_name")
+        date_col = func.date(ModelCallStat.created_at).label("date")
+        stmt = select(
+            model_name_col,
+            date_col,
+            func.count(ModelCallStat.id).label("count"),
+            func.sum(ModelCallStat.cost).label("cost"),
+            func.sum(ModelCallStat.duration_seconds).label("duration_seconds"),
+            func.sum(ModelCallStat.prompt_tokens).label("prompt_tokens"),
+            func.sum(ModelCallStat.completion_tokens).label("completion_tokens"),
+        ).where(
+            ModelCallStat.call_type == "llm", ModelCallStat.created_at >= start_date
         )
         if agent_id:
-            stmt = stmt.where(LLMCallStat.agent_id == agent_id)
+            stmt = stmt.where(ModelCallStat.agent_id == agent_id)
 
-        stmt = stmt.group_by(profile_name_col, date_col)
+        stmt = stmt.group_by(model_name_col, date_col)
         result = await session.execute(stmt)
 
-        stats_by_profile = {}
+        stats_by_model = {}
         for row in result.all():
-            if row.profile_name not in stats_by_profile:
-                stats_by_profile[row.profile_name] = {}
-            stats_by_profile[row.profile_name][row.date] = {
+            if row.model_name not in stats_by_model:
+                stats_by_model[row.model_name] = {}
+            stats_by_model[row.model_name][row.date] = {
                 "count": row.count,
                 "cost": float(row.cost or 0),
                 "duration_seconds": float(row.duration_seconds or 0),
                 "prompt_tokens": int(row.prompt_tokens or 0),
                 "completion_tokens": int(row.completion_tokens or 0),
             }
-        return stats_by_profile
+        return stats_by_model
 
     runs_counts = await get_counts_for_model(Run)
     sessions_counts = await get_counts_for_model(Session)
@@ -134,10 +126,10 @@ async def get_daily_stats(
     def format_series(counts):
         return [{"date": d.isoformat(), "count": counts.get(d, 0)} for d in dates]
 
-    def format_llm_series(profile_stats):
+    def format_llm_series(model_stats):
         series = []
         for d in dates:
-            day_stat = profile_stats.get(
+            day_stat = model_stats.get(
                 d,
                 {
                     "count": 0,

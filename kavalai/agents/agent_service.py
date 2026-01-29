@@ -1,22 +1,15 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional, Dict, List
 from uuid import UUID
 
 import yaml
 from pydantic import BaseModel
 from sqlalchemy import asc
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
-from kavalai import crud
-from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage
-from kavalai.agents.db import (
-    LLMProfile,
-    LLMCallStat,
-    EmbeddingProfile,
-    EmbeddingCallStat,
-)
+from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, ModelCallStat
 
 logger = logging.getLogger(__name__)
 
@@ -29,21 +22,6 @@ class LLMProfileView(BaseModel):
     provider: str
     model_name: str
     base_url: str | None
-    config: dict | None
-    total_cost: float = 0.0
-    created_at: datetime
-    updated_at: datetime
-
-
-class LLMEmbeddingView(BaseModel):
-    """Embedding profile data without API key."""
-
-    id: UUID
-    name: str
-    provider: str
-    model_name: str
-    base_url: str | None
-    embedding_size: int | None
     config: dict | None
     total_cost: float = 0.0
     created_at: datetime
@@ -191,177 +169,29 @@ class AgentService:
         await self.db.refresh(message)
         return message
 
-    async def get_llm_profile_by_name(self, profile_name: str) -> LLMProfile:
-        """
-        Get an LLM profile from DB by name.
-        """
-        stmt = select(LLMProfile).where(LLMProfile.name == profile_name)
-        result = await self.db.execute(stmt)
-        profile = result.scalar_one_or_none()
-
-        if not profile:
-            raise Exception(f"LLM Profile '{profile_name}' not found in DB")
-
-        return profile
-
-    async def upsert_llm_profile(self, profile: LLMProfile) -> LLMProfile:
-        """Upsert LLM profile to the database by name and return the profile with ID."""
-        stmt = select(LLMProfile).where(LLMProfile.name == profile.name)
-        result = await self.db.execute(stmt)
-        existing = result.scalar_one_or_none()
-
-        profile_data = {
-            "name": profile.name,
-            "provider": profile.provider,
-            "model_name": profile.model_name,
-            "api_key": profile.api_key,
-            "base_url": profile.base_url,
-            "config": profile.config,
-            "updated_at": datetime.now(timezone.utc),
-        }
-
-        if existing:
-            return await crud.update(self.db, LLMProfile, existing.id, profile_data)
-        else:
-            return await crud.insert(self.db, LLMProfile, profile_data)
-
-    async def get_llm_profiles_from_db(self) -> list[LLMProfileView]:
-        profiles = await crud.get_all(self.db, LLMProfile)
-
-        # Fetch total cost per profile
-        cost_stmt = select(
-            LLMCallStat.llm_profile_id, func.sum(LLMCallStat.cost).label("total_cost")
-        ).group_by(LLMCallStat.llm_profile_id)
-        cost_result = await self.db.execute(cost_stmt)
-        costs = {
-            row.llm_profile_id: float(row.total_cost or 0) for row in cost_result.all()
-        }
-
-        # Sort by updated_at desc manually since crud.get_all doesn't support ordering yet
-        profiles = sorted(profiles, key=lambda p: p.updated_at, reverse=True)
-
-        return [
-            LLMProfileView(
-                id=p.id,
-                name=p.name,
-                provider=p.provider,
-                model_name=p.model_name,
-                base_url=p.base_url,
-                config={
-                    k: v
-                    for k, v in (p.config or {}).items()
-                    if "key" not in k.lower() and "secret" not in k.lower()
-                },
-                total_cost=costs.get(p.id, 0.0),
-                created_at=p.created_at,
-                updated_at=p.updated_at,
-            )
-            for p in profiles
-        ]
-
-    async def get_embedding_profile_by_name(
-        self, profile_name: str
-    ) -> EmbeddingProfile:
-        """
-        Get an embedding profile from DB by name.
-        """
-        stmt = select(EmbeddingProfile).where(EmbeddingProfile.name == profile_name)
-        result = await self.db.execute(stmt)
-        profile = result.scalar_one_or_none()
-
-        if not profile:
-            raise Exception(f"Embedding Profile '{profile_name}' not found in DB")
-
-        return profile
-
-    async def upsert_embedding_profile(
-        self, profile: EmbeddingProfile
-    ) -> EmbeddingProfile:
-        """Upsert embedding profile to the database by name and return the profile with ID."""
-        stmt = select(EmbeddingProfile).where(EmbeddingProfile.name == profile.name)
-        result = await self.db.execute(stmt)
-        existing = result.scalar_one_or_none()
-
-        profile_data = {
-            "name": profile.name,
-            "provider": profile.provider,
-            "model_name": profile.model_name,
-            "api_key": profile.api_key,
-            "base_url": profile.base_url,
-            "embedding_size": profile.embedding_size,
-            "config": profile.config,
-            "updated_at": datetime.now(timezone.utc),
-        }
-
-        if existing:
-            return await crud.update(
-                self.db, EmbeddingProfile, existing.id, profile_data
-            )
-        else:
-            return await crud.insert(self.db, EmbeddingProfile, profile_data)
-
-    async def get_embedding_profiles_from_db(self) -> list[LLMEmbeddingView]:
-        profiles = await crud.get_all(self.db, EmbeddingProfile)
-
-        # Fetch total cost per profile
-        cost_stmt = select(
-            EmbeddingCallStat.embedding_profile_id,
-            func.sum(EmbeddingCallStat.cost).label("total_cost"),
-        ).group_by(EmbeddingCallStat.embedding_profile_id)
-        cost_result = await self.db.execute(cost_stmt)
-        costs = {
-            row.embedding_profile_id: float(row.total_cost or 0)
-            for row in cost_result.all()
-        }
-
-        # Sort by updated_at desc manually since crud.get_all doesn't support ordering yet
-        profiles = sorted(profiles, key=lambda p: p.updated_at, reverse=True)
-
-        return [
-            LLMEmbeddingView(
-                id=p.id,
-                name=p.name,
-                provider=p.provider,
-                model_name=p.model_name,
-                base_url=p.base_url,
-                embedding_size=p.embedding_size,
-                config={
-                    k: v
-                    for k, v in (p.config or {}).items()
-                    if "key" not in k.lower() and "secret" not in k.lower()
-                },
-                total_cost=costs.get(p.id, 0.0),
-                created_at=p.created_at,
-                updated_at=p.updated_at,
-            )
-            for p in profiles
-        ]
-
-    async def get_llm_call_stats(
+    async def get_model_call_stats(
         self,
-        llm_profile_id: Optional[UUID] = None,
+        call_type: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[LLMCallStat]:
+    ) -> List[ModelCallStat]:
         """
-        Retrieves paginated LLM call stats, optionally filtered by LLM profile.
+        Retrieves paginated model call stats, optionally filtered by call type.
         """
         stmt = (
-            select(LLMCallStat)
-            .order_by(LLMCallStat.created_at.desc())
+            select(ModelCallStat)
+            .order_by(ModelCallStat.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
-        if llm_profile_id:
-            stmt = stmt.where(LLMCallStat.llm_profile_id == llm_profile_id)
+        if call_type:
+            stmt = stmt.where(ModelCallStat.call_type == call_type)
 
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
 
-def load_profile_from_path(
-    profile_name: str, folder_path: str = None
-) -> LLMProfile | None:
+def load_profile_from_path(profile_name: str, folder_path: str = None) -> dict | None:
     if folder_path is None:
         folder_path = os.getenv("LLM_PROFILES_PATH")
         if folder_path is None:
@@ -375,33 +205,9 @@ def load_profile_from_path(
     try:
         with open(profile_path, "r") as f:
             data = yaml.safe_load(f)
-            return LLMProfile(**data)
+            return data
     except Exception as e:
         logger.error(
             f"Error loading LLM profile '{profile_name}' from {profile_path}: {e}"
-        )
-        return None
-
-
-def load_embedding_profile_from_path(
-    profile_name: str, folder_path: str = None
-) -> EmbeddingProfile | None:
-    if folder_path is None:
-        folder_path = os.getenv("EMBEDDING_PROFILES_PATH")
-        if folder_path is None:
-            # Default to the embedding_profiles folder within the package
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            folder_path = os.path.join(base_dir, "embedding_profiles")
-    profile_path = os.path.join(folder_path, f"{profile_name}.yaml")
-    if not os.path.exists(profile_path):
-        return None
-
-    try:
-        with open(profile_path, "r") as f:
-            data = yaml.safe_load(f)
-            return EmbeddingProfile(**data)
-    except Exception as e:
-        logger.error(
-            f"Error loading embedding profile '{profile_name}' from {profile_path}: {e}"
         )
         return None

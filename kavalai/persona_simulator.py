@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from rich.console import Console
 
 from kavalai.agents.agent_service import load_profile_from_path
-from kavalai.llm_clients.common import chat_completion_with_stats
+from kavalai.llm_clients.common import chat_completions
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
 
 logger = logging.getLogger(__name__)
@@ -128,12 +128,10 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
             # We want to keep track of LLM call stats in the simulator as well,
             # but we don't have a session to persist them to yet, unless we want to use a local sqlite?
             # For now, persona simulator doesn't use a database session for LLMCallStat.
-            # However, chat_completion_with_stats expects LLMProfile which might not have an ID.
-            resp = await chat_completion_with_stats(
-                llm_profile=llm_profile,
+            resp, stats = await chat_completions(
+                model=llm_profile.model,
                 response_model=PersonaResponse,
                 messages=all_messages,
-                session=None,
             )
 
             console.print(f"[bold white][Turn {turn_idx + 1}][/bold white]")

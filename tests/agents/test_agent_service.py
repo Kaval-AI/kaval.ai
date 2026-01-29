@@ -1,13 +1,7 @@
 import pytest
 from uuid import uuid4
-from kavalai.agents.agent_service import AgentService, load_embedding_profile_from_path
-from kavalai.agents.db import (
-    Agent,
-    LLMCallStat,
-    LLMProfile,
-    EmbeddingProfile,
-    EmbeddingCallStat,
-)
+from kavalai.agents.agent_service import AgentService
+from kavalai.agents.db import LLMProfile, LLMCallStat
 
 
 @pytest.mark.asyncio
@@ -190,82 +184,3 @@ class TestAgentService:
 
         # Test loading non-existent
         assert load_profile_from_path("ghost", folder_path=str(d)) is None
-
-    async def test_embedding_profiles_logic(self, agents_db):
-        service = AgentService(agents_db)
-
-        # 0. Setup agent for FK
-        agent = Agent(id=uuid4(), name="Test Agent")
-        agents_db.add(agent)
-        await agents_db.commit()
-
-        # 1. Test upsert new profile
-        profile = EmbeddingProfile(
-            name="TestEmbed",
-            provider="openai",
-            model_name="text-embedding-3-small",
-            api_key="key1",
-            config={"some": "cred"},
-        )
-        saved = await service.upsert_embedding_profile(profile)
-        assert saved.id is not None
-        assert saved.name == "TestEmbed"
-
-        # 2. Test get by name
-        retrieved = await service.get_embedding_profile_by_name("TestEmbed")
-        assert retrieved.id == saved.id
-
-        # 3. Test upsert existing (update)
-        profile.api_key = "key2"
-        updated = await service.upsert_embedding_profile(profile)
-        assert updated.id == saved.id
-        assert updated.api_key == "key2"
-
-        # 4. Test get all views
-        # Add some stats to verify cost calculation
-        stat = EmbeddingCallStat(
-            embedding_profile_id=saved.id,
-            cost=0.005,
-            agent_id=agent.id,
-        )
-        agents_db.add(stat)
-        await agents_db.commit()
-
-        views = await service.get_embedding_profiles_from_db()
-        assert len(views) == 1
-        assert views[0].name == "TestEmbed"
-        assert float(views[0].total_cost) == 0.005
-        assert not hasattr(
-            views[0], "api_key"
-        )  # LLMEmbeddingView should not have api_key
-
-        # 5. Test get by name - not found
-        with pytest.raises(Exception) as excinfo:
-            await service.get_embedding_profile_by_name("NonExistent")
-        assert "not found" in str(excinfo.value)
-
-    async def test_load_embedding_profile_from_path(self, tmp_path, monkeypatch):
-        # Create a dummy yaml profile
-        d = tmp_path / "embedding_profiles"
-        d.mkdir()
-        p = d / "test_embed_file.yaml"
-        p.write_text(
-            "name: test_embed_file\nprovider: openai\nmodel_name: text-embedding-3-small\napi_key: file-key\n"
-        )
-
-        # Test loading with explicit path
-        profile = load_embedding_profile_from_path(
-            "test_embed_file", folder_path=str(d)
-        )
-        assert profile is not None
-        assert profile.name == "test_embed_file"
-        assert profile.api_key == "file-key"
-
-        # Test loading with env var
-        monkeypatch.setenv("EMBEDDING_PROFILES_PATH", str(d))
-        profile = load_embedding_profile_from_path("test_embed_file")
-        assert profile is not None
-        assert profile.name == "test_embed_file"
-
-        # Test loading non-existent
-        assert load_embedding_profile_from_path("ghost", folder_path=str(d)) is None

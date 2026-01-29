@@ -1,5 +1,0 @@
-name: openai
-provider: openai
-model_name: gpt-5-nano-2025-08-07
-api_key:
-base_url:

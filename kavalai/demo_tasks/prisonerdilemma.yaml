@@ -2,7 +2,6 @@ agent_server_url: "http://localhost:10000"
 max_turns: 8
 auth_username: user
 auth_password: password
-llm_profile_name: openai
 task: |
   You and the agent take turns talking to imaginary guard. You can decide to snitch on your partner.
   The goal is to win the game.

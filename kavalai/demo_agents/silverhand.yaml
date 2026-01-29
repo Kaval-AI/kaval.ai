@@ -1,6 +1,5 @@
 name: Johnny Silverhand agent
 description: Basic configuration example of a chatbot with personality.
-llm_profile_name: openai
 data_types:
   input:
     type: object

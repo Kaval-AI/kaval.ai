@@ -8,17 +8,7 @@ Kaval.AI can be run using Docker. The provided `Dockerfile` and `entrypoint.sh` 
 - `agent-migrations`: Run database migrations for the agents.
 - `backoffice-server`: Start the backoffice Nginx and FastAPI server (requires `KAVALAI_BO_DB_URI` / `KAVALAI_BO_DB_SCHEMA`).
 - `agent-server`: Start an agent REST server (requires `WORKFLOW_YAML_PATH` and `KAVALAI_DB_URI` / `KAVALAI_DB_SCHEMA`).
-- `all-in-one`: Runs both migrations and starts both servers (for development/demo purposes).
 
-In production, Nginx serves the built Angular frontend from `/usr/share/nginx/html`.
-The `FRONTEND_URL` environment variable should be set (e.g., `http://localhost:8000`) for correct OAuth redirects. If `mismatching_state` (CSRF) errors occur, ensure that the session cookie is correctly handled by the browser and that `SESSION_SECRET_KEY` is stable.
-The server uses `ProxyHeadersMiddleware` to correctly handle `X-Forwarded-Proto` and `X-Forwarded-For` headers when running behind a proxy or in Docker.
-
-Example:
-```bash
-docker build -t kavalai .
-docker run -e BACKOFFICE_DB_HOST=... kavalai backoffice-server
-```
 
 ## Project Overview
 Kaval.AI is an AI agent writing framework where agent steps are defined using YAML. It consists of two main parts:
@@ -36,11 +26,11 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages). `get_summary_stats` now provides cost breakdown (total, LLM, embedding).
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
-        - `db.py`: Database models for agents, sessions, runs, tasks, messages, embedding profiles, and RAG index. Includes `parse_db_uri` and `DatabaseManager` for handling `postgresql+asyncpg` and `KAVALAI_DB_URI`.
+        - `db.py`: Database models for agents, sessions, runs, tasks, messages, model call stats, and RAG index. Includes `parse_db_uri` and `DatabaseManager` for handling `postgresql+asyncpg` and `KAVALAI_DB_URI`.
     - `llm_clients/`: Native LLM client implementations.
-        - `common.py`: Common LLM client utilities. Includes `chat_completion_with_stats` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data, cost) and `compute_embeddings` for generating text embeddings. Refactored to use native OpenAI and Gemini clients instead of instructor for better structured output and stats collection. Includes `get_llm_client` factory.
-        - `openai.py`: Native OpenAI client wrapper. Supports structured outputs via `beta.chat.completions.parse`.
-        - `gemini.py`: Native Gemini client wrapper. Supports structured outputs via `response_schema` (with schema cleanup for compatibility).
+        - `common.py`: Common LLM client utilities. Includes `chat_completions` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data, cost) and `compute_embeddings` for generating text embeddings. Both return a result/stats tuple, letting the caller decide whether to log stats using `_save_model_stats`. Refactored to use native OpenAI and Gemini clients instead of instructor for better structured output and stats collection. Includes `get_llm_client` factory.
+        - `openai.py`: Native OpenAI client wrapper. Supports structured outputs via `beta.chat.completions.parse`. Both `chat_completion` and `compute_embeddings` return a tuple of `(result, ModelCallStat)`.
+        - `gemini.py`: Native Gemini client wrapper. Supports structured outputs via `response_schema` (with schema cleanup for compatibility). Both `chat_completion` and `compute_embeddings` return a tuple of `(result, ModelCallStat)`.
 - `prices/`: Pricing data for different LLM providers.
         - `common.py`: Unified Pydantic models (`ModelPricing`, `TokenPricing`) for LLM pricing and cost calculation logic.
         - `openai.py`: OpenAI pricing data using the unified models.
@@ -83,9 +73,8 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `test_persona_simulator.py`: Tests for the persona simulation logic.
 - `kavalai/sql_migrations/`: SQL migration files for both `app` (agents) and `backoffice`.
     - `app/V000__agents.sql`: Initial schema for agents, sessions, runs, tasks, and chat messages.
-    - `app/V001__llm_profiles_and_stats.sql`: Defines `llm_profiles` (with `api_key`, `base_url`, `config`) and `llm_call_stats` (with `duration_seconds`).
-    - `app/V002__embedding_profiles_and_stats.sql`: Defines `embedding_profiles` and `embedding_call_stats`.
-    - `app/V003__rag.sql`: Defines `rag_index` (with `embedding` VECTOR, `collection_name`, and `source_id`).
+    - `app/V001__model_call_stats.sql`: Defines `model_call_stats` for unified tracking of LLM and embedding calls.
+    - `app/V002__rag.sql`: Defines `rag_index` (with `embedding` VECTOR, `collection_name`, and `source_id`).
     - `backoffice/V000__users__projects.sql`: Initial schema for users, projects, and project memberships.
     - `backoffice/V001__project_details.sql`: Adds database connection details to projects.
     - `backoffice/V002__active_project.sql`: Adds `active_project_id` to users.

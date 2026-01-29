@@ -3,21 +3,21 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-import yaml
 from pydantic import BaseModel
 from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai.agents.db import EmbeddingProfile, RagIndex, Agent, db_manager
-from kavalai.llm_clients.common import compute_embeddings_with_stats
+from kavalai.agents.db import RagIndex, Agent, db_manager, ModelCallStat
+from kavalai.crud import insert
+from kavalai.llm_clients.common import compute_embeddings
 
 logger = logging.getLogger(__name__)
 
 
 class RagServiceResult(BaseModel):
     id: UUID
-    embedding_profile_id: Optional[UUID] = None
+    model: str
     collection_name: str
     source_id: str
     content: Optional[str] = None
@@ -32,7 +32,7 @@ class RagService:
     def __init__(
         self,
         uri_or_session: str | AsyncSession,
-        embedding_profile: EmbeddingProfile,
+        model: str,
         agent: Optional[Agent] = None,
     ):
         if isinstance(uri_or_session, str):
@@ -46,15 +46,8 @@ class RagService:
                 yield uri_or_session
 
             self.session_maker = session_factory
-
-        self.embedding_profile = embedding_profile
+        self.model = model
         self.agent = agent
-
-    @classmethod
-    def from_uri_and_path(cls, uri: str, embedding_profile_path: str):
-        with open(embedding_profile_path, "r") as f:
-            data = yaml.safe_load(f)
-            return cls(uri, EmbeddingProfile(**data))
 
     async def batch_index(
         self,
@@ -75,12 +68,11 @@ class RagService:
             raise ValueError("The number of texts and source_ids must be the same.")
 
         async with self.session_maker() as session:
-            embeddings = await compute_embeddings_with_stats(
-                embedding_profile=self.embedding_profile,
+            embeddings, stats = await compute_embeddings(
+                model=self.model,
                 texts=texts,
-                session=session,
-                agent_id=self.agent.id if self.agent else None,
             )
+            await insert(session, ModelCallStat, stats)
 
             rag_items = []
             dim = len(embeddings[0])
@@ -89,7 +81,7 @@ class RagService:
                 zip(texts, metadata_list, embeddings)
             ):
                 item_data = {
-                    "embedding_profile_id": self.embedding_profile.id,
+                    "model": self.model,
                     "collection_name": collection_name,
                     "source_id": source_ids[i] if source_ids else "default",
                     "content": text,
@@ -142,12 +134,11 @@ class RagService:
         collection_name: Optional[str] = None,
     ) -> list[RagServiceResult]:
         async with self.session_maker() as session:
-            embeddings = await compute_embeddings_with_stats(
-                embedding_profile=self.embedding_profile,
+            embeddings, stats = await compute_embeddings(
+                model=self.model,
                 texts=[text],
-                session=session,
-                agent_id=self.agent.id if self.agent else None,
             )
+            await insert(session, ModelCallStat, stats)
             query_embedding = embeddings[0]
 
             # Using cosine distance <=> for pgvector
@@ -157,7 +148,7 @@ class RagService:
             )
             stmt = (
                 select(RagIndex, distance_col)
-                .where(RagIndex.embedding_profile_id == self.embedding_profile.id)
+                .where(RagIndex.model == self.model)
                 .order_by(distance_col)
                 .limit(top_k)
             )
@@ -175,7 +166,7 @@ class RagService:
                 # Convert RagIndex object to RagServiceResult and add similarity
                 res = RagServiceResult(
                     id=item.id,
-                    embedding_profile_id=item.embedding_profile_id,
+                    model=item.model,
                     collection_name=item.collection_name,
                     source_id=item.source_id,
                     content=item.content,

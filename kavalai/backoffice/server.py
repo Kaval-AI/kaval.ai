@@ -536,26 +536,6 @@ async def projects_get_llm_config_by_name(
         return profile
 
 
-@app.get("/projects/{project_id}/embedding-configs")
-async def projects_get_embedding_configs(project_id: UUID, request: Request):
-    """Fetch all embedding profiles for a specific project."""
-    assert_logged_in(request)
-    project = await get_project_and_assert_access(request, project_id)
-
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
-        service = AgentService(project_session)
-        return await service.get_embedding_profiles_from_db()
-
-
 @app.post("/projects/{project_id}/rag/query")
 async def projects_rag_query(
     project_id: UUID,
@@ -566,15 +546,13 @@ async def projects_rag_query(
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    embedding_profile_id = query_data.get("embedding_profile_id")
+    model = query_data.get("model")
     text = query_data.get("text")
     collection_name = query_data.get("collection_name")
     top_k = query_data.get("top_k", 5)
 
-    if not embedding_profile_id or not text:
-        raise HTTPException(
-            status_code=400, detail="embedding_profile_id and text are required"
-        )
+    if not model or not text:
+        raise HTTPException(status_code=400, detail="model and text are required")
 
     # Connect to the project database
     project_session_maker = db_manager.get_sessionmaker(
@@ -586,15 +564,7 @@ async def projects_rag_query(
     )
 
     async with project_session_maker() as project_session:
-        from kavalai.agents.db import EmbeddingProfile
-
-        embedding_profile = await get_one(
-            project_session, EmbeddingProfile, UUID(embedding_profile_id)
-        )
-        if not embedding_profile:
-            raise HTTPException(status_code=404, detail="Embedding profile not found")
-
-        rag_service = RagService(project_session, embedding_profile)
+        rag_service = RagService(project_session, model)
         results = await rag_service.query(
             text=text, top_k=top_k, collection_name=collection_name
         )

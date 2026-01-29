@@ -7,8 +7,7 @@ from kavalai.agents.db import (
     Run,
     Task,
     ChatMessage,
-    LLMProfile,
-    LLMCallStat,
+    ModelCallStat,
     ensure_async_scheme,
 )
 from kavalai.crud import insert, delete, get_one
@@ -102,54 +101,49 @@ async def test_run_set_null_on_delete_for_messages(agents_db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_llm_profile_and_stats(agents_db: AsyncSession):
-    """Test LLMProfile and LLMCallStat models and their relationship."""
-    # 1. Create LLM Profile
-    profile = await insert(
+async def test_agent_model_call_stats(agents_db: AsyncSession):
+    """Test Agent and ModelCallStat models (no direct FK)."""
+    # 1. Create Agent
+    agent = await insert(
         agents_db,
-        LLMProfile,
+        Agent,
         {
-            "name": "Test OpenAI",
-            "provider": "openai",
-            "model_name": "gpt-4",
-            "api_key": "sk-test",
-            "config": {"mode": "TOOLS"},
+            "name": "Test Agent",
         },
     )
-    assert profile.name == "Test OpenAI"
+    assert agent.name == "Test Agent"
 
-    # 2. Create Call Stat linked to profile
+    # 2. Create Call Stat linked to agent (by ID only)
     stat = await insert(
         agents_db,
-        LLMCallStat,
+        ModelCallStat,
         {
-            "llm_profile_id": profile.id,
+            "call_type": "llm",
+            "model": "gpt-4",
+            "agent_id": agent.id,
             "response_code": 200,
             "cost": 0.000123,
         },
     )
-    assert stat.llm_profile_id == profile.id
+    assert stat.agent_id == agent.id
 
-    # 3. Test Relationship (LLMProfile -> LLMCallStat)
-    # Re-fetch profile to load relationship
-    await get_one(agents_db, LLMProfile, profile.id)
-
-    # 4. Test ON DELETE SET NULL
-    profile_id = profile.id
+    # 3. Verify no automatic NULLing (since no FK)
+    agent_id = agent.id
     stat_id = stat.id
 
-    # Action: Delete ONLY the profile
-    await delete(agents_db, LLMProfile, profile_id)
+    # Action: Delete the agent
+    await delete(agents_db, Agent, agent_id)
 
     # Clear session to force re-fetch from DB
     agents_db.expire_all()
 
-    assert await get_one(agents_db, LLMProfile, profile_id) is None
+    assert await get_one(agents_db, Agent, agent_id) is None
 
-    # Re-fetch stat to see if it's still there but with llm_profile_id=None
-    fetched_stat = await get_one(agents_db, LLMCallStat, stat_id)
+    # Re-fetch stat to see if it's still there and STILL HAS agent_id
+    # (because there is no FK and no ON DELETE SET NULL)
+    fetched_stat = await get_one(agents_db, ModelCallStat, stat_id)
     assert fetched_stat is not None
-    assert fetched_stat.llm_profile_id is None
+    assert fetched_stat.agent_id == agent_id
 
 
 def test_ensure_async_scheme():

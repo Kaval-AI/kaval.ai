@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { EmbeddingConfig, RagResult, RagStats } from '../models/rag';
+import { RagResult, RagStats } from '../models/rag';
 
 @Injectable({
   providedIn: 'root'
@@ -9,12 +9,8 @@ import { EmbeddingConfig, RagResult, RagStats } from '../models/rag';
 export class RagService {
   constructor(private http: HttpClient) {}
 
-  getEmbeddingConfigs(projectId: string): Observable<EmbeddingConfig[]> {
-    return this.http.get<EmbeddingConfig[]>(`/api/projects/${projectId}/embedding-configs`);
-  }
-
   queryRag(projectId: string, queryData: {
-    embedding_profile_id: string,
+    model: string,
     text: string,
     collection_name?: string,
     top_k?: number

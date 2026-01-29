@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RagService } from '../../services/rag-service';
 import { UserService } from '../../services/user-service';
-import { EmbeddingConfig, RagResult, RagStats } from '../../models/rag';
+import { RagResult, RagStats } from '../../models/rag';
 
 @Component({
   selector: 'app-rag-page',
@@ -14,12 +14,11 @@ import { EmbeddingConfig, RagResult, RagStats } from '../../models/rag';
 })
 export class RagPage implements OnInit {
   projectId: string | null = null;
-  embeddingConfigs: EmbeddingConfig[] = [];
   results: RagResult[] = [];
   ragStats: RagStats | null = null;
 
   queryText: string = '';
-  selectedEmbeddingProfileId: string = '';
+  selectedModel: string = 'text-embedding-3-small';
   collectionName: string = '';
   topK: number = 10;
 
@@ -34,7 +33,6 @@ export class RagPage implements OnInit {
   ngOnInit(): void {
     this.projectId = this.userService.getActiveProjectId();
     if (this.projectId) {
-      this.loadEmbeddingConfigs();
       this.loadRagStats();
     }
   }
@@ -52,32 +50,15 @@ export class RagPage implements OnInit {
     });
   }
 
-  loadEmbeddingConfigs(): void {
-    if (!this.projectId) return;
-
-    this.ragService.getEmbeddingConfigs(this.projectId).subscribe({
-      next: (configs) => {
-        this.embeddingConfigs = configs;
-        if (configs.length > 0) {
-          this.selectedEmbeddingProfileId = configs[0].id;
-        }
-      },
-      error: (err) => {
-        console.error('Error loading embedding configs', err);
-        this.error = 'Failed to load embedding profiles.';
-      }
-    });
-  }
-
   onQuery(): void {
-    if (!this.projectId || !this.selectedEmbeddingProfileId || !this.queryText) {
+    if (!this.projectId || !this.selectedModel || !this.queryText) {
       return;
     }
 
     this.loading = true;
     this.error = null;
     this.ragService.queryRag(this.projectId, {
-      embedding_profile_id: this.selectedEmbeddingProfileId,
+      model: this.selectedModel,
       text: this.queryText,
       collection_name: this.collectionName || undefined,
       top_k: this.topK
