@@ -1,6 +1,5 @@
 import logging
 import os
-import secrets
 from uuid import UUID
 
 import uvicorn
@@ -44,8 +43,15 @@ oauth.register(
     client_kwargs={"scope": "openid email profile"},
 )
 
-# Add SessionMiddleware with a secret key
-app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(16))
+# Add SessionMiddleware with a fixed secret key and appropriate cookie settings
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET_KEY", "fallback-secret-key-for-dev-only"),
+    same_site="lax",
+    https_only=False,  # Set to True if you are using HTTPS
+    domain=None,  # Should be None for localhost/development
+    path="/",
+)
 
 
 async def authenticate_and_sync_user(user_info: dict):
@@ -122,7 +128,26 @@ async def get_project_and_assert_access(
 
 @app.get("/login")
 async def login(request: Request):
-    redirect_uri = request.url_for("google_auth_callback")
+    # Ensure any old state is cleared before starting a new login flow
+    if "_google_authlib_state_" in request.session:
+        del request.session["_google_authlib_state_"]
+
+    redirect_uri = str(request.url_for("google_auth_callback"))
+    frontend_url = os.getenv("FRONTEND_URL")
+    if frontend_url:
+        from urllib.parse import urlparse, urlunparse
+
+        parsed_frontend = urlparse(frontend_url)
+        parsed_redirect = urlparse(redirect_uri)
+        # Replace scheme and netloc with those from FRONTEND_URL
+        new_redirect = parsed_redirect._replace(
+            scheme=parsed_frontend.scheme, netloc=parsed_frontend.netloc
+        )
+        redirect_uri = urlunparse(new_redirect)
+
+    if "0.0.0.0" in redirect_uri:
+        redirect_uri = redirect_uri.replace("0.0.0.0", "localhost")
+
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
@@ -154,11 +179,18 @@ async def google_auth_callback(request: Request):
             "is_admin": db_user.is_admin,
             "active_project_id": str(db_user.active_project_id),
         }
-        return RedirectResponse(url=os.getenv("FRONTEND_URL", "http://localhost:4200"))
+        # Clear OAuth state from session after successful login
+        if "_google_authlib_state_" in request.session:
+            del request.session["_google_authlib_state_"]
+
+        return RedirectResponse(url=os.getenv("FRONTEND_URL", "http://localhost:8000"))
     except HTTPException as e:
         raise e
     except Exception as e:
         logger.error(f"Auth error: {e}")
+        # If it's a mismatching state error, it might be due to stale session
+        if "mismatching_state" in str(e):
+            return RedirectResponse(url="/login")
         raise HTTPException(status_code=400, detail="Authentication failed.")
 
 

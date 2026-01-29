@@ -11,7 +11,7 @@ Kaval.AI can be run using Docker. The provided `Dockerfile` and `entrypoint.sh` 
 - `all-in-one`: Runs both migrations and starts both servers (for development/demo purposes).
 
 In production, Nginx serves the built Angular frontend from `/usr/share/nginx/html`.
-The `FRONTEND_URL` environment variable should be set (e.g., `http://localhost:8000`) for correct OAuth redirects.
+The `FRONTEND_URL` environment variable should be set (e.g., `http://localhost:8000`) for correct OAuth redirects. If `mismatching_state` (CSRF) errors occur, ensure that the session cookie is correctly handled by the browser and that `SESSION_SECRET_KEY` is stable.
 The server uses `ProxyHeadersMiddleware` to correctly handle `X-Forwarded-Proto` and `X-Forwarded-For` headers when running behind a proxy or in Docker.
 
 Example:
