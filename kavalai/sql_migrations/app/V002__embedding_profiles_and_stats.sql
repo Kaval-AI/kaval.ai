@@ -4,7 +4,6 @@ CREATE TABLE embedding_profiles (
     name TEXT NOT NULL,
     provider TEXT NOT NULL,
     model_name TEXT NOT NULL,
-    api_key TEXT,
     base_url TEXT,
     embedding_size INTEGER,
     config JSONB,

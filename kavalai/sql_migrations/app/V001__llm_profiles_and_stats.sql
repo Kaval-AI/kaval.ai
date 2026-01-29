@@ -4,7 +4,6 @@ CREATE TABLE llm_profiles (
     name TEXT NOT NULL,
     provider TEXT NOT NULL,
     model_name TEXT NOT NULL,
-    api_key TEXT,
     base_url TEXT,
     config JSONB, -- Additional config parameters like mode, temperature etc.
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
