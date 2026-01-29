@@ -13,25 +13,21 @@ fi
 export $(grep -v '^#' "$ENV_FILE" | xargs)
 
 # Backoffice migrations
-docker run --rm \
-  --network kavalai_kavalai \
-  -v "$(pwd)/kavalai/sql_migrations/backoffice:/flyway/sql" \
-  flyway/flyway \
-  -url="jdbc:postgresql://${BACKOFFICE_DB_HOST}:${BACKOFFICE_DB_PORT}/${BACKOFFICE_DB_NAME}" \
-  -schemas="${BACKOFFICE_DB_SCHEMA}" \
-  -user="${BACKOFFICE_DB_USER}" \
-  -password="${BACKOFFICE_DB_PASSWORD}" \
-  -connectRetries=1 \
-  migrate
+python -m kavalai.migrate_db \
+  --migrations kavalai/sql_migrations/backoffice \
+  --host "${BACKOFFICE_DB_HOST}" \
+  --port "${BACKOFFICE_DB_PORT}" \
+  --user "${BACKOFFICE_DB_USER}" \
+  --password "${BACKOFFICE_DB_PASSWORD}" \
+  --database "${BACKOFFICE_DB_NAME}" \
+  --schema "${BACKOFFICE_DB_SCHEMA}"
 
 # App migrations
-docker run --rm \
-  --network kavalai_kavalai \
-  -v "$(pwd)/kavalai/sql_migrations/app:/flyway/sql" \
-  flyway/flyway \
-  -url="jdbc:postgresql://${AGENTS_DB_HOST}:${AGENTS_DB_PORT}/${AGENTS_DB_NAME}" \
-  -schemas="${AGENTS_DB_SCHEMA}" \
-  -user="${AGENTS_DB_USER}" \
-  -password="${AGENTS_DB_PASSWORD}" \
-  -connectRetries=1 \
-  migrate
+python -m kavalai.migrate_db \
+  --migrations kavalai/sql_migrations/app \
+  --host "${AGENTS_DB_HOST}" \
+  --port "${AGENTS_DB_PORT}" \
+  --user "${AGENTS_DB_USER}" \
+  --password "${AGENTS_DB_PASSWORD}" \
+  --database "${AGENTS_DB_NAME}" \
+  --schema "${AGENTS_DB_SCHEMA}"

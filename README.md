@@ -17,20 +17,25 @@ Run `pip install -r requirements.txt`.
 
 ## Database migrations
 
-We use Flyway for database migrations. You can run migrations using the provided script which runs Flyway in a Docker container:
+We use a custom migration script to manage database schemas. You can run migrations using the `kavalai.migrate_db` module.
 
-You can also run the migrations directly using `docker run`. For example, to migrate the `agents` schema using the local database settings:
+For example, to migrate the `agents` schema:
 
 ```bash
-docker run --rm \
-  -v "$(pwd)/kavalai/sql_migrations/app:/flyway/sql" \
-  flyway/flyway \
-  -url="jdbc:postgresql://postgres_db:5432/kavalai_dev" \
-  -schemas="agents" \
-  -user="kavalai_dev" \
-  -password="kavalai_dev" \
-  -connectRetries=1 \
-  migrate
+python -m kavalai.migrate_db \
+  --migrations kavalai/sql_migrations/app \
+  --host localhost \
+  --port 5432 \
+  --user kavalai_dev \
+  --password kavalai_dev \
+  --database kavalai_dev \
+  --schema agents
+```
+
+Alternatively, you can use the provided script to run all migrations using an environment file:
+
+```bash
+./scripts/migrate_db.sh .env
 ```
 
 
@@ -113,7 +118,26 @@ python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admi
 - Make a copy of `.env.example` as `.env` and fill in the missing details (ask your team lead for details).
 - Install [docker](https://docs.docker.com/engine/install/ubuntu/). You probably have to reboot your computer in the process.
 - Run `docker compose up -D` to bring up Postgres database.
-- Apply database migrations to local and test databases.
+- Apply database migrations to local and test databases:
+  ```bash
+  python -m kavalai.migrate_db \
+    --migrations kavalai/sql_migrations/app \
+    --host localhost \
+    --port 5432 \
+    --user kavalai_dev \
+    --password kavalai_dev \
+    --database kavalai_dev \
+    --schema agents
+
+  python -m kavalai.migrate_db \
+    --migrations kavalai/sql_migrations/backoffice \
+    --host localhost \
+    --port 5432 \
+    --user kavalai_dev \
+    --password kavalai_dev \
+    --database kavalai_dev \
+    --schema backoffice
+  ```
 
 
 
