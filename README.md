@@ -1,63 +1,12 @@
-# Kaval.AI Enterprise Agent Management System
+# Kaval.AI agents
 
 [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0)
 
-Kaval.AI is a Python SDK for developing AI agents that comes with backoffice app that is useful for monitoring and
-a/b testing different agent configurations like prompts and models.
+Kaval.AI is a Python SDK for writing AI agents like chatbots.
 
-# Installation
-
-You need access to [Kaval.AI Github repository](https://github.com/Kaval-AI/kaval.ai).
-For any questions, please write to *tpetmanson@gmail.com*.
-
-Add the Github repository dependency to `requirements.txt`.
-
-```aiignore
-kavalai@git+ssh://git@github.com/Kaval-AI/kaval.ai.git@main
-```
-
-Run `pip install -r requirements.txt`.
-
-## Database migrations
-
-We use a custom migration script to manage database schemas. You can run migrations using the `kavalai.migrate_db` module.
-It supports two types of migrations: `app` (for agents) and `backoffice`.
-
-
-```bash
-python -m kavalai.migrate_db app
-python -m kavalai.migrate_db backoffice
-```
-
-
-## LLM profiles
-
-LLM profiles define how to connect to various LLM providers. They are YAML files stored in the `kavalai/llm_profiles/` directory (or passed to the agent server).
-
-**OpenAI example (`kavalai/llm_profiles/openai.yaml`)**
-
-```yaml
-name: openai
-provider: openai
-model_name: gpt-4o
-api_key: your-api-key-here
-```
-
-**Gemini example (`kavalai/llm_profiles/gemini.yaml`)**
-
-```yaml
-name: gemini
-provider: google
-model_name: gemini-1.5-pro
-api_key: your-api-key-here
-```
-
-## Socrates Chatbot Example
-
-We have included a Socrates chatbot example in `kavalai/demo_agents/socrates.yaml`. This agent is configured to use the Socratic method in its conversations.
+## Socrates chatbot example
 
 **socrates.yaml**
-
 ```yaml
 name: Socrates
 description: A chatbot that acts and talks like the philosopher Socrates.
@@ -75,7 +24,7 @@ data_types:
         type: string
 tasks:
   - name: Compute the response
-    prompt: "You are Socrates, the ancient Greek philosopher. Engage in a Socratic dialogue with the user. Answer their questions with further questions that encourage them to think deeper and examine their own assumptions. Be humble, claim to know nothing, and use irony where appropriate. Your goal is not to provide answers, but to help the user find the truth within themselves."
+    prompt: "You are Socrates, the ancient Greek philosopher."
     inputs:
       input:
         type: context
@@ -85,10 +34,17 @@ tasks:
 
 ### Running the Chatbot Server
 
-To run the Socrates chatbot server, use the following command:
+To run the Socrates chatbot server, ensure you have set the required environment variables. You can provide them in a `.env` file or directly in the shell:
 
 ```bash
-HTTP_BASIC_AUTH_USER=admin HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server kavalai/demo_agents/socrates.yaml --port 10000
+export KAVALAI_AGENT_WORKFLOW_PATH=kavalai/demo_agents/socrates.yaml
+export KAVALAI_DB_URI=postgresql://user:password@localhost:5432/dbname
+export KAVALAI_DB_SCHEMA=agents
+export KAVALAI_AGENT_BASIC_AUTH_USER=admin
+export KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD=password
+export OPENAI_API_KEY=your_api_key_here
+
+python -m kavalai.agents.server
 ```
 
 ### Talking to the Chatbot via CLI
@@ -98,6 +54,35 @@ While the server is running, you can use the CLI chat tool to talk to Socrates:
 ```bash
 python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admin --password password
 ```
+
+
+# Installation
+
+You need access to [Kaval.AI Github repository](https://github.com/Kaval-AI/kaval.ai).
+For any questions, please write to *tpetmanson@gmail.com*.
+
+Add the Github repository dependency to `requirements.txt` or your `pyproject.toml`:
+
+```aiignore
+kavalai@git+ssh://git@github.com/Kaval-AI/kaval.ai.git@main
+```
+
+```
+pip install .
+pip install .[test]
+```
+
+## Database migrations
+
+We use a custom migration script to manage database schemas. You can run migrations using the `kavalai.migrate_db` module.
+It supports two types of migrations: `app` (for agents) and `backoffice`.
+
+```bash
+python -m kavalai.migrate_db app
+python -m kavalai.migrate_db backoffice
+```
+
+
 
 ## Local development
 
@@ -116,7 +101,6 @@ python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admi
   ```
 
 
-
 **Frontend setup**
 
 - Install [nvm](https://github.com/nvm-sh/nvm)
@@ -128,10 +112,38 @@ python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admi
 
 # Running agents
 
-Runs a demo agent on port 10000 with given access credentials.
+To run an agent server, you need to configure the environment variables.
+
+### Required Environment Variables
+
+| Variable | Description |
+| --- | --- |
+| `KAVALAI_AGENT_WORKFLOW_PATH` | Path to the agent's workflow YAML file. |
+| `KAVALAI_DB_URI` | Database connection string (e.g., `postgresql://user:password@localhost/dbname`). |
+| `KAVALAI_DB_SCHEMA` | Database schema name (default: `public`). |
+| `OPENAI_API_KEY` | Your OpenAI API key (if using OpenAI models). |
+| `GEMINI_API_KEY` | Your Gemini API key (if using Gemini models). |
+
+### Optional Environment Variables
+
+| Variable | Description |
+| --- | --- |
+| `KAVALAI_AGENT_BASIC_AUTH_USER` | Username for Basic Authentication. |
+| `KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD` | Password for Basic Authentication. |
+| `KAVALAI_AGENT_HOST` | Host to bind the server to (default: `0.0.0.0`). |
+| `KAVALAI_AGENT_PORT` | Port to bind the server to (default: `10000`). |
+| `KAVALAI_SQL_ECHO` | Enable SQL query logging (default: `0`). |
+
+### Example Command
 
 ```bash
-HTTP_BASIC_AUTH_USER=user HTTP_BASIC_AUTH_PASSWORD=password python -m kavalai.agents.server kavalai/demo_agents/silverhand.yaml --port 10000
+KAVALAI_AGENT_WORKFLOW_PATH=kavalai/demo_agents/socrates.yaml \
+KAVALAI_DB_URI=postgresql://user:password@localhost:5432/dbname \
+KAVALAI_DB_SCHEMA=agents \
+KAVALAI_AGENT_BASIC_AUTH_USER=admin \
+KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD=password \
+OPENAI_API_KEY=your_api_key_here \
+python -m kavalai.agents.server
 ```
 
 ## Persona simulation

@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
+from environs import Env
 from sqlalchemy import (
     MetaData,
     TEXT,
@@ -28,10 +28,10 @@ from sqlalchemy import (
     TypeDecorator,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.pool import NullPool
-from sqlalchemy.engine import make_url
 
 
 def parse_db_uri(uri: str) -> dict:
@@ -134,8 +134,14 @@ class DatabaseManager:
 db_manager = DatabaseManager()
 
 
+def get_kavalai_db_schema():
+    env = Env()
+    env.read_env()
+    return env.str("KAVALAI_DB_SCHEMA")
+
+
 class Base(DeclarativeBase):
-    metadata = MetaData(schema=os.environ["KAVALAI_DB_SCHEMA"])
+    metadata = MetaData(schema=get_kavalai_db_schema())
 
 
 class Agent(Base):
