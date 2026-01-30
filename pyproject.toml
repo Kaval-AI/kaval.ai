@@ -7,27 +7,26 @@ name = "kavalai"
 version = "0.1.3"
 description = "Kaval.AI Enterprise Agent Management System"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 authors = [
     { name = "Kaval.AI Team" },
 ]
 dependencies = [
     "asyncpg",
     "authlib",
+    "environs",
     "fastapi[standard]",
-    "fastmcp==2.14.2",
     "feedparser",
+    "google-genai",
     "graphviz",
     "httpx",
-    "openai",
     "itsdangerous",
-    "mcp",
+    "json-schema-to-pydantic",
+    "openai",
     "psycopg2-binary",
     "python-dotenv",
     "rich",
     "sqlalchemy",
-    "json-schema-to-pydantic",
-    "google-genai",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +35,7 @@ test = [
     "pytest-asyncio",
     "pytest-cov",
     "testcontainers[postgres]",
+    "pre-commit"
 ]
 
 [tool.setuptools.packages.find]
