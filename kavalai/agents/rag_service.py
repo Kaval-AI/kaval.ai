@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func
 
 from kavalai.agents.db import RagIndex, Agent, db_manager
 from kavalai.llm_clients.common import compute_embeddings
@@ -131,6 +132,7 @@ class RagService:
         text: str,
         top_k: int = 5,
         collection_name: Optional[str] = None,
+        keep_best: bool = False,
     ) -> list[RagServiceResult]:
         async with self.session_maker() as session:
             embeddings, stats = await compute_embeddings(
@@ -145,15 +147,37 @@ class RagService:
             distance_col = RagIndex.embedding.op("<=>")(query_embedding).label(
                 "distance"
             )
-            stmt = (
-                select(RagIndex, distance_col)
-                .where(RagIndex.model == self.model)
-                .order_by(distance_col)
-                .limit(top_k)
-            )
+            stmt = select(RagIndex, distance_col).where(RagIndex.model == self.model)
 
             if collection_name:
                 stmt = stmt.where(RagIndex.collection_name == collection_name)
+
+            if keep_best:
+                # Define a subquery to find the minimum distance for each source_id
+                sub_stmt = (
+                    select(
+                        RagIndex.source_id,
+                        func.min(distance_col).label("min_distance"),
+                    )
+                    .where(RagIndex.model == self.model)
+                    .group_by(RagIndex.source_id)
+                )
+
+                if collection_name:
+                    sub_stmt = sub_stmt.where(
+                        RagIndex.collection_name == collection_name
+                    )
+
+                sub_stmt = sub_stmt.subquery()
+
+                # Join the main query with the subquery to keep only the best results per source_id
+                stmt = stmt.join(
+                    sub_stmt,
+                    (RagIndex.source_id == sub_stmt.c.source_id)
+                    & (distance_col == sub_stmt.c.min_distance),
+                )
+
+            stmt = stmt.order_by(distance_col).limit(top_k)
 
             result = await session.execute(stmt)
             rows = result.all()

@@ -22,7 +22,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `workflow.py`: Core workflow execution engine (YAML to execution).
         - `client.py`: Client for interacting with agent servers, handles schema discovery and session management.
         - `agent_service.py`: Service for managing agent state, sessions, runs, LLM profiles, and embedding profiles in the DB. `get_or_create_agent` updates existing agents if description, schemas or workflow changed. Now includes `total_cost` in LLM and embedding profile views.
-        - `rag_service.py`: Service for indexing and querying text using embeddings (RAG). `query` now returns a list of `RagServiceResult` Pydantic models.
+        - `rag_service.py`: Service for indexing and querying text using embeddings (RAG). `query` now returns a list of `RagServiceResult` Pydantic models and supports `keep_best` parameter to return only the best match per `source_id`.
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages). `get_summary_stats` now provides cost breakdown (total, LLM, embedding).
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
