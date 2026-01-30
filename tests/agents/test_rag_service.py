@@ -18,7 +18,7 @@ async def test_rag_service_indexing(
     source_metadata = [{"id": 1}, {"id": 2}]
 
     items = await service.batch_index(
-        texts, source_metadata, collection_name="test_coll"
+        texts=texts, metadata_list=source_metadata, collection_name="test_coll"
     )
     assert len(items) == 2
     assert items[0].collection_name == "test_coll"
@@ -48,7 +48,10 @@ async def test_rag_service_deletion(
 
     # Index items
     await service.batch_index(
-        texts, metadata, collection_name=collection, source_ids=source_ids
+        texts=texts,
+        metadata_list=metadata,
+        collection_name=collection,
+        source_ids=source_ids,
     )
 
     # Verify they exist
@@ -78,7 +81,10 @@ async def test_rag_service_keep_best(
     collection = "keep_best_test"
 
     await service.batch_index(
-        texts, metadata, collection_name=collection, source_ids=source_ids
+        texts=texts,
+        metadata_list=metadata,
+        collection_name=collection,
+        source_ids=source_ids,
     )
 
     # Query for "apple".
@@ -120,7 +126,10 @@ async def test_rag_service_top_k_with_keep_best(
     collection = "top_k_keep_best_test"
 
     await service.batch_index(
-        texts, metadata, collection_name=collection, source_ids=source_ids
+        texts=texts,
+        metadata_list=metadata,
+        collection_name=collection,
+        source_ids=source_ids,
     )
 
     # Query with top_k=3 and keep_best=True
@@ -140,3 +149,122 @@ async def test_rag_service_top_k_with_keep_best(
         "content", top_k=1, collection_name=collection, keep_best=True
     )
     assert len(results_1) == 1
+
+
+@pytest.mark.asyncio
+async def test_rag_service_query_source_ids(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    service = RagService(agents_db_config["uri"], embedding_model)
+
+    texts = ["apple", "banana", "cherry"]
+    source_ids = ["sid_apple", "sid_banana", "sid_cherry"]
+    metadata = [{}, {}, {}]
+    collection = "source_ids_test"
+
+    await service.batch_index(
+        texts=texts,
+        metadata_list=metadata,
+        collection_name=collection,
+        source_ids=source_ids,
+    )
+
+    # Query with filtering by source_ids
+    results = await service.query(
+        "fruit",
+        top_k=10,
+        collection_name=collection,
+        source_ids=["sid_apple", "sid_cherry"],
+    )
+
+    assert len(results) == 2
+    found_ids = {r.source_id for r in results}
+    assert found_ids == {"sid_apple", "sid_cherry"}
+    assert "sid_banana" not in found_ids
+
+
+@pytest.mark.asyncio
+async def test_rag_service_query_source_ids_with_keep_best(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    service = RagService(agents_db_config["uri"], embedding_model)
+
+    # Index multiple items for some source_ids
+    texts = ["apple 1", "apple 2", "banana 1", "banana 2", "cherry"]
+    source_ids = ["sid_apple", "sid_apple", "sid_banana", "sid_banana", "sid_cherry"]
+    metadata = [{}, {}, {}, {}, {}]
+    collection = "source_ids_keep_best_test"
+
+    await service.batch_index(
+        texts=texts,
+        metadata_list=metadata,
+        collection_name=collection,
+        source_ids=source_ids,
+    )
+
+    # Query with filtering by source_ids and keep_best=True
+    results = await service.query(
+        "fruit",
+        top_k=10,
+        collection_name=collection,
+        source_ids=["sid_apple", "sid_banana"],
+        keep_best=True,
+    )
+
+    # We expect exactly 2 results: one for sid_apple and one for sid_banana
+    assert len(results) == 2
+    found_ids = {r.source_id for r in results}
+    assert found_ids == {"sid_apple", "sid_banana"}
+    assert "sid_cherry" not in found_ids
+
+
+@pytest.mark.asyncio
+async def test_compute_similarity_matrix(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    service = RagService(agents_db_config["uri"], embedding_model)
+
+    # Index some documents
+    texts = ["apple", "apple pie", "banana", "banana bread", "cherry"]
+    source_ids = ["fruit_1", "fruit_1", "fruit_2", "fruit_2", "fruit_3"]
+    await service.batch_index(
+        texts=texts,
+        metadata_list=[{}] * len(texts),
+        collection_name="matrix_test",
+        source_ids=source_ids,
+    )
+
+    # Compute similarity matrix
+    queries = ["apple", "banana"]
+    target_source_ids = ["fruit_1", "fruit_2", "fruit_3", "fruit_nonexistent"]
+
+    # Test "min" method (shortest distance = max similarity)
+    matrix_min = await service.compute_similarity_matrix(
+        texts=queries, source_ids=target_source_ids, method="min"
+    )
+
+    assert len(matrix_min) == 2  # 2 queries
+    assert len(matrix_min[0]) == 4  # 4 target source ids
+    assert len(matrix_min[1]) == 4
+
+    # matrix_min[0][0] is similarity between "apple" and "fruit_1" (contains "apple", "apple pie")
+    # "apple" vs "apple" should have high similarity
+    assert matrix_min[0][0] > 0.9
+    # matrix_min[0][1] is similarity between "apple" and "fruit_2" (contains "banana", "banana bread")
+    # should be lower
+    assert matrix_min[0][0] > matrix_min[0][1]
+    # nonexistent source should have 0 similarity
+    assert matrix_min[0][3] == 0.0
+
+    # Test "avg" method
+    matrix_avg = await service.compute_similarity_matrix(
+        texts=queries, source_ids=target_source_ids, method="avg"
+    )
+    assert len(matrix_avg) == 2
+    assert len(matrix_avg[0]) == 4
+
+    # For "fruit_1", "apple" query vs ["apple", "apple pie"]
+    # min distance will be "apple" vs "apple" (distance near 0)
+    # avg distance will be average of ("apple" vs "apple") and ("apple" vs "apple pie")
+    # So avg similarity should be less than or equal to min similarity
+    assert matrix_avg[0][0] <= matrix_min[0][0]
