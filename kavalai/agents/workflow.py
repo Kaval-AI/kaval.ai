@@ -43,7 +43,7 @@ class RestServer(BaseModel):
 class WorkflowModel(BaseModel):
     name: str
     description: str = ""
-    llm_model: str
+    llm_model: str = None
     data_types: dict[str, dict]
     rest_servers: list[RestServer] = []
     tasks: list[Task]

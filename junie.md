@@ -31,7 +31,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `common.py`: Common LLM client utilities. Includes `chat_completions` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data, cost) and `compute_embeddings` for generating text embeddings. Both return a result/stats tuple, letting the caller decide whether to log stats using `_save_model_stats`. Refactored to use native OpenAI and Gemini clients instead of instructor for better structured output and stats collection. Includes `get_llm_client` factory.
         - `openai.py`: Native OpenAI client wrapper. Supports structured outputs via `beta.chat.completions.parse`. Both `chat_completion` and `compute_embeddings` return a tuple of `(result, ModelCallStat)`.
         - `gemini.py`: Native Gemini client wrapper. Supports structured outputs via `response_schema` (with schema cleanup for compatibility). Both `chat_completion` and `compute_embeddings` return a tuple of `(result, ModelCallStat)`.
-- `prices/`: Pricing data for different LLM providers.
+    - `prices/`: Pricing data for different LLM providers.
         - `common.py`: Unified Pydantic models (`ModelPricing`, `TokenPricing`) for LLM pricing and cost calculation logic.
         - `openai.py`: OpenAI pricing data using the unified models.
         - `gemini.py`: Gemini pricing data using the unified models.
