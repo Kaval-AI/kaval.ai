@@ -20,14 +20,14 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `agents/`: SDK and agent runtime logic.
         - `__init__.py`: Package initialization, defines `PACKAGE_PATH` and `MIGRATIONS_PATH`.
         - `workflow.py`: Core workflow execution engine (YAML to execution).
-        - `server.py`: REST server for agents. Now logs masked database connection details (using `***`) and basic auth configuration status upon startup. Includes `mask_db_uri` for secure logging of database URIs.
+        - `server.py`: REST server for agents. Now logs masked database connection details (using `***`), basic auth configuration status, and database pooling settings (`KAVALAI_DB_POOL_SIZE`, `KAVALAI_DB_MAX_OVERFLOW`) upon startup. Includes `mask_db_uri` for secure logging of database URIs.
         - `client.py`: Client for interacting with agent servers, handles schema discovery and session management.
         - `agent_service.py`: Service for managing agent state, sessions, runs, LLM profiles, and embedding profiles in the DB. `get_or_create_agent` updates existing agents if description, schemas or workflow changed. Now includes `total_cost` in LLM and embedding profile views.
         - `rag_service.py`: Service for indexing and querying text using embeddings (RAG). `query` now returns a list of `RagServiceResult` Pydantic models and supports `keep_best` parameter to return only the best match per `source_id`. Now supports `source_ids` parameter to filter results. Added `compute_similarity_matrix` to compute similarities between multiple texts and source IDs in a single query.
         - `stats.py`: Statistics and analytics for agents (sessions, runs, messages). `get_summary_stats` now provides cost breakdown (total, LLM, embedding).
         - `sessions.py`: Service for querying session summaries and metadata.
         - `schema_parser.py`: Pydantic model generation from JSON schemas for input/output validation.
-        - `db.py`: Database models for agents, sessions, runs, tasks, messages, model call stats, and RAG index. Includes `parse_db_uri` and `DatabaseManager` for handling `postgresql+asyncpg` and `KAVALAI_DB_URI`.
+        - `db.py`: Database models for agents, sessions, runs, tasks, messages, model call stats, and RAG index. Includes `parse_db_uri` and `DatabaseManager` for handling `postgresql+asyncpg`, `KAVALAI_DB_URI`, and database pooling configuration.
     - `llm_clients/`: Native LLM client implementations.
         - `common.py`: Common LLM client utilities. Includes `chat_completions` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data, cost) and `compute_embeddings` for generating text embeddings. Both return a result/stats tuple, letting the caller decide whether to log stats using `_save_model_stats`. Refactored to use native OpenAI and Gemini clients instead of instructor for better structured output and stats collection. Includes `get_llm_client` factory.
         - `openai.py`: Native OpenAI client wrapper. Supports structured outputs via `beta.chat.completions.parse`. Both `chat_completion` and `compute_embeddings` return a tuple of `(result, ModelCallStat)`.

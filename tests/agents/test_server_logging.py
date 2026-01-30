@@ -30,6 +30,8 @@ class TestServerLogging(unittest.TestCase):
 
         mock_env.int.side_effect = lambda key, default=None: {
             "KAVALAI_AGENT_PORT": 10000,
+            "KAVALAI_DB_POOL_SIZE": 5,
+            "KAVALAI_DB_MAX_OVERFLOW": 10,
         }.get(key, default)
 
         mock_env.bool.return_value = False
@@ -52,6 +54,8 @@ class TestServerLogging(unittest.TestCase):
         # Assertions
         self.assertTrue(any("Database URI:" in log for log in info_logs))
         self.assertTrue(any("Database Schema: test_schema" in log for log in info_logs))
+        self.assertTrue(any("Database Pool Size: 5" in log for log in info_logs))
+        self.assertTrue(any("Database Max Overflow: 10" in log for log in info_logs))
         self.assertTrue(
             any("Basic Auth configured for user: admin" in log for log in info_logs)
         )

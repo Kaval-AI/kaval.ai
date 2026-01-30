@@ -209,6 +209,8 @@ def run_agent_server():
     - KAVALAI_AGENT_WORKFLOW_PATH: Path to the workflow YAML file.
     - KAVALAI_DB_URI: Database connection string.
     - KAVALAI_DB_SCHEMA: Database schema name.
+    - KAVALAI_DB_POOL_SIZE: Database connection pool size (optional, default: 0).
+    - KAVALAI_DB_MAX_OVERFLOW: Database connection pool max overflow (optional, default: 0).
     - KAVALAI_SQL_ECHO: Whether to log SQL queries (optional, default: False).
     - KAVALAI_AGENT_HOST: Host to bind the server to (optional, default: 0.0.0.0).
     - KAVALAI_AGENT_PORT: Port to bind the server to (optional, default: 10000).
@@ -220,11 +222,15 @@ def run_agent_server():
     # Log database connection info
     db_uri = env("KAVALAI_DB_URI")
     db_schema = env("KAVALAI_DB_SCHEMA", "public")
+    pool_size = env.int("KAVALAI_DB_POOL_SIZE", 0)
+    max_overflow = env.int("KAVALAI_DB_MAX_OVERFLOW", 0)
 
     masked_uri = mask_db_uri(db_uri)
 
     logger.info(f"Database URI: {masked_uri}")
     logger.info(f"Database Schema: {db_schema}")
+    logger.info(f"Database Pool Size: {pool_size}")
+    logger.info(f"Database Max Overflow: {max_overflow}")
 
     # Log basic auth info
     auth_user = env.str("KAVALAI_AGENT_BASIC_AUTH_USER", "")
@@ -239,7 +245,10 @@ def run_agent_server():
 
     # Specify the connection to the KavalAI agent server.
     session_provider = db_manager.get_sessionmaker(
-        uri=db_uri, echo=env.bool("KAVALAI_SQL_ECHO", False)
+        uri=db_uri,
+        echo=env.bool("KAVALAI_SQL_ECHO", False),
+        pool_size=pool_size,
+        max_overflow=max_overflow,
     )
 
     # Create FastAPI app.

@@ -114,6 +114,8 @@ class DatabaseManager:
         db_name=None,
         uri=None,
         echo=False,
+        pool_size=0,
+        max_overflow=0,
     ):
         if uri:
             url = ensure_async_scheme(uri)
@@ -122,7 +124,17 @@ class DatabaseManager:
 
         # Check cache first
         if url not in self._engines:
-            self._engines[url] = create_async_engine(url, echo=echo, poolclass=NullPool)
+            if pool_size > 0:
+                self._engines[url] = create_async_engine(
+                    url,
+                    echo=echo,
+                    pool_size=pool_size,
+                    max_overflow=max_overflow,
+                )
+            else:
+                self._engines[url] = create_async_engine(
+                    url, echo=echo, poolclass=NullPool
+                )
 
         engine = self._engines[url]
         return async_sessionmaker(

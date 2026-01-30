@@ -40,6 +40,8 @@ To run the Socrates chatbot server, ensure you have set the required environment
 export KAVALAI_AGENT_WORKFLOW_PATH=kavalai/demo_agents/socrates.yaml
 export KAVALAI_DB_URI=postgresql://user:password@localhost:5432/dbname
 export KAVALAI_DB_SCHEMA=agents
+export KAVALAI_DB_POOL_SIZE=0
+export KAVALAI_DB_MAX_OVERFLOW=0
 export KAVALAI_AGENT_BASIC_AUTH_USER=admin
 export KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD=password
 export OPENAI_API_KEY=your_api_key_here
@@ -133,6 +135,8 @@ To run an agent server, you need to configure the environment variables.
 | `KAVALAI_AGENT_HOST` | Host to bind the server to (default: `0.0.0.0`). |
 | `KAVALAI_AGENT_PORT` | Port to bind the server to (default: `10000`). |
 | `KAVALAI_SQL_ECHO` | Enable SQL query logging (default: `0`). |
+| `KAVALAI_DB_POOL_SIZE` | Database connection pool size (default: `0` for no pooling). |
+| `KAVALAI_DB_MAX_OVERFLOW` | Database connection pool max overflow (default: `0`). |
 
 ### Example Command
 
@@ -140,6 +144,8 @@ To run an agent server, you need to configure the environment variables.
 KAVALAI_AGENT_WORKFLOW_PATH=kavalai/demo_agents/socrates.yaml \
 KAVALAI_DB_URI=postgresql://user:password@localhost:5432/dbname \
 KAVALAI_DB_SCHEMA=agents \
+KAVALAI_DB_POOL_SIZE=0 \
+KAVALAI_DB_MAX_OVERFLOW=0 \
 KAVALAI_AGENT_BASIC_AUTH_USER=admin \
 KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD=password \
 OPENAI_API_KEY=your_api_key_here \
