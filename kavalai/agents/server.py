@@ -36,13 +36,13 @@ from kavalai.agents.workflow import Workflow
 
 logger = logging.getLogger(__name__)
 
-security = HTTPBasic()
+security = HTTPBasic(auto_error=False)
 
 env = Env()
 env.read_env()
 
 
-def validate_auth(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
+def validate_auth(credentials: Optional[HTTPBasicCredentials]):
     """Validate HTTP Basic Authentication.
 
     Authentication is disabled if KAVALAI_AGENT_BASIC_AUTH_USER and
@@ -63,6 +63,13 @@ def validate_auth(credentials: Annotated[HTTPBasicCredentials, Depends(security)
     # Basic auth is disabled
     if not expected_username and not expected_password:
         return True
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
     is_correct_username = secrets.compare_digest(
         credentials.username, expected_username
@@ -139,7 +146,7 @@ def create_agent_app(
     @app.post("/run_agent", response_model=OutputType)
     async def run_agent(
         input_data: InputType,
-        credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+        credentials: Annotated[Optional[HTTPBasicCredentials], Depends(security)],
     ) -> OutputType:
         """Execute the agent workflow with the provided input.
 
@@ -162,7 +169,7 @@ def create_agent_app(
 
     @app.get("/workflow", response_model=OutputType)
     async def get_workflow(
-        credentials: Annotated[HTTPBasicCredentials, Depends(security)],
+        credentials: Annotated[Optional[HTTPBasicCredentials], Depends(security)],
     ):
         """Retrieve the workflow configuration.
 

@@ -18,15 +18,14 @@ import logging
 from typing import Dict, Type, Optional, Literal
 from uuid import UUID
 
-import yaml
 import httpx
+import yaml
+from environs import Env
 from pydantic import BaseModel
 
 from kavalai.agents.agent_service import AgentService
-from kavalai.agents.db import ModelCallStat
-from kavalai.llm_clients.common import chat_completions
 from kavalai.agents.schema_parser import SchemaParser
-from kavalai.crud import insert
+from kavalai.llm_clients.common import chat_completions
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +110,8 @@ class Workflow:
         }
         self.tasks = {task.name: task for task in workflow_model.tasks}
         self.validate_workflow()
+        self.env = Env()
+        self.env.read_env()
 
     def validate_workflow(self):
         available_data = {"input"}
@@ -170,13 +171,14 @@ class Workflow:
             for msg in history:
                 messages.append(dict(role=msg.role, content=msg.content))
 
+        llm_model = self.workflow_model.llm_model or self.env.str("DEFAULT_LLM_MODEL")
         response, stats = await chat_completions(
-            model=self.workflow_model.llm_model,
+            model=llm_model,
             response_model=self.get_data_type(task.output),
             messages=messages,
         )
         if session:
-            await insert(session, ModelCallStat, stats)
+            session.add(stats)
 
         run_context.data[task.output] = response
 
@@ -294,7 +296,7 @@ class Workflow:
             )
 
         # 3. Execute Workflow Steps
-        for task in self.workflow1_model.tasks:
+        for task in self.workflow_model.tasks:
             logger.info("Running task <%s>", task.name)
             if task.prompt:
                 await self.run_prompt(task, run_context)

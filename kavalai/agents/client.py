@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import logging
 import urllib.parse
 from typing import Optional, Type
 
@@ -22,6 +23,8 @@ from json_schema_to_pydantic import create_model
 from pydantic import BaseModel
 
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
+
+logger = logging.getLogger(__name__)
 
 
 class AgentClient:
@@ -33,7 +36,7 @@ class AgentClient:
         timeout: float = 60.0,
     ):
         self.base_url = base_url.rstrip("/")
-        self.auth = (username, password) if username else None
+        self.auth = (username, password) if username and password else None
         self.timeout = timeout
         self.session_id: Optional[str] = None
         self.input_schema: Optional[Type[BaseModel]] = None

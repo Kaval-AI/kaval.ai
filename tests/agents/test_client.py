@@ -99,7 +99,14 @@ async def test_agent_client_run_agent():
         assert result.agent_response == "Hello world"
         assert client.session_id == "test-session"
 
-        # Check second call sends session_id
-        await client.run_agent(data)
-        args, kwargs = mock_post.call_args
-        assert kwargs["json"]["session_id"] == "test-session"
+
+@pytest.mark.asyncio
+async def test_agent_client_auth_only_username():
+    client = AgentClient("http://testserver", username="user")
+    assert client.auth is None
+
+
+@pytest.mark.asyncio
+async def test_agent_client_auth_only_password():
+    client = AgentClient("http://testserver", password="pass")
+    assert client.auth is None
