@@ -1,6 +1,9 @@
 # Kaval.AI Enterprise Agent Management System
 
-Kaval.AI is a Python SDK for developing AI agents that comes with backoffice app that is useful for monitoring and a/b testing different agent configurations like prompts and models.
+[Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0)
+
+Kaval.AI is a Python SDK for developing AI agents that comes with backoffice app that is useful for monitoring and
+a/b testing different agent configurations like prompts and models.
 
 # Installation
 
