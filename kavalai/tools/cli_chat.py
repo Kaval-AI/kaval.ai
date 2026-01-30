@@ -90,7 +90,7 @@ async def main():
                     f"[bold yellow]Agent (raw response):[/bold yellow] {response_data.model_dump()}"
                 )
 
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, EOFError):
             break
         except Exception as e:
             console.print(f"[bold red]Error: {e}[/bold red]")

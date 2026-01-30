@@ -30,7 +30,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `db.py`: Database models for agents, sessions, runs, tasks, messages, model call stats, and RAG index. Includes `parse_db_uri` and `DatabaseManager` for handling `postgresql+asyncpg`, `KAVALAI_DB_URI`, and database pooling configuration.
     - `llm_clients/`: Native LLM client implementations.
         - `common.py`: Common LLM client utilities. Includes `chat_completions` for executing LLM calls with comprehensive metric collection (tokens, duration, request/response data, cost) and `compute_embeddings` for generating text embeddings. Both return a result/stats tuple, letting the caller decide whether to log stats using `_save_model_stats`. Refactored to use native OpenAI and Gemini clients instead of instructor for better structured output and stats collection. Includes `get_llm_client` factory.
-        - `openai.py`: Native OpenAI client wrapper. Supports structured outputs via `beta.chat.completions.parse`. Both `chat_completion` and `compute_embeddings` return a tuple of `(result, ModelCallStat)`.
+        - `openai.py`: Native OpenAI client wrapper. Supports structured outputs via `beta.chat.completions.parse`. Both `chat_completion` and `compute_embeddings` return a tuple of `(result, ModelCallStat)`. `chat_completion` now includes retry logic (up to 3 attempts) for `LengthFinishReasonError`.
         - `gemini.py`: Native Gemini client wrapper. Supports structured outputs via `response_schema` (with schema cleanup for compatibility). Both `chat_completion` and `compute_embeddings` return a tuple of `(result, ModelCallStat)`.
     - `prices/`: Pricing data for different LLM providers.
         - `common.py`: Unified Pydantic models (`ModelPricing`, `TokenPricing`) for LLM pricing and cost calculation logic.
@@ -43,7 +43,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `db.py`: Backoffice-specific DB models (users, projects, memberships). Includes `DatabaseManager` for handling `postgresql+asyncpg` and `KAVALAI_BO_DB_URI`.
         - `project_service.py`: Service for managing project-related data and membership.
     - `tools/`: Utility tools.
-        - `cli_chat.py`: Command line tool for chatting with agents.
+        - `cli_chat.py`: Command line tool for chatting with agents. Now supports Ctrl+D (EOF) to exit.
         - `rss.py`: RSS feed parser tool.
         - `openapi_spec_parser.py`: Tool for parsing OpenAPI specifications.
         - `index_csv.py`: Tool for indexing large CSV files into RAG.

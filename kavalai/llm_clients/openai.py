@@ -18,7 +18,7 @@ import math
 import time
 from typing import Any, Dict, List, Optional, Type, Tuple
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, LengthFinishReasonError
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
@@ -41,35 +41,40 @@ class OpenAIClient:
 
         call_kwargs["response_format"] = response_model
 
-        try:
-            response = await self.client.beta.chat.completions.parse(**call_kwargs)
-            content = response.choices[0].message.parsed
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                response = await self.client.beta.chat.completions.parse(**call_kwargs)
+                content = response.choices[0].message.parsed
 
-            duration = time.perf_counter() - start_time
+                duration = time.perf_counter() - start_time
 
-            usage = response.usage
-            prompt_tokens = usage.prompt_tokens if usage else 0
-            completion_tokens = usage.completion_tokens if usage else 0
-            total_tokens = usage.total_tokens if usage else 0
+                usage = response.usage
+                prompt_tokens = usage.prompt_tokens if usage else 0
+                completion_tokens = usage.completion_tokens if usage else 0
+                total_tokens = usage.total_tokens if usage else 0
 
-            stats = ModelCallStat(
-                call_type="llm",
-                model=f"openai/{model}",
-                response_code=200,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=total_tokens,
-                duration_seconds=duration,
-                cost=None,  # We will compute cost later
-                response_data=response.model_dump()
-                if hasattr(response, "model_dump")
-                else str(response),
-            )
+                stats = ModelCallStat(
+                    call_type="llm",
+                    model=f"openai/{model}",
+                    response_code=200,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=total_tokens,
+                    duration_seconds=duration,
+                    cost=None,  # We will compute cost later
+                    response_data=response.model_dump()
+                    if hasattr(response, "model_dump")
+                    else str(response),
+                )
 
-            return content, stats
-        except Exception as e:
-            # duration = time.perf_counter() - start_time
-            raise e
+                return content, stats
+            except LengthFinishReasonError as e:
+                if attempt == max_attempts - 1:
+                    raise e
+            except Exception as e:
+                # duration = time.perf_counter() - start_time
+                raise e
 
     async def compute_embeddings(
         self,
