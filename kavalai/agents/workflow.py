@@ -59,6 +59,7 @@ class RestServer(BaseModel):
 class WorkflowModel(BaseModel):
     name: str
     description: str = ""
+    version: str = "1.0"
     llm_model: str = None
     data_types: dict[str, dict]
     rest_servers: list[RestServer] = []
