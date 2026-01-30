@@ -5,7 +5,6 @@ It handles batching, metadata field selection, and allows ignoring specific colu
 Example usage:
 python -m kavalai.tools.index_csv local_data/song_lyrics.csv \
     --collection-name lyrics \
-    --embedding-profile openai \
     --metadata-fields id title artist \
     --index-fields lyrics \
     --source-field id \
@@ -18,17 +17,16 @@ Modes:
 - lines: The field is split into lines and each line is indexed separately.
 """
 
-import asyncio
 import argparse
+import asyncio
 import csv
+import logging
 import os
 import sys
 from typing import List, Optional, Generator, Dict
 
 from kavalai.agents.db import db_manager
 from kavalai.agents.rag_service import RagService
-import logging
-
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +75,10 @@ def content_splitter_generator(
 
 
 async def index_csv(
+    *,
     csv_path: str,
     collection_name: str,
-    embedding_profile_name: str,
+    model: str = None,
     metadata_fields: List[str],
     index_fields: List[str],
     source_field: str,
@@ -88,10 +87,11 @@ async def index_csv(
     replace: bool = False,
     batch_size: int = 10,
 ):
+    model = model if model else os.environ["DEFAULT_EMBEDDING_MODEL"]
     async_session = db_manager.get_sessionmaker(uri=os.environ["KAVALAI_DB_URI"])
     async with async_session() as session:
         # Upsert profile to DB to get ID
-        rag_service = RagService(session, os.environ["DEFAULT_EMBEDDING_MODEL"])
+        rag_service = RagService(session, model)
 
         rows_processed = 0
         total_chunks = 0
@@ -149,12 +149,12 @@ def main():
     parser.add_argument("csv_path", help="Path to the CSV file")
     parser.add_argument("--collection-name", required=True, help="RAG collection name")
     parser.add_argument(
-        "--embedding-profile",
-        required=True,
-        help="Embedding profile name (from embedding_profiles/ folder)",
+        "--metadata-fields", nargs="*", default=[], help="Fields to store in metadata"
     )
     parser.add_argument(
-        "--metadata-fields", nargs="*", default=[], help="Fields to store in metadata"
+        "--model",
+        required=False,
+        help="Embedding model name e.g openai/text-embedding-3-small",
     )
     parser.add_argument(
         "--index-fields",
@@ -192,16 +192,16 @@ def main():
 
     asyncio.run(
         index_csv(
-            args.csv_path,
-            args.collection_name,
-            args.embedding_profile,
-            args.metadata_fields,
-            args.index_fields,
-            args.source_field,
-            args.mode,
-            args.limit,
-            args.replace,
-            args.batch_size,
+            csv_path=args.csv_path,
+            collection_name=args.collection_name,
+            model=args.model,
+            metadata_fields=args.metadata_fields,
+            index_fields=args.index_fields,
+            source_field=args.source_field,
+            mode=args.mode,
+            limit=args.limit,
+            replace=args.replace,
+            batch_size=args.batch_size,
         )
     )
 

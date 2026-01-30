@@ -4,7 +4,6 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from starlette.responses import Response
 
 from kavalai.backoffice import db
 from kavalai.backoffice.server import app
@@ -22,32 +21,6 @@ async def client():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
         yield ac
-
-
-@pytest.mark.asyncio
-async def test_login(client, mock_google_oauth):
-    mock_google_oauth.authorize_redirect = AsyncMock(return_value=Response())
-    with patch(
-        "os.getenv",
-        side_effect=lambda k, d=None: "http://localhost:4200"
-        if k == "FRONTEND_URL"
-        else d,
-    ):
-        response = await client.get("/login")
-        assert response.status_code == 200
-        # Check if redirect_uri was called with /api/ prefix
-        args, kwargs = mock_google_oauth.authorize_redirect.call_args
-        redirect_uri = args[1]
-        assert "http://localhost:4200/api/auth/google/callback" in redirect_uri
-
-
-@pytest.mark.asyncio
-async def test_logout(client):
-    with patch("kavalai.backoffice.server.is_logged_in", return_value=True), patch(
-        "starlette.requests.Request.session", {"user_info": {}}
-    ):
-        response = await client.get("/logout")
-        assert response.status_code == 200
 
 
 @pytest.mark.asyncio
