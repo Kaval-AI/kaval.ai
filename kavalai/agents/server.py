@@ -219,6 +219,7 @@ def run_agent_server():
     - KAVALAI_DB_POOL_SIZE: Database connection pool size (optional, default: 0).
     - KAVALAI_DB_MAX_OVERFLOW: Database connection pool max overflow (optional, default: 0).
     - KAVALAI_SQL_ECHO: Whether to log SQL queries (optional, default: False).
+    - KAVALAI_OPENAI_SERVICE_TIER: The service tier to use for OpenAI API calls (optional, e.g. "priority").
     - KAVALAI_AGENT_HOST: Host to bind the server to (optional, default: 0.0.0.0).
     - KAVALAI_AGENT_PORT: Port to bind the server to (optional, default: 10000).
     """
@@ -238,6 +239,11 @@ def run_agent_server():
     logger.info(f"Database Schema: {db_schema}")
     logger.info(f"Database Pool Size: {pool_size}")
     logger.info(f"Database Max Overflow: {max_overflow}")
+
+    # Log OpenAI service tier
+    service_tier = env.str("KAVALAI_OPENAI_SERVICE_TIER", "")
+    if service_tier:
+        logger.info(f"OpenAI Service Tier: {service_tier}")
 
     # Log basic auth info
     auth_user = env.str("KAVALAI_AGENT_BASIC_AUTH_USER", "")

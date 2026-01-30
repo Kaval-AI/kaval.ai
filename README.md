@@ -137,6 +137,7 @@ To run an agent server, you need to configure the environment variables.
 | `KAVALAI_SQL_ECHO` | Enable SQL query logging (default: `0`). |
 | `KAVALAI_DB_POOL_SIZE` | Database connection pool size (default: `0` for no pooling). |
 | `KAVALAI_DB_MAX_OVERFLOW` | Database connection pool max overflow (default: `0`). |
+| `KAVALAI_OPENAI_SERVICE_TIER` | The service tier to use for OpenAI API calls (e.g., `priority`). |
 
 ### Example Command
 

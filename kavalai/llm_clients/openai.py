@@ -25,8 +25,14 @@ from kavalai.agents.db import ModelCallStat
 
 
 class OpenAIClient:
-    def __init__(self, api_key: str, base_url: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: Optional[str] = None,
+        service_tier: Optional[str] = None,
+    ):
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self.service_tier = service_tier
 
     async def chat_completion(
         self,
@@ -38,6 +44,8 @@ class OpenAIClient:
         start_time = time.perf_counter()
 
         call_kwargs = {"model": model, "messages": messages, **kwargs}
+        if self.service_tier:
+            call_kwargs["service_tier"] = self.service_tier
 
         call_kwargs["response_format"] = response_model
 
@@ -84,11 +92,15 @@ class OpenAIClient:
         **kwargs,
     ) -> Tuple[List[List[float]], ModelCallStat]:
         start_time = time.perf_counter()
-        response = await self.client.embeddings.create(
-            input=texts,
-            model=model,
+        call_kwargs = {
+            "input": texts,
+            "model": model,
             **kwargs,
-        )
+        }
+        if self.service_tier:
+            call_kwargs["service_tier"] = self.service_tier
+
+        response = await self.client.embeddings.create(**call_kwargs)
         duration = time.perf_counter() - start_time
 
         embeddings = [data.embedding for data in response.data]

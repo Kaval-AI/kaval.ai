@@ -38,7 +38,10 @@ def get_llm_client(
     """
     provider, model = model.split("/")
     if provider == "openai":
-        return OpenAIClient(api_key=os.environ["OPENAI_API_KEY"])
+        return OpenAIClient(
+            api_key=os.environ["OPENAI_API_KEY"],
+            service_tier=os.environ.get("KAVALAI_OPENAI_SERVICE_TIER"),
+        )
     elif provider == "gemini":
         return GeminiClient(api_key=os.environ["GEMINI_API_KEY"])
     else:
