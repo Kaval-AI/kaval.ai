@@ -75,6 +75,29 @@ class RunContext(BaseModel):
     run_id: Optional[UUID] = None
     data: dict = {}
 
+    def prepare_tool_inputs(self, task: Task) -> dict | str:
+        inputs = {}
+        for name, info in task.inputs.items():
+            if info.type == "literal":
+                val = info.value
+            else:
+                # Fallback to the key name if info.name is not explicitly provided
+                val = self.data.get(info.name or name)
+            inputs[name] = val
+
+        if len(inputs) == 1:
+            single_val = list(inputs.values())[0]
+            if isinstance(single_val, BaseModel):
+                return single_val.model_dump()
+            return single_val
+
+        pieces = []
+        for key, value in inputs.items():
+            if isinstance(value, BaseModel):
+                value = value.model_dump_json()
+            pieces.append(f"{key}:{value}")
+        return "\n".join(pieces)
+
 
 def make_prompt(prompt: str, input_data: dict) -> str:
     pieces = [prompt]
@@ -226,13 +249,7 @@ class Workflow:
             )
 
     async def run_tool(self, task: Task, run_context: RunContext):
-        inputs = {}
-        for name, info in task.inputs.items():
-            if info.type == "literal":
-                inputs[name] = info.value
-            else:
-                # Fallback to the key name if info.name is not explicitly provided
-                inputs[name] = run_context.data.get(info.name or name)
+        inputs = run_context.prepare_tool_inputs(task)
 
         rest_server = self.rest_servers[task.rest_server]
         auth = None
@@ -242,10 +259,14 @@ class Workflow:
             auth = (username, password)
 
         async with httpx.AsyncClient(auth=auth) as client:
-            kwargs = {"params": inputs, "timeout": 60.0}
+            kwargs = {
+                "params": inputs if isinstance(inputs, dict) else {},
+                "timeout": 60.0,
+            }
             if task.method.lower() in ("post", "put", "patch"):
                 kwargs["json"] = inputs
-                kwargs.pop("params")
+                if "params" in kwargs:
+                    kwargs.pop("params")
 
             response = await client.request(
                 task.method.upper(),

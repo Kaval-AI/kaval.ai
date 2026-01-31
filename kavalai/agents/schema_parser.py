@@ -15,7 +15,7 @@ limitations under the License.
 """
 
 from typing import Any, Dict, Type, Tuple
-from pydantic import BaseModel, create_model, Field
+from pydantic import BaseModel, create_model, Field, ConfigDict
 
 
 class SchemaParser:
@@ -49,6 +49,19 @@ class SchemaParser:
             items_def = prop_def.get("items", {})
             item_type, _ = self._json_type_to_python(items_def)
             python_type = list[item_type]
+        elif json_type == "object" and "properties" in prop_def:
+            # Inline object definition, create a nested model
+            # We use a generic name or something derived from field name if we had it.
+            # But _json_type_to_python doesn't have field name.
+            # Actually, the best way to handle inline objects is to give them a name.
+            # For now, let's just create an anonymous model.
+            nested_fields = {
+                k: self._json_type_to_python(v)
+                for k, v in prop_def.get("properties", {}).items()
+            }
+            python_type = create_model(
+                "InlineModel", __config__=ConfigDict(extra="forbid"), **nested_fields
+            )
         else:
             python_type = type_map.get(json_type, Any)
 
@@ -83,7 +96,11 @@ class SchemaParser:
             ref_name = schema["$ref"]
             ref_model = self.parse_type(ref_name)
             # Create a subclass or alias? Subclass with the new name is better for clarity.
-            model = create_model(type_name, __base__=ref_model)
+            model = create_model(
+                type_name,
+                __base__=ref_model,
+                __config__=ConfigDict(extra="forbid"),
+            )
             self.models[type_name] = model
             return model
 
@@ -94,7 +111,7 @@ class SchemaParser:
             # Now returns (type, FieldInfo)
             fields[field_name] = self._json_type_to_python(field_def)
 
-        model = create_model(type_name, **fields)
+        model = create_model(type_name, __config__=ConfigDict(extra="forbid"), **fields)
         self.models[type_name] = model
         return model
 

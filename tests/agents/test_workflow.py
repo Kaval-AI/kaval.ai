@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 
+from pydantic import BaseModel
 from kavalai.agents.workflow import (
     Workflow,
     WorkflowModel,
@@ -125,8 +126,74 @@ class TestRunToolMethod:
 
         assert captured_method == "POST"
         # For POST, it should use json
-        assert captured_json == {"query": run_context.data["input"]}
+        # Since only one input is given, it is passed straight
+        assert captured_json == run_context.data["input"]
+        # When params is popped, it's missing from kwargs in request call
         assert captured_params is None
+
+    @pytest.mark.asyncio
+    async def test_run_tool_serializes_pydantic_models(self):
+        """run_tool should serialize Pydantic models to dicts in JSON body."""
+
+        class TestModel(BaseModel):
+            name: str
+
+        # Define a workflow model with a POST task
+        model = WorkflowModel(
+            name="Test Workflow",
+            data_types={
+                "test_model": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                },
+                "output_model": {
+                    "type": "object",
+                    "properties": {"result": {"type": "string"}},
+                },
+            },
+            rest_servers=[RestServer(name="test_server", url="http://localhost:1234")],
+            tasks=[
+                Task(
+                    name="Task 1",
+                    tool="search",
+                    rest_server="test_server",
+                    method="post",
+                    inputs={"input": TypeInputInfo(type="context", value="input")},
+                    output="output_model",
+                )
+            ],
+        )
+        workflow = Workflow(model)
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": "success"}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.request.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        captured_json = None
+
+        async def mock_request(method, url, **kwargs):
+            nonlocal captured_json
+            captured_json = kwargs.get("json")
+            return mock_response
+
+        mock_client.request = mock_request
+
+        with patch(
+            "kavalai.agents.workflow.httpx.AsyncClient", return_value=mock_client
+        ):
+            run_context = RunContext()
+            run_context.data["input"] = TestModel(name="test_value")
+            await workflow.run_tool(workflow.workflow_model.tasks[0], run_context)
+
+        # Check that the Pydantic model was converted to a dict
+        # Since only one input is given, it is passed straight
+        assert captured_json == {"name": "test_value"}
+        assert isinstance(captured_json, dict)
 
 
 class TestRestServerEnvVarValidation:
