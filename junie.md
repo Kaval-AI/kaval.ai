@@ -19,7 +19,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `kavalai/`: Main Python package.
     - `agents/`: SDK and agent runtime logic.
         - `__init__.py`: Package initialization, defines `PACKAGE_PATH` and `MIGRATIONS_PATH`.
-        - `workflow.py`: Core workflow execution engine (YAML to execution).
+        - `workflow.py`: Core workflow execution engine (YAML to execution). REST servers use `username_env` and `password_env` to specify environment variable names for basic auth credentials (not literal values). Validates that env vars are defined when loading the workflow.
         - `server.py`: REST server for agents. Supports optional HTTP basic authentication. Logs masked database connection details (using `***`), basic auth configuration status, database pooling settings, and OpenAI service tier upon startup. Includes `mask_db_uri` for secure logging of database URIs.
         - `client.py`: Client for interacting with agent servers, handles schema discovery and session management. Now ensures HTTP basic auth is only used if both username and password are provided and non-empty.
         - `agent_service.py`: Service for managing agent state, sessions, runs, LLM profiles, and embedding profiles in the DB. `get_or_create_agent` updates existing agents if description, schemas or workflow changed. Now includes `total_cost` in LLM and embedding profile views.
@@ -89,7 +89,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - **Backend**: Python with FastAPI, SQLAlchemy (Async), Pydantic.
 - **Frontend**: Angular (using modern built-in control flow: `@if`, `@for`).
 - **Database**: PostgreSQL (multiple schemas/databases).
-- **Workflows**: Defined in YAML, processed by `Workflow` class in `kavalai/agents/workflow.py`. Supports REST tools with basic auth.
+- **Workflows**: Defined in YAML, processed by `Workflow` class in `kavalai/agents/workflow.py`. Supports REST tools with basic auth via environment variables.
 - **Project Isolation**: The backoffice manages multiple "projects". Each project can point to a different agent database.
 
 ## Workflow Execution

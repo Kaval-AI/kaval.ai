@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import logging
+import os
 from typing import Dict, Type, Optional, Literal
 from uuid import UUID
 
@@ -51,8 +52,8 @@ class Task(BaseModel):
 class RestServer(BaseModel):
     name: str
     url: str
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username_env: Optional[str] = None
+    password_env: Optional[str] = None
 
 
 class WorkflowModel(BaseModel):
@@ -112,6 +113,28 @@ class Workflow:
         self.validate_workflow()
         self.env = Env()
         self.env.read_env()
+        self._validate_rest_server_env_vars()
+
+    def _validate_rest_server_env_vars(self):
+        """Validate that environment variables for REST server auth are defined."""
+        for server in self.workflow_model.rest_servers:
+            if server.username_env and server.password_env:
+                if server.username_env not in os.environ:
+                    raise WorkflowException(
+                        f"Environment variable '{server.username_env}' for REST server "
+                        f"'{server.name}' username is not defined."
+                    )
+                if server.password_env not in os.environ:
+                    raise WorkflowException(
+                        f"Environment variable '{server.password_env}' for REST server "
+                        f"'{server.name}' password is not defined."
+                    )
+            elif server.username_env or server.password_env:
+                # Only one of them is defined - this is an error
+                raise WorkflowException(
+                    f"REST server '{server.name}' must have both username_env and "
+                    f"password_env defined, or neither."
+                )
 
     def validate_workflow(self):
         available_data = {"input"}
@@ -211,11 +234,11 @@ class Workflow:
                 inputs[name] = run_context.data.get(info.name or name)
 
         rest_server = self.rest_servers[task.rest_server]
-        auth = (
-            (rest_server.username, rest_server.password)
-            if rest_server.username and rest_server.password
-            else None
-        )
+        auth = None
+        if rest_server.username_env and rest_server.password_env:
+            username = os.environ[rest_server.username_env]
+            password = os.environ[rest_server.password_env]
+            auth = (username, password)
 
         async with httpx.AsyncClient(auth=auth) as client:
             response = await client.get(
