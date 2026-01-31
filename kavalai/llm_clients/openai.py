@@ -33,6 +33,7 @@ class OpenAIClient:
     ):
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.service_tier = service_tier
+        assert service_tier in ["standard", "priority", None]
 
     async def chat_completion(
         self,
@@ -43,11 +44,14 @@ class OpenAIClient:
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
 
-        call_kwargs = {"model": model, "messages": messages, **kwargs}
+        call_kwargs = {
+            "model": model,
+            "messages": messages,
+            "response_format": response_model,
+            **kwargs,
+        }
         if self.service_tier:
             call_kwargs["service_tier"] = self.service_tier
-
-        call_kwargs["response_format"] = response_model
 
         max_attempts = 3
         for attempt in range(max_attempts):
