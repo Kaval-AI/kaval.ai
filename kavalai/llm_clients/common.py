@@ -16,16 +16,68 @@ limitations under the License.
 
 import logging
 import os
+import asyncio
+import random
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 from pydantic import BaseModel
+import openai
+from google.genai import errors
 
 from kavalai.agents.db import ModelCallStat
 from kavalai.llm_clients.gemini import GeminiClient
 from kavalai.llm_clients.openai import OpenAIClient
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+async def with_retry(
+    func: Callable[..., T],
+    *args,
+    max_retries: int = 5,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0,
+    **kwargs,
+) -> T:
+    """
+    Exponential backoff retry wrapper for LLM client calls.
+    Retries only on specific OpenAI and Gemini exceptions.
+    """
+    retriable_exceptions = (
+        # OpenAI exceptions
+        openai.RateLimitError,
+        openai.InternalServerError,
+        openai.APIConnectionError,
+        openai.APITimeoutError,
+        openai.LengthFinishReasonError,
+        # Gemini exceptions
+        errors.ServerError,
+        errors.ClientError,
+    )
+
+    last_exception = None
+    for attempt in range(max_retries + 1):
+        try:
+            return await func(*args, **kwargs)
+        except retriable_exceptions as e:
+            last_exception = e
+            if attempt == max_retries:
+                break
+
+            delay = min(base_delay * (2**attempt) + random.uniform(0, 1), max_delay)
+            logger.warning(
+                f"LLM call failed with {type(e).__name__}: {e}. "
+                f"Retrying in {delay:.2f} seconds (attempt {attempt + 1}/{max_retries})..."
+            )
+            await asyncio.sleep(delay)
+        except Exception as e:
+            # Do not retry on other exceptions (programming errors, auth errors, etc.)
+            raise e
+
+    raise last_exception
 
 
 def get_llm_client(
@@ -36,7 +88,7 @@ def get_llm_client(
 
     Model parameter is a provider/model combo like openai/text-embedding-3-small
     """
-    provider, model = model.split("/")
+    provider, model_name = model.split("/")
     if provider == "openai":
         return OpenAIClient(
             api_key=os.environ["OPENAI_API_KEY"],
@@ -70,7 +122,9 @@ async def chat_completions(
         },
     }
     _, model_name = model.split("/")
-    content, stats = await client.chat_completion(
+
+    content, stats = await with_retry(
+        client.chat_completion,
         model=model_name,
         messages=messages,
         response_model=response_model,
@@ -103,7 +157,9 @@ async def compute_embeddings(
         },
     }
     _, model_name = model.split("/")
-    embeddings, stats = await client.compute_embeddings(
+
+    embeddings, stats = await with_retry(
+        client.compute_embeddings,
         model=model_name,
         texts=texts,
         normalize=normalize,
