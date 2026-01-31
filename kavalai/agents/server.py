@@ -28,6 +28,7 @@ from fastapi import Depends
 from fastapi import HTTPException, status, FastAPI, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from kavalai.agents.agent_service import AgentService
@@ -180,6 +181,25 @@ def create_agent_app(
             content=workflow.workflow_model.model_dump_json(),
             media_type="application/json",
         )
+
+    @app.get("/liveness")
+    async def liveness():
+        """Liveness probe for K8s."""
+        return {"status": "ok"}
+
+    @app.get("/health")
+    async def health():
+        """Health probe for K8s. Checks DB connectivity."""
+        try:
+            async with session_scope(session_provider) as session:
+                await session.execute(text("SELECT 1"))
+            return {"status": "ok", "database": "connected"}
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database connection failed",
+            )
 
     return app
 
