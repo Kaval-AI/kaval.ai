@@ -47,6 +47,7 @@ class Task(BaseModel):
     # REST tool call
     tool: Optional[str] = None
     rest_server: Optional[str] = None
+    method: str = "get"
 
 
 class RestServer(BaseModel):
@@ -241,8 +242,15 @@ class Workflow:
             auth = (username, password)
 
         async with httpx.AsyncClient(auth=auth) as client:
-            response = await client.get(
-                f"{rest_server.url}/{task.tool}", params=inputs, timeout=60.0
+            kwargs = {"params": inputs, "timeout": 60.0}
+            if task.method.lower() in ("post", "put", "patch"):
+                kwargs["json"] = inputs
+                kwargs.pop("params")
+
+            response = await client.request(
+                task.method.upper(),
+                f"{rest_server.url}/{task.tool}",
+                **kwargs,
             )
             response.raise_for_status()
             result_data = response.json()

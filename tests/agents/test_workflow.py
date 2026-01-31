@@ -15,7 +15,7 @@ from kavalai.agents.workflow import (
 
 
 def create_workflow_model_with_rest_server(
-    username_env: str = None, password_env: str = None
+    username_env: str = None, password_env: str = None, method: str = "get"
 ) -> WorkflowModel:
     """Helper to create a WorkflowModel with a REST server."""
     rest_servers = [
@@ -41,9 +41,92 @@ def create_workflow_model_with_rest_server(
                 output="output",
                 tool="test_tool",
                 rest_server="test_server",
+                method=method,
             )
         ],
     )
+
+
+class TestRunToolMethod:
+    """Tests for run_tool method handling."""
+
+    @pytest.mark.asyncio
+    async def test_run_tool_uses_default_get_method(self):
+        """run_tool should use GET method by default."""
+        model = create_workflow_model_with_rest_server()
+        workflow = Workflow(model)
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": "success"}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.request.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        captured_method = None
+        captured_url = None
+
+        async def mock_request(method, url, **kwargs):
+            nonlocal captured_method, captured_url
+            captured_method = method
+            captured_url = url
+            return mock_response
+
+        mock_client.request = mock_request
+
+        with patch(
+            "kavalai.agents.workflow.httpx.AsyncClient", return_value=mock_client
+        ):
+            task = workflow.workflow_model.tasks[0]
+            run_context = RunContext()
+            run_context.data["input"] = MagicMock()
+            await workflow.run_tool(task, run_context)
+
+        assert captured_method == "GET"
+        assert captured_url == "http://localhost:8000/test_tool"
+
+    @pytest.mark.asyncio
+    async def test_run_tool_uses_specified_post_method(self):
+        """run_tool should use POST method when specified."""
+        model = create_workflow_model_with_rest_server(method="post")
+        workflow = Workflow(model)
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": "success"}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.request.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        captured_method = None
+        captured_params = None
+        captured_json = None
+
+        async def mock_request(method, url, **kwargs):
+            nonlocal captured_method, captured_params, captured_json
+            captured_method = method
+            captured_params = kwargs.get("params")
+            captured_json = kwargs.get("json")
+            return mock_response
+
+        mock_client.request = mock_request
+
+        with patch(
+            "kavalai.agents.workflow.httpx.AsyncClient", return_value=mock_client
+        ):
+            task = workflow.workflow_model.tasks[0]
+            run_context = RunContext()
+            run_context.data["input"] = MagicMock()
+            await workflow.run_tool(task, run_context)
+
+        assert captured_method == "POST"
+        # For POST, it should use json
+        assert captured_json == {"query": run_context.data["input"]}
+        assert captured_params is None
 
 
 class TestRestServerEnvVarValidation:
