@@ -48,39 +48,68 @@ def generate_workflow_svg(
         used_types.add("input")
 
     for task in model.tasks:
-        used_types.add(task.output)
+        if isinstance(task.output, str):
+            used_types.add(task.output)
+        elif isinstance(task.output, dict):
+            # For combine tasks, if it's the final output, it uses the "output" data type
+            # We also add all types referenced in the values
+            used_types.add("output")
+            for out_info in task.output.values():
+                if out_info.type == "context":
+                    actual_name = (out_info.name or out_info.value or "").split(".")[0]
+                    if actual_name:
+                        used_types.add(actual_name)
+
         for input_name, input_info in task.inputs.items():
             if input_info.type == "context":
-                actual_name = input_info.name or input_info.value or input_name
+                actual_name = (input_info.name or input_info.value or input_name).split(
+                    "."
+                )[0]
                 used_types.add(actual_name)
 
     # Resolve $ref chains to find all types that should be mentioned in labels
-    added = True
-    while added:
-        added = False
-        for dt_name, dt_def in model.data_types.items():
-            if dt_name in used_types:
-                if isinstance(dt_def, dict) and "$ref" in dt_def:
-                    ref_type = dt_def["$ref"]
-                    if ref_type not in used_types:
-                        used_types.add(ref_type)
-                        added = True
+    # Note: we don't add ref_type to used_types here because we only want to render
+    # nodes that are directly used as inputs or outputs.
 
     # 1. Define Data Type Nodes
-    for dt_name, dt_def in model.data_types.items():
+    # First, collect all potential node names from data_types and used_types
+    all_node_names = set(model.data_types.keys()) | used_types
+
+    for dt_name in all_node_names:
+        dt_def = model.data_types.get(dt_name, {})
         # Only render types that are directly used as inputs or outputs
-        is_directly_used = dt_name == "input"
-        for task in model.tasks:
-            if task.output == dt_name:
-                is_directly_used = True
-                break
-            for input_name, input_info in task.inputs.items():
-                if input_info.type == "context":
-                    if (input_info.name or input_info.value or input_name) == dt_name:
+        is_directly_used = dt_name == "input" or dt_name in used_types
+        if not is_directly_used:
+            for task in model.tasks:
+                if isinstance(task.output, str):
+                    if task.output == dt_name:
                         is_directly_used = True
                         break
-            if is_directly_used:
-                break
+                elif isinstance(task.output, dict):
+                    if dt_name == "output":
+                        is_directly_used = True
+                        break
+                    for out_info in task.output.values():
+                        if out_info.type == "context":
+                            source_id = (out_info.name or out_info.value or "").split(
+                                "."
+                            )[0]
+                            if source_id == dt_name:
+                                is_directly_used = True
+                                break
+                    if is_directly_used:
+                        break
+
+                for input_name, input_info in task.inputs.items():
+                    if input_info.type == "context":
+                        source_id = (
+                            input_info.name or input_info.value or input_name
+                        ).split(".")[0]
+                        if source_id == dt_name:
+                            is_directly_used = True
+                            break
+                if is_directly_used:
+                    break
 
         if not is_directly_used:
             continue
@@ -116,13 +145,24 @@ def generate_workflow_svg(
         # Edges: Inputs -> Task
         for input_name, input_info in task.inputs.items():
             if input_info.type == "context":
-                source_id = input_info.name or input_info.value or input_name
+                source_id = (input_info.name or input_info.value or input_name).split(
+                    "."
+                )[0]
                 if source_id in nodes:
                     edges.append(Edge(source=source_id, target=task_id))
 
         # Edges: Task -> Output
-        if task.output in nodes:
-            edges.append(Edge(source=task_id, target=task.output))
+        if isinstance(task.output, str):
+            if task.output in nodes:
+                edges.append(Edge(source=task_id, target=task.output))
+        elif isinstance(task.output, dict):
+            if "output" in nodes:
+                edges.append(Edge(source=task_id, target="output"))
+            for out_info in task.output.values():
+                if out_info.type == "context":
+                    source_id = (out_info.name or out_info.value or "").split(".")[0]
+                    if source_id in nodes:
+                        edges.append(Edge(source=source_id, target=task_id))
 
     # 3. Render using Graphviz
     dot = Digraph(name=model.name, comment=model.description)

@@ -183,3 +183,69 @@ def test_generate_workflow_svg_unreferenced_type():
         assert "input" in node_calls
         assert "output" in node_calls
         assert "Unused" not in node_calls
+
+
+def test_generate_workflow_svg_complex_paths():
+    model_data = {
+        "name": "Complex Workflow",
+        "data_types": {
+            "input": {
+                "properties": {"user": {"properties": {"name": {"type": "string"}}}}
+            },
+            "intermediate": {"properties": {"val": {"type": "integer"}}},
+            "output": {"properties": {"result": {"type": "string"}}},
+        },
+        "tasks": [
+            {
+                "name": "Task 1",
+                "inputs": {
+                    "user_name": {"value": "input.user.name", "type": "context"}
+                },
+                "output": "intermediate",
+                "tool": "get_val",
+            },
+            {
+                "name": "Task 2",
+                "inputs": {"data": {"value": "intermediate", "type": "context"}},
+                "output": {
+                    "result": {"value": "Task 1.output", "type": "context"},
+                    "final": {"value": "something.else", "type": "context"},
+                },
+            },
+        ],
+    }
+    model = WorkflowModel(**model_data)
+
+    with patch("kavalai.backoffice.svg.Digraph") as MockDigraph:
+        mock_dot = MockDigraph.return_value
+        generate_workflow_svg(model)
+
+        node_calls = {
+            call.args[0]: call.args[1] for call in mock_dot.node.call_args_list
+        }
+        # Data nodes
+        assert "input" in node_calls
+        assert "intermediate" in node_calls
+        assert "output" in node_calls  # Combine task implicitly uses "output" type
+        assert "something" in node_calls  # Referenced in task 2 output
+
+        # Edges
+        edge_sources = [call.args[0] for call in mock_dot.edge.call_args_list]
+        edge_targets = [call.args[1] for call in mock_dot.edge.call_args_list]
+
+        # Task 1: input -> Task 1, Task 1 -> intermediate
+        assert "input" in edge_sources
+        assert "task_Task_1" in edge_targets
+        assert "task_Task_1" in edge_sources
+        assert "intermediate" in edge_targets
+
+        # Task 2: intermediate -> Task 2, Task 2 -> output, Task 1 -> Task 2, something -> Task 2
+        assert "intermediate" in edge_sources
+        assert "task_Task_2" in edge_targets
+        assert "task_Task_2" in edge_sources
+        assert "output" in edge_targets
+        # Mapping context from other task
+        assert "Task 1" in edge_sources
+        assert "task_Task_2" in edge_targets
+        # Mapping context from unknown but added type
+        assert "something" in edge_sources
