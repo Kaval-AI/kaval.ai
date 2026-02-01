@@ -90,6 +90,9 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - **Frontend**: Angular (using modern built-in control flow: `@if`, `@for`).
 - **Database**: PostgreSQL (multiple schemas/databases).
 - **Workflows**: Defined in YAML, processed by `Workflow` class in `kavalai/agents/workflow.py`. Supports REST tools with basic auth via environment variables.
+- **Security & Quality**:
+    - Pre-commit hooks for code quality (`ruff`, `yamllint`, `pre-commit-hooks`).
+    - Security scanning with `bandit` (Python) and `gitleaks` (secrets).
 - **Project Isolation**: The backoffice manages multiple "projects". Each project can point to a different agent database.
 
 ## Workflow Execution
