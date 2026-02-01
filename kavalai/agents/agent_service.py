@@ -64,13 +64,11 @@ class AgentService:
                 "output_schema": output_schema,
                 "workflow": workflow,
             }
-            logger.info(f"UPDATES: {updates}")
             changed = False
             for field, value in updates.items():
                 if value is not None and getattr(agent, field) != value:
                     setattr(agent, field, value)
                     changed = True
-            logger.info(f"CHANGED: {changed}")
             if changed:
                 await self.db.commit()
                 await self.db.refresh(agent)

@@ -40,7 +40,7 @@ class TypeInputInfo(BaseModel):
 class Task(BaseModel):
     name: str
     inputs: dict[str, TypeInputInfo] = {}
-    output: str
+    output: str | dict[str, TypeInputInfo] = ""
     # LLM call
     prompt: Optional[str] = None
     use_history: bool = True
@@ -75,28 +75,44 @@ class RunContext(BaseModel):
     run_id: Optional[UUID] = None
     data: dict = {}
 
-    def prepare_tool_inputs(self, task: Task) -> dict | str:
+    def resolve_context_value(self, path: str):
+        """Resolve a dotted path like 'input.user_message' from context data."""
+        parts = path.split(".")
+        value = self.data.get(parts[0])
+        for part in parts[1:]:
+            if value is None:
+                return None
+            if isinstance(value, BaseModel):
+                # Try getting the field from Pydantic model
+                try:
+                    value = getattr(value, part)
+                except AttributeError:
+                    return None
+            elif isinstance(value, dict):
+                value = value.get(part)
+            else:
+                return None
+        return value
+
+    def resolve_input_info(self, info: TypeInputInfo, fallback_name: str = None):
+        """Resolve a TypeInputInfo to its actual value."""
+        if info.type == "literal":
+            return info.value
+        # For context type, use info.value (the path) or info.name or fallback
+        path = info.value or info.name or fallback_name
+        if path:
+            return self.resolve_context_value(str(path))
+        return None
+
+    def prepare_tool_inputs(self, task: Task) -> dict:
         inputs = {}
         for name, info in task.inputs.items():
-            if info.type == "literal":
-                val = info.value
-            else:
-                # Fallback to the key name if info.name is not explicitly provided
-                val = self.data.get(info.name or name)
-            inputs[name] = val
-
-        if len(inputs) == 1:
-            single_val = list(inputs.values())[0]
-            if isinstance(single_val, BaseModel):
-                return single_val.model_dump()
-            return single_val
-
-        pieces = []
-        for key, value in inputs.items():
+            value = self.resolve_input_info(info, fallback_name=name)
             if isinstance(value, BaseModel):
-                value = value.model_dump_json()
-            pieces.append(f"{key}:{value}")
-        return "\n".join(pieces)
+                value = value.model_dump()
+            inputs[name] = value
+
+        return inputs
 
 
 def make_prompt(prompt: str, input_data: dict) -> str:
@@ -160,27 +176,42 @@ class Workflow:
                     f"password_env defined, or neither."
                 )
 
+    def _get_root_context_name(self, info: TypeInputInfo, fallback: str) -> str:
+        """Extract the root context name from a TypeInputInfo (e.g., 'input' from 'input.user_message')."""
+        path = info.value or info.name or fallback
+        if path:
+            return str(path).split(".")[0]
+        return fallback
+
     def validate_workflow(self):
         available_data = {"input"}
         for task in self.workflow_model.tasks:
             # Check outputs
-            if task.output not in self.workflow_model.data_types:
-                raise WorkflowException(
-                    f"output '{task.output}' in task '{task.name}' is not defined in data_types."
-                )
+            if isinstance(task.output, str) and task.output:
+                if task.output not in self.workflow_model.data_types:
+                    raise WorkflowException(
+                        f"output '{task.output}' in task '{task.name}' is not defined in data_types."
+                    )
+            elif isinstance(task.output, dict):
+                # For combine task with dict output, we expect it to produce 'output' data type
+                if "output" not in self.workflow_model.data_types:
+                    raise WorkflowException(
+                        f"Task '{task.name}' has dict output but 'output' data type is not defined."
+                    )
 
             # Check inputs
             for input_name, input_info in task.inputs.items():
                 if input_info.type == "context":
-                    # If 'name' is provided, that's what we look for in available_data
-                    actual_input_name = input_info.name or input_name
-                    if actual_input_name not in available_data:
+                    root_name = self._get_root_context_name(input_info, input_name)
+                    if root_name not in available_data:
                         raise WorkflowException(
-                            f"input '{actual_input_name}' in task '{task.name}' is not available. "
+                            f"input '{root_name}' in task '{task.name}' is not available. "
                             f"Available context: {sorted(list(available_data))}"
                         )
+
             # After task success, its output is available for next tasks
-            available_data.add(task.output)
+            if isinstance(task.output, str) and task.output:
+                available_data.add(task.output)
 
     @classmethod
     def from_yaml_path(cls, yaml_path: str):
@@ -201,10 +232,7 @@ class Workflow:
     async def run_prompt(self, task: Task, run_context: RunContext):
         input_data = {}
         for name, info in task.inputs.items():
-            if info.type == "literal":
-                input_data[name] = info.value
-            else:
-                input_data[name] = run_context.data.get(info.name or name)
+            input_data[name] = run_context.resolve_input_info(info, fallback_name=name)
 
         input_text = make_prompt(task.prompt, input_data)
 
@@ -227,6 +255,7 @@ class Workflow:
         if session:
             session.add(stats)
 
+        logger.info(f"Setting {task.output} = {response}")
         run_context.data[task.output] = response
 
         # DB LOGGING: Record this prompt as a Task
@@ -260,14 +289,14 @@ class Workflow:
 
         async with httpx.AsyncClient(auth=auth) as client:
             kwargs = {
-                "params": inputs if isinstance(inputs, dict) else {},
+                "params": inputs,
                 "timeout": 60.0,
             }
             if task.method.lower() in ("post", "put", "patch"):
                 kwargs["json"] = inputs
                 if "params" in kwargs:
                     kwargs.pop("params")
-
+            logger.info(f"Calling {task.method.upper()} {rest_server.url}/{task.tool}")
             response = await client.request(
                 task.method.upper(),
                 f"{rest_server.url}/{task.tool}",
@@ -298,6 +327,30 @@ class Workflow:
                 inputs={"tool": task.tool, "arguments": inputs},
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
             )
+
+    def run_combine(self, task: Task, run_context: RunContext):
+        """Combine context values into an output dict (no LLM or tool call)."""
+        result = {}
+        if isinstance(task.output, dict):
+            for field_name, info in task.output.items():
+                result[field_name] = run_context.resolve_input_info(
+                    info, fallback_name=field_name
+                )
+
+            # Store as 'output' in context (standard output key for final result)
+            output_type = self.get_data_type("output")
+            model_instance = output_type(**result)
+            run_context.data["output"] = model_instance
+            logger.info(f"Combined output with fields: {list(result.keys())}")
+        elif isinstance(task.output, str):
+            # If output is a string, it means we are combining inputs into a named data type
+            for input_name, info in task.inputs.items():
+                result[input_name] = run_context.resolve_input_info(
+                    info, fallback_name=input_name
+                )
+            output_type = self.get_data_type(task.output)
+            run_context.data[task.output] = output_type(**result)
+            logger.info(f"Combined inputs into {task.output}")
 
     async def run(
         self,
@@ -355,9 +408,7 @@ class Workflow:
             elif task.tool:
                 await self.run_tool(task, run_context)
             else:
-                raise WorkflowException(
-                    f"Task {task.name} has no prompt or tool defined."
-                )
+                self.run_combine(task, run_context)
 
         # 4. Finalize and Log Response
         output_model = run_context.data.get("output")

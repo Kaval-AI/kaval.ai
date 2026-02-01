@@ -1,9 +1,10 @@
 """Tests for workflow.py REST server environment variable handling."""
 
-import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 
+import pytest
 from pydantic import BaseModel
+
 from kavalai.agents.workflow import (
     Workflow,
     WorkflowModel,
@@ -126,8 +127,9 @@ class TestRunToolMethod:
 
         assert captured_method == "POST"
         # For POST, it should use json
-        # Since only one input is given, it is passed straight
-        assert captured_json == run_context.data["input"]
+        # After changing prepare_tool_inputs to always return a dict,
+        # single inputs are now wrapped in a dict with the input name as key.
+        assert captured_json == {"query": run_context.data["input"]}
         # When params is popped, it's missing from kwargs in request call
         assert captured_params is None
 
@@ -191,8 +193,9 @@ class TestRunToolMethod:
             await workflow.run_tool(workflow.workflow_model.tasks[0], run_context)
 
         # Check that the Pydantic model was converted to a dict
-        # Since only one input is given, it is passed straight
-        assert captured_json == {"name": "test_value"}
+        # After changing prepare_tool_inputs to always return a dict,
+        # single inputs are now wrapped in a dict with the input name as key.
+        assert captured_json == {"input": {"name": "test_value"}}
         assert isinstance(captured_json, dict)
 
 
@@ -337,3 +340,88 @@ class TestRunToolAuth:
             await workflow.run_tool(task, run_context)
 
         assert captured_auth is None
+
+
+class TestWorkflowFeatures:
+    def test_resolve_context_value_nested(self):
+        from kavalai.agents.workflow import RunContext
+        from pydantic import BaseModel
+
+        class NestedModel(BaseModel):
+            field: str
+
+        class RootModel(BaseModel):
+            nested: NestedModel
+            value: int
+
+        data = {
+            "input": RootModel(nested=NestedModel(field="hello"), value=42),
+            "simple": {"key": "val"},
+        }
+        ctx = RunContext(data=data)
+
+        assert ctx.resolve_context_value("input.value") == 42
+        assert ctx.resolve_context_value("input.nested.field") == "hello"
+        assert ctx.resolve_context_value("simple.key") == "val"
+        assert ctx.resolve_context_value("nonexistent") is None
+        assert ctx.resolve_context_value("input.nonexistent") is None
+
+    @pytest.mark.asyncio
+    async def test_workflow_run_combine(self):
+        from kavalai.agents.workflow import Workflow
+
+        yaml_content = """
+name: Test Workflow
+data_types:
+  input:
+    type: object
+    properties:
+      msg: { type: string }
+  output:
+    type: object
+    properties:
+      final_msg: { type: string }
+tasks:
+  - name: Combine
+    output:
+      final_msg: { value: input.msg, type: context }
+"""
+        w = Workflow.from_yaml(yaml_content)
+        w.agent_service = None
+
+        result = await w.run({"msg": "hello"})
+        assert getattr(result.data, "final_msg") == "hello"
+
+    @pytest.mark.asyncio
+    async def test_workflow_run_combine_named_type(self):
+        from kavalai.agents.workflow import Workflow
+
+        yaml_content = """
+name: Test Workflow
+data_types:
+  input:
+    type: object
+    properties:
+      msg: { type: string }
+  intermediate:
+    type: object
+    properties:
+      text: { type: string }
+  output:
+    type: object
+    properties:
+      final_msg: { type: string }
+tasks:
+  - name: Combine Intermediate
+    inputs:
+      text: { value: input.msg, type: context }
+    output: intermediate
+  - name: Final Output
+    output:
+      final_msg: { value: intermediate.text, type: context }
+"""
+        w = Workflow.from_yaml(yaml_content)
+        w.agent_service = None
+
+        result = await w.run({"msg": "hello world"})
+        assert getattr(result.data, "final_msg") == "hello world"
