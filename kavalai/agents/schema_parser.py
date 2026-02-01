@@ -23,11 +23,28 @@ class SchemaParser:
         self.raw_schemas = datatypes
         self.models: Dict[str, Type[BaseModel]] = {}
 
-    def _json_type_to_python(self, prop_def: Dict[str, Any]) -> Tuple[Any, Any]:
+    def _json_type_to_python(
+        self, prop_def: Dict[str, Any], context: str = ""
+    ) -> Tuple[Any, Any]:
         """
         Maps JSON schema types to Python types and returns
         a tuple of (type, FieldInfo).
         """
+        allowed_keys = {
+            "type",
+            "items",
+            "properties",
+            "$ref",
+            "max_length",
+            "min_length",
+        }
+        for key in prop_def:
+            if key not in allowed_keys:
+                msg = f"Unknown attribute '{key}'"
+                if context:
+                    msg += f" in {context}"
+                raise ValueError(msg)
+
         type_map = {
             "string": str,
             "integer": int,
@@ -47,7 +64,9 @@ class SchemaParser:
 
         if json_type == "array":
             items_def = prop_def.get("items", {})
-            item_type, _ = self._json_type_to_python(items_def)
+            item_type, _ = self._json_type_to_python(
+                items_def, context=f"{context}.items"
+            )
             python_type = list[item_type]
         elif json_type == "object" and "properties" in prop_def:
             # Inline object definition, create a nested model
@@ -56,7 +75,7 @@ class SchemaParser:
             # Actually, the best way to handle inline objects is to give them a name.
             # For now, let's just create an anonymous model.
             nested_fields = {
-                k: self._json_type_to_python(v)
+                k: self._json_type_to_python(v, context=f"{context}.{k}")
                 for k, v in prop_def.get("properties", {}).items()
             }
             python_type = create_model(
@@ -91,6 +110,11 @@ class SchemaParser:
         if not schema:
             raise ValueError(f"Definition for '{type_name}' not found.")
 
+        allowed_keys = {"type", "properties", "$ref"}
+        for key in schema:
+            if key not in allowed_keys:
+                raise ValueError(f"Unknown attribute '{key}' in type '{type_name}'")
+
         # Handle top-level $ref
         if "$ref" in schema:
             ref_name = schema["$ref"]
@@ -109,7 +133,9 @@ class SchemaParser:
 
         for field_name, field_def in properties.items():
             # Now returns (type, FieldInfo)
-            fields[field_name] = self._json_type_to_python(field_def)
+            fields[field_name] = self._json_type_to_python(
+                field_def, context=f"property '{field_name}'"
+            )
 
         model = create_model(type_name, __config__=ConfigDict(extra="forbid"), **fields)
         self.models[type_name] = model
