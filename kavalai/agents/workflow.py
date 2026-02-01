@@ -246,7 +246,9 @@ class Workflow:
             for msg in history:
                 messages.append(dict(role=msg.role, content=msg.content))
 
-        llm_model = self.workflow_model.llm_model or self.env.str("DEFAULT_LLM_MODEL")
+        llm_model = self.workflow_model.llm_model or self.env.str(
+            "KAVALAI_DEFAULT_LLM_MODEL"
+        )
         response, stats = await chat_completions(
             model=llm_model,
             response_model=self.get_data_type(task.output),

@@ -139,7 +139,7 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
             all_messages = [{"role": "system", "content": system_message}] + history
 
             resp, stats = await chat_completions(
-                model=os.environ["DEFAULT_LLM_MODEL"],
+                model=os.environ["KAVALAI_DEFAULT_LLM_MODEL"],
                 response_model=PersonaResponse,
                 messages=all_messages,
             )

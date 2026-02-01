@@ -103,7 +103,7 @@ async def index_csv(
     replace: bool = False,
     batch_size: int = 10,
 ):
-    model = model if model else os.environ["DEFAULT_EMBEDDING_MODEL"]
+    model = model if model else os.environ["KAVALAI_DEFAULT_EMBEDDING_MODEL"]
     async_session = db_manager.get_sessionmaker(uri=os.environ["KAVALAI_DB_URI"])
     async with async_session() as session:
         # Upsert profile to DB to get ID
