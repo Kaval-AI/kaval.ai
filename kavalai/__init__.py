@@ -17,10 +17,7 @@ limitations under the License.
 import logging
 import os
 
-from dotenv import load_dotenv
 from rich.logging import RichHandler
-
-load_dotenv(verbose=True)
 
 FORMAT = "%(message)s"
 logging.basicConfig(

@@ -24,7 +24,6 @@ dependencies = [
     "json-schema-to-pydantic",
     "openai",
     "psycopg2-binary",
-    "python-dotenv",
     "rich",
     "sqlalchemy",
 ]
@@ -35,6 +34,7 @@ test = [
     "pytest-asyncio",
     "pytest-cov",
     "testcontainers[postgres]",
+    "python-dotenv",
     "pre-commit"
 ]
 
