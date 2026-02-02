@@ -19,7 +19,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `kavalai/`: Main Python package.
     - `agents/`: SDK and agent runtime logic.
         - `__init__.py`: Package initialization, defines `PACKAGE_PATH` and `MIGRATIONS_PATH`.
-        - `workflow.py`: Core workflow engine (YAML to execution). Supports case-insensitive (snake_case conversion) loading of tasks and workflow models from YAML. `RunContext.resolve_context_value` supports nested dotted paths (e.g., `input.criteria.keywords`). `RunContext.prepare_tool_inputs` always returns a dictionary of inputs, ensuring Pydantic models are dumped to dicts. Tasks without `prompt` or `tool` are "combine" tasks, merging inputs into the specified output. `Workflow.validate_workflow` ensures combine tasks have valid output definitions. REST servers use `username_env` and `password_env` for basic auth. Tasks can specify an HTTP `method` for REST tool calls.
+        - `workflow.py`: Core workflow engine (YAML to execution). Supports case-insensitive (snake_case conversion) loading of tasks and workflow models from YAML. `RunContext.resolve_context_value` supports nested dotted paths (e.g., `input.criteria.keywords`). `RunContext.prepare_tool_inputs` always returns a dictionary of inputs, ensuring Pydantic models are dumped to dicts. Tasks without `prompt` or `tool` are "combine" tasks, merging inputs into the specified output. `Workflow.validate_workflow` ensures combine tasks have valid output definitions. REST servers support `url_env` for configurable URLs and use `username_env` and `password_env` for basic auth. Tasks can specify an HTTP `method` for REST tool calls.
         - `server.py`: REST server for agents. Supports optional HTTP basic authentication. Logs masked database connection details (using `***`), basic auth configuration status, database pooling settings, and OpenAI service tier upon startup. Includes `mask_db_uri` for secure logging of database URIs. Added `/liveness` and `/health` endpoints for K8s probes; `/health` performs a database connectivity check.
         - `client.py`: Client for interacting with agent servers, handles schema discovery and session management. Now ensures HTTP basic auth is only used if both username and password are provided and non-empty.
         - `agent_service.py`: Service for managing agent state, sessions, runs, LLM profiles, and embedding profiles in the DB. `get_or_create_agent` updates existing agents if description, schemas or workflow changed. Now includes `total_cost` in LLM and embedding profile views.
@@ -89,7 +89,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - **Backend**: Python with FastAPI, SQLAlchemy (Async), Pydantic.
 - **Frontend**: Angular (using modern built-in control flow: `@if`, `@for`).
 - **Database**: PostgreSQL (multiple schemas/databases).
-- **Workflows**: Defined in YAML, processed by `Workflow` class in `kavalai/agents/workflow.py`. Supports REST tools with basic auth via environment variables.
+- **Workflows**: Defined in YAML, processed by `Workflow` class in `kavalai/agents/workflow.py`. Supports REST tools with configurable URLs and basic auth via environment variables.
 - **Security & Quality**:
     - Pre-commit hooks for code quality (`ruff`, `yamllint`, `pre-commit-hooks`).
     - Security scanning with `bandit` (Python) and `gitleaks` (secrets).

@@ -3,7 +3,7 @@
 from unittest.mock import patch, AsyncMock, MagicMock
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from kavalai.agents.workflow import (
     Workflow,
@@ -199,6 +199,22 @@ class TestRunToolMethod:
         assert isinstance(captured_json, dict)
 
 
+class TestRestServerModelValidation:
+    """Tests for RestServer Pydantic model validation."""
+
+    def test_rest_server_must_have_url_or_url_env(self):
+        with pytest.raises(ValidationError) as exc_info:
+            RestServer(name="test_server")
+        assert "Either 'url' or 'url_env' must be specified" in str(exc_info.value)
+
+    def test_rest_server_cannot_have_both_url_and_url_env(self):
+        with pytest.raises(ValidationError) as exc_info:
+            RestServer(
+                name="test_server", url="http://localhost:8000", url_env="TEST_URL_ENV"
+            )
+        assert "Only one of 'url' or 'url_env' can be specified" in str(exc_info.value)
+
+
 class TestRestServerEnvVarValidation:
     """Tests for REST server environment variable validation during workflow loading."""
 
@@ -208,6 +224,39 @@ class TestRestServerEnvVarValidation:
         workflow = Workflow(model)
         assert workflow is not None
         assert "test_server" in workflow.rest_servers
+
+    def test_workflow_loads_with_url_env(self, monkeypatch):
+        """Workflow should load and resolve URL from env when url_env is specified."""
+        monkeypatch.setenv("MY_REST_URL", "http://my-api.com")
+        # create_workflow_model_with_rest_server uses url by default
+        # We need to create a model where only url_env is specified
+        rest_servers = [RestServer(name="test_server", url_env="MY_REST_URL")]
+        model = create_workflow_model_with_rest_server()
+        model.rest_servers = rest_servers
+
+        workflow = Workflow(model)
+        assert workflow.rest_servers["test_server"].url == "http://my-api.com"
+
+    def test_workflow_raises_on_invalid_url(self):
+        """Workflow should raise exception when URL is invalid."""
+        model = create_workflow_model_with_rest_server()
+        model.rest_servers[0].url = "not-a-url"
+
+        with pytest.raises(WorkflowException) as exc_info:
+            Workflow(model)
+        assert "invalid URL" in str(exc_info.value)
+
+    def test_workflow_raises_on_missing_url_env(self, monkeypatch):
+        """Workflow should raise exception when url_env is not defined."""
+        monkeypatch.delenv("MY_REST_URL", raising=False)
+        rest_servers = [RestServer(name="test_server", url_env="MY_REST_URL")]
+        model = create_workflow_model_with_rest_server()
+        model.rest_servers = rest_servers
+
+        with pytest.raises(WorkflowException) as exc_info:
+            Workflow(model)
+        assert "MY_REST_URL" in str(exc_info.value)
+        assert "URL is not defined" in str(exc_info.value)
 
     def test_workflow_loads_with_valid_auth_env_vars(self, monkeypatch):
         """Workflow should load when both env vars are defined."""

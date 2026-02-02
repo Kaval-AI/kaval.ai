@@ -22,7 +22,7 @@ from uuid import UUID
 import httpx
 import yaml
 from environs import Env
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.schema_parser import SchemaParser
@@ -52,9 +52,22 @@ class Task(BaseModel):
 
 class RestServer(BaseModel):
     name: str
-    url: str
+    url: Optional[str] = None
+    url_env: Optional[str] = None
     username_env: Optional[str] = None
     password_env: Optional[str] = None
+
+    @model_validator(mode="after")
+    def check_url_configs(self) -> "RestServer":
+        if self.url and self.url_env:
+            raise ValueError(
+                f"REST server '{self.name}': Only one of 'url' or 'url_env' can be specified."
+            )
+        if not self.url and not self.url_env:
+            raise ValueError(
+                f"REST server '{self.name}': Either 'url' or 'url_env' must be specified."
+            )
+        return self
 
 
 class WorkflowModel(BaseModel):
@@ -158,6 +171,35 @@ class Workflow:
     def _validate_rest_server_env_vars(self):
         """Validate that environment variables for REST server auth are defined."""
         for server in self.workflow_model.rest_servers:
+            # 1. URL Configuration validation
+            if server.url and server.url_env:
+                raise WorkflowException(
+                    f"REST server '{server.name}': Only one of 'url' or 'url_env' can be specified."
+                )
+            if not server.url and not server.url_env:
+                raise WorkflowException(
+                    f"REST server '{server.name}': Either 'url' or 'url_env' must be specified."
+                )
+
+            # 2. URL Resolution from environment
+            if server.url_env:
+                if server.url_env not in os.environ:
+                    raise WorkflowException(
+                        f"Environment variable '{server.url_env}' for REST server "
+                        f"'{server.name}' URL is not defined."
+                    )
+                server.url = os.environ[server.url_env]
+
+            # 3. URL Format validation
+            if not server.url or not (
+                server.url.startswith("http://") or server.url.startswith("https://")
+            ):
+                raise WorkflowException(
+                    f"REST server '{server.name}' has an invalid URL: {server.url}. "
+                    f"It must start with http:// or https://"
+                )
+
+            # 4. Auth validation
             if server.username_env and server.password_env:
                 if server.username_env not in os.environ:
                     raise WorkflowException(
