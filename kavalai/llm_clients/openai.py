@@ -33,7 +33,7 @@ class OpenAIClient:
     ):
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.service_tier = service_tier
-        assert service_tier in ["standard", "priority", None]
+        assert service_tier in ["auto", "default", "flex", "priority", None]
 
     async def chat_completion(
         self,
@@ -92,9 +92,6 @@ class OpenAIClient:
             "model": model,
             **kwargs,
         }
-        if self.service_tier:
-            call_kwargs["service_tier"] = self.service_tier
-
         response = await self.client.embeddings.create(**call_kwargs)
         duration = time.perf_counter() - start_time
 

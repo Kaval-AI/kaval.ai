@@ -8,7 +8,7 @@ services:
       POSTGRES_DB: kavalai_dev
       PGDATA: /var/lib/postgresql/pgdata
     ports:
-      - "14000:5432"
+      - "6543:5432"
     volumes:
       - ./local_data/pgdata:/var/lib/postgresql/pgdata
     networks:

@@ -76,7 +76,7 @@ async def test_openai_compute_embeddings_with_service_tier():
 
     with patch.object(client.client.embeddings, "create", mock_create):
         await client.compute_embeddings(model="text-embedding-3-small", texts=["hi"])
-        assert mock_create.call_args.kwargs["service_tier"] == "priority"
+        assert "service_tier" not in mock_create.call_args.kwargs
 
 
 @pytest.mark.asyncio
