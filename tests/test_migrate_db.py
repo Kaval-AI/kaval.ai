@@ -162,3 +162,39 @@ def test_migrate_main_with_env_vars(db_config):
     count = cur.fetchone()[0]
     assert count > 0
     conn.close()
+
+
+def test_migrate_skip_create_schema(db_config):
+    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
+    schema = "skip_create_schema_schema"
+    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
+
+    # First, create schema manually but NOT the table
+    conn = psycopg2.connect(**db_config)
+    cur = conn.cursor()
+    cur.execute(f"CREATE SCHEMA {schema}")
+    conn.commit()
+    conn.close()
+
+    # Now run migrations with skip_create_schema=True
+    # It should work because schema already exists, and it should create the table
+    migrate(migrations_dir, uri, schema=schema, skip_create_schema=True)
+
+    # Verify migrations were applied and table was created
+    conn = psycopg2.connect(**db_config)
+    cur = conn.cursor()
+    cur.execute(f"SELECT count(*) FROM {schema}.kavalai_migrations")
+    count = cur.fetchone()[0]
+    assert count > 0
+    conn.close()
+
+
+def test_migrate_skip_create_schema_fails_if_schema_missing(db_config):
+    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
+    schema = "missing_schema"
+    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
+
+    # Running with skip_create_schema=True when schema doesn't exist should fail
+    # because it will try to set search_path or create table in non-existent schema
+    with pytest.raises(psycopg2.Error):
+        migrate(migrations_dir, uri, schema=schema, skip_create_schema=True)

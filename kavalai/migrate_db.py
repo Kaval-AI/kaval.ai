@@ -60,23 +60,27 @@ def get_migrations(migrations_dir: str) -> List[Tuple[str, str]]:
     ]
 
 
-def ensure_schema_and_table(cur, schema: str):
+def ensure_schema_and_table(cur, schema: str, skip_create_schema: bool = False):
     """Ensures the schema and the migration tracking table exist."""
-    cur.execute(
-        sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(schema))
-    )
+    if not skip_create_schema:
+        cur.execute(
+            sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(schema))
+        )
+
     # Set search_path to the target schema and public (for extensions)
     cur.execute(sql.SQL("SET search_path TO {}, public").format(sql.Identifier(schema)))
 
     # Create migrations table if it doesn't exist
-    cur.execute(f"""
+    cur.execute(
+        f"""
         CREATE TABLE IF NOT EXISTS {schema}.kavalai_migrations (
             id SERIAL PRIMARY KEY,
             filename TEXT UNIQUE NOT NULL,
             checksum TEXT NOT NULL,
             applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    """)
+    """
+    )
 
 
 def get_applied_migrations(cur, schema: str) -> dict:
@@ -102,6 +106,7 @@ def migrate(
     migrations_dir: str,
     uri: str,
     schema: str,
+    skip_create_schema: bool = False,
 ):
     logger.info(f"Connecting to database: {uri}")
 
@@ -140,7 +145,8 @@ def migrate(
         conn.autocommit = False
         cur = conn.cursor()
 
-        ensure_schema_and_table(cur, schema)
+        ensure_schema_and_table(cur, schema, skip_create_schema=skip_create_schema)
+
         applied_migrations = get_applied_migrations(cur, schema)
 
         migrations = get_migrations(migrations_dir)
@@ -187,6 +193,11 @@ def main():
     parser.add_argument(
         "type", choices=["app", "backoffice"], help="Type of migrations to run."
     )
+    parser.add_argument(
+        "--skip-create-schema",
+        action="store_true",
+        help="Don't create schema, just create tables and apply migrations.",
+    )
     args = parser.parse_args()
 
     if args.type == "backoffice":
@@ -200,7 +211,7 @@ def main():
     else:
         raise ValueError(f"Invalid migration type: {args.type}")
 
-    migrate(migrations_dir, uri, schema)
+    migrate(migrations_dir, uri, schema, skip_create_schema=args.skip_create_schema)
 
 
 if __name__ == "__main__":
