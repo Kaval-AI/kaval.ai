@@ -30,8 +30,9 @@ class OpenAIClient:
         api_key: str,
         base_url: Optional[str] = None,
         service_tier: Optional[str] = None,
+        timeout: float = 30.0,
     ):
-        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
         self.service_tier = service_tier
         assert service_tier in ["auto", "default", "flex", "priority", None]
 

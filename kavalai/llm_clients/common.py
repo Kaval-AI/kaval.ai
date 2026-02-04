@@ -88,14 +88,16 @@ def get_llm_client(
 
     Model parameter is a provider/model combo like openai/text-embedding-3-small
     """
+    timeout = float(os.environ.get("KAVALAI_LLM_TIMEOUT", 30.0))
     provider, model_name = model.split("/")
     if provider == "openai":
         return OpenAIClient(
             api_key=os.environ["OPENAI_API_KEY"],
             service_tier=os.environ.get("KAVALAI_OPENAI_SERVICE_TIER"),
+            timeout=timeout,
         )
     elif provider == "gemini":
-        return GeminiClient(api_key=os.environ["GEMINI_API_KEY"])
+        return GeminiClient(api_key=os.environ["GEMINI_API_KEY"], timeout=timeout)
     else:
         raise ValueError(f"Invalid provider: {provider}")
 

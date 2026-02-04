@@ -24,8 +24,8 @@ from kavalai.agents.db import ModelCallStat
 
 
 class GeminiClient:
-    def __init__(self, api_key: str):
-        self.client = genai.Client(api_key=api_key)
+    def __init__(self, api_key: str, timeout: float = 30.0):
+        self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout})
 
     async def chat_completion(
         self,

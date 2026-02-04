@@ -14,7 +14,6 @@ from kavalai.llm_clients.common import (
     with_retry,
     get_llm_client,
 )
-from kavalai.llm_clients.openai import OpenAIClient
 
 
 class MockResponse(BaseModel):
@@ -253,17 +252,33 @@ async def test_get_llm_client_invalid():
 @pytest.mark.asyncio
 async def test_get_llm_client_openai(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
-    client = get_llm_client("openai/gpt-4")
-    assert isinstance(client, OpenAIClient)
+    monkeypatch.setenv("KAVALAI_LLM_TIMEOUT", "45.0")
+    with patch("kavalai.llm_clients.openai.AsyncOpenAI") as mock_openai:
+        get_llm_client("openai/gpt-4")
+        mock_openai.assert_called_once()
+        assert mock_openai.call_args.kwargs["timeout"] == 45.0
 
 
 @pytest.mark.asyncio
 async def test_get_llm_client_gemini(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake")
+    monkeypatch.setenv("KAVALAI_LLM_TIMEOUT", "15.0")
     from kavalai.llm_clients.gemini import GeminiClient
 
-    client = get_llm_client("gemini/gemini-pro")
-    assert isinstance(client, GeminiClient)
+    with patch("google.genai.Client") as mock_gemini:
+        client = get_llm_client("gemini/gemini-pro")
+        assert isinstance(client, GeminiClient)
+        mock_gemini.assert_called_once()
+        assert mock_gemini.call_args.kwargs["http_options"]["timeout"] == 15.0
+
+
+@pytest.mark.asyncio
+async def test_get_llm_client_default_timeout(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.delenv("KAVALAI_LLM_TIMEOUT", raising=False)
+    with patch("kavalai.llm_clients.openai.AsyncOpenAI") as mock_openai:
+        get_llm_client("openai/gpt-4")
+        assert mock_openai.call_args.kwargs["timeout"] == 30.0
 
 
 @pytest.mark.asyncio
