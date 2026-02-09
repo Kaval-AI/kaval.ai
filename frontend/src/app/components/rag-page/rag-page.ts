@@ -33,7 +33,7 @@ export class RagPage implements OnInit {
   ragStats: RagStats | null = null;
 
   queryText: string = '';
-  selectedModel: string = 'text-embedding-3-small';
+  selectedModel: string = 'openai/text-embedding-3-small';
   collectionName: string = '';
   topK: number = 10;
 
