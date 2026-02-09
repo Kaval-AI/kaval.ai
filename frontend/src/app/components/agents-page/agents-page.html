@@ -49,16 +49,22 @@
             </div>
 
             <div class="schemas">
+              @if (selectedAgent.workflow) {
+                <div>
+                  <h5>Workflow JSON</h5>
+                  <app-json-tree [data]="selectedAgent.workflow" [isExpanded]="false"></app-json-tree>
+                </div>
+              }
               @if (selectedAgent.input_schema) {
                 <div>
                   <h5>Input Schema</h5>
-                  <app-json-tree [data]="selectedAgent.input_schema" [isExpanded]="true"></app-json-tree>
+                  <app-json-tree [data]="selectedAgent.input_schema" [isExpanded]="false"></app-json-tree>
                 </div>
               }
               @if (selectedAgent.output_schema) {
                 <div>
                   <h5>Output Schema</h5>
-                  <app-json-tree [data]="selectedAgent.output_schema" [isExpanded]="true"></app-json-tree>
+                  <app-json-tree [data]="selectedAgent.output_schema" [isExpanded]="false"></app-json-tree>
                 </div>
               }
             </div>
