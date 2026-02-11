@@ -127,6 +127,7 @@ def create_agent_app(
         description=workflow.workflow_model.description,
         version=workflow.workflow_model.version,
     )
+    app.state.workflow = workflow
 
     InputDataType = workflow.get_data_type("input")
     OutputDataType = workflow.get_data_type("output")
@@ -229,8 +230,18 @@ def mask_db_uri(db_uri: str) -> str:
     return db_uri
 
 
-def run_agent_server():
-    """Start the Kaval.AI agent server using environment configuration.
+def create_app_from_env_conf(
+    workflow_path: Optional[str] = None,
+    db_uri: Optional[str] = None,
+    db_schema: Optional[str] = None,
+    pool_size: Optional[int] = None,
+    max_overflow: Optional[int] = None,
+    sql_echo: Optional[bool] = None,
+    openai_service_tier: Optional[str] = None,
+) -> FastAPI:
+    """Create Kavalai server application from environment configuration.
+
+    Optional parameters can override the environment variables.
 
     The following environment variables are used:
     - KAVALAI_AGENT_WORKFLOW_PATH: Path to the workflow YAML file.
@@ -240,18 +251,36 @@ def run_agent_server():
     - KAVALAI_DB_MAX_OVERFLOW: Database connection pool max overflow (optional, default: 0).
     - KAVALAI_SQL_ECHO: Whether to log SQL queries (optional, default: False).
     - KAVALAI_OPENAI_SERVICE_TIER: The service tier to use for OpenAI API calls (optional, e.g. "priority").
-    - KAVALAI_AGENT_HOST: Host to bind the server to (optional, default: 0.0.0.0).
-    - KAVALAI_AGENT_PORT: Port to bind the server to (optional, default: 10000).
+
+    Args:
+        workflow_path: Path to the workflow YAML file.
+        db_uri: Database connection string.
+        db_schema: Database schema name.
+        pool_size: Database connection pool size.
+        max_overflow: Database connection pool max overflow.
+        sql_echo: Whether to log SQL queries.
+        openai_service_tier: The service tier to use for OpenAI API calls.
+
+    Returns:
+        A FastAPI application instance.
     """
-    workflow_path = env.str("KAVALAI_AGENT_WORKFLOW_PATH")
+    if workflow_path is None:
+        workflow_path = env.str("KAVALAI_AGENT_WORKFLOW_PATH")
+
     logger.info(f"Loading workflow from {workflow_path}.")
     workflow = Workflow.from_yaml_path(workflow_path)
 
     # Log database connection info
-    db_uri = env("KAVALAI_DB_URI")
-    db_schema = env("KAVALAI_DB_SCHEMA", "public")
-    pool_size = env.int("KAVALAI_DB_POOL_SIZE", 0)
-    max_overflow = env.int("KAVALAI_DB_MAX_OVERFLOW", 0)
+    if db_uri is None:
+        db_uri = env("KAVALAI_DB_URI")
+    if db_schema is None:
+        db_schema = env("KAVALAI_DB_SCHEMA", "public")
+    if pool_size is None:
+        pool_size = env.int("KAVALAI_DB_POOL_SIZE", 0)
+    if max_overflow is None:
+        max_overflow = env.int("KAVALAI_DB_MAX_OVERFLOW", 0)
+    if sql_echo is None:
+        sql_echo = env.bool("KAVALAI_SQL_ECHO", False)
 
     masked_uri = mask_db_uri(db_uri)
 
@@ -259,11 +288,14 @@ def run_agent_server():
     logger.info(f"Database Schema: {db_schema}")
     logger.info(f"Database Pool Size: {pool_size}")
     logger.info(f"Database Max Overflow: {max_overflow}")
+    logger.info(f"SQL Echo: {sql_echo}")
 
     # Log OpenAI service tier
-    service_tier = env.str("KAVALAI_OPENAI_SERVICE_TIER", "")
-    if service_tier:
-        logger.info(f"OpenAI Service Tier: {service_tier}")
+    if openai_service_tier is None:
+        openai_service_tier = env.str("KAVALAI_OPENAI_SERVICE_TIER", "")
+
+    if openai_service_tier:
+        logger.info(f"OpenAI Service Tier: {openai_service_tier}")
 
     # Log basic auth info
     auth_user = env.str("KAVALAI_AGENT_BASIC_AUTH_USER", "")
@@ -279,18 +311,22 @@ def run_agent_server():
     # Specify the connection to the KavalAI agent server.
     session_provider = db_manager.get_sessionmaker(
         uri=db_uri,
-        echo=env.bool("KAVALAI_SQL_ECHO", False),
+        echo=sql_echo,
         pool_size=pool_size,
         max_overflow=max_overflow,
     )
 
-    # Create FastAPI app.
-    app = create_agent_app(
+    return create_agent_app(
         workflow=workflow,
         session_provider=session_provider,
     )
 
-    logger.info(f"Starting agent <{workflow.workflow_model.name}>.")
+
+def run_agent_server():
+    """Start the Kaval.AI agent server using environment configuration."""
+    # Create FastAPI app.
+    app = create_app_from_env_conf()
+    logger.info(f"Starting agent <{app.state.workflow.workflow_model.name}>.")
     uvicorn.run(
         app,
         host=env.str("KAVALAI_AGENT_HOST", "0.0.0.0"),
