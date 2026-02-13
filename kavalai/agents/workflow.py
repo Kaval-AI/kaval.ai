@@ -26,6 +26,10 @@ from pydantic import BaseModel, model_validator
 
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.schema_parser import SchemaParser
+from kavalai.agents.workflow_validation import (
+    validate_rest_server_env_vars,
+    validate_workflow,
+)
 from kavalai.llm_clients.llm_client import chat_completions
 
 logger = logging.getLogger(__name__)
@@ -48,6 +52,8 @@ class Task(BaseModel):
     tool: Optional[str] = None
     rest_server: Optional[str] = None
     method: str = "get"
+    # Streaming
+    stream: bool = False
 
 
 class RestServer(BaseModel):
@@ -163,97 +169,10 @@ class Workflow:
             server.name: server for server in workflow_model.rest_servers
         }
         self.tasks = {task.name: task for task in workflow_model.tasks}
-        self.validate_workflow()
+        validate_workflow(self.workflow_model)
         self.env = Env()
         self.env.read_env()
-        self._validate_rest_server_env_vars()
-
-    def _validate_rest_server_env_vars(self):
-        """Validate that environment variables for REST server auth are defined."""
-        for server in self.workflow_model.rest_servers:
-            # 1. URL Configuration validation
-            if server.url and server.url_env:
-                raise WorkflowException(
-                    f"REST server '{server.name}': Only one of 'url' or 'url_env' can be specified."
-                )
-            if not server.url and not server.url_env:
-                raise WorkflowException(
-                    f"REST server '{server.name}': Either 'url' or 'url_env' must be specified."
-                )
-
-            # 2. URL Resolution from environment
-            if server.url_env:
-                if server.url_env not in os.environ:
-                    raise WorkflowException(
-                        f"Environment variable '{server.url_env}' for REST server "
-                        f"'{server.name}' URL is not defined."
-                    )
-                server.url = os.environ[server.url_env]
-
-            # 3. URL Format validation
-            if not server.url or not (
-                server.url.startswith("http://") or server.url.startswith("https://")
-            ):
-                raise WorkflowException(
-                    f"REST server '{server.name}' has an invalid URL: {server.url}. "
-                    f"It must start with http:// or https://"
-                )
-
-            # 4. Auth validation
-            if server.username_env and server.password_env:
-                if server.username_env not in os.environ:
-                    raise WorkflowException(
-                        f"Environment variable '{server.username_env}' for REST server "
-                        f"'{server.name}' username is not defined."
-                    )
-                if server.password_env not in os.environ:
-                    raise WorkflowException(
-                        f"Environment variable '{server.password_env}' for REST server "
-                        f"'{server.name}' password is not defined."
-                    )
-            elif server.username_env or server.password_env:
-                # Only one of them is defined - this is an error
-                raise WorkflowException(
-                    f"REST server '{server.name}' must have both username_env and "
-                    f"password_env defined, or neither."
-                )
-
-    def _get_root_context_name(self, info: TypeInputInfo, fallback: str) -> str:
-        """Extract the root context name from a TypeInputInfo (e.g., 'input' from 'input.user_message')."""
-        path = info.value or info.name or fallback
-        if path:
-            return str(path).split(".")[0]
-        return fallback
-
-    def validate_workflow(self):
-        available_data = {"input"}
-        for task in self.workflow_model.tasks:
-            # Check outputs
-            if isinstance(task.output, str) and task.output:
-                if task.output not in self.workflow_model.data_types:
-                    raise WorkflowException(
-                        f"output '{task.output}' in task '{task.name}' is not defined in data_types."
-                    )
-            elif isinstance(task.output, dict):
-                # For combine task with dict output, we expect it to produce 'output' data type
-                if "output" not in self.workflow_model.data_types:
-                    raise WorkflowException(
-                        f"Task '{task.name}' has dict output but 'output' data type is not defined."
-                    )
-
-            # Check inputs
-            for input_name, input_info in task.inputs.items():
-                if input_info.type == "context":
-                    root_name = self._get_root_context_name(input_info, input_name)
-                    if root_name not in available_data:
-                        raise WorkflowException(
-                            f"input '{root_name}' in task '{task.name}' is not available. "
-                            f"Available context: {sorted(list(available_data))}"
-                        )
-
-            # After task success, its output is available for next tasks
-            if isinstance(task.output, str) and task.output:
-                available_data.add(task.output)
+        validate_rest_server_env_vars(self.workflow_model)
 
     @classmethod
     def from_yaml_path(cls, yaml_path: str):
