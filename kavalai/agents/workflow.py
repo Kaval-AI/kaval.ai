@@ -349,6 +349,7 @@ class Workflow:
             response.raise_for_status()
             result_data = response.json()
 
+        # Convert result to output type
         output_type = self.get_data_type(task.output)
         if output_type:
             result = (

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import Any, Dict, Type, Tuple
+from typing import Any, Dict, Type, Tuple, Optional
 from pydantic import BaseModel, create_model, Field, ConfigDict
 
 
@@ -37,6 +37,8 @@ class SchemaParser:
             "$ref",
             "max_length",
             "min_length",
+            "required",
+            "default",
         }
         for key in prop_def:
             if key not in allowed_keys:
@@ -56,36 +58,40 @@ class SchemaParser:
 
         # Handle References
         if "$ref" in prop_def:
-            ref_name = prop_def["$ref"]
-            return self.parse_type(ref_name), ...
+            python_type = self.parse_type(prop_def["$ref"])
 
-        # Determine base type
-        json_type = prop_def.get("type", "string")
-
-        if json_type == "array":
-            items_def = prop_def.get("items", {})
-            item_type, _ = self._json_type_to_python(
-                items_def, context=f"{context}.items"
-            )
-            python_type = list[item_type]
-        elif json_type == "object" and "properties" in prop_def:
-            # Inline object definition, create a nested model
-            # We use a generic name or something derived from field name if we had it.
-            # But _json_type_to_python doesn't have field name.
-            # Actually, the best way to handle inline objects is to give them a name.
-            # For now, let's just create an anonymous model.
-            nested_fields = {
-                k: self._json_type_to_python(v, context=f"{context}.{k}")
-                for k, v in prop_def.get("properties", {}).items()
-            }
-            python_type = create_model(
-                "InlineModel", __config__=ConfigDict(extra="forbid"), **nested_fields
-            )
         else:
-            python_type = type_map.get(json_type, Any)
+            # Determine base type
+            json_type = prop_def.get("type", "string")
 
-        # Build Field constraints
+            if json_type == "array":
+                items_def = prop_def.get("items", {})
+                item_type, _ = self._json_type_to_python(
+                    items_def, context=f"{context}.items"
+                )
+                python_type = list[item_type]
+            elif json_type == "object" and "properties" in prop_def:
+                # Inline object definition, create a nested model
+                nested_fields = {
+                    k: self._json_type_to_python(v, context=f"{context}.{k}")
+                    for k, v in prop_def.get("properties", {}).items()
+                }
+                python_type = create_model(
+                    "InlineModel",
+                    __config__=ConfigDict(extra="forbid"),
+                    **nested_fields,
+                )
+            else:
+                python_type = type_map.get(json_type, Any)
+
+        # Build Field constraints and default value
         field_kwargs = {}
+        default_value = ...
+
+        is_required = prop_def.get("required", True)
+        if not is_required:
+            python_type = Optional[python_type]
+            default_value = prop_def.get("default", None)
 
         # Support maxLength -> max_length
         if "max_length" in prop_def:
@@ -95,11 +101,10 @@ class SchemaParser:
         if "min_length" in prop_def:
             field_kwargs["min_length"] = prop_def["min_length"]
 
-        # If we have constraints, return (type, Field(...)), else (type, ...)
         if field_kwargs:
-            return python_type, Field(**field_kwargs)
+            return python_type, Field(default=default_value, **field_kwargs)
 
-        return python_type, ...
+        return python_type, default_value
 
     def parse_type(self, type_name: str) -> Type[BaseModel]:
         """Recursively parses a schema definition into a Pydantic model."""

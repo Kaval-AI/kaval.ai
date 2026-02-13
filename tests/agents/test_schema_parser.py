@@ -80,3 +80,68 @@ def test_missing_ref_raises_error():
     parser = SchemaParser(datatypes)
     with pytest.raises(ValueError, match="Definition for 'NonExistent' not found"):
         parser.parse_all()
+
+
+def test_optional_fields():
+    """Test required: false makes a field optional."""
+    datatypes = {
+        "User": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string"},
+                "age": {"type": "integer", "required": False},
+                "email": {"type": "string", "required": False, "default": "n/a"},
+            },
+        }
+    }
+    parser = SchemaParser(datatypes)
+    models = parser.parse_all()
+
+    User = models["User"]
+
+    # age and email are optional
+    user1 = User(username="alice")
+    assert user1.username == "alice"
+    assert user1.age is None
+    assert user1.email == "n/a"
+
+    # username is still required
+    with pytest.raises(ValueError):
+        User(age=30)
+
+
+def test_required_default_is_true():
+    """Test that fields are required by default."""
+    datatypes = {
+        "User": {
+            "type": "object",
+            "properties": {"username": {"type": "string"}},
+        }
+    }
+    parser = SchemaParser(datatypes)
+    models = parser.parse_all()
+    User = models["User"]
+
+    with pytest.raises(ValueError):
+        User()
+
+
+def test_optional_ref():
+    """Test that a $ref can also be optional."""
+    datatypes = {
+        "Address": {"type": "object", "properties": {"city": {"type": "string"}}},
+        "User": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "address": {"$ref": "Address", "required": False},
+            },
+        },
+    }
+    parser = SchemaParser(datatypes)
+    models = parser.parse_all()
+    User = models["User"]
+
+    user = User(name="bob")
+    assert user.name == "bob"
+    assert user.address is None
