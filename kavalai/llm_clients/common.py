@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import io
 import math
 from typing import Any, List, Optional
 from pydantic import BaseModel
@@ -24,6 +25,24 @@ class StreamContent(BaseModel):
     type: str
     name: str
     value: str
+
+
+class Streamer:
+    def __init__(self, name: str, stream: io.StringIO):
+        self.name = name
+        self.stream = stream
+
+    def stream_partial(self, value: str):
+        self.stream.write(
+            StreamContent(type="partial", name=self.name, value=value).model_dump_json()
+            + "\n"
+        )
+
+    def stream_complete(self, value: str):
+        self.stream.write(
+            StreamContent(type="complete", name=self.name, value="").model_dump_json()
+            + "\n"
+        )
 
 
 def normalize_embeddings(embeddings: List[List[float]]) -> List[List[float]]:

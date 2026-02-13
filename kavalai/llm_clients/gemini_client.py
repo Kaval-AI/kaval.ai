@@ -24,7 +24,11 @@ from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
-from kavalai.llm_clients.common import create_model_call_stat, normalize_embeddings
+from kavalai.llm_clients.common import (
+    create_model_call_stat,
+    normalize_embeddings,
+    Streamer,
+)
 
 
 class GeminiClient:
@@ -36,7 +40,7 @@ class GeminiClient:
         model: str,
         messages: List[Dict[str, Any]],
         response_model: Type[BaseModel] = None,
-        response_stream: Optional[io.StringIO] = None,
+        streamer: Optional[Streamer] = None,
         **kwargs,
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
@@ -78,9 +82,11 @@ class GeminiClient:
             last_response = response
             if response.text:
                 buffer.write(response.text)
-                if response_stream is not None:
-                    response_stream.write(ensure_json(buffer.getvalue()))
-
+                if streamer is not None:
+                    streamer.stream_partial(ensure_json(buffer.getvalue()))
+        # Stream the final complete value.
+        if streamer is not None:
+            streamer.stream_complete(ensure_json(buffer.getvalue()))
         duration = time.perf_counter() - start_time
 
         content = response_model.model_validate_json(buffer.getvalue())

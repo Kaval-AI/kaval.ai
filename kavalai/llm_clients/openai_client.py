@@ -24,7 +24,11 @@ from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
-from kavalai.llm_clients.common import create_model_call_stat, normalize_embeddings
+from kavalai.llm_clients.common import (
+    create_model_call_stat,
+    normalize_embeddings,
+    Streamer,
+)
 
 
 class OpenAIClient:
@@ -44,7 +48,7 @@ class OpenAIClient:
         model: str,
         messages: List[Dict[str, Any]],
         response_model: Type[BaseModel],
-        response_stream: Optional[io.StringIO] = None,
+        streamer: Optional[Streamer] = None,
         **kwargs,
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
@@ -63,12 +67,15 @@ class OpenAIClient:
             async for chunk in stream:
                 if isinstance(chunk, ResponseTextDeltaEvent):
                     buffer.write(chunk.delta)
-                    if response_stream is not None:
-                        response_stream.write(ensure_json(buffer.getvalue()))
+                    if streamer is not None:
+                        streamer.stream_partial(ensure_json(buffer.getvalue()))
                 if isinstance(chunk, ResponseCompletedEvent):
                     usage = chunk.response.usage
                     input_tokens = usage.input_tokens
                     output_tokens = usage.output_tokens
+        # Stream the final complete value.
+        if streamer is not None:
+            streamer.stream_complete(ensure_json(buffer.getvalue()))
 
         result = response_model.model_validate_json(buffer.getvalue())
         duration = time.perf_counter() - start_time

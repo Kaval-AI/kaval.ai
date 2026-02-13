@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from openai import LengthFinishReasonError
 from openai.types.responses import ResponseTextDeltaEvent, ResponseCompletedEvent
 from kavalai.llm_clients.openai_client import OpenAIClient
+from kavalai.llm_clients.common import Streamer
 
 
 class SimpleResponse(BaseModel):
@@ -45,6 +46,7 @@ async def test_openai_chat_completions_streaming():
     mock_stream_manager.__aexit__ = AsyncMock(return_value=None)
 
     response_stream = io.StringIO()
+    streamer = Streamer(name="test", stream=response_stream)
 
     with patch.object(
         client.client.responses, "stream", return_value=mock_stream_manager
@@ -53,7 +55,7 @@ async def test_openai_chat_completions_streaming():
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": "hi"}],
             response_model=SimpleResponse,
-            response_stream=response_stream,
+            streamer=streamer,
         )
 
     assert isinstance(result, SimpleResponse)
@@ -64,12 +66,10 @@ async def test_openai_chat_completions_streaming():
     assert stats.total_tokens == 30
 
     # Check response_stream content. ensure_json is called on each delta.
-    # buffer.getvalue() evolves:
-    # 1. '{"answer": "He' -> ensure_json('{"answer": "He') -> '{"answer": "He"}'
-    # 2. '{"answer": "Hello", "confid' -> ensure_json(...) -> '{"answer": "Hello", "confid": null}' (approx)
-    # Actually, partial_json_parser.ensure_json(buffer.getvalue()) will be called 3 times.
     stream_out = response_stream.getvalue()
     assert len(stream_out) > 0
+    assert '"partial"' in stream_out
+    assert '"complete"' in stream_out
     assert "Hello" in stream_out
 
 
@@ -205,11 +205,12 @@ async def test_openai_structured_output_stream():
         }
     ]
     response_stream = io.StringIO()
+    streamer = Streamer(name="test", stream=response_stream)
     content, stats = await client.chat_completions(
         model="gpt-4o-mini",
         messages=messages,
         response_model=SimpleResponse,
-        response_stream=response_stream,
+        streamer=streamer,
     )
 
     assert isinstance(content, SimpleResponse)

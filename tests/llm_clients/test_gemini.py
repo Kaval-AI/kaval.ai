@@ -3,6 +3,7 @@ import pytest
 from pydantic import BaseModel
 from unittest.mock import AsyncMock, patch
 from kavalai.llm_clients.gemini_client import GeminiClient
+from kavalai.llm_clients.common import Streamer
 
 
 class SimpleResponse(BaseModel):
@@ -73,18 +74,21 @@ async def test_gemini_streaming():
 
         messages = [{"role": "user", "content": "What is 2+2?"}]
         response_stream = io.StringIO()
+        streamer = Streamer(name="test", stream=response_stream)
         content, stats = await client.chat_completions(
             model="gemini-2.0-flash",
             messages=messages,
             response_model=SimpleResponse,
-            response_stream=response_stream,
+            streamer=streamer,
         )
 
         assert isinstance(content, SimpleResponse)
         assert content.answer == "4"
         # ensure_json should make it valid JSON at each step
         stream_content = response_stream.getvalue()
-        assert '{"answer":' in stream_content
+        assert '"partial"' in stream_content
+        assert '"complete"' in stream_content
+        assert "4" in stream_content
         assert stats.total_tokens == 15
 
 
