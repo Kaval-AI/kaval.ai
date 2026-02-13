@@ -19,3 +19,4 @@ tasks:
         type: context
         value: input
     output: output
+    stream: true

@@ -83,3 +83,22 @@ class AgentClient:
 
         self.session_id = response_json.get("session_id")
         return self.output_schema(**response_json["data"])
+
+    async def stream_agent(self, data: BaseModel, external_id: Optional[str] = None):
+        if self.input_schema is None or self.output_schema is None:
+            await self.discover_schemas()
+
+        payload = {
+            "session_id": self.session_id,
+            "external_id": external_id,
+            "data": data.model_dump(),
+        }
+
+        url = f"{self.base_url}/stream_agent"
+
+        async with httpx.AsyncClient(auth=self.auth, timeout=self.timeout) as client:
+            async with client.stream("POST", url, json=payload) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line:
+                        yield line

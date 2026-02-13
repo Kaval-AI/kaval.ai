@@ -110,3 +110,36 @@ async def test_agent_client_auth_only_username():
 async def test_agent_client_auth_only_password():
     client = AgentClient("http://testserver", password="pass")
     assert client.auth is None
+
+
+@pytest.mark.asyncio
+async def test_agent_client_stream_agent():
+    client = AgentClient("http://testserver")
+
+    # Pre-set schemas to avoid discovery in this test
+    client.input_schema = MockInput
+    client.output_schema = MockOutput
+
+    lines = [
+        '{"type": "partial", "name": "output", "value": "{\\"agent_response\\": \\"Hello\\"}"}',
+        '{"type": "complete", "name": "output", "value": ""}',
+    ]
+
+    async def mock_aiter_lines(self):
+        for line in lines:
+            yield line
+
+    with patch("httpx.AsyncClient.stream") as mock_stream:
+        mock_resp = MagicMock()
+        mock_resp.aiter_lines = mock_aiter_lines.__get__(mock_resp)
+        mock_resp.raise_for_status = MagicMock()
+
+        # Mock context manager
+        mock_stream.return_value.__aenter__.return_value = mock_resp
+
+        data = MockInput(user_message="Hi")
+        received_lines = []
+        async for line in client.stream_agent(data):
+            received_lines.append(line)
+
+        assert received_lines == lines
