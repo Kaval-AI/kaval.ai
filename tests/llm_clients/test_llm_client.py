@@ -14,6 +14,8 @@ from kavalai.llm_clients.llm_client import (
     with_retry,
     get_llm_client,
 )
+from kavalai.llm_clients.common import Streamer
+import io
 
 
 class MockResponse(BaseModel):
@@ -161,6 +163,50 @@ async def test_chat_completions_with_stats(agents_db, monkeypatch):
     assert stats.cost is None
     assert stats.request_data["requests"][0]["arguments"]["messages"] == messages
     assert stats.response_data == {"id": "chat-123"}
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_streaming(agents_db, monkeypatch):
+    # Mock client
+    mock_client = AsyncMock()
+
+    # Mock response
+    mock_content = MockResponse(message="hello")
+    mock_stats = ModelCallStat(
+        call_type="llm",
+        model="openai/gpt-4o",
+        prompt_tokens=10,
+        completion_tokens=5,
+        total_tokens=15,
+        duration_seconds=0.5,
+        cost=None,
+        response_data={"id": "chat-123"},
+        response_code=200,
+    )
+    mock_client.chat_completions.return_value = (mock_content, mock_stats)
+
+    monkeypatch.setattr(
+        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
+    )
+
+    stream = io.StringIO()
+    streamer = Streamer(name="test", stream=stream)
+
+    messages = [{"role": "user", "content": "hi"}]
+
+    response, stats = await chat_completions(
+        model="openai/gpt-4o",
+        response_model=MockResponse,
+        messages=messages,
+        streamer=streamer,
+    )
+
+    assert response.message == "hello"
+    # Verify streamer was passed to mock_client.chat_completions
+    mock_client.chat_completions.assert_called_once()
+    args, kwargs = mock_client.chat_completions.call_args
+    assert kwargs["streamer"] == streamer
+    assert stats.request_data["requests"][0]["arguments"]["streamer"] == str(streamer)
 
 
 @pytest.mark.asyncio

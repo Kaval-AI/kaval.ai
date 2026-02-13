@@ -28,6 +28,7 @@ from google.genai import errors
 from kavalai.agents.db import ModelCallStat
 from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.openai_client import OpenAIClient
+from kavalai.llm_clients.common import Streamer
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,7 @@ async def chat_completions(
     model: str,
     response_model: type[BaseModel],
     messages: list[dict],
+    streamer: Streamer | None = None,
     **kwargs,
 ) -> tuple[Any, ModelCallStat]:
     """
@@ -130,6 +132,7 @@ async def chat_completions(
         model=model_name,
         messages=messages,
         response_model=response_model,
+        streamer=streamer,
         **kwargs,
     )
 
