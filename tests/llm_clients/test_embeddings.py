@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from kavalai.agents.db import ModelCallStat
-from kavalai.llm_clients.common import compute_embeddings
-from kavalai.llm_clients.gemini import GeminiClient
-from kavalai.llm_clients.openai import OpenAIClient
+from kavalai.llm_clients.llm_client import compute_embeddings
+from kavalai.llm_clients.gemini_client import GeminiClient
+from kavalai.llm_clients.openai_client import OpenAIClient
 
 
 @pytest.mark.asyncio

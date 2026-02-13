@@ -26,7 +26,7 @@ from pydantic import BaseModel, model_validator
 
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.schema_parser import SchemaParser
-from kavalai.llm_clients.common import chat_completions
+from kavalai.llm_clients.llm_client import chat_completions
 
 logger = logging.getLogger(__name__)
 

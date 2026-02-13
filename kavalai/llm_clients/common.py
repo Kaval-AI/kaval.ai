@@ -14,160 +14,58 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import logging
-import os
-import asyncio
-import random
-from datetime import datetime, timezone
-from typing import Any, Callable, TypeVar
-
+import math
+from typing import Any, List, Optional
 from pydantic import BaseModel
-import openai
-from google.genai import errors
-
 from kavalai.agents.db import ModelCallStat
-from kavalai.llm_clients.gemini import GeminiClient
-from kavalai.llm_clients.openai import OpenAIClient
-
-logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
 
 
-async def with_retry(
-    func: Callable[..., T],
-    *args,
-    max_retries: int = 5,
-    base_delay: float = 1.0,
-    max_delay: float = 60.0,
-    **kwargs,
-) -> T:
-    """
-    Exponential backoff retry wrapper for LLM client calls.
-    Retries only on specific OpenAI and Gemini exceptions.
-    """
-    retriable_exceptions = (
-        # OpenAI exceptions
-        openai.RateLimitError,
-        openai.InternalServerError,
-        openai.APIConnectionError,
-        openai.APITimeoutError,
-        openai.LengthFinishReasonError,
-        # Gemini exceptions
-        errors.ServerError,
-        errors.ClientError,
-    )
-
-    last_exception = None
-    for attempt in range(max_retries + 1):
-        try:
-            return await func(*args, **kwargs)
-        except retriable_exceptions as e:
-            last_exception = e
-            if attempt == max_retries:
-                break
-
-            delay = min(base_delay * (2**attempt) + random.uniform(0, 1), max_delay)
-            logger.warning(
-                f"LLM call failed with {type(e).__name__}: {e}. "
-                f"Retrying in {delay:.2f} seconds (attempt {attempt + 1}/{max_retries})..."
-            )
-            await asyncio.sleep(delay)
-        except Exception as e:
-            # Do not retry on other exceptions (programming errors, auth errors, etc.)
-            raise e
-
-    raise last_exception
+class StreamContent(BaseModel):
+    type: str
+    name: str
+    value: str
 
 
-def get_llm_client(
+def normalize_embeddings(embeddings: List[List[float]]) -> List[List[float]]:
+    normalized_embeddings = []
+    for emb in embeddings:
+        norm = math.sqrt(sum(x * x for x in emb))
+        if norm > 0:
+            normalized_embeddings.append([x / norm for x in emb])
+        else:
+            normalized_embeddings.append(emb)
+    return normalized_embeddings
+
+
+def create_model_call_stat(
+    call_type: str,
     model: str,
-) -> OpenAIClient | GeminiClient:
-    """
-    Factory function to get the appropriate LLM client.
+    duration: float,
+    prompt_tokens: Optional[int] = None,
+    completion_tokens: Optional[int] = None,
+    total_tokens: Optional[int] = None,
+    batch_size: Optional[int] = None,
+    response_code: int = 200,
+    response_data: Any = None,
+) -> ModelCallStat:
+    if (
+        total_tokens is None
+        and prompt_tokens is not None
+        and completion_tokens is not None
+    ):
+        total_tokens = prompt_tokens + completion_tokens
 
-    Model parameter is a provider/model combo like openai/text-embedding-3-small
-    """
-    timeout = float(os.environ.get("KAVALAI_LLM_TIMEOUT", 30.0))
-    provider, model_name = model.split("/")
-    if provider == "openai":
-        return OpenAIClient(
-            api_key=os.environ["OPENAI_API_KEY"],
-            service_tier=os.environ.get("KAVALAI_OPENAI_SERVICE_TIER"),
-            timeout=timeout,
-        )
-    elif provider == "gemini":
-        return GeminiClient(api_key=os.environ["GEMINI_API_KEY"], timeout=timeout)
-    else:
-        raise ValueError(f"Invalid provider: {provider}")
-
-
-async def chat_completions(
-    model: str,
-    response_model: type[BaseModel],
-    messages: list[dict],
-    **kwargs,
-) -> tuple[Any, ModelCallStat]:
-    """
-    Execute a chat completion with native clients and return result and stats.
-    """
-    client = get_llm_client(model)
-
-    # We want to keep track of the request for stats
-    request_info = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "arguments": {
-            "model": model,
-            "messages": messages,
-            "response_model": str(response_model),
-            **kwargs,
-        },
-    }
-    _, model_name = model.split("/")
-
-    content, stats = await with_retry(
-        client.chat_completions,
-        model=model_name,
-        messages=messages,
-        response_model=response_model,
-        **kwargs,
+    return ModelCallStat(
+        call_type=call_type,
+        model=model,
+        response_code=response_code,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        batch_size=batch_size,
+        duration_seconds=duration,
+        cost=None,  # We will compute cost later
+        response_data=response_data
+        if isinstance(response_data, (dict, list)) or response_data is None
+        else str(response_data),
     )
-
-    stats.request_data = {"requests": [request_info]}
-
-    return content, stats
-
-
-async def compute_embeddings(
-    model: str,
-    texts: list[str],
-    normalize: bool = False,
-    **kwargs,
-) -> tuple[list[list[float]], ModelCallStat]:
-    """
-    Compute embeddings for a list of texts and return embeddings and stats.
-    """
-    client = get_llm_client(model)
-
-    request_info = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "arguments": {
-            "model": model,
-            "texts_count": len(texts),
-            "normalize": normalize,
-            **kwargs,
-        },
-    }
-    _, model_name = model.split("/")
-
-    embeddings, stats = await with_retry(
-        client.compute_embeddings,
-        model=model_name,
-        texts=texts,
-        normalize=normalize,
-        **kwargs,
-    )
-
-    stats.request_data = request_info
-
-    return embeddings, stats

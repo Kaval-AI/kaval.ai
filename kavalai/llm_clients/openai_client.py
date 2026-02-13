@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import io
-import math
 import time
 from typing import Any, Dict, List, Optional, Type, Tuple
 
@@ -25,12 +24,7 @@ from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
-
-
-class StreamContent(BaseModel):
-    type: str
-    name: str
-    value: str
+from kavalai.llm_clients.common import create_model_call_stat, normalize_embeddings
 
 
 class OpenAIClient:
@@ -79,18 +73,15 @@ class OpenAIClient:
         result = response_model.model_validate_json(buffer.getvalue())
         duration = time.perf_counter() - start_time
 
-        stats = ModelCallStat(
+        stats = create_model_call_stat(
             call_type="llm",
             model=f"openai/{model}",
-            response_code=200,
+            duration=duration,
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
-            total_tokens=input_tokens + output_tokens,
-            duration_seconds=duration,
-            cost=None,  # We will compute cost later
             response_data=result.model_dump()
             if hasattr(result, "model_dump")
-            else str(result),
+            else result,
         )
         return result, stats
 
@@ -113,27 +104,19 @@ class OpenAIClient:
         embeddings = [data.embedding for data in response.data]
 
         if normalize:
-            normalized_embeddings = []
-            for emb in embeddings:
-                norm = math.sqrt(sum(x * x for x in emb))
-                if norm > 0:
-                    normalized_embeddings.append([x / norm for x in emb])
-                else:
-                    normalized_embeddings.append(emb)
-            embeddings = normalized_embeddings
+            embeddings = normalize_embeddings(embeddings)
 
         total_tokens = response.usage.total_tokens if response.usage else 0
 
-        stats = ModelCallStat(
+        stats = create_model_call_stat(
             call_type="embedding",
             model=f"openai/{model}",
-            response_code=200,
+            duration=duration,
             batch_size=len(texts),
             total_tokens=total_tokens,
-            duration_seconds=duration,
             response_data=response.model_dump()
             if hasattr(response, "model_dump")
-            else str(response),
+            else response,
         )
 
         return embeddings, stats

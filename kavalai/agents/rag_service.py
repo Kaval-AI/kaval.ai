@@ -24,7 +24,7 @@ from sqlalchemy import delete, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kavalai.agents.db import RagIndex, Agent, db_manager
-from kavalai.llm_clients.common import compute_embeddings
+from kavalai.llm_clients.llm_client import compute_embeddings
 
 logger = logging.getLogger(__name__)
 

@@ -33,7 +33,7 @@ from json_schema_to_pydantic import create_model
 from pydantic import BaseModel, Field, HttpUrl
 from rich.console import Console
 
-from kavalai.llm_clients.common import chat_completions
+from kavalai.llm_clients.llm_client import chat_completions
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
 
 logger = logging.getLogger(__name__)
