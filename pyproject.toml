@@ -23,6 +23,7 @@ dependencies = [
     "itsdangerous",
     "json-schema-to-pydantic",
     "openai",
+    "partial-json-parser",
     "psycopg2-binary",
     "rich",
     "sqlalchemy",
