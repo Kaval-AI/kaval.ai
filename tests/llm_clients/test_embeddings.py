@@ -89,7 +89,7 @@ async def test_gemini_compute_embeddings_mock():
 
 @pytest.mark.asyncio
 async def test_common_compute_embeddings_mock():
-    with patch("kavalai.llm_clients.common.get_llm_client") as mock_get_client:
+    with patch("kavalai.llm_clients.llm_client.get_llm_client") as mock_get_client:
         mock_client = AsyncMock()
         mock_stats = ModelCallStat(
             call_type="embedding",
@@ -135,7 +135,7 @@ async def test_openai_embeddings_integration():
 
 
 async def test_compute_embeddings_with_stats(agents_db):
-    with patch("kavalai.llm_clients.common.get_llm_client") as mock_get_client:
+    with patch("kavalai.llm_clients.llm_client.get_llm_client") as mock_get_client:
         mock_client = AsyncMock()
         mock_stats = ModelCallStat(
             call_type="embedding",

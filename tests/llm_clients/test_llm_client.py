@@ -142,7 +142,7 @@ async def test_chat_completions_with_stats(agents_db, monkeypatch):
     mock_client.chat_completions.return_value = (mock_content, mock_stats)
 
     monkeypatch.setattr(
-        "kavalai.llm_clients.common.get_llm_client", lambda _: mock_client
+        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
     )
 
     messages = [{"role": "user", "content": "hi"}]
@@ -169,7 +169,7 @@ async def test_chat_completions_error(agents_db, monkeypatch):
     mock_client.chat_completions.side_effect = Exception("API Error")
 
     monkeypatch.setattr(
-        "kavalai.llm_clients.common.get_llm_client", lambda _: mock_client
+        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
     )
 
     with pytest.raises(Exception, match="API Error"):
@@ -198,7 +198,7 @@ async def test_chat_completions_retry(agents_db, monkeypatch):
     ]
 
     monkeypatch.setattr(
-        "kavalai.llm_clients.common.get_llm_client", lambda _: mock_client
+        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
     )
 
     with patch("asyncio.sleep", return_value=None):
@@ -230,7 +230,7 @@ async def test_compute_embeddings_retry(agents_db, monkeypatch):
     ]
 
     monkeypatch.setattr(
-        "kavalai.llm_clients.common.get_llm_client", lambda _: mock_client
+        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
     )
 
     with patch("asyncio.sleep", return_value=None):
@@ -253,7 +253,7 @@ async def test_get_llm_client_invalid():
 async def test_get_llm_client_openai(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
     monkeypatch.setenv("KAVALAI_LLM_TIMEOUT", "45.0")
-    with patch("kavalai.llm_clients.openai.AsyncOpenAI") as mock_openai:
+    with patch("kavalai.llm_clients.openai_client.AsyncOpenAI") as mock_openai:
         get_llm_client("openai/gpt-4")
         mock_openai.assert_called_once()
         assert mock_openai.call_args.kwargs["timeout"] == 45.0
@@ -276,7 +276,7 @@ async def test_get_llm_client_gemini(monkeypatch):
 async def test_get_llm_client_default_timeout(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
     monkeypatch.delenv("KAVALAI_LLM_TIMEOUT", raising=False)
-    with patch("kavalai.llm_clients.openai.AsyncOpenAI") as mock_openai:
+    with patch("kavalai.llm_clients.openai_client.AsyncOpenAI") as mock_openai:
         get_llm_client("openai/gpt-4")
         assert mock_openai.call_args.kwargs["timeout"] == 30.0
 
