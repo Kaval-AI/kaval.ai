@@ -31,6 +31,8 @@ from kavalai.agents.workflow_validation import (
     validate_workflow,
 )
 from kavalai.llm_clients.llm_client import chat_completions
+from kavalai.llm_clients.common import Streamer
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +192,9 @@ class Workflow:
             raise KeyError(f"Data type '{name}' was not defined in YAML datatypes.")
         return self.models[name]
 
-    async def run_prompt(self, task: Task, run_context: RunContext):
+    async def run_prompt(
+        self, task: Task, run_context: RunContext, stream: io.StringIO
+    ):
         input_data = {}
         for name, info in task.inputs.items():
             input_data[name] = run_context.resolve_input_info(info, fallback_name=name)
@@ -210,10 +214,16 @@ class Workflow:
         llm_model = self.workflow_model.llm_model or self.env.str(
             "KAVALAI_DEFAULT_LLM_MODEL"
         )
+
+        streamer = None
+        if task.stream:
+            streamer = Streamer(task.output, stream)
+
         response, stats = await chat_completions(
             model=llm_model,
             response_model=self.get_data_type(task.output),
             messages=messages,
+            streamer=streamer,
         )
         if session:
             session.add(stats)
@@ -223,24 +233,17 @@ class Workflow:
 
         # DB LOGGING: Record this prompt as a Task
         if self.agent_service and run_context.run_id:
-            task_output = response
-            if isinstance(response, dict):
-                output_type = self.get_data_type(task.output)
-                if output_type:
-                    task_output = output_type(**response)
-                    run_context.data[task.output] = task_output
-
             await self.agent_service.add_task(
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
                 inputs={"prompt": input_text},
-                output=task_output.model_dump()
-                if isinstance(task_output, BaseModel)
-                else {"result": task_output},
+                output=response.model_dump()
+                if isinstance(response, BaseModel)
+                else {"result": response},
             )
 
-    async def run_tool(self, task: Task, run_context: RunContext):
+    async def run_tool(self, task: Task, run_context: RunContext, stream: io.StringIO):
         inputs = run_context.prepare_tool_inputs(task)
 
         rest_server = self.rest_servers[task.rest_server]
@@ -282,6 +285,16 @@ class Workflow:
         logger.info(f"Setting {task.output} = {debug_data}")
         run_context.data[task.output] = result
 
+        # Publish to stream
+        if task.stream and stream is not None:
+            streamer = Streamer(task.output, stream)
+            stream_value = (
+                result.model_dump_json()
+                if isinstance(result, BaseModel)
+                else str(result)
+            )
+            streamer.stream_complete(stream_value)
+
         # Store the tool run info.
         if self.agent_service and run_context.run_id:
             await self.agent_service.add_task(
@@ -321,6 +334,7 @@ class Workflow:
         input_data: dict,
         session_id: Optional[UUID] = None,
         external_id: Optional[str] = None,
+        stream: io.StringIO | None = None,
     ) -> WorkflowRunResult:
         # 1. Parse Input
         parsed_input = self.get_data_type("input")(**input_data)
@@ -368,9 +382,9 @@ class Workflow:
         for task in self.workflow_model.tasks:
             logger.info("Running task <%s>", task.name)
             if task.prompt:
-                await self.run_prompt(task, run_context)
+                await self.run_prompt(task, run_context, stream)
             elif task.tool:
-                await self.run_tool(task, run_context)
+                await self.run_tool(task, run_context, stream)
             else:
                 self.run_combine(task, run_context)
 

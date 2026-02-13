@@ -84,7 +84,7 @@ class TestRunToolMethod:
             task = workflow.workflow_model.tasks[0]
             run_context = RunContext()
             run_context.data["input"] = MagicMock()
-            await workflow.run_tool(task, run_context)
+            await workflow.run_tool(task, run_context, None)
 
         assert captured_method == "GET"
         assert captured_url == "http://localhost:8000/test_tool"
@@ -123,7 +123,7 @@ class TestRunToolMethod:
             task = workflow.workflow_model.tasks[0]
             run_context = RunContext()
             run_context.data["input"] = MagicMock()
-            await workflow.run_tool(task, run_context)
+            await workflow.run_tool(task, run_context, None)
 
         assert captured_method == "POST"
         # For POST, it should use json
@@ -190,7 +190,7 @@ class TestRunToolMethod:
         ):
             run_context = RunContext()
             run_context.data["input"] = TestModel(name="test_value")
-            await workflow.run_tool(workflow.workflow_model.tasks[0], run_context)
+            await workflow.run_tool(workflow.workflow_model.tasks[0], run_context, None)
 
         # Check that the Pydantic model was converted to a dict
         # After changing prepare_tool_inputs to always return a dict,
@@ -355,7 +355,7 @@ class TestRunToolAuth:
             task = workflow.workflow_model.tasks[0]
             run_context = RunContext()
             run_context.data["input"] = MagicMock()
-            await workflow.run_tool(task, run_context)
+            await workflow.run_tool(task, run_context, None)
 
         assert captured_auth == ("user123", "pass456")
 
@@ -386,7 +386,7 @@ class TestRunToolAuth:
             task = workflow.workflow_model.tasks[0]
             run_context = RunContext()
             run_context.data["input"] = MagicMock()
-            await workflow.run_tool(task, run_context)
+            await workflow.run_tool(task, run_context, None)
 
         assert captured_auth is None
 
