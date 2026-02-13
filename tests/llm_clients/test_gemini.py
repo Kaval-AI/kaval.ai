@@ -31,7 +31,7 @@ async def test_gemini_structured_output():
                 "content": "What is 2+2? Answer in JSON format with 'answer' and 'confidence' fields.",
             }
         ]
-        content, stats = await client.chat_completion(
+        content, stats = await client.chat_completions(
             model="gemini-2.0-flash", messages=messages, response_model=SimpleResponse
         )
 
@@ -59,7 +59,7 @@ async def test_gemini_structured_output_integration():
             "content": "What is 2+2? Answer in JSON format with 'answer' and 'confidence' fields.",
         }
     ]
-    content, stats = await client.chat_completion(
+    content, stats = await client.chat_completions(
         model="gemini-2.0-flash", messages=messages, response_model=SimpleResponse
     )
 

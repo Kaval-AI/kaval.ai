@@ -126,7 +126,7 @@ async def chat_completions(
     _, model_name = model.split("/")
 
     content, stats = await with_retry(
-        client.chat_completion,
+        client.chat_completions,
         model=model_name,
         messages=messages,
         response_model=response_model,

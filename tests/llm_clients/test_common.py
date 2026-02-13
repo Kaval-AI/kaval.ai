@@ -139,7 +139,7 @@ async def test_chat_completions_with_stats(agents_db, monkeypatch):
         response_data={"id": "chat-123"},
         response_code=200,
     )
-    mock_client.chat_completion.return_value = (mock_content, mock_stats)
+    mock_client.chat_completions.return_value = (mock_content, mock_stats)
 
     monkeypatch.setattr(
         "kavalai.llm_clients.common.get_llm_client", lambda _: mock_client
@@ -166,7 +166,7 @@ async def test_chat_completions_with_stats(agents_db, monkeypatch):
 @pytest.mark.asyncio
 async def test_chat_completions_error(agents_db, monkeypatch):
     mock_client = AsyncMock()
-    mock_client.chat_completion.side_effect = Exception("API Error")
+    mock_client.chat_completions.side_effect = Exception("API Error")
 
     monkeypatch.setattr(
         "kavalai.llm_clients.common.get_llm_client", lambda _: mock_client
@@ -183,7 +183,7 @@ async def test_chat_completions_error(agents_db, monkeypatch):
 @pytest.mark.asyncio
 async def test_chat_completions_retry(agents_db, monkeypatch):
     mock_client = AsyncMock()
-    mock_client.chat_completion.side_effect = [
+    mock_client.chat_completions.side_effect = [
         openai.RateLimitError("Rate limit exceeded", response=AsyncMock(), body={}),
         (
             MockResponse(message="success"),
@@ -209,7 +209,7 @@ async def test_chat_completions_retry(agents_db, monkeypatch):
         )
 
     assert response.message == "success"
-    assert mock_client.chat_completion.call_count == 2
+    assert mock_client.chat_completions.call_count == 2
 
 
 @pytest.mark.asyncio

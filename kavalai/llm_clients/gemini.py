@@ -27,7 +27,7 @@ class GeminiClient:
     def __init__(self, api_key: str, timeout: float = 30.0):
         self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout})
 
-    async def chat_completion(
+    async def chat_completions(
         self,
         model: str,
         messages: List[Dict[str, Any]],
