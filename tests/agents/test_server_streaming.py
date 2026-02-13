@@ -47,9 +47,9 @@ async def test_stream_agent_endpoint(monkeypatch, app):
         model, response_model, messages, streamer=None, **kwargs
     ):
         if streamer:
-            streamer.stream_partial('{"agent_response": "He')
-            streamer.stream_partial('{"agent_response": "Hello world"}')
-            streamer.stream_complete('{"agent_response": "Hello world"}')
+            await streamer.stream_partial('{"agent_response": "He')
+            await streamer.stream_partial('{"agent_response": "Hello world"}')
+            await streamer.stream_complete('{"agent_response": "Hello world"}')
 
         response = response_model(agent_response="Hello world")
         from kavalai.agents.db import ModelCallStat

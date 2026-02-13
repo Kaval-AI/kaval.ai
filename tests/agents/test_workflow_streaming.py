@@ -1,5 +1,5 @@
-import io
 import pytest
+import asyncio
 from pydantic import BaseModel
 from kavalai.agents.workflow import Workflow
 from kavalai.llm_clients.common import StreamContent
@@ -44,9 +44,9 @@ tasks:
     ):
         if streamer:
             # Simulate partial stream
-            streamer.stream_partial('{"agent_response": "He')
-            streamer.stream_partial('{"agent_response": "Hello world"}')
-            streamer.stream_complete('{"agent_response": "Hello world"}')
+            await streamer.stream_partial('{"agent_response": "He')
+            await streamer.stream_partial('{"agent_response": "Hello world"}')
+            await streamer.stream_complete('{"agent_response": "Hello world"}')
 
         response = response_model(agent_response="Hello world")
         stats = None  # Not needed for this test
@@ -57,13 +57,21 @@ tasks:
     )
 
     # 3. Run Workflow with stream
-    stream = io.StringIO()
+    queue = asyncio.Queue()
     input_data = {"user_message": "Junie"}
-    result = await workflow.run(input_data=input_data, stream=stream)
+    task = asyncio.create_task(workflow.run(input_data=input_data, queue=queue))
 
     # 4. Verify Stream Content
-    stream.seek(0)
-    lines = stream.readlines()
+    lines = []
+    while not task.done() or not queue.empty():
+        try:
+            line = await asyncio.wait_for(queue.get(), timeout=0.1)
+            lines.append(line)
+        except asyncio.TimeoutError:
+            continue
+
+    result = await task
+
     assert len(lines) == 3
 
     partial1 = StreamContent.model_validate_json(lines[0])
@@ -134,13 +142,22 @@ tasks:
     monkeypatch.setattr("httpx.AsyncClient.request", mock_request)
 
     # 3. Run Workflow with stream
-    stream = io.StringIO()
+    queue = asyncio.Queue()
     input_data = {"user_message": "Junie"}
-    result = await workflow.run(input_data=input_data, stream=stream)
+    task = asyncio.create_task(workflow.run(input_data=input_data, queue=queue))
 
     # 4. Verify Stream Content
-    stream.seek(0)
-    lines = stream.readlines()
+    lines = []
+    while not task.done() or not queue.empty():
+        try:
+            line = await asyncio.wait_for(queue.get(), timeout=0.1)
+            lines.append(line)
+        except asyncio.TimeoutError:
+            continue
+
+    result = await task
+
+    # 4. Verify Stream Content
     assert len(lines) >= 1
 
     complete = StreamContent.model_validate_json(lines[-1])

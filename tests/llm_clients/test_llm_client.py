@@ -15,7 +15,7 @@ from kavalai.llm_clients.llm_client import (
     get_llm_client,
 )
 from kavalai.llm_clients.common import Streamer
-import io
+import asyncio
 
 
 class MockResponse(BaseModel):
@@ -189,8 +189,8 @@ async def test_chat_completions_streaming(agents_db, monkeypatch):
         "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
     )
 
-    stream = io.StringIO()
-    streamer = Streamer(name="test", stream=stream)
+    queue = asyncio.Queue()
+    streamer = Streamer(name="test", queue=queue)
 
     messages = [{"role": "user", "content": "hi"}]
 

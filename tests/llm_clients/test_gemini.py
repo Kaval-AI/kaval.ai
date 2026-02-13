@@ -1,3 +1,4 @@
+import asyncio
 import os
 import pytest
 from pydantic import BaseModel
@@ -49,8 +50,6 @@ async def test_gemini_structured_output():
 
 @pytest.mark.asyncio
 async def test_gemini_streaming():
-    import io
-
     client = GeminiClient(api_key="fake-key")
 
     mock_response1 = AsyncMock()
@@ -73,8 +72,8 @@ async def test_gemini_streaming():
         mock_generate.return_value = mock_stream()
 
         messages = [{"role": "user", "content": "What is 2+2?"}]
-        response_stream = io.StringIO()
-        streamer = Streamer(name="test", stream=response_stream)
+        queue = asyncio.Queue()
+        streamer = Streamer(name="test", queue=queue)
         content, stats = await client.chat_completions(
             model="gemini-2.0-flash",
             messages=messages,
@@ -84,8 +83,11 @@ async def test_gemini_streaming():
 
         assert isinstance(content, SimpleResponse)
         assert content.answer == "4"
-        # ensure_json should make it valid JSON at each step
-        stream_content = response_stream.getvalue()
+
+        stream_content = ""
+        while not queue.empty():
+            stream_content += await queue.get() + "\n"
+
         assert '"partial"' in stream_content
         assert '"complete"' in stream_content
         assert "4" in stream_content

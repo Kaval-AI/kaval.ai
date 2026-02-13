@@ -32,7 +32,7 @@ from kavalai.agents.workflow_validation import (
 )
 from kavalai.llm_clients.llm_client import chat_completions
 from kavalai.llm_clients.common import Streamer
-import io
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +193,7 @@ class Workflow:
         return self.models[name]
 
     async def run_prompt(
-        self, task: Task, run_context: RunContext, stream: io.StringIO
+        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
     ):
         input_data = {}
         for name, info in task.inputs.items():
@@ -216,8 +216,8 @@ class Workflow:
         )
 
         streamer = None
-        if task.stream:
-            streamer = Streamer(task.output, stream)
+        if task.stream and queue is not None:
+            streamer = Streamer(task.output, queue)
 
         response, stats = await chat_completions(
             model=llm_model,
@@ -243,7 +243,9 @@ class Workflow:
                 else {"result": response},
             )
 
-    async def run_tool(self, task: Task, run_context: RunContext, stream: io.StringIO):
+    async def run_tool(
+        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
+    ):
         inputs = run_context.prepare_tool_inputs(task)
 
         rest_server = self.rest_servers[task.rest_server]
@@ -286,14 +288,14 @@ class Workflow:
         run_context.data[task.output] = result
 
         # Publish to stream
-        if task.stream and stream is not None:
-            streamer = Streamer(task.output, stream)
+        if task.stream and queue is not None:
+            streamer = Streamer(task.output, queue)
             stream_value = (
                 result.model_dump_json()
                 if isinstance(result, BaseModel)
                 else str(result)
             )
-            streamer.stream_complete(stream_value)
+            await streamer.stream_complete(stream_value)
 
         # Store the tool run info.
         if self.agent_service and run_context.run_id:
@@ -334,7 +336,7 @@ class Workflow:
         input_data: dict,
         session_id: Optional[UUID] = None,
         external_id: Optional[str] = None,
-        stream: io.StringIO | None = None,
+        queue: asyncio.Queue | None = None,
     ) -> WorkflowRunResult:
         # 1. Parse Input
         parsed_input = self.get_data_type("input")(**input_data)
@@ -382,9 +384,9 @@ class Workflow:
         for task in self.workflow_model.tasks:
             logger.info("Running task <%s>", task.name)
             if task.prompt:
-                await self.run_prompt(task, run_context, stream)
+                await self.run_prompt(task, run_context, queue)
             elif task.tool:
-                await self.run_tool(task, run_context, stream)
+                await self.run_tool(task, run_context, queue)
             else:
                 self.run_combine(task, run_context)
 

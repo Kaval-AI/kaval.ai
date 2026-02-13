@@ -83,10 +83,10 @@ class GeminiClient:
             if response.text:
                 buffer.write(response.text)
                 if streamer is not None:
-                    streamer.stream_partial(ensure_json(buffer.getvalue()))
+                    await streamer.stream_partial(ensure_json(buffer.getvalue()))
         # Stream the final complete value.
         if streamer is not None:
-            streamer.stream_complete(ensure_json(buffer.getvalue()))
+            await streamer.stream_complete(ensure_json(buffer.getvalue()))
         duration = time.perf_counter() - start_time
 
         content = response_model.model_validate_json(buffer.getvalue())

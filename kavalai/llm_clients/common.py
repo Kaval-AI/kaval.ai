@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import io
+import asyncio
 import math
 from typing import Any, List, Optional
 from pydantic import BaseModel
@@ -28,20 +28,18 @@ class StreamContent(BaseModel):
 
 
 class Streamer:
-    def __init__(self, name: str, stream: io.StringIO):
+    def __init__(self, name: str, queue: asyncio.Queue):
         self.name = name
-        self.stream = stream
+        self.queue = queue
 
-    def stream_partial(self, value: str):
-        self.stream.write(
+    async def stream_partial(self, value: str):
+        await self.queue.put(
             StreamContent(type="partial", name=self.name, value=value).model_dump_json()
-            + "\n"
         )
 
-    def stream_complete(self, value: str):
-        self.stream.write(
+    async def stream_complete(self, value: str):
+        await self.queue.put(
             StreamContent(type="complete", name=self.name, value="").model_dump_json()
-            + "\n"
         )
 
 

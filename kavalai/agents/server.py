@@ -16,7 +16,6 @@ limitations under the License.
 """
 
 import asyncio
-import io
 import logging
 import secrets
 from contextlib import asynccontextmanager
@@ -183,41 +182,30 @@ def create_agent_app(
         1. Validates authentication.
         2. Creates a database session.
         3. Initializes the AgentService.
-        4. Runs the workflow in the background while streaming results from an io.StringIO.
+        4. Runs the workflow in the background while streaming results from an asyncio.Queue.
         """
         validate_auth(credentials)
 
         async def generate():
             async with session_scope(session_provider) as session:
                 workflow.agent_service = AgentService(session)
-                stream = io.StringIO()
+                queue = asyncio.Queue()
                 # Start workflow in a background task
                 task = asyncio.create_task(
                     workflow.run(
                         input_data=input_data.data.model_dump(),
                         session_id=input_data.session_id,
                         external_id=input_data.external_id,
-                        stream=stream,
+                        queue=queue,
                     )
                 )
 
-                read_pos = 0
-                while not task.done():
-                    stream.seek(read_pos)
-                    line = stream.readline()
-                    if line:
-                        read_pos = stream.tell()
-                        yield line
-                    else:
-                        await asyncio.sleep(0.05)
-
-                # Final check for any remaining data in the stream
-                stream.seek(read_pos)
-                while True:
-                    line = stream.readline()
-                    if not line:
-                        break
-                    yield line
+                while not task.done() or not queue.empty():
+                    try:
+                        line = await asyncio.wait_for(queue.get(), timeout=0.01)
+                        yield line + "\n"
+                    except asyncio.TimeoutError:
+                        continue
 
                 # Check if the task raised an exception
                 await task

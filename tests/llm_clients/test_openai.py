@@ -1,4 +1,4 @@
-import io
+import asyncio
 import os
 
 import pytest
@@ -45,8 +45,8 @@ async def test_openai_chat_completions_streaming():
     mock_stream_manager.__aenter__.return_value = mock_stream
     mock_stream_manager.__aexit__ = AsyncMock(return_value=None)
 
-    response_stream = io.StringIO()
-    streamer = Streamer(name="test", stream=response_stream)
+    queue = asyncio.Queue()
+    streamer = Streamer(name="test", queue=queue)
 
     with patch.object(
         client.client.responses, "stream", return_value=mock_stream_manager
@@ -65,8 +65,11 @@ async def test_openai_chat_completions_streaming():
     assert stats.completion_tokens == 20
     assert stats.total_tokens == 30
 
-    # Check response_stream content. ensure_json is called on each delta.
-    stream_out = response_stream.getvalue()
+    # Check queue content.
+    stream_out = ""
+    while not queue.empty():
+        stream_out += await queue.get() + "\n"
+
     assert len(stream_out) > 0
     assert '"partial"' in stream_out
     assert '"complete"' in stream_out
@@ -204,8 +207,8 @@ async def test_openai_structured_output_stream():
             "content": "What is 2+2? Answer in JSON format with 'answer' and 'confidence' fields.",
         }
     ]
-    response_stream = io.StringIO()
-    streamer = Streamer(name="test", stream=response_stream)
+    queue = asyncio.Queue()
+    streamer = Streamer(name="test", queue=queue)
     content, stats = await client.chat_completions(
         model="gpt-4o-mini",
         messages=messages,
@@ -216,4 +219,4 @@ async def test_openai_structured_output_stream():
     assert isinstance(content, SimpleResponse)
     assert "4" in content.answer
     assert content.confidence >= 0.0
-    assert len(response_stream.getvalue()) > 0
+    assert not queue.empty()

@@ -122,6 +122,7 @@ async def chat_completions(
             "model": model,
             "messages": messages,
             "response_model": str(response_model),
+            "streamer": str(streamer) if streamer else None,
             **kwargs,
         },
     }

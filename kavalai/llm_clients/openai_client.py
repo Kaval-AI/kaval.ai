@@ -68,14 +68,14 @@ class OpenAIClient:
                 if isinstance(chunk, ResponseTextDeltaEvent):
                     buffer.write(chunk.delta)
                     if streamer is not None:
-                        streamer.stream_partial(ensure_json(buffer.getvalue()))
+                        await streamer.stream_partial(ensure_json(buffer.getvalue()))
                 if isinstance(chunk, ResponseCompletedEvent):
                     usage = chunk.response.usage
                     input_tokens = usage.input_tokens
                     output_tokens = usage.output_tokens
         # Stream the final complete value.
         if streamer is not None:
-            streamer.stream_complete(ensure_json(buffer.getvalue()))
+            await streamer.stream_complete(ensure_json(buffer.getvalue()))
 
         result = response_model.model_validate_json(buffer.getvalue())
         duration = time.perf_counter() - start_time
