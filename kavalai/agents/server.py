@@ -15,6 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import asyncio
+import io
 import logging
 import secrets
 from contextlib import asynccontextmanager
@@ -26,6 +28,7 @@ import uvicorn
 from environs import Env
 from fastapi import Depends
 from fastapi import HTTPException, status, FastAPI, Response
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -168,6 +171,58 @@ def create_agent_app(
                 external_id=input_data.external_id,
             )
             return OutputType(session_id=result.session_id, data=result.data)
+
+    @app.post("/stream_agent")
+    async def stream_agent(
+        input_data: InputType,
+        credentials: Annotated[Optional[HTTPBasicCredentials], Depends(security)],
+    ) -> StreamingResponse:
+        """Execute the agent workflow and stream the output.
+
+        This endpoint:
+        1. Validates authentication.
+        2. Creates a database session.
+        3. Initializes the AgentService.
+        4. Runs the workflow in the background while streaming results from an io.StringIO.
+        """
+        validate_auth(credentials)
+
+        async def generate():
+            async with session_scope(session_provider) as session:
+                workflow.agent_service = AgentService(session)
+                stream = io.StringIO()
+                # Start workflow in a background task
+                task = asyncio.create_task(
+                    workflow.run(
+                        input_data=input_data.data.model_dump(),
+                        session_id=input_data.session_id,
+                        external_id=input_data.external_id,
+                        stream=stream,
+                    )
+                )
+
+                read_pos = 0
+                while not task.done():
+                    stream.seek(read_pos)
+                    line = stream.readline()
+                    if line:
+                        read_pos = stream.tell()
+                        yield line
+                    else:
+                        await asyncio.sleep(0.05)
+
+                # Final check for any remaining data in the stream
+                stream.seek(read_pos)
+                while True:
+                    line = stream.readline()
+                    if not line:
+                        break
+                    yield line
+
+                # Check if the task raised an exception
+                await task
+
+        return StreamingResponse(generate(), media_type="application/x-ndjson")
 
     @app.get("/workflow", response_model=OutputType)
     async def get_workflow(
