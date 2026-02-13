@@ -1,11 +1,13 @@
+import io
 import os
 
 import pytest
 from pydantic import BaseModel
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from openai import LengthFinishReasonError
-from kavalai.llm_clients.openai import OpenAIClient
+from openai.types.responses import ResponseTextDeltaEvent, ResponseCompletedEvent
+from kavalai.llm_clients.openai_client import OpenAIClient
 
 
 class SimpleResponse(BaseModel):
@@ -14,50 +16,113 @@ class SimpleResponse(BaseModel):
 
 
 @pytest.mark.asyncio
+async def test_openai_chat_completions_streaming():
+    client = OpenAIClient(api_key="fake-key")
+
+    mock_stream = AsyncMock()
+
+    # Use MagicMock for chunks to avoid pydantic validation errors
+    chunk1 = MagicMock(spec=ResponseTextDeltaEvent)
+    chunk1.delta = '{"answer": "He'
+
+    chunk2 = MagicMock(spec=ResponseTextDeltaEvent)
+    chunk2.delta = 'llo", "confid'
+
+    chunk3 = MagicMock(spec=ResponseTextDeltaEvent)
+    chunk3.delta = 'ence": 1.0}'
+
+    chunk4 = MagicMock(spec=ResponseCompletedEvent)
+    chunk4.response = MagicMock()
+    chunk4.response.usage = MagicMock()
+    chunk4.response.usage.input_tokens = 10
+    chunk4.response.usage.output_tokens = 20
+
+    # Simulate a stream of chunks
+    mock_stream.__aiter__.return_value = [chunk1, chunk2, chunk3, chunk4]
+
+    mock_stream_manager = MagicMock()
+    mock_stream_manager.__aenter__.return_value = mock_stream
+    mock_stream_manager.__aexit__ = AsyncMock(return_value=None)
+
+    response_stream = io.StringIO()
+
+    with patch.object(
+        client.client.responses, "stream", return_value=mock_stream_manager
+    ) as _:
+        result, stats = await client.chat_completions(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "hi"}],
+            response_model=SimpleResponse,
+            response_stream=response_stream,
+        )
+
+    assert isinstance(result, SimpleResponse)
+    assert result.answer == "Hello"
+    assert result.confidence == 1.0
+    assert stats.prompt_tokens == 10
+    assert stats.completion_tokens == 20
+    assert stats.total_tokens == 30
+
+    # Check response_stream content. ensure_json is called on each delta.
+    # buffer.getvalue() evolves:
+    # 1. '{"answer": "He' -> ensure_json('{"answer": "He') -> '{"answer": "He"}'
+    # 2. '{"answer": "Hello", "confid' -> ensure_json(...) -> '{"answer": "Hello", "confid": null}' (approx)
+    # Actually, partial_json_parser.ensure_json(buffer.getvalue()) will be called 3 times.
+    stream_out = response_stream.getvalue()
+    assert len(stream_out) > 0
+    assert "Hello" in stream_out
+
+
+@pytest.mark.asyncio
 async def test_openai_chat_completion_no_retry_in_client():
     client = OpenAIClient(api_key="fake-key")
 
-    # Mock the openai client's parse method
-    mock_parse = AsyncMock()
+    mock_stream_manager = MagicMock()
+    mock_stream_manager.__aenter__.side_effect = LengthFinishReasonError(
+        completion=MagicMock()
+    )
 
-    # We need to simulate the openai.LengthFinishReasonError.
-    fake_completion = AsyncMock()
-    error = LengthFinishReasonError(completion=fake_completion)
-
-    mock_parse.side_effect = error
-
-    with patch.object(client.client.beta.chat.completions, "parse", mock_parse):
+    with patch.object(
+        client.client.responses, "stream", return_value=mock_stream_manager
+    ):
         with pytest.raises(LengthFinishReasonError):
-            await client.chat_completion(
+            await client.chat_completions(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": "hi"}],
                 response_model=SimpleResponse,
             )
-        assert mock_parse.call_count == 1
 
 
 @pytest.mark.asyncio
 async def test_openai_chat_completion_with_service_tier():
     client = OpenAIClient(api_key="fake-key", service_tier="priority")
-    mock_parse = AsyncMock()
 
-    mock_response = AsyncMock()
-    mock_response.choices = [AsyncMock()]
-    mock_response.choices[0].message.parsed = SimpleResponse(
-        answer="ok", confidence=1.0
-    )
-    mock_response.usage.total_tokens = 5
-    mock_response.model_dump.return_value = {}
+    mock_stream = AsyncMock()
 
-    mock_parse.return_value = mock_response
+    chunk1 = MagicMock(spec=ResponseTextDeltaEvent)
+    chunk1.delta = '{"answer": "ok", "confidence": 1.0}'
 
-    with patch.object(client.client.beta.chat.completions, "parse", mock_parse):
-        await client.chat_completion(
-            model="gpt-4",
+    chunk2 = MagicMock(spec=ResponseCompletedEvent)
+    chunk2.response = MagicMock()
+    chunk2.response.usage = MagicMock()
+    chunk2.response.usage.input_tokens = 5
+    chunk2.response.usage.output_tokens = 5
+
+    mock_stream.__aiter__.return_value = [chunk1, chunk2]
+
+    mock_stream_manager = MagicMock()
+    mock_stream_manager.__aenter__.return_value = mock_stream
+    mock_stream_manager.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(
+        client.client.responses, "stream", return_value=mock_stream_manager
+    ) as mock_stream_method:
+        await client.chat_completions(
+            model="gpt-4o",
             messages=[{"role": "user", "content": "hi"}],
             response_model=SimpleResponse,
         )
-        assert mock_parse.call_args.kwargs["service_tier"] == "priority"
+        assert mock_stream_method.call_args.kwargs["service_tier"] == "priority"
 
 
 @pytest.mark.asyncio
@@ -65,9 +130,9 @@ async def test_openai_compute_embeddings_with_service_tier():
     client = OpenAIClient(api_key="fake-key", service_tier="priority")
     mock_create = AsyncMock()
 
-    mock_data = AsyncMock()
+    mock_data = MagicMock()
     mock_data.embedding = [0.1]
-    mock_response = AsyncMock()
+    mock_response = MagicMock()
     mock_response.data = [mock_data]
     mock_response.usage.total_tokens = 5
     mock_response.model_dump.return_value = {}
@@ -84,9 +149,9 @@ async def test_openai_compute_embeddings():
     client = OpenAIClient(api_key="fake-key")
     mock_create = AsyncMock()
 
-    mock_data = AsyncMock()
+    mock_data = MagicMock()
     mock_data.embedding = [0.1, 0.2]
-    mock_response = AsyncMock()
+    mock_response = MagicMock()
     mock_response.data = [mock_data]
     mock_response.usage.total_tokens = 5
     mock_response.model_dump.return_value = {"fake": "resp"}
@@ -110,9 +175,9 @@ async def test_openai_compute_embeddings_zero_norm():
     client = OpenAIClient(api_key="fake-key")
     mock_create = AsyncMock()
 
-    mock_data = AsyncMock()
+    mock_data = MagicMock()
     mock_data.embedding = [0.0, 0.0]
-    mock_response = AsyncMock()
+    mock_response = MagicMock()
     mock_response.data = [mock_data]
     mock_response.usage.total_tokens = 0
     mock_response.model_dump.return_value = {}
@@ -129,7 +194,7 @@ async def test_openai_compute_embeddings_zero_norm():
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
-async def test_openai_structured_output():
+async def test_openai_structured_output_stream():
     api_key = os.getenv("OPENAI_API_KEY")
     client = OpenAIClient(api_key=api_key)
 
@@ -139,10 +204,15 @@ async def test_openai_structured_output():
             "content": "What is 2+2? Answer in JSON format with 'answer' and 'confidence' fields.",
         }
     ]
-    content, stats = await client.chat_completion(
-        model="gpt-4o-mini", messages=messages, response_model=SimpleResponse
+    response_stream = io.StringIO()
+    content, stats = await client.chat_completions(
+        model="gpt-4o-mini",
+        messages=messages,
+        response_model=SimpleResponse,
+        response_stream=response_stream,
     )
 
     assert isinstance(content, SimpleResponse)
     assert "4" in content.answer
     assert content.confidence >= 0.0
+    assert len(response_stream.getvalue()) > 0
