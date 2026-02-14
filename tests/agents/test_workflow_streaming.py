@@ -72,7 +72,7 @@ tasks:
 
     result = await task
 
-    assert len(lines) == 4
+    assert len(lines) == 3
 
     partial1 = StreamContent.model_validate_json(lines[0])
     assert partial1.type == "partial"
@@ -121,6 +121,7 @@ tasks:
         type: context
         value: input.user_message
     output: output
+    stream: true
 """
     workflow = Workflow.from_yaml(workflow_yaml)
 
@@ -162,9 +163,6 @@ tasks:
     complete = StreamContent.model_validate_json(lines[-1])
     assert complete.type == "complete"
     assert complete.name == "output"
-    assert (
-        complete.value
-        == '{"session_id":null,"data":{},"run_context":{"agent_id":null,"session_id":null,"run_id":null,"data":{"input":{"user_message":"Junie"},"output":{"agent_response":"Tool response"}}}}'
-    )
+    assert complete.value == '{"agent_response":"Tool response"}'
 
     assert result.data.agent_response == "Tool response"

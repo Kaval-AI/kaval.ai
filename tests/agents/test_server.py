@@ -233,6 +233,15 @@ async def test_stream_agent_endpoint(
 
         complete = json.loads(lines[2])
         assert complete["type"] == "complete"
+        assert complete["name"] == "output"
+
+        # Final output
+        final_output = json.loads(lines[3])
+        assert final_output["type"] == "complete"
+        assert final_output["name"] == "output"
+        final_value = json.loads(final_output["value"])
+        assert "session_id" in final_value
+        assert final_value["data"]["agent_response"] == "Hello world"
 
 
 # --- Logging Tests (from test_server_logging.py) ---

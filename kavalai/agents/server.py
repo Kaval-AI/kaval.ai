@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.db import db_manager
 from kavalai.agents.workflow import Workflow
+from kavalai.llm_clients.common import Streamer
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +200,6 @@ def create_agent_app(
                         queue=queue,
                     )
                 )
-
                 while not task.done() or not queue.empty():
                     try:
                         line = await asyncio.wait_for(queue.get(), timeout=0.01)
@@ -207,8 +207,18 @@ def create_agent_app(
                     except asyncio.TimeoutError:
                         continue
 
-                # Check if the task raised an exception
-                await task
+                # Check if the task raised an exception and get the result
+                result = await task
+
+                # Stream final output
+                output = OutputType(session_id=result.session_id, data=result.data)
+                streamer = Streamer("output", queue)
+                await streamer.stream_complete(output.model_dump_json())
+
+                # Yield any remaining items in the queue (including our final output)
+                while not queue.empty():
+                    line = await queue.get()
+                    yield line + "\n"
 
         return StreamingResponse(generate(), media_type="application/x-ndjson")
 
