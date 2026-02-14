@@ -2,42 +2,60 @@
 
 [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0)
 
-Kaval.AI is a Python SDK for writing AI agents like chatbots.
+Kaval.AI is a Python SDK for writing AI agents and workflow automation pipelines.
+It has a separate SDK and agent management software UI that provides various
+ways to analyze the agent's performance and manage its workflows.
 
-## Socrates chatbot example
+## News Summarizer agent example
 
-**socrates.yaml**
+**news_summarizer.yaml**
 ```yaml
-name: Socrates
-description: A chatbot that acts and talks like the philosopher Socrates.
+name: News Summarizer
+description: An agent that summarizes news from an RSS feed.
 llm_profile_name: openai
 data_types:
   input:
     type: object
     properties:
-      user_message:
-        type: string
+      rss_url: { type: string }
+  news_feed:
+    type: object
+    properties:
+      title: { type: string }
+      items:
+        type: array
+        items:
+          type: object
+          properties:
+            title: { type: string }
+            summary: { type: string }
   output:
     type: object
     properties:
-      agent_response:
-        type: string
+      agent_response: { type: string }
+rest_servers:
+  - name: rss_api
+    url: http://localhost:10001
 tasks:
-  - name: Compute the response
-    prompt: "You are Socrates, the ancient Greek philosopher."
+  - name: Fetch news
+    tool: /get_rss_feed
+    rest_server: rss_api
     inputs:
-      input:
-        type: context
-        value: input
+      url: { type: context, value: input.rss_url }
+    output: news_feed
+  - name: Summarize news
+    prompt: "Summarize the following news items into a concise report."
+    inputs:
+      news: { type: context, value: news_feed.items }
     output: output
 ```
 
-### Running the Chatbot Server
+### Running the Agent Server
 
-To run the Socrates chatbot server, ensure you have set the required environment variables. You can provide them in a `.env` file or directly in the shell:
+To run the news summarizer agent server, ensure you have set the required environment variables. You can provide them in a `.env` file or directly in the shell:
 
 ```bash
-export KAVALAI_AGENT_WORKFLOW_PATH=kavalai/demo_agents/socrates.yaml
+export KAVALAI_AGENT_WORKFLOW_PATH=news_summarizer.yaml
 export KAVALAI_DB_URI=postgresql://user:password@localhost:5432/dbname
 export KAVALAI_DB_SCHEMA=agents
 export KAVALAI_DB_POOL_SIZE=0
@@ -49,13 +67,42 @@ export OPENAI_API_KEY=your_api_key_here
 python -m kavalai.agents.server
 ```
 
-### Talking to the Chatbot via CLI
+### Talking to the Agent via CLI
 
-While the server is running, you can use the CLI chat tool to talk to Socrates:
+While the server is running, you can use the CLI chat tool to interact with the agent:
 
 ```bash
 python -m kavalai.tools.cli_chat --url http://localhost --port 10000 --user admin --password password
 ```
+
+### Agent Server Endpoints
+
+The agent server provides two primary endpoints for executing workflows:
+
+#### Synchronous: `/run_agent`
+Returns the final result of the entire workflow in a single JSON response once all tasks are complete.
+
+- **Use case:** Simple interactions where you only need the final output.
+- **Payload:**
+  ```json
+  {
+    "session_id": "...",
+    "data": { "agent_response": "..." }
+  }
+  ```
+
+#### Streaming: `/stream_agent`
+Returns a stream of [NDJSON](http://ndjson.org/) objects as the workflow executes. This allows for real-time updates, especially for long-running LLM prompts.
+
+- **Use case:** Chat interfaces and real-time applications where you want to show the agent's response as it's being generated.
+- **Payload (Stream):**
+  ```json
+  {"type": "partial", "name": "output", "value": "{\"agent_response\": \"The\"}"}
+  {"type": "partial", "name": "output", "value": "{\"agent_response\": \"The report\"}"}
+  {"type": "complete", "name": "output", "value": "{\"agent_response\": \"The report is ready.\"}"}
+  ```
+
+**Important:** The `stream: true` keyword in task definitions only has an effect when using the `/stream_agent` endpoint. If you use `/run_agent`, all tasks will execute to completion before the final response is sent.
 
 
 # Installation
@@ -152,6 +199,155 @@ KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD=password \
 OPENAI_API_KEY=your_api_key_here \
 python -m kavalai.agents.server
 ```
+
+## Kavalai agent YAML workflow tutorial
+
+Kaval.AI agents are defined using a YAML workflow.
+A workflow consists of `data_types` and a list of `tasks`.
+
+### Data types
+
+Kaval.AI uses JSON Schema-like definitions to define data types. These are used to validate inputs and outputs of the workflow and individual tasks.
+
+**Example:**
+```yaml
+data_types:
+  input:
+    type: object
+    properties:
+      rss_url: { type: string }
+  news_feed:
+    type: object
+    properties:
+      title: { type: string }
+      items:
+        type: array
+        items:
+          type: object
+          properties:
+            title: { type: string }
+            summary: { type: string }
+  output:
+    type: object
+    properties:
+      agent_response: { type: string }
+```
+
+Supported types include `string`, `integer`, `number`, `boolean`, `array`, and `object`.
+
+#### Using $ref for complex types
+
+You can use `$ref` to reference other data types defined in `data_types`. This is useful for building complex, nested data structures.
+
+**Example:**
+```yaml
+data_types:
+  news_item:
+    type: object
+    properties:
+      title: { type: string }
+      summary: { type: string }
+  news_feed:
+    type: object
+    properties:
+      title: { type: string }
+      items: { type: array, items: { $ref: news_item } }
+```
+
+### Tasks
+
+Tasks are the building blocks of a workflow. There are three main types of tasks: `prompt`, `run_tool`, and `combine`.
+
+#### Prompt (LLM call)
+A `prompt` task sends a message to an LLM.
+
+- `prompt`: The system message or instructions for the LLM.
+- `inputs`: Data from the context to be included in the prompt.
+- `output`: The name of the data type the LLM response should conform to.
+- `stream`: (Optional) Set to `true` to stream the response. **Note:** Streaming data is only available when using the `/stream_agent` endpoint.
+
+**Example:**
+```yaml
+  - name: Summarize news
+    prompt: "Summarize the following news items."
+    inputs:
+      news_items: { type: context, value: news_feed.items }
+    output: output
+    stream: true
+```
+
+#### Run Tool (REST call)
+A `run_tool` task calls an external REST API.
+
+- `tool`: The API endpoint path.
+- `rest_server`: The name of the REST server (defined in `rest_servers`).
+- `method`: HTTP method (e.g., `get`, `post`).
+- `inputs`: Parameters or body for the API call.
+- `output`: The data type the API response should be parsed into.
+
+**Example:**
+```yaml
+  - name: Fetch news
+    tool: /get_rss_feed
+    rest_server: rss_api
+    method: get
+    inputs:
+      url: { type: context, value: input.rss_url }
+    output: news_feed
+```
+
+#### Combine
+A `combine` task merges multiple context values into a single data type without calling an LLM or an external tool.
+
+**Basic Example:**
+Merging inputs into a named data type.
+```yaml
+  - name: Finalize news feed
+    inputs:
+      title: { type: literal, value: "Latest News" }
+      items: { type: context, value: fetch_task.items }
+    output: news_feed
+```
+
+**Special case for final output:**
+If the `output` of a `combine` task is a dictionary instead of a string, it maps inputs to the fields of the special `output` data type. This is the standard way to prepare the final response of the workflow.
+
+```yaml
+  - name: Finalize output
+    inputs:
+      agent_response: { type: context, value: summarization_task.text }
+    output:
+      agent_response: { type: context, value: summarization_task.text }
+```
+
+### REST Servers and Authentication
+
+You can define external REST servers in the `rest_servers` section. To avoid hardcoding sensitive information or environment-specific URLs, you can use environment variables.
+
+#### Configuration via Environment Variables
+
+- `url_env`: Environment variable name containing the base URL.
+- `username_env`: Environment variable name containing the username for Basic Auth.
+- `password_env`: Environment variable name containing the password for Basic Auth.
+
+**Example:**
+```yaml
+rest_servers:
+  - name: rss_api
+    url_env: RSS_API_URL
+    username_env: RSS_API_USER
+    password_env: RSS_API_PASSWORD
+```
+
+When using `url_env`, the SDK will look up the value of `RSS_API_URL` in your environment (e.g., in your `.env` file). If `username_env` and `password_env` are provided, the `run_tool` task will automatically use Basic Authentication.
+
+### Context and Inputs
+
+Inputs for tasks can be `literal` or `context` values. `context` values use a dotted path to reference data produced by previous tasks or the initial `input`.
+
+- `{ type: literal, value: "https://news.ycombinator.com/rss" }`
+- `{ type: context, value: news_feed.items }`
+
 
 ## Persona simulation
 
