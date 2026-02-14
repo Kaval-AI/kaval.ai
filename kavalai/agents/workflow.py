@@ -307,7 +307,9 @@ class Workflow:
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
             )
 
-    def run_combine(self, task: Task, run_context: RunContext):
+    async def run_combine(
+        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None = None
+    ):
         """Combine context values into an output dict (no LLM or tool call)."""
         result = {}
         if isinstance(task.output, dict):
@@ -315,12 +317,14 @@ class Workflow:
                 result[field_name] = run_context.resolve_input_info(
                     info, fallback_name=field_name
                 )
-
             # Store as 'output' in context (standard output key for final result)
             output_type = self.get_data_type("output")
             model_instance = output_type(**result)
             run_context.data["output"] = model_instance
             logger.info(f"Combined output with fields: {list(result.keys())}")
+            if task.stream and queue is not None:
+                streamer = Streamer("output", queue)
+                await streamer.stream_complete(model_instance.model_dump_json())
         elif isinstance(task.output, str):
             # If output is a string, it means we are combining inputs into a named data type
             for input_name, info in task.inputs.items():
@@ -329,6 +333,11 @@ class Workflow:
                 )
             output_type = self.get_data_type(task.output)
             run_context.data[task.output] = output_type(**result)
+            if task.stream and queue is not None:
+                streamer = Streamer(task.output, queue)
+                await streamer.stream_complete(
+                    run_context.data[task.output].model_dump_json()
+                )
             logger.info(f"Combined inputs into {task.output}")
 
     async def run(
@@ -388,7 +397,7 @@ class Workflow:
             elif task.tool:
                 await self.run_tool(task, run_context, queue)
             else:
-                self.run_combine(task, run_context)
+                await self.run_combine(task, run_context, queue)
 
         # 4. Finalize and Log Response
         output_model = run_context.data.get("output")

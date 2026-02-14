@@ -12,7 +12,18 @@ data_types:
       agent_response:
         type: string
         max_length: 300
+  echo_response:
+    type: object
+    properties:
+      echo_response: { type: string }
 tasks:
+  - name: Echo input
+    inputs:
+      echo_response:
+        value: input.user_message
+        type: context
+    output: echo_response
+    stream: true
   - name: Compute the response
     prompt: |
       You are Johnny Silverhand. You rock and are awesome!

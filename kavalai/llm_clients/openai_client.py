@@ -75,7 +75,7 @@ class OpenAIClient:
                     output_tokens = usage.output_tokens
         # Stream the final complete value.
         if streamer is not None:
-            await streamer.stream_complete(ensure_json(buffer.getvalue()))
+            await streamer.stream_complete(buffer.getvalue())
 
         result = response_model.model_validate_json(buffer.getvalue())
         duration = time.perf_counter() - start_time

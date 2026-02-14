@@ -39,7 +39,9 @@ class Streamer:
 
     async def stream_complete(self, value: str):
         await self.queue.put(
-            StreamContent(type="complete", name=self.name, value="").model_dump_json()
+            StreamContent(
+                type="complete", name=self.name, value=value
+            ).model_dump_json()
         )
 
 

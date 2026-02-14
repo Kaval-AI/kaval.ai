@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import asyncio
-import json
 import sys
 from argparse import ArgumentParser
 
@@ -23,7 +22,6 @@ from rich.console import Console
 from rich.prompt import Prompt
 
 from kavalai.agents.client import AgentClient
-from kavalai.llm_clients.common import StreamContent
 
 console = Console()
 
@@ -80,38 +78,8 @@ async def main():
             data = client.input_schema(user_message=user_input)
 
             console.print("[bold yellow]Agent:[/bold yellow] ", end="")
-            last_response = ""
             async for line in client.stream_agent(data):
-                try:
-                    stream_content = StreamContent.model_validate_json(line)
-                    if stream_content.type == "partial":
-                        try:
-                            # Try to parse as JSON to extract agent_response
-                            val_dict = json.loads(stream_content.value)
-                            if "agent_response" in val_dict:
-                                new_response = val_dict["agent_response"]
-                                if new_response.startswith(last_response):
-                                    diff = new_response[len(last_response) :]
-                                    console.print(diff, end="")
-                                    last_response = new_response
-                                else:
-                                    # If it doesn't start with last_response, it might be a new part or complete replacement
-                                    console.print(new_response, end="")
-                                    last_response = new_response
-                            elif not val_dict:
-                                # Skip empty JSON objects like {}
-                                pass
-                            else:
-                                console.print(stream_content.value, end="")
-                        except json.JSONDecodeError:
-                            # Not JSON, just print it
-                            console.print(stream_content.value, end="")
-                    elif stream_content.type == "complete":
-                        break
-                except Exception:
-                    # Ignore parsing errors for now
-                    pass
-            console.print()
+                console.print(line)
 
         except (KeyboardInterrupt, EOFError):
             break
