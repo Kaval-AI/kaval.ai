@@ -121,6 +121,11 @@ async def test_agent_client_stream_agent():
     client.output_schema = MockOutput
 
     lines = [
+        'data: {"type": "partial", "name": "output", "value": "{\\"agent_response\\": \\"Hello\\"}"}',
+        'data: {"type": "complete", "name": "output", "value": ""}',
+    ]
+
+    expected_lines = [
         '{"type": "partial", "name": "output", "value": "{\\"agent_response\\": \\"Hello\\"}"}',
         '{"type": "complete", "name": "output", "value": ""}',
     ]
@@ -142,4 +147,4 @@ async def test_agent_client_stream_agent():
         async for line in client.stream_agent(data):
             received_lines.append(line)
 
-        assert received_lines == lines
+        assert received_lines == expected_lines

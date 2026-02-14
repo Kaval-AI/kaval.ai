@@ -92,7 +92,7 @@ Returns the final result of the entire workflow in a single JSON response once a
   ```
 
 #### Streaming: `/stream_agent`
-Returns a stream of [NDJSON](http://ndjson.org/) objects as the workflow executes. This allows for real-time updates, especially for long-running LLM prompts.
+Returns a stream of Server-Sent Events (SSE) as the workflow executes. This allows for real-time updates, especially for long-running LLM prompts. Each event is a JSON object prefixed with `data: `.
 
 - **Use case:** Chat interfaces and real-time applications where you want to show the agent's response as it's being generated.
 - **Payload (Stream):**

@@ -183,7 +183,7 @@ def create_agent_app(
         1. Validates authentication.
         2. Creates a database session.
         3. Initializes the AgentService.
-        4. Runs the workflow in the background while streaming results in newline separate JSON format (application/x-ndjson).
+        4. Runs the workflow in the background while streaming results in Server-Sent Events (SSE) format (text/event-stream).
         """
         validate_auth(credentials)
 
@@ -203,7 +203,7 @@ def create_agent_app(
                 while not task.done() or not queue.empty():
                     try:
                         line = await asyncio.wait_for(queue.get(), timeout=0.01)
-                        yield line + "\n"
+                        yield f"data: {line}\n\n"
                     except asyncio.TimeoutError:
                         continue
 
@@ -218,9 +218,9 @@ def create_agent_app(
                 # Yield any remaining items in the queue (including our final output)
                 while not queue.empty():
                     line = await queue.get()
-                    yield line + "\n"
+                    yield f"data: {line}\n\n"
 
-        return StreamingResponse(generate(), media_type="application/x-ndjson")
+        return StreamingResponse(generate(), media_type="text/event-stream")
 
     @app.get("/workflow", response_model=OutputType)
     async def get_workflow(

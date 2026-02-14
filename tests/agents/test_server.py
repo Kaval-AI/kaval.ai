@@ -218,9 +218,11 @@ async def test_stream_agent_endpoint(
         response = await ac.post("/stream_agent", json=input_data)
 
         assert response.status_code == 200
-        assert response.headers["content-type"] == "application/x-ndjson"
+        assert response.headers["content-type"].startswith("text/event-stream")
 
-        lines = [line for line in response.text.split("\n") if line]
+        lines = [
+            line[6:] for line in response.text.split("\n") if line.startswith("data: ")
+        ]
         assert len(lines) == 4
 
         partial1 = json.loads(lines[0])
