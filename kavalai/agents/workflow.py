@@ -411,8 +411,12 @@ class Workflow:
                 content=agent_resp,
             )
 
-        return WorkflowRunResult(
+        workflow_result = WorkflowRunResult(
             session_id=run_context.session_id,
             data=output_model,
             run_context=run_context,
         )
+        if queue is not None:
+            streamer = Streamer("output", queue)
+            await streamer.stream_complete(workflow_result.model_dump_json())
+        return workflow_result

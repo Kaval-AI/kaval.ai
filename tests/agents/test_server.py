@@ -221,7 +221,7 @@ async def test_stream_agent_endpoint(
         assert response.headers["content-type"] == "application/x-ndjson"
 
         lines = [line for line in response.text.split("\n") if line]
-        assert len(lines) == 3
+        assert len(lines) == 4
 
         partial1 = json.loads(lines[0])
         assert partial1["type"] == "partial"
