@@ -183,7 +183,7 @@ def create_agent_app(
         1. Validates authentication.
         2. Creates a database session.
         3. Initializes the AgentService.
-        4. Runs the workflow in the background while streaming results from an asyncio.Queue.
+        4. Runs the workflow in the background while streaming results in newline separate JSON format (application/x-ndjson).
         """
         validate_auth(credentials)
 
