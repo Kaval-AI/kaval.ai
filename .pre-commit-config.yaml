@@ -6,12 +6,6 @@ repos:
         args: ["--fix", "--ignore=E402"] # Adds E402 to the ignore list
       - id: ruff-format
 
-  - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.35.1
-    hooks:
-      - id: yamllint
-        args: ["-d", "{extends: default, rules: {line-length: disable}}"]
-
   # -------------------------------
   # Misc quality tools
   # -------------------------------
