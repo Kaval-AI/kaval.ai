@@ -503,6 +503,7 @@ async def projects_rag_query(
     text = query_data.get("text")
     collection_name = query_data.get("collection_name")
     top_k = query_data.get("top_k", 5)
+    source_ids = query_data.get("source_ids")
 
     if not model or not text:
         raise HTTPException(status_code=400, detail="model and text are required")
@@ -519,7 +520,10 @@ async def projects_rag_query(
     async with project_session_maker() as project_session:
         rag_service = RagService(project_session, model)
         results = await rag_service.query(
-            text=text, top_k=top_k, collection_name=collection_name
+            text=text,
+            top_k=top_k,
+            collection_name=collection_name,
+            source_ids=source_ids,
         )
         return results
 

@@ -39,6 +39,11 @@
         </select>
       </div>
 
+      <div class="form-group col-source-ids">
+        <label for="sourceIds">Source IDs (comma separated)</label>
+        <input type="text" id="sourceIds" [(ngModel)]="sourceIdsInput" class="form-control" placeholder="id1, id2...">
+      </div>
+
       <div class="form-group col-topk">
         <label for="topK">Top K</label>
         <input type="number" id="topK" [(ngModel)]="topK" min="1" max="100" class="form-control">

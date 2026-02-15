@@ -57,6 +57,27 @@ describe('RagService', () => {
     req.flush(mockResults);
   });
 
+  it('should query RAG with source_ids', () => {
+    const mockResults: RagResult[] = [
+      { content: 'Result 1' } as RagResult
+    ];
+    const projectId = 'proj123';
+    const queryData = {
+      model: 'text-embedding-3-small',
+      text: 'query',
+      source_ids: ['id1', 'id2']
+    };
+
+    service.queryRag(projectId, queryData).subscribe(results => {
+      expect(results).toEqual(mockResults);
+    });
+
+    const req = httpMock.expectOne(`/api/projects/${projectId}/rag/query`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual(queryData);
+    req.flush(mockResults);
+  });
+
   it('should fetch RAG stats', () => {
     const mockStats: RagStats = { total_entries: 10, total_collections: 1, collections: ['default'] };
     const projectId = 'proj123';

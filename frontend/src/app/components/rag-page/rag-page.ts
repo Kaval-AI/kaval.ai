@@ -35,6 +35,7 @@ export class RagPage implements OnInit {
   queryText: string = '';
   selectedModel: string = 'openai/text-embedding-3-small';
   collectionName: string = '';
+  sourceIdsInput: string = '';
   topK: number = 10;
 
   loading: boolean = false;
@@ -72,11 +73,16 @@ export class RagPage implements OnInit {
 
     this.loading = true;
     this.error = null;
+    const sourceIds = this.sourceIdsInput
+      ? this.sourceIdsInput.split(',').map(id => id.trim()).filter(id => !!id)
+      : undefined;
+
     this.ragService.queryRag(this.projectId, {
       model: this.selectedModel,
       text: this.queryText,
       collection_name: this.collectionName || undefined,
-      top_k: this.topK
+      top_k: this.topK,
+      source_ids: sourceIds
     }).subscribe({
       next: (results) => {
         this.results = results;
