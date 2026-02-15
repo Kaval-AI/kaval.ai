@@ -22,6 +22,7 @@ from uuid import UUID
 from pydantic import BaseModel
 from sqlalchemy import delete, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from kavalai.agents.db import RagIndex, Agent, db_manager
 from kavalai.llm_clients.llm_client import compute_embeddings
@@ -239,11 +240,57 @@ class RagService:
             session.add(stats)
             query_embedding = embeddings[0]
 
-            # Using cosine distance <=> for pgvector
-            # Similarity = 1 - distance
-            distance_col = RagIndex.embedding.op("<=>")(query_embedding).label(
-                "distance"
+            stmt = self._build_query_stmt(
+                query_embedding=query_embedding,
+                top_k=top_k,
+                collection_name=collection_name,
+                source_ids=source_ids,
+                keep_best=keep_best,
             )
+
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            return [self._map_row_to_result(row[0], row[1]) for row in rows]
+
+    def _build_query_stmt(
+        self,
+        query_embedding: list[float],
+        top_k: int,
+        collection_name: Optional[str] = None,
+        source_ids: Optional[list[str]] = None,
+        keep_best: bool = False,
+    ):
+        """Build the SQLAlchemy statement for the RAG query."""
+        distance_col = RagIndex.embedding.op("<=>")(query_embedding).label("distance")
+
+        if keep_best:
+            # Use DISTINCT ON to get one row per source_id.
+            # We order by source_id, then distance, then id as a tie-breaker.
+            distinct_stmt = (
+                select(RagIndex, distance_col.label("distance"))
+                .distinct(RagIndex.source_id)
+                .where(RagIndex.model == self.model)
+            )
+
+            if collection_name:
+                distinct_stmt = distinct_stmt.where(
+                    RagIndex.collection_name == collection_name
+                )
+
+            if source_ids:
+                distinct_stmt = distinct_stmt.where(RagIndex.source_id.in_(source_ids))
+
+            distinct_stmt = distinct_stmt.order_by(
+                RagIndex.source_id, distance_col, RagIndex.id
+            )
+
+            sub = distinct_stmt.subquery()
+            # Select RagIndex columns from the subquery
+            stmt = select(aliased(RagIndex, sub), sub.c.distance).order_by(
+                sub.c.distance
+            )
+        else:
             stmt = select(RagIndex, distance_col).where(RagIndex.model == self.model)
 
             if collection_name:
@@ -252,59 +299,24 @@ class RagService:
             if source_ids:
                 stmt = stmt.where(RagIndex.source_id.in_(source_ids))
 
-            if keep_best:
-                # Define a subquery to find the minimum distance for each source_id
-                sub_stmt = (
-                    select(
-                        RagIndex.source_id,
-                        func.min(distance_col).label("min_distance"),
-                    )
-                    .where(RagIndex.model == self.model)
-                    .group_by(RagIndex.source_id)
-                )
+            stmt = stmt.order_by(distance_col)
 
-                if collection_name:
-                    sub_stmt = sub_stmt.where(
-                        RagIndex.collection_name == collection_name
-                    )
+        return stmt.limit(top_k)
 
-                if source_ids:
-                    sub_stmt = sub_stmt.where(RagIndex.source_id.in_(source_ids))
-
-                sub_stmt = sub_stmt.subquery()
-
-                # Join the main query with the subquery to keep only the best results per source_id
-                stmt = stmt.join(
-                    sub_stmt,
-                    (RagIndex.source_id == sub_stmt.c.source_id)
-                    & (distance_col == sub_stmt.c.min_distance),
-                )
-
-            stmt = stmt.order_by(distance_col).limit(top_k)
-
-            result = await session.execute(stmt)
-            rows = result.all()
-
-            results = []
-            for row in rows:
-                item = row[0]
-                distance = row[1]
-                # Convert RagIndex object to RagServiceResult and add similarity
-                res = RagServiceResult(
-                    id=item.id,
-                    model=item.model,
-                    collection_name=item.collection_name,
-                    source_id=item.source_id,
-                    content=item.content,
-                    embedding_size=item.embedding_size,
-                    rag_metadata=item.rag_metadata or {},
-                    similarity=1.0 - float(distance) if distance is not None else 0.0,
-                    created_at=item.created_at,
-                    updated_at=item.updated_at,
-                )
-                results.append(res)
-
-            return results
+    def _map_row_to_result(self, item: RagIndex, distance: float) -> RagServiceResult:
+        """Map a database row to a RagServiceResult."""
+        return RagServiceResult(
+            id=item.id,
+            model=item.model,
+            collection_name=item.collection_name,
+            source_id=item.source_id,
+            content=item.content,
+            embedding_size=item.embedding_size,
+            rag_metadata=item.rag_metadata or {},
+            similarity=1.0 - float(distance) if distance is not None else 0.0,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+        )
 
     async def compute_similarity_matrix(
         self,
@@ -339,41 +351,58 @@ class RagService:
             )
             session.add(stats)
 
-            agg_func = func.min if method == "min" else func.avg
-
-            # Construct a single query with one column per text embedding
-            cols = [RagIndex.source_id]
-            for i, emb in enumerate(embeddings):
-                distance_col = RagIndex.embedding.op("<=>")(emb)
-                cols.append(agg_func(distance_col).label(f"dist_{i}"))
-
-            stmt = (
-                select(*cols)
-                .where(
-                    RagIndex.model == self.model,
-                    RagIndex.source_id.in_(source_ids),
-                )
-                .group_by(RagIndex.source_id)
-            )
-
+            stmt = self._build_similarity_matrix_stmt(embeddings, source_ids, method)
             result = await session.execute(stmt)
             rows = result.all()
 
-            # Map source_id to index for quick lookup
-            source_id_to_idx = {sid: i for i, sid in enumerate(source_ids)}
-            # Initialize matrix with 0.0
-            matrix = [[0.0 for _ in range(len(source_ids))] for _ in range(len(texts))]
+            return self._process_similarity_matrix_rows(rows, texts, source_ids)
 
-            for row in rows:
-                sid = row.source_id
-                if sid in source_id_to_idx:
-                    s_idx = source_id_to_idx[sid]
-                    for t_idx in range(len(texts)):
-                        # Retrieve distance from the dynamically named column
-                        dist = getattr(row, f"dist_{t_idx}")
-                        # Similarity = 1 - Distance
-                        matrix[t_idx][s_idx] = (
-                            1.0 - float(dist) if dist is not None else 0.0
-                        )
+    def _build_similarity_matrix_stmt(
+        self,
+        embeddings: list[list[float]],
+        source_ids: list[str],
+        method: str,
+    ):
+        """Build the SQLAlchemy statement for similarity matrix computation."""
+        agg_func = func.min if method == "min" else func.avg
 
-            return matrix
+        # Construct a single query with one column per text embedding
+        cols = [RagIndex.source_id]
+        for i, emb in enumerate(embeddings):
+            distance_col = RagIndex.embedding.op("<=>")(emb)
+            cols.append(agg_func(distance_col).label(f"dist_{i}"))
+
+        return (
+            select(*cols)
+            .where(
+                RagIndex.model == self.model,
+                RagIndex.source_id.in_(source_ids),
+            )
+            .group_by(RagIndex.source_id)
+        )
+
+    def _process_similarity_matrix_rows(
+        self,
+        rows: list,
+        texts: list[str],
+        source_ids: list[str],
+    ) -> list[list[float]]:
+        """Process database rows into a similarity matrix."""
+        # Map source_id to index for quick lookup
+        source_id_to_idx = {sid: i for i, sid in enumerate(source_ids)}
+        # Initialize matrix with 0.0
+        matrix = [[0.0 for _ in range(len(source_ids))] for _ in range(len(texts))]
+
+        for row in rows:
+            sid = row.source_id
+            if sid in source_id_to_idx:
+                s_idx = source_id_to_idx[sid]
+                for t_idx in range(len(texts)):
+                    # Retrieve distance from the dynamically named column
+                    dist = getattr(row, f"dist_{t_idx}")
+                    # Similarity = 1 - Distance
+                    matrix[t_idx][s_idx] = (
+                        1.0 - float(dist) if dist is not None else 0.0
+                    )
+
+        return matrix

@@ -109,6 +109,36 @@ async def test_rag_service_keep_best(
 
 
 @pytest.mark.asyncio
+async def test_rag_service_keep_best_duplicates(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test that keep_best handles duplicate content/distances correctly."""
+    service = RagService(agents_db_config["uri"], embedding_model)
+
+    collection = "duplicate_test"
+    # Index exactly the same content for the same source_id multiple times
+    texts = ["Tesla Model 3 is an electric car", "Tesla Model 3 is an electric car"]
+    source_ids = ["tesla_3", "tesla_3"]
+    metadata = [{"brand": "Tesla"}, {"brand": "Tesla"}]
+
+    await service.batch_index(
+        texts=texts,
+        metadata_list=metadata,
+        collection_name=collection,
+        source_ids=source_ids,
+    )
+
+    # Query with keep_best=True
+    results = await service.query(
+        "Tesla electric car", top_k=10, collection_name=collection, keep_best=True
+    )
+
+    # Should only have one result despite multiple identical best matches
+    assert len(results) == 1
+    assert results[0].source_id == "tesla_3"
+
+
+@pytest.mark.asyncio
 async def test_rag_service_top_k_with_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
