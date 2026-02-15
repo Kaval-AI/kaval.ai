@@ -144,11 +144,8 @@ async def test_learn_from_rag(agents_db):
 
 @pytest.mark.asyncio
 async def test_learn_from_rag_empty(agents_db):
-    normalizer = await Normalizer.learn_from_rag(agents_db, model="non-existent/model")
-    assert normalizer.center_vector is None
-
-    embeddings = [[1.0, 2.0]]
-    assert normalizer.transform(embeddings) == embeddings
+    with pytest.raises(Exception, match="No embeddings found in RAG index."):
+        await Normalizer.learn_from_rag(agents_db, model="non-existent/model")
 
 
 @pytest.mark.asyncio
@@ -203,3 +200,18 @@ def test_get_default_normalizer(tmp_path, monkeypatch):
     # 3. Caching
     normalizer3 = get_default_normalizer()
     assert normalizer3 is normalizer2
+
+
+def test_center_vector_none():
+    normalizer = Normalizer(center_vector=None, center=True)
+    embeddings = np.array([[1.0, 2.0]])
+    assert np.array_equal(normalizer.center(embeddings), embeddings)
+
+
+def test_center_vector_size_mismatch():
+    normalizer = Normalizer(center_vector=[1.0, 2.0], center=True)
+    embeddings = np.array([[1.0, 2.0, 3.0]])
+    with pytest.raises(
+        ValueError, match="Embedding size 3 does not match center vector size 2"
+    ):
+        normalizer.center(embeddings)

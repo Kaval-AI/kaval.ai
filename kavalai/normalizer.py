@@ -135,7 +135,7 @@ class Normalizer:
         embeddings = [row[0] for row in result.all() if row[0] is not None]
 
         if not embeddings:
-            return cls()
+            raise Exception("No embeddings found in RAG index.")
 
         mean_vector = np.mean(embeddings, axis=0)
         return cls(center_vector=mean_vector)
