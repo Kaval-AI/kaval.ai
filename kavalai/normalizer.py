@@ -19,7 +19,7 @@ import numpy as np
 import yaml
 from typing import List, Optional, Union
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kavalai.agents.db import RagIndex
@@ -127,17 +127,19 @@ class Normalizer:
         collection_name: Optional[str] = None,
     ) -> "Normalizer":
         """Learns the centering vector (mean) from the RAG index."""
-        stmt = select(RagIndex.embedding).where(RagIndex.model == model)
+        stmt = select(func.avg(RagIndex.embedding)).where(RagIndex.model == model)
         if collection_name:
             stmt = stmt.where(RagIndex.collection_name == collection_name)
 
         result = await session.execute(stmt)
-        embeddings = [row[0] for row in result.all() if row[0] is not None]
+        mean_vector = result.scalar()
 
-        if not embeddings:
+        if mean_vector is None:
             raise Exception("No embeddings found in RAG index.")
 
-        mean_vector = np.mean(embeddings, axis=0)
+        if isinstance(mean_vector, str):
+            mean_vector = [float(x) for x in mean_vector.strip("[]").split(",")]
+
         return cls(center_vector=mean_vector)
 
 
