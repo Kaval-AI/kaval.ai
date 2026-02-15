@@ -30,7 +30,8 @@ export class RagService {
     text: string,
     collection_name?: string,
     top_k?: number,
-    source_ids?: string[]
+    source_ids?: string[],
+    normalizer_yaml?: string
   }): Observable<RagResult[]> {
     return this.http.post<RagResult[]>(`/api/projects/${projectId}/rag/query`, queryData);
   }

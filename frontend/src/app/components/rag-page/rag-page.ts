@@ -37,6 +37,7 @@ export class RagPage implements OnInit {
   collectionName: string = '';
   sourceIdsInput: string = '';
   topK: number = 10;
+  normalizerYaml: string = '';
 
   loading: boolean = false;
   error: string | null = null;
@@ -82,7 +83,8 @@ export class RagPage implements OnInit {
       text: this.queryText,
       collection_name: this.collectionName || undefined,
       top_k: this.topK,
-      source_ids: sourceIds
+      source_ids: sourceIds,
+      normalizer_yaml: this.normalizerYaml || undefined
     }).subscribe({
       next: (results) => {
         this.results = results;

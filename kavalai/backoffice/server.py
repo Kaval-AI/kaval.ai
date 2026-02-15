@@ -504,6 +504,7 @@ async def projects_rag_query(
     collection_name = query_data.get("collection_name")
     top_k = query_data.get("top_k", 5)
     source_ids = query_data.get("source_ids")
+    normalizer_yaml = query_data.get("normalizer_yaml")
 
     if not model or not text:
         raise HTTPException(status_code=400, detail="model and text are required")
@@ -517,8 +518,19 @@ async def projects_rag_query(
         db_name=project.db_name,
     )
 
+    normalizer = None
+    if normalizer_yaml:
+        from kavalai.normalizer import Normalizer
+
+        try:
+            normalizer = Normalizer.from_yaml(normalizer_yaml)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid normalizer YAML: {str(e)}"
+            )
+
     async with project_session_maker() as project_session:
-        rag_service = RagService(project_session, model)
+        rag_service = RagService(project_session, model, normalizer=normalizer)
         results = await rag_service.query(
             text=text,
             top_k=top_k,
