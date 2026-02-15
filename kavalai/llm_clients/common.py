@@ -15,10 +15,12 @@ limitations under the License.
 """
 
 import asyncio
-import math
 from typing import Any, List, Optional
 from pydantic import BaseModel
 from kavalai.agents.db import ModelCallStat
+
+
+from kavalai.normalizer import Normalizer
 
 
 class StreamContent(BaseModel):
@@ -46,14 +48,7 @@ class Streamer:
 
 
 def normalize_embeddings(embeddings: List[List[float]]) -> List[List[float]]:
-    normalized_embeddings = []
-    for emb in embeddings:
-        norm = math.sqrt(sum(x * x for x in emb))
-        if norm > 0:
-            normalized_embeddings.append([x / norm for x in emb])
-        else:
-            normalized_embeddings.append(emb)
-    return normalized_embeddings
+    return Normalizer().transform(embeddings, l2=True)
 
 
 def create_model_call_stat(

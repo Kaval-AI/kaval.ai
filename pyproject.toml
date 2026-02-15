@@ -22,6 +22,7 @@ dependencies = [
     "httpx",
     "itsdangerous",
     "json-schema-to-pydantic",
+    "numpy",
     "openai",
     "partial-json-parser",
     "psycopg2-binary",

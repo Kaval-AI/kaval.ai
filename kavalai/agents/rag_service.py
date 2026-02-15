@@ -26,6 +26,7 @@ from sqlalchemy.orm import aliased
 
 from kavalai.agents.db import RagIndex, Agent, db_manager
 from kavalai.llm_clients.llm_client import compute_embeddings
+from kavalai.normalizer import Normalizer
 
 logger = logging.getLogger(__name__)
 
@@ -406,3 +407,12 @@ class RagService:
                     )
 
         return matrix
+
+    async def learn_normalizer(
+        self, collection_name: Optional[str] = None
+    ) -> Normalizer:
+        """Learns a normalizer from the current RAG index."""
+        async with self.session_maker() as session:
+            return await Normalizer.learn_from_rag(
+                session, model=self.model, collection_name=collection_name
+            )

@@ -166,9 +166,9 @@ async def test_openai_compute_embeddings():
             model="text-embedding-3-small", texts=["hi"], normalize=True
         )
 
-    assert embeddings == [
+    assert embeddings[0] == pytest.approx(
         [0.1 / (0.1**2 + 0.2**2) ** 0.5, 0.2 / (0.1**2 + 0.2**2) ** 0.5]
-    ]
+    )
     assert stats.total_tokens == 5
     assert mock_create.call_count == 1
 
@@ -192,7 +192,7 @@ async def test_openai_compute_embeddings_zero_norm():
             model="text-embedding-3-small", texts=["hi"], normalize=True
         )
 
-    assert embeddings == [[0.0, 0.0]]
+    assert embeddings[0] == pytest.approx([0.0, 0.0])
 
 
 @pytest.mark.asyncio
