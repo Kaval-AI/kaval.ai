@@ -21,8 +21,11 @@ from typing import List, Optional, Union
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
+import logging
 from kavalai.agents.db import RagIndex
+
+
+logger = logging.getLogger(__name__)
 
 
 class Normalizer:
@@ -154,9 +157,11 @@ def get_default_normalizer() -> Normalizer:
 
     env_path = os.getenv("KAVALAI_EMBEDDING_NORMALIZER_YAML")
     if env_path and os.path.exists(env_path):
+        logger.debug(f"Loading default normalizer from {env_path}")
         _default_normalizer = Normalizer.load_from_yaml(env_path)
     else:
         # Default with simple L2 norm
+        logger.debug("No default normalizer defined, using L2 norm")
         _default_normalizer = Normalizer(l2=True)
 
     return _default_normalizer
