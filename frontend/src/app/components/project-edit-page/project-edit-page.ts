@@ -204,12 +204,14 @@ export class ProjectEditPage implements OnInit {
   }
 
   testConnection() {
-    if (!this.projectId || this.projectId === 'new') return;
+    if (!this.projectId) return;
 
     this.isTestingConnection = true;
     this.connectionStatus = null;
 
-    this.projectService.testConnection(this.projectId).subscribe({
+    const data = this.projectId === 'new' ? this.projectForm.value : {};
+
+    this.projectService.testConnection(this.projectId, data).subscribe({
       next: (res) => {
         this.connectionStatus = res;
         this.isTestingConnection = false;

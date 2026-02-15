@@ -584,10 +584,17 @@ async def projects_rag_stats(project_id: UUID, request: Request):
 
 
 @app.post("/projects/test-connection/{project_id}")
-async def projects_test_connection(project_id: UUID, request: Request):
+async def projects_test_connection(
+    project_id: str, request: Request, data: dict = Body(default={})
+):
     """Test connection to the project database."""
     assert_logged_in(request)
-    project = await get_project_and_assert_access(request, project_id)
+
+    if project_id == "new":
+        project = db.Project(**data)
+    else:
+        project = await get_project_and_assert_access(request, UUID(project_id))
+
     async with db.AsyncBackofficeSession() as session:
         service = ProjectService(session)
         return await service.test_connection(project)

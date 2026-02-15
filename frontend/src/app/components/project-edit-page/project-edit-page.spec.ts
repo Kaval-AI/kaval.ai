@@ -108,14 +108,26 @@ describe('ProjectEditPage', () => {
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/']);
   });
 
-  it('should test connection', () => {
+  it('should test connection for existing project', () => {
     component.projectId = '1';
     const mockRes = { status: 'success', message: 'Connected' };
     projectServiceSpy.testConnection.and.returnValue(of(mockRes));
 
     component.testConnection();
 
-    expect(projectServiceSpy.testConnection).toHaveBeenCalledWith('1');
+    expect(projectServiceSpy.testConnection).toHaveBeenCalledWith('1', {});
+    expect(component.connectionStatus).toEqual(mockRes);
+  });
+
+  it('should test connection for new project', () => {
+    component.projectId = 'new';
+    component.projectForm.patchValue({ name: 'New Project', db_host: 'localhost' });
+    const mockRes = { status: 'success', message: 'Connected' };
+    projectServiceSpy.testConnection.and.returnValue(of(mockRes));
+
+    component.testConnection();
+
+    expect(projectServiceSpy.testConnection).toHaveBeenCalledWith('new', component.projectForm.value);
     expect(component.connectionStatus).toEqual(mockRes);
   });
 
@@ -130,7 +142,7 @@ describe('ProjectEditPage', () => {
     expect(component.connectionStatus?.message).toBe('Failed');
   });
 
-  it('should disable save button when form is pristine', () => {
+  it('should NOT disable save button when form is pristine but valid', () => {
     const mockProject = { id: '1', name: 'Test Project' } as Project;
     activatedRouteMock.snapshot.paramMap.get.and.returnValue('1');
     projectServiceSpy.getAll.and.returnValue(of([mockProject]));
@@ -139,12 +151,11 @@ describe('ProjectEditPage', () => {
     fixture.detectChanges();
 
     const saveButton = fixture.nativeElement.querySelector('button[type="submit"]');
-    expect(saveButton.disabled).toBeTrue();
+    expect(saveButton.disabled).toBeFalse();
 
-    component.projectForm.patchValue({ name: 'New Name' });
-    component.projectForm.markAsDirty();
+    component.projectForm.patchValue({ name: '' }); // make it invalid
     fixture.detectChanges();
 
-    expect(saveButton.disabled).toBeFalse();
+    expect(saveButton.disabled).toBeTrue();
   });
 });

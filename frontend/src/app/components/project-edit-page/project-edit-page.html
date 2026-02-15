@@ -48,11 +48,11 @@
           </div>
         </div>
 
-        @if (projectId && projectId !== 'new') {
+        @if (projectId) {
           <div class="test-connection-row">
             <button type="button"
                     (click)="testConnection()"
-                    [disabled]="isTestingConnection">
+                    [disabled]="isTestingConnection || (projectId === 'new' && projectForm.invalid)">
               {{ isTestingConnection ? 'Testing...' : 'Test Connection' }}
             </button>
             @if (connectionStatus) {
@@ -65,7 +65,7 @@
       </fieldset>
 
       <div class="button-row">
-        <button type="submit" [disabled]="projectForm.invalid || projectForm.pristine">Save</button>
+        <button type="submit" [disabled]="projectForm.invalid">Save</button>
         <button type="button" (click)="cancel()">Cancel</button>
       </div>
 
