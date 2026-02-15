@@ -55,11 +55,11 @@ def test_centering():
 def test_transform():
     center_vector = [1.0, 1.0]
     embeddings = [[2.0, 2.0]]
-    normalizer = Normalizer(center_vector=center_vector)
+    normalizer = Normalizer(center_vector=center_vector, l2=True, center=True)
 
     # Center: [2, 2] - [1, 1] = [1, 1]
     # L2: [1, 1] -> [1/sqrt(2), 1/sqrt(2)]
-    result = normalizer.transform(embeddings, l2=True, center=True)
+    result = normalizer.transform(embeddings)
     assert pytest.approx(result[0]) == [1 / math.sqrt(2), 1 / math.sqrt(2)]
 
 
@@ -158,3 +158,33 @@ async def test_rag_service_learn_normalizer(agents_db):
     normalizer = await rag_service.learn_normalizer(collection_name="test")
 
     assert np.allclose(normalizer.center_vector, [2.0, 2.0])
+
+
+def test_get_default_normalizer(tmp_path, monkeypatch):
+    from kavalai.normalizer import get_default_normalizer
+    import kavalai.normalizer
+
+    # Clear cache for testing
+    kavalai.normalizer._default_normalizer = None
+
+    # 1. Default (no env var)
+    normalizer = get_default_normalizer()
+    assert normalizer.l2 is True
+    assert normalizer.center_enabled is False
+
+    # 2. With env var
+    kavalai.normalizer._default_normalizer = None
+    yaml_path = os.path.join(tmp_path, "custom_normalizer.yaml")
+    custom = Normalizer(l1=True, l2=False, center=True, center_vector=[0.1, 0.2])
+    custom.save_to_yaml(yaml_path)
+
+    monkeypatch.setenv("KAVALAI_EMBEDDING_NORMALIZER_YAML", yaml_path)
+    normalizer2 = get_default_normalizer()
+    assert normalizer2.l1 is True
+    assert normalizer2.l2 is False
+    assert normalizer2.center_enabled is True
+    assert np.allclose(normalizer2.center_vector, [0.1, 0.2])
+
+    # 3. Caching
+    normalizer3 = get_default_normalizer()
+    assert normalizer3 is normalizer2

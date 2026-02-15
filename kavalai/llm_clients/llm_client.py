@@ -26,6 +26,7 @@ import openai
 from google.genai import errors
 
 from kavalai.agents.db import ModelCallStat
+from kavalai.normalizer import Normalizer
 from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.openai_client import OpenAIClient
 from kavalai.llm_clients.common import Streamer
@@ -146,6 +147,7 @@ async def compute_embeddings(
     model: str,
     texts: list[str],
     normalize: bool = False,
+    normalizer: Normalizer | None = None,
     **kwargs,
 ) -> tuple[list[list[float]], ModelCallStat]:
     """
@@ -169,6 +171,7 @@ async def compute_embeddings(
         model=model_name,
         texts=texts,
         normalize=normalize,
+        normalizer=normalizer,
         **kwargs,
     )
 

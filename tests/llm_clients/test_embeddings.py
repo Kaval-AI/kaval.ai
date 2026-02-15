@@ -109,7 +109,10 @@ async def test_common_compute_embeddings_mock():
         assert result == [[0.1, 0.2, 0.3]]
         assert stats.total_tokens == 10
         mock_client.compute_embeddings.assert_called_once_with(
-            model="text-embedding-3-small", texts=texts, normalize=True
+            model="text-embedding-3-small",
+            texts=texts,
+            normalize=True,
+            normalizer=None,
         )
 
 
@@ -159,3 +162,10 @@ async def test_compute_embeddings_with_stats(agents_db):
         assert float(stats.cost) == 0.000002
         assert stats.batch_size == 1
         assert stats.response_code == 200
+
+        mock_client.compute_embeddings.assert_called_once_with(
+            model="text-embedding-3-small",
+            texts=texts,
+            normalize=False,
+            normalizer=None,
+        )

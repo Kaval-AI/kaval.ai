@@ -1,9 +1,6 @@
-import pytest
-import numpy as np
 from pydantic import BaseModel
 from kavalai.llm_clients.common import (
     create_model_call_stat,
-    normalize_embeddings,
     StreamContent,
 )
 from kavalai.agents.db import ModelCallStat
@@ -11,19 +8,6 @@ from kavalai.agents.db import ModelCallStat
 
 class SimpleModel(BaseModel):
     name: str
-
-
-def test_normalize_embeddings():
-    embeddings = [[1.0, 1.0], [0.0, 0.0], [3.0, 4.0]]
-    normalized = normalize_embeddings(embeddings)
-
-    # [1.0, 1.0] -> norm is sqrt(2), so [1/sqrt(2), 1/sqrt(2)]
-    assert pytest.approx(sum(x * x for x in normalized[0])) == 1.0
-    # [0.0, 0.0] -> norm is 0, should remain [0.0, 0.0]
-    assert np.allclose(normalized[1], [0.0, 0.0])
-    # [3.0, 4.0] -> norm is 5, so [0.6, 0.8]
-    assert np.allclose(normalized[2], [0.6, 0.8])
-    assert pytest.approx(sum(x * x for x in normalized[2])) == 1.0
 
 
 def test_create_model_call_stat_basic():

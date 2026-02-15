@@ -118,3 +118,34 @@ async def test_gemini_structured_output_integration():
     assert isinstance(content, SimpleResponse)
     assert "4" in content.answer
     assert content.confidence >= 0.0
+
+
+@pytest.mark.asyncio
+async def test_gemini_compute_embeddings_custom_normalizer():
+    from kavalai.normalizer import Normalizer
+    from unittest.mock import MagicMock
+
+    client = GeminiClient(api_key="fake-key")
+
+    mock_emb = MagicMock()
+    mock_emb.values = [3.0, 4.0]
+    mock_response = MagicMock()
+    mock_response.embeddings = [mock_emb]
+    mock_response.usage_metadata.total_token_count = 5
+
+    with patch.object(
+        client.client.aio.models, "embed_content", new_callable=AsyncMock
+    ) as mock_embed:
+        mock_embed.return_value = mock_response
+
+        # L1 normalizer: [3.0, 4.0] -> [3/7, 4/7]
+        l1_normalizer = Normalizer(l1=True)
+
+        embeddings, stats = await client.compute_embeddings(
+            model="text-embedding-004",
+            texts=["hi"],
+            normalize=True,
+            normalizer=l1_normalizer,
+        )
+
+    assert embeddings[0] == pytest.approx([3 / 7, 4 / 7])

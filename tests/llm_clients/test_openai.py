@@ -149,6 +149,10 @@ async def test_openai_compute_embeddings_with_service_tier():
 
 @pytest.mark.asyncio
 async def test_openai_compute_embeddings():
+    import kavalai.normalizer
+
+    kavalai.normalizer._default_normalizer = None
+
     client = OpenAIClient(api_key="fake-key")
     mock_create = AsyncMock()
 
@@ -175,6 +179,10 @@ async def test_openai_compute_embeddings():
 
 @pytest.mark.asyncio
 async def test_openai_compute_embeddings_zero_norm():
+    import kavalai.normalizer
+
+    kavalai.normalizer._default_normalizer = None
+
     client = OpenAIClient(api_key="fake-key")
     mock_create = AsyncMock()
 
@@ -193,6 +201,36 @@ async def test_openai_compute_embeddings_zero_norm():
         )
 
     assert embeddings[0] == pytest.approx([0.0, 0.0])
+
+
+@pytest.mark.asyncio
+async def test_openai_compute_embeddings_custom_normalizer():
+    from kavalai.normalizer import Normalizer
+
+    client = OpenAIClient(api_key="fake-key")
+    mock_create = AsyncMock()
+
+    mock_data = MagicMock()
+    mock_data.embedding = [3.0, 4.0]
+    mock_response = MagicMock()
+    mock_response.data = [mock_data]
+    mock_response.usage.total_tokens = 5
+    mock_response.model_dump.return_value = {}
+
+    mock_create.return_value = mock_response
+
+    # L1 normalizer: [3.0, 4.0] -> [3/7, 4/7]
+    l1_normalizer = Normalizer(l1=True)
+
+    with patch.object(client.client.embeddings, "create", mock_create):
+        embeddings, stats = await client.compute_embeddings(
+            model="text-embedding-3-small",
+            texts=["hi"],
+            normalize=True,
+            normalizer=l1_normalizer,
+        )
+
+    assert embeddings[0] == pytest.approx([3 / 7, 4 / 7])
 
 
 @pytest.mark.asyncio

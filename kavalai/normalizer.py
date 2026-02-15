@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import os
 import numpy as np
 import yaml
 from typing import List, Optional, Union
@@ -61,11 +62,7 @@ class Normalizer:
         return embeddings - self.center_vector
 
     def transform(
-        self,
-        embeddings: Union[List[List[float]], np.ndarray],
-        l1: Optional[bool] = None,
-        l2: Optional[bool] = None,
-        center: Optional[bool] = None,
+        self, embeddings: Union[List[List[float]], np.ndarray]
     ) -> List[List[float]]:
         """Applies centering and normalization in sequence."""
         if not isinstance(embeddings, np.ndarray):
@@ -77,16 +74,12 @@ class Normalizer:
         else:
             is_single = False
 
-        l1 = l1 if l1 is not None else self.l1
-        l2 = l2 if l2 is not None else self.l2
-        center = center if center is not None else self.center_enabled
-
         result = embeddings
-        if center:
+        if self.center_enabled:
             result = self.center(result)
-        if l1:
+        if self.l1:
             result = self.normalize_l1(result)
-        if l2:
+        if self.l2:
             result = self.normalize_l2(result)
 
         list_result = result.tolist()
@@ -137,3 +130,22 @@ class Normalizer:
 
         mean_vector = np.mean(embeddings, axis=0)
         return cls(center_vector=mean_vector)
+
+
+_default_normalizer = None
+
+
+def get_default_normalizer() -> Normalizer:
+    """Returns the default normalizer, loading it from environment variable if defined."""
+    global _default_normalizer
+    if _default_normalizer is not None:
+        return _default_normalizer
+
+    env_path = os.getenv("KAVALAI_EMBEDDING_NORMALIZER_YAML")
+    if env_path and os.path.exists(env_path):
+        _default_normalizer = Normalizer.load_from_yaml(env_path)
+    else:
+        # Default with simple L2 norm
+        _default_normalizer = Normalizer(l2=True)
+
+    return _default_normalizer

@@ -24,9 +24,9 @@ from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
+from kavalai.normalizer import Normalizer, get_default_normalizer
 from kavalai.llm_clients.common import (
     create_model_call_stat,
-    normalize_embeddings,
     Streamer,
 )
 
@@ -97,6 +97,7 @@ class OpenAIClient:
         model: str,
         texts: List[str],
         normalize: bool = False,
+        normalizer: Optional[Normalizer] = None,
         **kwargs,
     ) -> Tuple[List[List[float]], ModelCallStat]:
         start_time = time.perf_counter()
@@ -109,9 +110,10 @@ class OpenAIClient:
         duration = time.perf_counter() - start_time
 
         embeddings = [data.embedding for data in response.data]
-
         if normalize:
-            embeddings = normalize_embeddings(embeddings)
+            if normalizer is None:
+                normalizer = get_default_normalizer()
+            embeddings = normalizer.transform(embeddings)
 
         total_tokens = response.usage.total_tokens if response.usage else 0
 

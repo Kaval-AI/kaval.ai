@@ -15,12 +15,11 @@ limitations under the License.
 """
 
 import asyncio
-from typing import Any, List, Optional
+from typing import Any, Optional
+
 from pydantic import BaseModel
+
 from kavalai.agents.db import ModelCallStat
-
-
-from kavalai.normalizer import Normalizer
 
 
 class StreamContent(BaseModel):
@@ -45,10 +44,6 @@ class Streamer:
                 type="complete", name=self.name, value=value
             ).model_dump_json()
         )
-
-
-def normalize_embeddings(embeddings: List[List[float]]) -> List[List[float]]:
-    return Normalizer().transform(embeddings, l2=True)
 
 
 def create_model_call_stat(

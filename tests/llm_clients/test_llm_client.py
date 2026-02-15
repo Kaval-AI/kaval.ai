@@ -341,3 +341,35 @@ async def test_with_retry_gemini_other_client_error_retried():
 
     assert result.message == "success"
     assert mock_func.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_compute_embeddings_with_normalizer(monkeypatch):
+    from kavalai.normalizer import Normalizer
+
+    mock_client = AsyncMock()
+    mock_client.compute_embeddings.return_value = (
+        [[0.1, 0.2]],
+        ModelCallStat(
+            call_type="embedding",
+            model="openai/text-embedding-3-small",
+            duration_seconds=0.1,
+        ),
+    )
+
+    monkeypatch.setattr(
+        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
+    )
+
+    normalizer = Normalizer(l1=True)
+    embeddings, stats = await compute_embeddings(
+        model="openai/text-embedding-3-small",
+        texts=["hi"],
+        normalize=True,
+        normalizer=normalizer,
+    )
+
+    # Check that normalizer was passed to client.compute_embeddings
+    mock_client.compute_embeddings.assert_called_once()
+    assert mock_client.compute_embeddings.call_args.kwargs["normalizer"] is normalizer
+    assert mock_client.compute_embeddings.call_args.kwargs["normalize"] is True
