@@ -73,6 +73,7 @@ class RagService:
         uri_or_session: str | AsyncSession,
         model: str,
         agent: Optional[Agent] = None,
+        normalizer: Optional[Normalizer] = None,
     ):
         """
         Initialize the RagService.
@@ -81,6 +82,7 @@ class RagService:
             uri_or_session (str | AsyncSession): Database URI or an active AsyncSession.
             model (str): The name of the embedding model to use (e.g., "openai/text-embedding-3-small").
             agent (Optional[Agent]): Optional Agent object to associate with this service.
+            normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
         """
         if isinstance(uri_or_session, str):
             self.session_maker = db_manager.get_sessionmaker(uri=uri_or_session)
@@ -95,6 +97,7 @@ class RagService:
             self.session_maker = session_factory
         self.model = model
         self.agent = agent
+        self.normalizer = normalizer
 
     async def batch_index(
         self,
@@ -135,6 +138,7 @@ class RagService:
             embeddings, stats = await compute_embeddings(
                 model=self.model,
                 texts=texts,
+                normalizer=self.normalizer,
             )
             session.add(stats)
 
@@ -237,6 +241,7 @@ class RagService:
             embeddings, stats = await compute_embeddings(
                 model=self.model,
                 texts=[text],
+                normalizer=self.normalizer,
             )
             session.add(stats)
             query_embedding = embeddings[0]
@@ -349,6 +354,7 @@ class RagService:
             embeddings, stats = await compute_embeddings(
                 model=self.model,
                 texts=texts,
+                normalizer=self.normalizer,
             )
             session.add(stats)
 
