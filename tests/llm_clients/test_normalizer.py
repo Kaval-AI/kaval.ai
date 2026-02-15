@@ -72,6 +72,21 @@ def test_transform_single_vector():
     assert pytest.approx(result) == [1 / math.sqrt(2), 1 / math.sqrt(2)]
 
 
+def test_yaml_string_load_save():
+    center_vector = [1.0, 2.0, 3.0]
+    original = Normalizer(center_vector=center_vector, l1=True, l2=False, center=True)
+    yaml_str = original.to_yaml()
+
+    assert "l1: true" in yaml_str.lower()
+    assert "center: true" in yaml_str.lower()
+
+    loaded = Normalizer.from_yaml(yaml_str)
+    assert loaded.l1 is True
+    assert loaded.l2 is False
+    assert loaded.center_enabled is True
+    assert np.allclose(loaded.center_vector, center_vector)
+
+
 def test_yaml_save_load(tmp_path):
     yaml_path = os.path.join(tmp_path, "normalizer.yaml")
     center_vector = [1.0, 2.0, 3.0]

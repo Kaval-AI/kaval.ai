@@ -85,8 +85,8 @@ class Normalizer:
         list_result = result.tolist()
         return list_result if not is_single else list_result[0]
 
-    def save_to_yaml(self, path: str):
-        """Saves the normalizer parameters to a YAML file."""
+    def to_yaml(self) -> str:
+        """Returns the normalizer parameters as a YAML string."""
         data = {
             "l1": self.l1,
             "l2": self.l2,
@@ -95,20 +95,29 @@ class Normalizer:
             if self.center_vector is not None
             else None,
         }
+        return yaml.dump(data)
+
+    def save_to_yaml(self, path: str):
+        """Saves the normalizer parameters to a YAML file."""
         with open(path, "w") as f:
-            yaml.dump(data, f)
+            f.write(self.to_yaml())
 
     @classmethod
-    def load_from_yaml(cls, path: str) -> "Normalizer":
-        """Loads a normalizer from a YAML file."""
-        with open(path, "r") as f:
-            data = yaml.safe_load(f)
+    def from_yaml(cls, yaml_str: str) -> "Normalizer":
+        """Loads a normalizer from a YAML string."""
+        data = yaml.safe_load(yaml_str)
         return cls(
             center_vector=data.get("center_vector"),
             l1=data.get("l1", False),
             l2=data.get("l2", False),
             center=data.get("center", False),
         )
+
+    @classmethod
+    def load_from_yaml(cls, path: str) -> "Normalizer":
+        """Loads a normalizer from a YAML file."""
+        with open(path, "r") as f:
+            return cls.from_yaml(f.read())
 
     @classmethod
     async def learn_from_rag(
