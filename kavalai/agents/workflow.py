@@ -49,6 +49,7 @@ class Task(BaseModel):
     output: str | dict[str, TypeInputInfo] = ""
     # LLM call
     prompt: Optional[str] = None
+    temperature: Optional[float] = None
     use_history: bool = True
     # REST tool call
     tool: Optional[str] = None
@@ -82,6 +83,7 @@ class WorkflowModel(BaseModel):
     name: str
     description: str = ""
     version: str = "1.0"
+    temperature: float = 0.0
     llm_model: Optional[str] = None
     data_types: dict[str, dict]
     rest_servers: list[RestServer] = []
@@ -215,6 +217,12 @@ class Workflow:
             "KAVALAI_DEFAULT_LLM_MODEL"
         )
 
+        temperature = (
+            task.temperature
+            if task.temperature is not None
+            else self.workflow_model.temperature
+        )
+
         streamer = None
         if task.stream and queue is not None:
             streamer = Streamer(task.output, queue)
@@ -224,6 +232,7 @@ class Workflow:
             response_model=self.get_data_type(task.output),
             messages=messages,
             streamer=streamer,
+            temperature=temperature,
         )
         if session:
             session.add(stats)
