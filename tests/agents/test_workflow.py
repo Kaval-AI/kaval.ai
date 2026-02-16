@@ -133,6 +133,60 @@ class TestRunToolMethod:
         # When params is popped, it's missing from kwargs in request call
         assert captured_params is None
 
+
+class TestWorkflowTemperatureValidation:
+    """Tests for temperature validation in Workflow."""
+
+    def test_workflow_invalid_temperature_too_high(self):
+        """Workflow should raise exception if temperature > 2.0."""
+        data = {
+            "name": "test",
+            "temperature": 2.1,
+            "data_types": {
+                "input": {"type": "object", "properties": {}},
+                "output": {"type": "object", "properties": {}},
+            },
+            "tasks": [],
+        }
+        model = WorkflowModel(**data)
+        with pytest.raises(
+            WorkflowException, match="temperature must be between 0.0 and 2.0"
+        ):
+            Workflow(model)
+
+    def test_workflow_invalid_temperature_too_low(self):
+        """Workflow should raise exception if temperature < 0.0."""
+        data = {
+            "name": "test",
+            "temperature": -0.1,
+            "data_types": {
+                "input": {"type": "object", "properties": {}},
+                "output": {"type": "object", "properties": {}},
+            },
+            "tasks": [],
+        }
+        model = WorkflowModel(**data)
+        with pytest.raises(
+            WorkflowException, match="temperature must be between 0.0 and 2.0"
+        ):
+            Workflow(model)
+
+    def test_task_invalid_temperature(self):
+        """Task should raise exception if temperature is invalid."""
+        data = {
+            "name": "test",
+            "data_types": {
+                "input": {"type": "object", "properties": {}},
+                "output": {"type": "object", "properties": {}},
+            },
+            "tasks": [{"name": "task1", "temperature": 2.5, "output": "output"}],
+        }
+        model = WorkflowModel(**data)
+        with pytest.raises(
+            WorkflowException, match="task1' temperature must be between 0.0 and 2.0"
+        ):
+            Workflow(model)
+
     @pytest.mark.asyncio
     async def test_run_tool_serializes_pydantic_models(self):
         """run_tool should serialize Pydantic models to dicts in JSON body."""

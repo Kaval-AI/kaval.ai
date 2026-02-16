@@ -88,8 +88,18 @@ def get_root_context_name(info: "TypeInputInfo", fallback: str) -> str:
 def validate_workflow(workflow_model: "WorkflowModel"):
     from kavalai.agents.workflow import WorkflowException
 
+    if not (0.0 <= workflow_model.temperature <= 2.0):
+        raise WorkflowException(
+            f"Workflow temperature must be between 0.0 and 2.0, got {workflow_model.temperature}"
+        )
+
     available_data = {"input"}
     for task in workflow_model.tasks:
+        if task.temperature is not None and not (0.0 <= task.temperature <= 2.0):
+            raise WorkflowException(
+                f"Task '{task.name}' temperature must be between 0.0 and 2.0, got {task.temperature}"
+            )
+
         # Check outputs
         if isinstance(task.output, str) and task.output:
             if task.output not in workflow_model.data_types:

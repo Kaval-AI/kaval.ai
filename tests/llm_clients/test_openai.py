@@ -129,6 +129,39 @@ async def test_openai_chat_completion_with_service_tier():
 
 
 @pytest.mark.asyncio
+async def test_openai_chat_completion_with_temperature():
+    client = OpenAIClient(api_key="fake-key")
+
+    mock_stream = AsyncMock()
+
+    chunk1 = MagicMock(spec=ResponseTextDeltaEvent)
+    chunk1.delta = '{"answer": "ok", "confidence": 1.0}'
+
+    chunk2 = MagicMock(spec=ResponseCompletedEvent)
+    chunk2.response = MagicMock()
+    chunk2.response.usage = MagicMock()
+    chunk2.response.usage.input_tokens = 5
+    chunk2.response.usage.output_tokens = 5
+
+    mock_stream.__aiter__.return_value = [chunk1, chunk2]
+
+    mock_stream_manager = MagicMock()
+    mock_stream_manager.__aenter__.return_value = mock_stream
+    mock_stream_manager.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(
+        client.client.responses, "stream", return_value=mock_stream_manager
+    ) as mock_stream_method:
+        await client.chat_completions(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "hi"}],
+            response_model=SimpleResponse,
+            temperature=0.7,
+        )
+        assert mock_stream_method.call_args.kwargs["temperature"] == 0.7
+
+
+@pytest.mark.asyncio
 async def test_openai_compute_embeddings_with_service_tier():
     client = OpenAIClient(api_key="fake-key", service_tier="priority")
     mock_create = AsyncMock()
