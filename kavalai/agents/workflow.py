@@ -33,8 +33,22 @@ from kavalai.agents.workflow_validation import (
 from kavalai.llm_clients.llm_client import chat_completions
 from kavalai.llm_clients.common import Streamer
 import asyncio
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def to_plain(obj):
+    """Recursively convert Pydantic models, dicts, and lists into plain JSON-serializable types."""
+    if isinstance(obj, BaseModel):
+        return obj.model_dump()
+    if isinstance(obj, (datetime, UUID)):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: to_plain(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [to_plain(v) for v in obj]
+    return obj
 
 
 class TypeInputInfo(BaseModel):
@@ -410,15 +424,29 @@ class Workflow:
 
         # 4. Finalize and Log Response
         output_model = run_context.data.get("output")
-        if self.agent_service and output_model:
-            agent_resp = getattr(output_model, "agent_response", str(output_model))
-            await self.agent_service.add_chat_message(
-                agent_id=run_context.agent_id,
-                session_id=run_context.session_id,
-                run_id=run_context.run_id,
-                role="assistant",
-                content=agent_resp,
+        if self.agent_service:
+            # Persist final output_data and full execution context into the Run
+            serialized_context = to_plain(run_context.data)
+            serialized_output = (
+                to_plain(output_model) if output_model is not None else None
             )
+
+            await self.agent_service.update_run(
+                run_id=run_context.run_id,
+                output_data=serialized_output,
+                context=serialized_context,
+            )
+
+            # Also log assistant message if we have a final output with a textual response
+            if output_model is not None:
+                agent_resp = getattr(output_model, "agent_response", str(output_model))
+                await self.agent_service.add_chat_message(
+                    agent_id=run_context.agent_id,
+                    session_id=run_context.session_id,
+                    run_id=run_context.run_id,
+                    role="assistant",
+                    content=agent_resp,
+                )
 
         return WorkflowRunResult(
             session_id=run_context.session_id,

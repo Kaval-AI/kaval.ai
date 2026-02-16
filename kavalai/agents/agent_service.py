@@ -106,6 +106,27 @@ class AgentService:
         await self.db.refresh(run)
         return run
 
+    async def update_run(
+        self,
+        run_id: UUID,
+        *,
+        output_data: Optional[Dict] = None,
+        context: Optional[Dict] = None,
+    ) -> Run:
+        """Updates an existing run with final output_data and/or context."""
+        stmt = select(Run).where(Run.id == run_id)
+        result = await self.db.execute(stmt)
+        run = result.scalar_one_or_none()
+        if not run:
+            raise ValueError(f"Run not found: {run_id}")
+        if output_data is not None:
+            run.output_data = output_data
+        if context is not None:
+            run.context = context
+        await self.db.commit()
+        await self.db.refresh(run)
+        return run
+
     async def add_task(
         self,
         session_id: UUID,
