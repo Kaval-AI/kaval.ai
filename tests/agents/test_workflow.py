@@ -5,10 +5,8 @@ from unittest.mock import patch, AsyncMock, MagicMock
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from kavalai.agents.workflow import (
-    Workflow,
-    RunContext,
-)
+from kavalai.agents.workflow import Workflow
+from kavalai.agents.run_context import RunContext
 from kavalai.agents.workflow_model import (
     WorkflowModel,
     WorkflowException,
@@ -463,7 +461,7 @@ class TestRunToolAuth:
 
 class TestWorkflowFeatures:
     def test_resolve_context_value_nested(self):
-        from kavalai.agents.workflow import RunContext
+        from kavalai.agents.run_context import RunContext
         from pydantic import BaseModel
 
         class NestedModel(BaseModel):
