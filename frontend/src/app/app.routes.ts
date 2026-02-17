@@ -29,18 +29,18 @@ import { UsersPage } from './components/users-page/users-page';
 
 export const routes: Routes = [
   // Default route
-  { path: '', component: ProjectsPage },
+  { path: '', component: ProjectsPage, data: { title: 'Projects' } },
 
-  { path: 'agents', component: AgentsPage },
-  { path: 'users', component: UsersPage },
-  { path: 'project-edit/:id', component: ProjectEditPage },
-  { path: 'user-edit/:id', component: UserEditPage },
-  { path: 'conversations', component: ConversationsPage },
-  { path: 'conversations/:sessionId', component: SessionDetailPage },
-  { path: 'tests', component: TestsPage },
-  { path: 'metrics', component: MetricsPage },
-  { path: 'llm-call-stats', component: LlmCallStatsPage },
-  { path: 'rag', component: RagPage },
+  { path: 'agents', component: AgentsPage, data: { title: 'Agents' } },
+  { path: 'users', component: UsersPage, data: { title: 'Users' } },
+  { path: 'project-edit/:id', component: ProjectEditPage, data: { title: 'Edit Project' } },
+  { path: 'user-edit/:id', component: UserEditPage, data: { title: 'Edit User' } },
+  { path: 'conversations', component: ConversationsPage, data: { title: 'Conversations' } },
+  { path: 'conversations/:sessionId', component: SessionDetailPage, data: { title: 'Conversation History' } },
+  { path: 'tests', component: TestsPage, data: { title: 'Acceptance Tests' } },
+  { path: 'metrics', component: MetricsPage, data: { title: 'Metrics' } },
+  { path: 'llm-call-stats', component: LlmCallStatsPage, data: { title: 'Model Calls' } },
+  { path: 'rag', component: RagPage, data: { title: 'RAG' } },
 
   // Wildcard route for 404 - Should always be last
   { path: '**', redirectTo: '' },

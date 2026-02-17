@@ -1,7 +1,6 @@
 <div class="users-container">
   <div class="header-section">
     <div class="header-top">
-      <h1>Users</h1>
       @if (!showForm) {
         <button class="add-btn" (click)="addUser()">
           <i class="fas fa-plus"></i> Add User
@@ -13,7 +12,6 @@
 
   @if (showForm) {
     <div class="user-form">
-      <h2>Add New User</h2>
       <form [formGroup]="userForm" (ngSubmit)="saveUser()">
         <div class="form-group">
           <label for="email">Email</label>

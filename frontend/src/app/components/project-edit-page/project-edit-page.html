@@ -1,6 +1,5 @@
 <div class="centered">
   <main>
-    <h2>{{ projectId && projectId !== 'new' ? 'Edit Project' : 'New Project' }}</h2>
     <form [formGroup]="projectForm" (ngSubmit)="saveProject()" class="form-container">
       <div class="form-field">
         <label for="name">Project Name</label>

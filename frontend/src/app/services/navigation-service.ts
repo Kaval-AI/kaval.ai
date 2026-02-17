@@ -13,18 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { Component, inject } from '@angular/core';
-import { UserInfo } from '../user-info/user-info';
-import { NavigationService } from '../../services/navigation-service';
 
-@Component({
-  selector: 'app-header',
-  standalone: true,
-  imports: [UserInfo],
-  templateUrl: './header.html',
-  styleUrl: './header.css',
+import { Injectable, signal } from '@angular/core';
+
+@Injectable({
+  providedIn: 'root',
 })
-export class Header {
-  private navigationService = inject(NavigationService);
-  title = this.navigationService.title;
+export class NavigationService {
+  private titleSignal = signal<string>('');
+
+  readonly title = this.titleSignal.asReadonly();
+
+  setTitle(title: string) {
+    this.titleSignal.set(title);
+  }
 }

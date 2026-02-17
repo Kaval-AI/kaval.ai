@@ -56,6 +56,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `agent-service.ts`: Handles agent-related API calls (including RAG).
         - `user-service.ts`: Manages user authentication and profiles.
         - `project-service.ts`: Manages project context and memberships.
+        - `navigation-service.ts`: Manages the current page title displayed in the header.
     - `public/assets/images/`: Public assets including logos and icons.
     - `src/app/components/`: UI components organized by feature.
         - `agents-page/`, `projects-page/`, `users-page/`: CRUD interfaces for main entities.

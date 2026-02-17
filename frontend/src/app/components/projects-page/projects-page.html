@@ -1,6 +1,5 @@
 @if (projects.length > 0) {
   <header>
-    <h2>Projects</h2>
     <div>
       <label for="projectSelect">Current project: </label>
       <select id="projectSelect"
@@ -73,7 +72,6 @@
 </div>
 } @else if (projects.length == 0) {
   <div class="centered">
-    <h2>Projects</h2>
     <p>We don't have any projects.</p>
      @if (getIsAdmin()) {
       <button type="button" (click)="startNewProject()">Add New</button>
