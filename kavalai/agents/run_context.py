@@ -94,6 +94,7 @@ class RunContext(BaseModel):
             "lt": operator.lt,
             "lte": operator.le,
             "contains": lambda a, b: b in a if a is not None else False,
+            "len": lambda a, b: len(a) == b if a is not None else False,
         }
 
         for key, val in condition.items():
@@ -125,6 +126,13 @@ class RunContext(BaseModel):
                     info = TypeInputInfo(**operand)
                     operand = await self.resolve_input_info(info)
                 return operand is not None
+
+            elif key == "is_true":
+                operand = val
+                if isinstance(operand, dict) and "type" in operand:
+                    info = TypeInputInfo(**operand)
+                    operand = await self.resolve_input_info(info)
+                return bool(operand)
 
             elif key == "all":
                 if not isinstance(val, list):

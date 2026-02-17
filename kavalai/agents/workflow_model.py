@@ -56,11 +56,14 @@ class Task(BaseModel):
         return self
 
     def _validate_condition(self, condition: dict):
-        operators = {"eq", "not_eq", "gt", "gte", "lt", "lte", "contains"}
+        operators = {"eq", "not_eq", "gt", "gte", "lt", "lte", "contains", "len"}
         for key, val in condition.items():
             if key in operators:
                 if not isinstance(val, list) or len(val) != 2:
                     raise ValueError(f"Operator '{key}' requires a list of 2 operands.")
+            elif key in ["is_null", "is_not_null", "is_true"]:
+                # These take a single operand (either dict or literal)
+                pass
             elif key == "all":
                 if not isinstance(val, list):
                     raise ValueError("'all' requires a list of conditions.")

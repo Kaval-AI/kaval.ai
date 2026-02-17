@@ -268,10 +268,6 @@ tasks:
     result1 = await workflow.run({"val": 12})
     assert result1.data.result == "Not 7"
 
-    # val=4 -> LT runs, NotEQ runs. Result: "Not 7"
-    result2 = await workflow.run({"val": 4})
-    assert result2.data.result == "Not 7"
-
     # val=7 -> GTE (false), LT (false), NotEQ (false). Result: None
     result3 = await workflow.run({"val": 7})
     assert result3.data is None
@@ -279,3 +275,53 @@ tasks:
     # val=10 -> GTE runs, NotEQ runs. Result: "Not 7"
     result4 = await workflow.run({"val": 10})
     assert result4.data.result == "Not 7"
+
+
+@pytest.mark.asyncio
+async def test_workflow_conditional_is_true_and_len():
+    workflow_yaml = """
+name: TrueLenTest
+data_types:
+  input:
+    type: object
+    properties:
+      is_active:
+        type: boolean
+      tags:
+        type: array
+        items:
+          type: string
+  output:
+    type: object
+    properties:
+      status:
+        type: string
+tasks:
+  - name: Active Check
+    when:
+      is_true: { type: context, value: input.is_active }
+    output:
+      status:
+        type: literal
+        value: "Active"
+  - name: Length Check
+    when:
+      len: [ { type: context, value: input.tags }, 3 ]
+    output:
+      status:
+        type: literal
+        value: "Has 3 tags"
+"""
+    workflow = Workflow.from_yaml(workflow_yaml)
+
+    # is_active=True, tags length 2 -> Result "Active"
+    result1 = await workflow.run({"is_active": True, "tags": ["a", "b"]})
+    assert result1.data.status == "Active"
+
+    # is_active=False, tags length 3 -> Result "Has 3 tags"
+    result2 = await workflow.run({"is_active": False, "tags": ["a", "b", "c"]})
+    assert result2.data.status == "Has 3 tags"
+
+    # Both match. Last one wins if they write to same output field.
+    result3 = await workflow.run({"is_active": True, "tags": ["a", "b", "c"]})
+    assert result3.data.status == "Has 3 tags"

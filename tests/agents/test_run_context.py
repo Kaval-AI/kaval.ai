@@ -160,6 +160,32 @@ async def test_evaluate_condition_basic_operators():
     assert await rc.evaluate_condition({"is_not_null": None}) is False
     assert await rc.evaluate_condition({"is_not_null": 10}) is True
 
+    # is_true
+    assert await rc.evaluate_condition({"is_true": True}) is True
+    assert await rc.evaluate_condition({"is_true": False}) is False
+    assert await rc.evaluate_condition({"is_true": 1}) is True
+    assert await rc.evaluate_condition({"is_true": 0}) is False
+    assert (
+        await rc.evaluate_condition({"is_true": {"type": "context", "value": "a"}})
+        is True
+    )
+    rc.data["f"] = False
+    assert (
+        await rc.evaluate_condition({"is_true": {"type": "context", "value": "f"}})
+        is False
+    )
+
+    # len
+    assert await rc.evaluate_condition({"len": [[1, 2, 3], 3]}) is True
+    assert await rc.evaluate_condition({"len": [[1, 2, 3], 2]}) is False
+    assert await rc.evaluate_condition({"len": ["hello", 5]}) is True
+    rc.data["l"] = [1, 2]
+    assert (
+        await rc.evaluate_condition({"len": [{"type": "context", "value": "l"}, 2]})
+        is True
+    )
+    assert await rc.evaluate_condition({"len": [None, 0]}) is False
+
 
 @pytest.mark.asyncio
 async def test_evaluate_condition_logical():
