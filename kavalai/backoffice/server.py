@@ -173,7 +173,9 @@ async def google_auth_callback(request: Request):
             "name": db_user.name,
             "picture": db_user.picture,
             "is_admin": db_user.is_admin,
-            "active_project_id": str(db_user.active_project_id),
+            "active_project_id": str(db_user.active_project_id)
+            if db_user.active_project_id
+            else None,
         }
         # Clear OAuth state from session after successful login
         if "_google_authlib_state_" in request.session:
@@ -203,7 +205,9 @@ async def set_active_project(project_id: UUID, request: Request):
         await update(session, db.User, user_id, {"active_project_id": project_id})
 
         # Update session
-        request.session["user_info"]["active_project_id"] = str(project_id)
+        user_info = request.session.get("user_info", {})
+        user_info["active_project_id"] = str(project_id)
+        request.session["user_info"] = user_info
         return {"status": "ok", "active_project_id": project_id}
 
 

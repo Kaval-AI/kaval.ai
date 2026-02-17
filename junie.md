@@ -96,7 +96,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - **Security & Quality**:
     - Pre-commit hooks for code quality (`ruff`, `yamllint`, `pre-commit-hooks`).
     - Security scanning with `bandit` (Python) and `gitleaks` (secrets).
-- **Project Isolation**: The backoffice manages multiple "projects". Each project can point to a different agent database.
+- **Project Isolation**: The backoffice manages multiple "projects". Each project can point to a different agent database. Users have an `active_project_id` stored in the database and session, which is used as the default project when navigating to the projects page. The global header includes a project selector that synchronizes the active project across all pages.
 
 ## Workflow Execution
 1. A YAML definition is loaded.

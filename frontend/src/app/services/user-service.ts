@@ -80,7 +80,7 @@ export class UserService {
 
   getActiveProjectId(): string | null {
     const user = this.userDetails$.value;
-    if (user && user.active_project_id) {
+    if (user && user.active_project_id && user.active_project_id !== 'None') {
       return user.active_project_id;
     }
     return null;

@@ -1,15 +1,6 @@
 @if (projects.length > 0) {
   <header>
     <div>
-      <label for="projectSelect">Current project: </label>
-      <select id="projectSelect"
-              (change)="onProjectSelect($event)"
-              [value]="selectedProject?.id || ''">
-        <option value="" disabled>-- Choose a Project --</option>
-        @for (p of projects; track p.id) {
-          <option [value]="p.id">{{ p.name }}</option>
-        }
-      </select>
       <button type="button" (click)="startNewProject()">+ Add new</button>
     </div>
   </header>

@@ -4,6 +4,19 @@
       <img src="assets/images/logo.svg" alt="Kaval.AI Logo" class="logo" />
     </div>
     <div class="page-title">{{ title() }}</div>
+    @if (projects.length > 0) {
+      <div class="project-selector">
+        <label for="headerProjectSelect">Current project: </label>
+        <select id="headerProjectSelect"
+                (change)="onProjectSelect($event)"
+                [value]="activeProjectId || ''">
+          <option value="" disabled>-- Choose a Project --</option>
+          @for (p of projects; track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      </div>
+    }
   </div>
   <app-user-info></app-user-info>
 </header>

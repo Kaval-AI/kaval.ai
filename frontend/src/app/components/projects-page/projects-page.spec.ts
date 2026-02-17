@@ -35,12 +35,13 @@ describe('ProjectsPage', () => {
   beforeEach(async () => {
     projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll', 'delete']);
     agentServiceSpy = jasmine.createSpyObj('AgentService', ['getSummaryStats']);
-    userServiceSpy = jasmine.createSpyObj('UserService', ['getIsAdmin', 'setActiveProject']);
+    userServiceSpy = jasmine.createSpyObj('UserService', ['getIsAdmin', 'setActiveProject', 'getActiveProjectId'], { userDetails: of({ id: 'u1' }) });
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     projectServiceSpy.getAll.and.returnValue(of([]));
     agentServiceSpy.getSummaryStats.and.returnValue(of({ total_cost: 0, llm_cost: 0, embedding_cost: 0, total_sessions: 0 }));
     userServiceSpy.getIsAdmin.and.returnValue(true);
+    userServiceSpy.getActiveProjectId.and.returnValue(null);
 
     await TestBed.configureTestingModule({
       imports: [ProjectsPage, CommonModule],
@@ -61,15 +62,29 @@ describe('ProjectsPage', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should load projects on init', () => {
+  it('should load projects on init and select first', () => {
     const mockProjects: Project[] = [{ id: '1', name: 'Project 1' } as Project];
     projectServiceSpy.getAll.and.returnValue(of(mockProjects));
+    userServiceSpy.getActiveProjectId.and.returnValue(null);
 
     component.ngOnInit();
 
     expect(projectServiceSpy.getAll).toHaveBeenCalled();
     expect(component.projects).toEqual(mockProjects);
     expect(component.selectedProject).toEqual(mockProjects[0]);
+  });
+
+  it('should select active project on init if it exists', () => {
+    const mockProjects: Project[] = [
+      { id: '1', name: 'Project 1' } as Project,
+      { id: '2', name: 'Project 2' } as Project
+    ];
+    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
+    userServiceSpy.getActiveProjectId.and.returnValue('2');
+
+    component.ngOnInit();
+
+    expect(component.selectedProject).toEqual(mockProjects[1]);
   });
 
   it('should navigate to edit page', () => {
@@ -112,12 +127,9 @@ describe('ProjectsPage', () => {
       { id: '2', name: 'P2' } as Project
     ];
     component.projects = mockProjects;
-    const event = { target: { value: '2' } } as any;
 
-    component.onProjectSelect(event);
-
+    component.selectProject(mockProjects[1]);
 
     expect(component.selectedProject?.id).toBe('2');
-    expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('2');
   });
 });

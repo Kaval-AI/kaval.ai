@@ -39,31 +39,29 @@ export class ProjectsPage implements OnInit {
   summaryStats: any = null;
 
   ngOnInit() {
-    this.loadProjects();
+    this.userService.userDetails.subscribe(details => {
+      if (details) {
+        this.loadProjects();
+      }
+    });
   }
 
   loadProjects() {
     this.projectService.getAll().subscribe((data: Project[]) => {
       this.projects = data;
       // If we already have a selected project, keep it selected (and updated)
-      // otherwise, grab the first one.
+      // otherwise, grab the active one from user service, or the first one.
+      const activeProjectId = this.userService.getActiveProjectId();
       const toSelect = this.projects.find(p => p.id === this.selectedProject?.id) ||
+                       (activeProjectId ? this.projects.find(p => p.id === activeProjectId) : null) ||
                        (this.projects.length > 0 ? this.projects[0] : null);
+
       this.selectProject(toSelect);
     });
   }
 
   getIsAdmin() {
     return this.userService.getIsAdmin();
-  }
-
-  onProjectSelect(event: Event) {
-    const target = event.target as HTMLSelectElement;
-    const project = this.projects.find(p => p.id === target.value);
-    if (project) {
-      this.selectProject(project);
-      this.userService.setActiveProject(project.id);
-    }
   }
 
   selectProject(project: Project | null) {
