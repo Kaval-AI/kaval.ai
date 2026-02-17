@@ -86,9 +86,7 @@ def validate_rest_server_env_vars(workflow_model: "WorkflowModel"):
 def get_root_context_name(info: "TypeInputInfo", fallback: str) -> str:
     """Extract the root context name from a TypeInputInfo (e.g., 'input' from 'input.user_message')."""
     path = info.value or info.name or fallback
-    if path:
-        return str(path).split(".")[0]
-    return fallback
+    return str(path).split(".")[0]
 
 
 def validate_workflow(workflow_model: "WorkflowModel"):

@@ -16,7 +16,7 @@ limitations under the License.
 
 import logging
 import os
-from typing import Dict, Type, Optional
+from typing import Dict, Type, Optional, Any
 from uuid import UUID
 
 import httpx
@@ -39,6 +39,7 @@ from kavalai.agents.workflow_validation import (
 )
 from kavalai.llm_clients.llm_client import chat_completions
 from kavalai.llm_clients.common import Streamer
+from kavalai.agents.resolvers import resolve_path
 import asyncio
 import operator
 
@@ -52,55 +53,46 @@ class RunContext(BaseModel):
     session_id: Optional[UUID] = None
     run_id: Optional[UUID] = None
     data: dict = {}
+    agent_service: Optional[Any] = None
 
     def resolve_context_value(self, path: str):
         """Resolve a dotted path like 'input.user_message' from context data."""
-        parts = path.split(".")
-        value = self.data.get(parts[0])
-        for part in parts[1:]:
-            if value is None:
-                return None
+        return resolve_path(self.data, path)
 
-            if part == "length":
-                if hasattr(value, "__len__"):
-                    value = len(value)
-                    continue
-                else:
-                    return None
-
-            if isinstance(value, BaseModel):
-                # Try getting the field from Pydantic model
-                try:
-                    value = getattr(value, part)
-                except AttributeError:
-                    return None
-            elif isinstance(value, dict):
-                value = value.get(part)
-            else:
-                return None
-        return value
-
-    def resolve_input_info(self, info: TypeInputInfo, fallback_name: str = None):
+    async def resolve_input_info(self, info: TypeInputInfo):
         """Resolve a TypeInputInfo to its actual value."""
         if info.type == "literal":
             return info.value
-        # For context type, use info.value (the path) or info.name or fallback
-        path = info.value or info.name or fallback_name
+        if info.type == "load_from_history":
+            if not self.agent_service or not self.session_id:
+                logger.warning(
+                    "Cannot load from history: agent_service or session_id not set"
+                )
+                return None
+            path = info.value or info.name
+            return await self.agent_service.get_history_value(
+                self.session_id, str(path)
+            )
+
+        # For context type, use info.value (the path) or info.name
+        path = info.value or info.name
         if path:
             return self.resolve_context_value(str(path))
         return None
 
-    def prepare_tool_inputs(self, task: Task) -> dict:
+    async def prepare_tool_inputs(self, task: Task) -> dict:
         inputs = {}
         for name, info in task.inputs.items():
-            value = self.resolve_input_info(info, fallback_name=name)
+            if info.value is None and info.name is None:
+                info = info.model_copy(update={"value": name})
+            value = await self.resolve_input_info(info)
             if isinstance(value, BaseModel):
                 value = value.model_dump()
             inputs[name] = value
 
         return inputs
 
-    def evaluate_condition(self, condition: dict) -> bool:
+    async def evaluate_condition(self, condition: dict) -> bool:
         """
         Evaluate a condition dictionary.
         Supported formats:
@@ -133,7 +125,7 @@ class RunContext(BaseModel):
                     if isinstance(operand, dict) and "type" in operand:
                         # It's a TypeInputInfo
                         info = TypeInputInfo(**operand)
-                        operands.append(self.resolve_input_info(info))
+                        operands.append(await self.resolve_input_info(info))
                     else:
                         operands.append(operand)
 
@@ -142,17 +134,23 @@ class RunContext(BaseModel):
             elif key == "all":
                 if not isinstance(val, list):
                     raise ValueError("'all' requires a list of conditions.")
-                return all(self.evaluate_condition(c) for c in val)
+                results = []
+                for c in val:
+                    results.append(await self.evaluate_condition(c))
+                return all(results)
 
             elif key == "any":
                 if not isinstance(val, list):
                     raise ValueError("'any' requires a list of conditions.")
-                return any(self.evaluate_condition(c) for c in val)
+                results = []
+                for c in val:
+                    results.append(await self.evaluate_condition(c))
+                return any(results)
 
             elif key == "not":
                 if not isinstance(val, dict):
                     raise ValueError("'not' requires a single condition dictionary.")
-                return not self.evaluate_condition(val)
+                return not await self.evaluate_condition(val)
 
         return True
 
@@ -208,7 +206,9 @@ class Workflow:
     ):
         input_data = {}
         for name, info in task.inputs.items():
-            input_data[name] = run_context.resolve_input_info(info, fallback_name=name)
+            if info.value is None and info.name is None:
+                info = info.model_copy(update={"value": name})
+            input_data[name] = await run_context.resolve_input_info(info)
 
         input_text = make_prompt(task.prompt, input_data)
 
@@ -264,7 +264,7 @@ class Workflow:
     async def run_tool(
         self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
     ):
-        inputs = run_context.prepare_tool_inputs(task)
+        inputs = await run_context.prepare_tool_inputs(task)
 
         rest_server = self.rest_servers[task.rest_server]
         url = rest_server.url
@@ -336,9 +336,9 @@ class Workflow:
         result = {}
         if isinstance(task.output, dict):
             for field_name, info in task.output.items():
-                result[field_name] = run_context.resolve_input_info(
-                    info, fallback_name=field_name
-                )
+                if info.value is None and info.name is None:
+                    info = info.model_copy(update={"value": field_name})
+                result[field_name] = await run_context.resolve_input_info(info)
             # Store as 'output' in context (standard output key for final result)
             output_type = self.get_data_type("output")
             model_instance = output_type(**result)
@@ -350,9 +350,9 @@ class Workflow:
         elif isinstance(task.output, str):
             # If output is a string, it means we are combining inputs into a named data type
             for input_name, info in task.inputs.items():
-                result[input_name] = run_context.resolve_input_info(
-                    info, fallback_name=input_name
-                )
+                if info.value is None and info.name is None:
+                    info = info.model_copy(update={"value": input_name})
+                result[input_name] = await run_context.resolve_input_info(info)
             output_type = self.get_data_type(task.output)
             run_context.data[task.output] = output_type(**result)
             if task.stream and queue is not None:
@@ -371,7 +371,7 @@ class Workflow:
     ) -> WorkflowRunResult:
         # 1. Parse Input
         parsed_input = self.get_data_type("input")(**input_data)
-        run_context = RunContext()
+        run_context = RunContext(agent_service=self.agent_service)
         run_context.data["input"] = parsed_input
 
         # 2. Initialize DB Context (Agent -> Session -> Run)
@@ -414,7 +414,7 @@ class Workflow:
         # 3. Execute Workflow Steps
         for task in self.workflow_model.tasks:
             if task.when:
-                if not run_context.evaluate_condition(task.when):
+                if not await run_context.evaluate_condition(task.when):
                     logger.info("Skipping task <%s> due to condition", task.name)
                     continue
 

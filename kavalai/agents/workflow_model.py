@@ -38,7 +38,7 @@ class WorkflowException(Exception):
 
 
 class TypeInputInfo(BaseModel):
-    type: Literal["literal", "context"]
+    type: Literal["literal", "context", "load_from_history"]
     value: Optional[BaseModel | str | int | float | bool] = None
     name: Optional[str] = None
 
