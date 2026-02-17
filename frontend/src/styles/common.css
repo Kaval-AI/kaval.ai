@@ -1,0 +1,49 @@
+:root {
+  --main-bg-color: #002626;
+  --main-text-color: #acc12f;
+  --header-height: 64px;
+}
+
+body {
+  background-color: var(--main-bg-color);
+  color: var(--main-text-color);
+  font-family: 'Roboto', sans-serif;
+  margin: 0;
+}
+
+button {
+  background-color: var(--main-text-color);
+  color: var(--main-bg-color);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input, select, textarea {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--main-text-color);
+  color: var(--main-text-color);
+  padding: 8px;
+  border-radius: 4px;
+}
+
+a {
+  color: var(--main-text-color);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}

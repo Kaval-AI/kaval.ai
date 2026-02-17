@@ -4,14 +4,21 @@
   align-items: center;
   width: 100vw;
   height: 100vh;
-  background-color: #f0f2f5; /* A light grey background */
+  background-color: var(--main-bg-color);
 }
 
 mat-card {
   width: 100%;
   max-width: 600px;
-  padding: 24px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  padding: 32px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(172, 193, 47, 0.2);
+  color: var(--main-text-color);
+}
+
+.login-logo {
+  height: 80px;
+  margin-bottom: 24px;
 }
 
 mat-card-header {

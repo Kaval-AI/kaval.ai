@@ -2,4 +2,26 @@ header {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
+  align-items: center;
+  height: 100%;
+  padding: 0 16px;
+  background-color: var(--main-bg-color);
+  border-bottom: 1px solid rgba(172, 193, 47, 0.2);
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  height: 40px;
+  width: 40px;
+}
+
+.app-name {
+  font-size: 1.2rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
 }

@@ -1,8 +1,10 @@
 <div class="app-container">
   @if (isLoggedIn) {
-    <app-sidebar-menu></app-sidebar-menu>
-    <div class="page-container"><router-outlet></router-outlet></div>
-    <app-user-info></app-user-info>
+    <app-header></app-header>
+    <div class="main-content">
+      <app-sidebar-menu></app-sidebar-menu>
+      <div class="page-container"><router-outlet></router-outlet></div>
+    </div>
   } @else {
   <app-login-page></app-login-page>
   }
