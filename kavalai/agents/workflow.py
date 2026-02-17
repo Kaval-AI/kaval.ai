@@ -33,6 +33,7 @@ from kavalai.agents.workflow_validation import (
 from kavalai.llm_clients.llm_client import chat_completions
 from kavalai.llm_clients.common import Streamer
 import asyncio
+import operator
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ class Task(BaseModel):
     name: str
     inputs: dict[str, TypeInputInfo] = {}
     output: str | dict[str, TypeInputInfo] = ""
+    when: Optional[dict] = None
     # LLM call
     prompt: Optional[str] = None
     temperature: Optional[float] = None
@@ -119,6 +121,14 @@ class RunContext(BaseModel):
         for part in parts[1:]:
             if value is None:
                 return None
+
+            if part == "length":
+                if hasattr(value, "__len__"):
+                    value = len(value)
+                    continue
+                else:
+                    return None
+
             if isinstance(value, BaseModel):
                 # Try getting the field from Pydantic model
                 try:
@@ -150,6 +160,62 @@ class RunContext(BaseModel):
             inputs[name] = value
 
         return inputs
+
+    def evaluate_condition(self, condition: dict) -> bool:
+        """
+        Evaluate a condition dictionary.
+        Supported formats:
+        - { "eq": [val1, val2] }
+        - { "all": [cond1, cond2] }
+        - { "any": [cond1, cond2] }
+        - { "not": cond }
+        Values can be TypeInputInfo (dict) or raw literals.
+        """
+        if not condition:
+            return True
+
+        operators = {
+            "eq": operator.eq,
+            "not_eq": operator.ne,
+            "gt": operator.gt,
+            "gte": operator.ge,
+            "lt": operator.lt,
+            "lte": operator.le,
+            "contains": lambda a, b: b in a if a is not None else False,
+        }
+
+        for key, val in condition.items():
+            if key in operators:
+                if not isinstance(val, list) or len(val) != 2:
+                    raise ValueError(f"Operator '{key}' requires a list of 2 operands.")
+
+                operands = []
+                for operand in val:
+                    if isinstance(operand, dict) and "type" in operand:
+                        # It's a TypeInputInfo
+                        info = TypeInputInfo(**operand)
+                        operands.append(self.resolve_input_info(info))
+                    else:
+                        operands.append(operand)
+
+                return operators[key](operands[0], operands[1])
+
+            elif key == "all":
+                if not isinstance(val, list):
+                    raise ValueError("'all' requires a list of conditions.")
+                return all(self.evaluate_condition(c) for c in val)
+
+            elif key == "any":
+                if not isinstance(val, list):
+                    raise ValueError("'any' requires a list of conditions.")
+                return any(self.evaluate_condition(c) for c in val)
+
+            elif key == "not":
+                if not isinstance(val, dict):
+                    raise ValueError("'not' requires a single condition dictionary.")
+                return not self.evaluate_condition(val)
+
+        return True
 
 
 def make_prompt(prompt: str, input_data: dict) -> str:
@@ -414,6 +480,11 @@ class Workflow:
 
         # 3. Execute Workflow Steps
         for task in self.workflow_model.tasks:
+            if task.when:
+                if not run_context.evaluate_condition(task.when):
+                    logger.info("Skipping task <%s> due to condition", task.name)
+                    continue
+
             logger.info("Running task <%s>", task.name)
             if task.prompt:
                 await self.run_prompt(task, run_context, queue)
