@@ -48,6 +48,7 @@ class Task(BaseModel):
     inputs: dict[str, TypeInputInfo] = {}
     output: str | dict[str, TypeInputInfo] = ""
     when: Optional[dict] = None
+    stop: bool = False
 
     @model_validator(mode="after")
     def validate_conditions(self) -> "Task":

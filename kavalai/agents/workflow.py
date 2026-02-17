@@ -315,6 +315,12 @@ class Workflow:
             else:
                 await self.run_combine(task, run_context, queue)
 
+            if task.stop:
+                logger.info(
+                    "Stopping workflow after task <%s> due to stop: True", task.name
+                )
+                break
+
         # 4. Finalize and Log Response
         output_model = run_context.data.get("output")
         if self.agent_service:
