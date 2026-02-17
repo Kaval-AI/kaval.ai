@@ -53,10 +53,10 @@ data_types:
 tasks:
   - name: load_and_combine
     inputs:
-      prev_results: { type: load_from_history, value: search_results }
+      prev_results: { type: history, value: search_results }
       current_msg: { type: context, value: input.user_message }
     output:
-      prev_results: { type: load_from_history, value: search_results }
+      prev_results: { type: history, value: search_results }
       current_msg: { type: context, value: input.user_message }
 """
     wf2 = Workflow.from_yaml(yaml_2)
@@ -98,7 +98,7 @@ tasks:
   - name: conditional_task
     when:
       eq:
-        - { type: load_from_history, value: status }
+        - { type: history, value: status }
         - "completed"
     inputs:
       result: { type: literal, value: "it worked" }
@@ -121,7 +121,7 @@ tasks:
   - name: conditional_task
     when:
       eq:
-        - { type: load_from_history, value: status }
+        - { type: history, value: status }
         - "failed"
     inputs:
       result: { type: literal, value: "should not happen" }

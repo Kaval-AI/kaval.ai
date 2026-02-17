@@ -45,7 +45,7 @@ async def test_resolve_input_info_context():
 
 
 @pytest.mark.asyncio
-async def test_resolve_input_info_load_from_history():
+async def test_resolve_input_info_history():
     session_id = uuid4()
     mock_service = AsyncMock()
     mock_service.get_history_value.return_value = "history_val"
@@ -53,20 +53,20 @@ async def test_resolve_input_info_load_from_history():
     rc = RunContext(session_id=session_id, agent_service=mock_service)
 
     # Using value
-    info = TypeInputInfo(type="load_from_history", value="some_key")
+    info = TypeInputInfo(type="history", value="some_key")
     assert await rc.resolve_input_info(info) == "history_val"
     mock_service.get_history_value.assert_called_with(session_id, "some_key")
 
     # Using name
-    info = TypeInputInfo(type="load_from_history", name="other_key")
+    info = TypeInputInfo(type="history", name="other_key")
     assert await rc.resolve_input_info(info) == "history_val"
     mock_service.get_history_value.assert_called_with(session_id, "other_key")
 
 
 @pytest.mark.asyncio
-async def test_resolve_input_info_load_from_history_missing_service(caplog):
+async def test_resolve_input_info_history_missing_service(caplog):
     rc = RunContext(session_id=uuid4())
-    info = TypeInputInfo(type="load_from_history", value="key")
+    info = TypeInputInfo(type="history", value="key")
     assert await rc.resolve_input_info(info) is None
     assert (
         "Cannot load from history: agent_service or session_id not set" in caplog.text

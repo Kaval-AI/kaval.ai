@@ -44,7 +44,7 @@ class RunContext(BaseModel):
         """Resolve a TypeInputInfo to its actual value."""
         if info.type == "literal":
             return info.value
-        if info.type == "load_from_history":
+        if info.type == "history":
             if not self.agent_service or not self.session_id:
                 logger.warning(
                     "Cannot load from history: agent_service or session_id not set"
