@@ -191,3 +191,91 @@ tasks:
     # With vip tag
     result2 = await workflow.run({"tags": ["vip", "newsletter"]})
     assert result2.data.result == "VIP Customer"
+
+
+@pytest.mark.asyncio
+async def test_workflow_conditional_invalid_operator_length():
+    workflow_yaml = """
+name: InvalidLengthTest
+data_types:
+  input:
+    type: object
+    properties:
+      val:
+        type: integer
+  output:
+    type: object
+    properties:
+      result:
+        type: string
+tasks:
+  - name: Invalid Task
+    when:
+      eq: [ { type: context, value: input.val }, 1 , 2]
+    output:
+      result:
+        type: literal
+        value: "Should fail"
+"""
+    # The error now happens during Workflow.from_yaml (initialization) due to Pydantic validator
+    with pytest.raises(
+        ValueError, match="Operator 'eq' requires a list of 2 operands."
+    ):
+        Workflow.from_yaml(workflow_yaml)
+
+
+@pytest.mark.asyncio
+async def test_workflow_conditional_operators():
+    workflow_yaml = """
+name: OperatorTest
+data_types:
+  input:
+    type: object
+    properties:
+      val:
+        type: integer
+  output:
+    type: object
+    properties:
+      result:
+        type: string
+tasks:
+  - name: GTE Task
+    when:
+      gte: [ { type: context, value: input.val }, 10 ]
+    output:
+      result:
+        type: literal
+        value: "GTE 10"
+  - name: LT Task
+    when:
+      lt: [ { type: context, value: input.val }, 5 ]
+    output:
+      result:
+        type: literal
+        value: "LT 5"
+  - name: NotEQ Task
+    when:
+      not_eq: [ { type: context, value: input.val }, 7 ]
+    output:
+      result:
+        type: literal
+        value: "Not 7"
+"""
+    workflow = Workflow.from_yaml(workflow_yaml)
+
+    # val=12 -> GTE runs, NotEQ runs. Result: "Not 7"
+    result1 = await workflow.run({"val": 12})
+    assert result1.data.result == "Not 7"
+
+    # val=4 -> LT runs, NotEQ runs. Result: "Not 7"
+    result2 = await workflow.run({"val": 4})
+    assert result2.data.result == "Not 7"
+
+    # val=7 -> GTE (false), LT (false), NotEQ (false). Result: None
+    result3 = await workflow.run({"val": 7})
+    assert result3.data is None
+
+    # val=10 -> GTE runs, NotEQ runs. Result: "Not 7"
+    result4 = await workflow.run({"val": 10})
+    assert result4.data.result == "Not 7"

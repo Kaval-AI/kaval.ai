@@ -63,6 +63,34 @@ class Task(BaseModel):
     inputs: dict[str, TypeInputInfo] = {}
     output: str | dict[str, TypeInputInfo] = ""
     when: Optional[dict] = None
+
+    @model_validator(mode="after")
+    def validate_conditions(self) -> "Task":
+        if self.when:
+            self._validate_condition(self.when)
+        return self
+
+    def _validate_condition(self, condition: dict):
+        operators = {"eq", "not_eq", "gt", "gte", "lt", "lte", "contains"}
+        for key, val in condition.items():
+            if key in operators:
+                if not isinstance(val, list) or len(val) != 2:
+                    raise ValueError(f"Operator '{key}' requires a list of 2 operands.")
+            elif key == "all":
+                if not isinstance(val, list):
+                    raise ValueError("'all' requires a list of conditions.")
+                for c in val:
+                    self._validate_condition(c)
+            elif key == "any":
+                if not isinstance(val, list):
+                    raise ValueError("'any' requires a list of conditions.")
+                for c in val:
+                    self._validate_condition(c)
+            elif key == "not":
+                if not isinstance(val, dict):
+                    raise ValueError("'not' requires a single condition dictionary.")
+                self._validate_condition(val)
+
     # LLM call
     prompt: Optional[str] = None
     temperature: Optional[float] = None
