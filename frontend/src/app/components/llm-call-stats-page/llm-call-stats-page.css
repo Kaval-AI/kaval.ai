@@ -163,6 +163,22 @@
 }
 
 @media (max-width: 768px) {
+  .header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .stat-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .stat-meta {
+    align-items: flex-start;
+  }
+
   .stat-details {
     grid-template-columns: 1fr;
   }

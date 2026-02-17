@@ -1,70 +1,84 @@
+.login-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--main-bg-color);
+  z-index: 1000;
+}
+
+.header-links {
+  display: flex;
+  height: 100%;
+}
+
+.website_logo {
+  width: 120px;
+  position: relative;
+  top:-3px;
+}
+
+.header-links a {
+  color: var(--main-text-color);
+  position: relative;
+  font-weight: 300;
+  font-size: 24px;
+  opacity: 0.8;
+  transition: all 0.2s;
+  border-radius: 4px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+@media (max-width: 768px) {
+  .header-links a {
+    font-size: 18px;
+    padding: 0 8px;
+  }
+}
+.header-links a:hover {
+  opacity: 1;
+  text-decoration: none;
+  background-color: rgba(172, 193, 47, 0.1);
+}
+
+.header-login-button {
+  font-size: 1.5rem;
+  margin: 20px 0;
+}
+
 .login-container {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   width: 100vw;
   height: 100vh;
   background-color: var(--main-bg-color);
-}
-
-mat-card {
-  width: 100%;
-  max-width: 600px;
-  padding: 32px;
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(172, 193, 47, 0.2);
-  color: var(--main-text-color);
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .login-logo {
-  height: 80px;
-  margin-bottom: 24px;
+  width: 50%;
+  max-width: 100%;
+  height: auto;
+  background-color: var(--main-bg-color);
+  margin-bottom: 2rem;
 }
 
-mat-card-header {
+.login-subtitle {
+  color: var(--main-text-color);
+  font-size: 2.2rem;
+  margin-bottom: 2rem;
   text-align: center;
-  margin-bottom: 24px;
 }
 
-.full-width {
-  width: 100%;
-}
-
-mat-form-field {
-  margin-bottom: 16px;
-}
-
-button.full-width {
-  margin-top: 8px;
-  padding: 12px 0;
-  font-size: 1rem;
-}
-
-.error-message {
-  color: #f44336; /* Angular Material's default 'warn' color */
-  font-size: 0.875em;
-  text-align: center;
-  margin-bottom: 16px;
-}
-
-mat-card-title {
-  text-align: center;
-  font-size: 1.5rem;
-  margin-bottom: 8px;
-}
-
-mat-card-subtitle {
-  text-align: center;
-  margin-bottom: 24px;
-}
-
-mat-card-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* Google logo */
 .gsi-material-button {
   -moz-user-select: none;
   -webkit-user-select: none;
@@ -88,14 +102,8 @@ mat-card-content {
   padding: 0 12px;
   position: relative;
   text-align: center;
-  -webkit-transition:
-    background-color 0.218s,
-    border-color 0.218s,
-    box-shadow 0.218s;
-  transition:
-    background-color 0.218s,
-    border-color 0.218s,
-    box-shadow 0.218s;
+  -webkit-transition: background-color .218s, border-color .218s, box-shadow .218s;
+  transition: background-color .218s, border-color .218s, box-shadow .218s;
   vertical-align: middle;
   white-space: nowrap;
   width: auto;
@@ -135,8 +143,8 @@ mat-card-content {
 }
 
 .gsi-material-button .gsi-material-button-state {
-  -webkit-transition: opacity 0.218s;
-  transition: opacity 0.218s;
+  -webkit-transition: opacity .218s;
+  transition: opacity .218s;
   bottom: 0;
   left: 0;
   opacity: 0;
@@ -166,15 +174,32 @@ mat-card-content {
 }
 
 .gsi-material-button:not(:disabled):hover {
-  -webkit-box-shadow:
-    0 1px 2px 0 rgba(60, 64, 67, 0.3),
-    0 1px 3px 1px rgba(60, 64, 67, 0.15);
-  box-shadow:
-    0 1px 2px 0 rgba(60, 64, 67, 0.3),
-    0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  -webkit-box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
 }
 
 .gsi-material-button:not(:disabled):hover .gsi-material-button-state {
   background-color: #303030;
   opacity: 8%;
+}
+
+@media (max-width: 768px) {
+  .login-logo {
+    width: 100%;
+  }
+
+  .login-header {
+    flex-direction: column;
+    height: auto;
+    padding: 16px;
+    align-items: center;
+  }
+
+  .header-links {
+    height: auto;
+  }
+
+  .header-login-button {
+    margin: 10px 0;
+  }
 }
