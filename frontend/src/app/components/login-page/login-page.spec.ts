@@ -70,7 +70,7 @@ describe('LoginPage', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const loginButton = compiled.querySelector('.header-login-button');
     expect(loginButton).toBeTruthy();
-    expect(loginButton?.textContent).toContain('Login');
+    expect(loginButton?.textContent).toContain('Sign in with Google');
   });
 
   it('should call login when header login button is clicked', () => {

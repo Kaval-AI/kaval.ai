@@ -21,7 +21,7 @@ import { LlmCallStatsPage } from './components/llm-call-stats-page/llm-call-stat
 import { RagPage } from './components/rag-page/rag-page';
 import { SessionDetailPage } from './components/session-detail-page/session-detail-page';
 
-import { LandingPage } from './components/landing-page/landing-page';
+import { ProjectsPage } from './components/projects-page/projects-page';
 import { AgentsPage } from './components/agents-page/agents-page';
 import { ProjectEditPage } from './components/project-edit-page/project-edit-page';
 import { UserEditPage } from './components/user-edit-page/user-edit-page';
@@ -29,7 +29,7 @@ import { UsersPage } from './components/users-page/users-page';
 
 export const routes: Routes = [
   // Default route
-  { path: '', component: LandingPage },
+  { path: '', component: ProjectsPage },
 
   { path: 'agents', component: AgentsPage },
   { path: 'users', component: UsersPage },
