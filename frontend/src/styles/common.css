@@ -1,6 +1,8 @@
 :root {
-  --main-bg-color: #002626;
-  --main-text-color: #acc12f;
+  --main-bg-color: #ffffff;
+  --main-text-color: #333333;
+  --accent-color: #acc12f;
+  --dark-green-color: #002626;
   --header-height: 64px;
 }
 
@@ -11,9 +13,14 @@ body {
   margin: 0;
 }
 
+h1, h2, h3, h4 {
+  color: var(--dark-green-color);
+  font-size: 30px;
+}
+
 button {
-  background-color: var(--main-text-color);
-  color: var(--main-bg-color);
+  background-color: var(--accent-color);
+  color: var(--dark-green-color);
   border: none;
   padding: 8px 16px;
   border-radius: 4px;
@@ -32,11 +39,16 @@ button:disabled {
 }
 
 input, select, textarea {
-  background-color: rgba(255, 255, 255, 0.1);
-  border: 1px solid var(--main-text-color);
+  background-color: #ffffff;
+  border: 1px solid #ccc;
   color: var(--main-text-color);
   padding: 8px;
   border-radius: 4px;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
 }
 
 a {

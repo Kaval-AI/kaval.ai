@@ -7,7 +7,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: var(--main-bg-color);
+  background-color: var(--dark-green-color);
   z-index: 1000;
 }
 
@@ -23,7 +23,7 @@
 }
 
 .header-links a {
-  color: var(--main-text-color);
+  color: var(--accent-color);
   position: relative;
   font-weight: 300;
   font-size: 24px;
@@ -50,6 +50,8 @@
 .header-login-button {
   font-size: 1.5rem;
   margin: 20px 0;
+  background-color: var(--accent-color);
+  color: var(--dark-green-color);
 }
 
 .login-container {
@@ -59,7 +61,7 @@
   align-items: center;
   width: 100vw;
   height: 100vh;
-  background-color: var(--main-bg-color);
+  background-color: var(--dark-green-color);
   padding: 20px;
   box-sizing: border-box;
 }
@@ -68,12 +70,12 @@
   width: 50%;
   max-width: 100%;
   height: auto;
-  background-color: var(--main-bg-color);
+  background-color: var(--dark-green-color);
   margin-bottom: 2rem;
 }
 
 .login-subtitle {
-  color: var(--main-text-color);
+  color: var(--accent-color);
   font-size: 2.2rem;
   margin-bottom: 2rem;
   text-align: center;

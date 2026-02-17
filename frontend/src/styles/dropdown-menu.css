@@ -17,6 +17,7 @@
   text-align: left;
   cursor: pointer;
   font-size: 14px;
+  color: var(--main-text-color);
 }
 
 .dropdown-menu-panel button:hover {

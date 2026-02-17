@@ -47,7 +47,7 @@ select {
 
 .header h2 {
   margin: 0;
-  color: #333;
+  color: var(--dark-green-color);
 }
 
 .title-section {
@@ -68,8 +68,8 @@ select {
 
 button {
   padding: 8px 16px;
-  background-color: #42A5F5;
-  color: white;
+  background-color: var(--accent-color);
+  color: var(--dark-green-color);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -99,7 +99,7 @@ button:disabled {
 .session-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-  border-color: #42A5F5;
+  border-color: var(--accent-color);
 }
 
 .session-header {

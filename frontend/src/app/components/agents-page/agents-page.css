@@ -38,7 +38,8 @@
 }
 
 .agents-table tr.selected {
-  background-color: #e3f2fd;
+  background-color: var(--accent-color);
+  color: var(--dark-green-color);
 }
 
 .workflow-chart {
@@ -113,8 +114,8 @@
 
 .btn-conversations {
   padding: 8px 16px;
-  background-color: #1976d2;
-  color: white;
+  background-color: var(--accent-color);
+  color: var(--dark-green-color);
   border: none;
   border-radius: 4px;
   cursor: pointer;
