@@ -74,4 +74,8 @@ export class Header implements OnInit {
       });
     }
   }
+
+  startNewProject() {
+    this.router.navigate(['/project-edit', 'new']);
+  }
 }
