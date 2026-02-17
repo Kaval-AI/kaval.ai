@@ -119,3 +119,41 @@ class TestAgentService:
 
         stats = await service.get_model_call_stats(limit=5, offset=5)
         assert len(stats) == 5
+
+    async def test_get_history_value(self, agents_db):
+        service = AgentService(agents_db)
+        agent = await service.get_or_create_agent(name="HistoryTest")
+        session = await service.get_or_create_session(agent_id=agent.id)
+
+        # Create Run 1
+        run1 = await service.create_run(session_id=session.id)
+        await service.update_run(
+            run_id=run1.id,
+            context={"search_results": "result1", "other": "val1", "nested": {"a": 1}},
+        )
+
+        # Create Run 2
+        run2 = await service.create_run(session_id=session.id)
+        await service.update_run(
+            run_id=run2.id,
+            context={
+                "search_results": "result2",
+                "something": "else",
+                "nested": {"b": 2},
+            },
+        )
+
+        # Test single retrieval (most recent)
+        val = await service.get_history_value(session.id, "search_results")
+        assert val == "result2"
+
+        val_other = await service.get_history_value(session.id, "other")
+        assert val_other == "val1"
+
+        # Test path retrieval
+        val_nested = await service.get_history_value(session.id, "nested.b")
+        assert val_nested == 2
+
+        # Test non-existent key
+        val_none = await service.get_history_value(session.id, "non_existent")
+        assert val_none is None

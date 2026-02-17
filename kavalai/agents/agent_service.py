@@ -15,12 +15,13 @@ limitations under the License.
 """
 
 import logging
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from uuid import UUID
 
 from sqlalchemy import select, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, ModelCallStat
+from kavalai.agents.resolvers import resolve_path, find_key_recursive
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,34 @@ class AgentService:
         await self.db.commit()
         await self.db.refresh(task)
         return task
+
+    async def get_history_value(self, session_id: UUID, key: str) -> Optional[Any]:
+        """
+        Retrieves a value from the context of previous runs in the same session.
+        - If `key` is a dotted path (e.g., "output.search_results"), resolves it as such.
+        - If `key` is a plain name (e.g., "search_results"), searches recursively for the
+          first matching key in the context dicts of previous runs (newest first).
+        Returns the most recent value found for the given key.
+        """
+        is_path = "." in key
+        root_key = key.split(".")[0] if is_path else key
+
+        stmt = (
+            select(Run.context)
+            .where(Run.session_id == session_id)
+            .where(Run.context.has_key(root_key))
+            .order_by(Run.created_at.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        row = result.scalar()
+
+        if row:
+            val = resolve_path(row, key) if is_path else find_key_recursive(row, key)
+            if val is not None:
+                return val
+
+        return None
 
     async def get_chat_history(
         self, session_id: UUID, limit: int = 50
