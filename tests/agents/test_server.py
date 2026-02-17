@@ -12,7 +12,8 @@ from kavalai.agents.server import (
     create_app_from_env_conf,
     run_agent_server,
 )
-from kavalai.agents.workflow import Workflow, WorkflowModel
+from kavalai.agents.workflow import Workflow
+from kavalai.agents.workflow_model import WorkflowModel
 
 
 @pytest.fixture

@@ -17,7 +17,7 @@ limitations under the License.
 from typing import List, Dict, Set
 from graphviz import Digraph
 from pydantic import BaseModel
-from kavalai.agents.workflow import WorkflowModel
+from kavalai.agents.workflow_model import WorkflowModel
 
 
 class Node(BaseModel):

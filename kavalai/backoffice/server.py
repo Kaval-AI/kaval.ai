@@ -31,7 +31,7 @@ from kavalai.agents.agent_service import AgentService
 from kavalai.agents.db import db_manager, Agent
 from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions
-from kavalai.agents.workflow import WorkflowModel
+from kavalai.agents.workflow_model import WorkflowModel
 from kavalai.backoffice.svg import generate_workflow_svg
 from fastapi.responses import Response
 from kavalai.agents.rag_service import RagService

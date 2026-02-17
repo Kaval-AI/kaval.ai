@@ -19,14 +19,14 @@ import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from kavalai.agents.workflow import WorkflowModel, TypeInputInfo
+    from kavalai.agents.workflow_model import WorkflowModel, TypeInputInfo
 
 logger = logging.getLogger(__name__)
 
 
 def validate_rest_server_env_vars(workflow_model: "WorkflowModel"):
     """Validate that environment variables for REST server auth are defined."""
-    from kavalai.agents.workflow import WorkflowException
+    from kavalai.agents.workflow_model import WorkflowException
 
     for server in workflow_model.rest_servers:
         # 1. URL Configuration validation
@@ -86,7 +86,7 @@ def get_root_context_name(info: "TypeInputInfo", fallback: str) -> str:
 
 
 def validate_workflow(workflow_model: "WorkflowModel"):
-    from kavalai.agents.workflow import WorkflowException
+    from kavalai.agents.workflow_model import WorkflowException
 
     if not (0.0 <= workflow_model.temperature <= 2.0):
         raise WorkflowException(

@@ -7,12 +7,14 @@ from pydantic import BaseModel, ValidationError
 
 from kavalai.agents.workflow import (
     Workflow,
+    RunContext,
+)
+from kavalai.agents.workflow_model import (
     WorkflowModel,
     WorkflowException,
     RestServer,
     Task,
     TypeInputInfo,
-    RunContext,
 )
 
 
