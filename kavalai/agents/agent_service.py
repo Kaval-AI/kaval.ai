@@ -158,20 +158,23 @@ class AgentService:
         Returns the most recent value found for the given key.
         """
         is_path = "." in key
-        root_key = key.split(".")[0] if is_path else key
 
+        # Fetch recent contexts for the session, newest first, and scan for the key.
         stmt = (
             select(Run.context)
             .where(Run.session_id == session_id)
-            .where(Run.context.has_key(root_key))
             .order_by(Run.created_at.desc())
-            .limit(1)
         )
         result = await self.db.execute(stmt)
-        row = result.scalar()
+        rows = list(result.scalars().all())
 
-        if row:
-            val = resolve_path(row, key) if is_path else find_key_recursive(row, key)
+        for row in rows:
+            if not row:
+                continue
+            if is_path:
+                val = resolve_path(row, key)
+            else:
+                val = find_key_recursive(row, key)
             if val is not None:
                 return val
 
