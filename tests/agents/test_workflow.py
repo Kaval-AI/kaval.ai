@@ -282,7 +282,6 @@ class TestRestServerEnvVarValidation:
         assert "test_server" in workflow.rest_servers
 
     def test_workflow_loads_with_url_env(self, monkeypatch):
-        """Workflow should load and resolve URL from env when url_env is specified."""
         monkeypatch.setenv("MY_REST_URL", "http://my-api.com")
         # create_workflow_model_with_rest_server uses url by default
         # We need to create a model where only url_env is specified
@@ -291,16 +290,22 @@ class TestRestServerEnvVarValidation:
         model.rest_servers = rest_servers
 
         workflow = Workflow(model)
-        assert workflow.rest_servers["test_server"].url == "http://my-api.com"
+        # url should stay None
+        assert workflow.rest_servers["test_server"].url is None
+        # url_env should stay as specified
+        assert workflow.rest_servers["test_server"].url_env == "MY_REST_URL"
 
-    def test_workflow_raises_on_invalid_url(self):
-        """Workflow should raise exception when URL is invalid."""
+    def test_workflow_raises_on_invalid_url_env_value(self, monkeypatch):
+        """Workflow should raise exception when url_env value is invalid."""
+        monkeypatch.setenv("MY_REST_URL", "not-a-url")
+        rest_servers = [RestServer(name="test_server", url_env="MY_REST_URL")]
         model = create_workflow_model_with_rest_server()
-        model.rest_servers[0].url = "not-a-url"
+        model.rest_servers = rest_servers
 
         with pytest.raises(WorkflowException) as exc_info:
             Workflow(model)
         assert "invalid URL" in str(exc_info.value)
+        assert "from MY_REST_URL" in str(exc_info.value)
 
     def test_workflow_raises_on_missing_url_env(self, monkeypatch):
         """Workflow should raise exception when url_env is not defined."""
@@ -313,6 +318,15 @@ class TestRestServerEnvVarValidation:
             Workflow(model)
         assert "MY_REST_URL" in str(exc_info.value)
         assert "URL is not defined" in str(exc_info.value)
+
+    def test_workflow_raises_on_invalid_url(self):
+        """Workflow should raise exception when static URL is invalid."""
+        model = create_workflow_model_with_rest_server()
+        model.rest_servers[0].url = "not-a-url"
+
+        with pytest.raises(WorkflowException) as exc_info:
+            Workflow(model)
+        assert "invalid URL" in str(exc_info.value)
 
     def test_workflow_loads_with_valid_auth_env_vars(self, monkeypatch):
         """Workflow should load when both env vars are defined."""

@@ -39,17 +39,23 @@ def validate_rest_server_env_vars(workflow_model: "WorkflowModel"):
                 f"REST server '{server.name}': Either 'url' or 'url_env' must be specified."
             )
 
-        # 2. URL Resolution from environment
+        # 2. URL Resolution check from environment (no mutation)
         if server.url_env:
             if server.url_env not in os.environ:
                 raise WorkflowException(
                     f"Environment variable '{server.url_env}' for REST server "
                     f"'{server.name}' URL is not defined."
                 )
-            server.url = os.environ[server.url_env]
+            url_val = os.environ[server.url_env]
+            # Check format of the env var value
+            if not (url_val.startswith("http://") or url_val.startswith("https://")):
+                raise WorkflowException(
+                    f"REST server '{server.name}' has an invalid URL from {server.url_env}: {url_val}. "
+                    f"It must start with http:// or https://"
+                )
 
-        # 3. URL Format validation
-        if not server.url or not (
+        # 3. URL Format validation for static URL
+        if server.url and not (
             server.url.startswith("http://") or server.url.startswith("https://")
         ):
             raise WorkflowException(

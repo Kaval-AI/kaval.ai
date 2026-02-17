@@ -267,6 +267,10 @@ class Workflow:
         inputs = run_context.prepare_tool_inputs(task)
 
         rest_server = self.rest_servers[task.rest_server]
+        url = rest_server.url
+        if not url and rest_server.url_env:
+            url = os.environ[rest_server.url_env]
+
         auth = None
         if rest_server.username_env and rest_server.password_env:
             username = os.environ[rest_server.username_env]
@@ -282,10 +286,10 @@ class Workflow:
                 kwargs["json"] = inputs
                 if "params" in kwargs:
                     kwargs.pop("params")
-            logger.info(f"Calling {task.method.upper()} {rest_server.url}/{task.tool}")
+            logger.info(f"Calling {task.method.upper()} {url}/{task.tool}")
             response = await client.request(
                 task.method.upper(),
-                f"{rest_server.url}/{task.tool}",
+                f"{url}/{task.tool}",
                 **kwargs,
             )
             response.raise_for_status()
