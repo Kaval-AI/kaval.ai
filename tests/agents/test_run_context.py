@@ -135,6 +135,31 @@ async def test_evaluate_condition_basic_operators():
     )
     assert await rc.evaluate_condition({"contains": [None, "foo"]}) is False
 
+    # is_null
+    assert (
+        await rc.evaluate_condition({"is_null": {"type": "context", "value": "a"}})
+        is False
+    )
+    rc.data["n"] = None
+    assert (
+        await rc.evaluate_condition({"is_null": {"type": "context", "value": "n"}})
+        is True
+    )
+    assert await rc.evaluate_condition({"is_null": None}) is True
+    assert await rc.evaluate_condition({"is_null": 10}) is False
+
+    # is_not_null
+    assert (
+        await rc.evaluate_condition({"is_not_null": {"type": "context", "value": "a"}})
+        is True
+    )
+    assert (
+        await rc.evaluate_condition({"is_not_null": {"type": "context", "value": "n"}})
+        is False
+    )
+    assert await rc.evaluate_condition({"is_not_null": None}) is False
+    assert await rc.evaluate_condition({"is_not_null": 10}) is True
+
 
 @pytest.mark.asyncio
 async def test_evaluate_condition_logical():

@@ -112,6 +112,20 @@ class RunContext(BaseModel):
 
                 return operators[key](operands[0], operands[1])
 
+            elif key == "is_null":
+                operand = val
+                if isinstance(operand, dict) and "type" in operand:
+                    info = TypeInputInfo(**operand)
+                    operand = await self.resolve_input_info(info)
+                return operand is None
+
+            elif key == "is_not_null":
+                operand = val
+                if isinstance(operand, dict) and "type" in operand:
+                    info = TypeInputInfo(**operand)
+                    operand = await self.resolve_input_info(info)
+                return operand is not None
+
             elif key == "all":
                 if not isinstance(val, list):
                     raise ValueError("'all' requires a list of conditions.")
