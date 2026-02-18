@@ -1,10 +1,31 @@
-# Kaval.AI agents
+<img src="frontend/public/assets/images/iconlogo.svg" alt="Kaval.AI Logo" width="400" height="100"/>
 
-[Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0)
+Kaval.AI is an open source Python SDK for writing AI agents and workflow automation pipelines.
+Suitable for conversational agents and generic workflow automation.
 
-Kaval.AI is a Python SDK for writing AI agents and workflow automation pipelines.
-It has a separate SDK and agent management software UI that provides various
-ways to analyze the agent's performance and manage its workflows.
+Features:
+- Makes implementing simple workflows simple via YAML-defined workflows.
+- Built-in debugging and monitoring tools via modern UI.
+- Built-in support for Retrieval augmented generation (RAG) index.
+- Agent server REST API with authentication and streaming support.
+- Supports calling REST servers with basic authentication.
+
+## License
+Copyright 2026 OÜ KAVAL AI (registry code 17393877)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+
 
 ## News Summarizer agent example
 
