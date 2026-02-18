@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, ActivatedRoute } from '@angular/router';
 import { UserService } from '../../services/user-service';
 import { CommonModule } from '@angular/common';
@@ -27,7 +27,7 @@ import { filter, map } from 'rxjs';
   templateUrl: './sidebar-menu.html',
   styleUrl: './sidebar-menu.css',
 })
-export class SidebarMenu {
+export class SidebarMenu implements OnInit {
   private userService = inject(UserService);
   private navigationService = inject(NavigationService);
   private router = inject(Router);
@@ -36,16 +36,24 @@ export class SidebarMenu {
   constructor() {
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd),
-      map(() => {
-        let route = this.activatedRoute;
-        while (route.firstChild) {
-          route = route.firstChild;
-        }
-        return route.snapshot.data['title'] || '';
-      })
+      map(() => this.getRouteTitle())
     ).subscribe((title) => {
       this.navigationService.setTitle(title);
     });
+  }
+
+  ngOnInit(): void {
+    // Set initial title for fresh page load
+    const title = this.getRouteTitle();
+    this.navigationService.setTitle(title);
+  }
+
+  private getRouteTitle(): string {
+    let route = this.activatedRoute;
+    while (route.firstChild) {
+      route = route.firstChild;
+    }
+    return route.snapshot.data['title'] || '';
   }
 
   isAdmin(): boolean {

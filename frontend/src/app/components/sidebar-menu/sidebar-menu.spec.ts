@@ -15,21 +15,27 @@ limitations under the License.
 */
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Routes } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { SidebarMenu } from './sidebar-menu';
+import { NavigationService } from '../../services/navigation-service';
 
 describe('SidebarMenu', () => {
   let component: SidebarMenu;
   let fixture: ComponentFixture<SidebarMenu>;
+  let navigationService: NavigationService;
+
+  const routes: Routes = [
+    { path: 'test', component: SidebarMenu, data: { title: 'Test Title' } }
+  ];
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [SidebarMenu],
       providers: [
-        provideRouter([]),
+        provideRouter(routes),
         provideHttpClient(),
         provideHttpClientTesting(),
       ]
@@ -37,10 +43,17 @@ describe('SidebarMenu', () => {
 
     fixture = TestBed.createComponent(SidebarMenu);
     component = fixture.componentInstance;
+    navigationService = TestBed.inject(NavigationService);
     fixture.detectChanges();
   });
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should set title on initialization', () => {
+    const spy = spyOn(navigationService, 'setTitle');
+    component.ngOnInit();
+    expect(spy).toHaveBeenCalled();
   });
 });
