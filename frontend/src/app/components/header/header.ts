@@ -42,8 +42,9 @@ export class Header implements OnInit {
   ngOnInit(): void {
     this.userService.userDetails.subscribe(details => {
       if (details) {
-        this.loadProjects();
+        // Set active project first so template can reflect it while projects load
         this.activeProjectId = details.active_project_id && details.active_project_id !== 'None' ? details.active_project_id : null;
+        this.loadProjects();
       } else {
         this.projects = [];
         this.activeProjectId = null;
@@ -56,8 +57,14 @@ export class Header implements OnInit {
       this.projects = data;
 
       const activeProjectId = this.userService.getActiveProjectId();
-      if (this.projects.length > 0 && !activeProjectId) {
-        this.userService.setActiveProject(this.projects[0].id);
+      if (activeProjectId) {
+        // Ensure the select reflects the currently active project from the service
+        this.activeProjectId = activeProjectId;
+      } else if (this.projects.length > 0) {
+        // If none is set, default to the first and update both service and local state
+        const firstId = this.projects[0].id;
+        this.userService.setActiveProject(firstId);
+        this.activeProjectId = firstId;
       }
     });
   }

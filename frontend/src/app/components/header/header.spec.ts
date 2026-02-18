@@ -18,7 +18,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
-import { of } from 'rxjs';
+import { of, BehaviorSubject } from 'rxjs';
 
 import { Header } from './header';
 import { ProjectService } from '../../services/project-service';
@@ -91,5 +91,24 @@ describe('Header', () => {
     component.onProjectSelect(event);
     expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('2');
     expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/', { skipLocationChange: true });
+  });
+
+  it('should show active project in the select element', async () => {
+    const mockProjects: Project[] = [
+      { id: '1', name: 'Project 1' } as Project,
+      { id: '2', name: 'Project 2' } as Project
+    ];
+    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
+    userServiceSpy.getActiveProjectId.and.returnValue('2');
+    // Simulate user details update with active project id '2'
+    const userDetailsSubject = new BehaviorSubject<any>({ id: 'u1', active_project_id: '2' });
+    Object.defineProperty(userServiceSpy, 'userDetails', { get: () => userDetailsSubject.asObservable() });
+
+    component.ngOnInit();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector('select');
+    expect(select.value).toBe('2');
   });
 });

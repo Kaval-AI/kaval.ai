@@ -12,7 +12,7 @@
                 [value]="activeProjectId || ''">
           <option value="" disabled>-- Choose a Project --</option>
           @for (p of projects; track p.id) {
-            <option [value]="p.id">{{ p.name }}</option>
+            <option [value]="p.id" [selected]="p.id === (activeProjectId || '')">{{ p.name }}</option>
           }
         </select>
       </div>

@@ -5,7 +5,7 @@ header {
   align-items: center;
   height: 100%;
   padding: 0 16px;
-  background-color: var(--main-bg-color);
+  background-color: var(--dark-green-color);
   border-bottom: 1px solid rgba(0, 38, 38, 0.1);
 }
 
