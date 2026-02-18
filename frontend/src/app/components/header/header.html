@@ -6,7 +6,6 @@
     <div class="page-title">{{ title() }}</div>
     @if (projects.length > 0) {
       <div class="project-selector">
-        <label for="headerProjectSelect">Current project: </label>
         <select id="headerProjectSelect"
                 (change)="onProjectSelect($event)"
                 [value]="activeProjectId || ''">

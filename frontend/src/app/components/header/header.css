@@ -31,9 +31,9 @@ header {
 }
 
 .page-title {
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: var(--dark-green-color);
+  font-size: 18pt;
+  font-weight: 400;
+  color: var(--accent-color);
   padding-left: 16px;
   border-right: 1px solid rgba(0, 38, 38, 0.1);
   margin-right: 16px;
