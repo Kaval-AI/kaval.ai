@@ -114,6 +114,7 @@ input:disabled, textarea:disabled {
 
 .project-header {
   display: flex;
+  flex-direction: column;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 2rem;
@@ -121,106 +122,26 @@ input:disabled, textarea:disabled {
   padding-bottom: 1rem;
 }
 
+.info-group {
+  margin-top:25px;
+}
+
 .title-section h3 {
   margin: 0;
-  font-size: 1.5rem;
   color: #333;
 }
 
-.project-role-badge {
-  display: inline-block;
-  background: #e9ecef;
-  color: #495057;
-  padding: 0.2rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  font-weight: 600;
-  margin-top: 0.5rem;
-}
 
-.action-icons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.icon-btn {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  padding: 8px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s;
-  color: #6c757d;
-}
 
 .icon-btn:hover {
   background-color: #f8f9fa;
 }
 
-.edit-btn:hover {
-  color: #007bff;
-}
-
-.delete-btn:hover {
-  color: #dc3545;
-}
-
-.info-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.info-group label {
-  font-weight: bold;
-  font-size: 0.9rem;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.info-content {
-  font-size: 1.1rem;
-  color: #333;
-  line-height: 1.6;
-}
 
 .description-text {
   white-space: pre-wrap;
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.stat-card {
-  background: #f8f9fa;
-  padding: 1.25rem;
-  border-radius: 8px;
-  border: 1px solid #e9ecef;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.stat-label {
-  font-size: 0.8rem;
-  color: #6c757d;
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.025em;
-}
-
-.stat-value {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #212529;
-}
 
 .button-row {
   display: flex;
@@ -233,9 +154,8 @@ input:disabled, textarea:disabled {
   cursor: pointer;
 }
 
-.btn-delete {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
+.action-buttons {
+  margin: 0.5rem 0 1rem 0; /* leave space between buttons and following info groups */
+  display: flex;
+  gap: 0.5rem;
 }

@@ -38,6 +38,11 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button.danger {
+  background-color: #dc3545;
+  color: white;
+}
+
 input, select, textarea {
   background-color: #ffffff;
   border: 1px solid #ccc;
@@ -60,6 +65,69 @@ a:hover {
   text-decoration: underline;
 }
 
+.badge {
+  display: inline-block;
+  background: var(--accent-color);
+  color: var(--dark-green-color);
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.info-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.info-group label {
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.info-content {
+  font-size: 1.1rem;
+  color: #333;
+  line-height: 1.6;
+}
+
 h1 {
   font-family: system-ui;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: var(--accent-color);
+  padding: 1.25rem;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: #000000;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  color: #000000;
+  opacity: 0.7;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #000000;
 }

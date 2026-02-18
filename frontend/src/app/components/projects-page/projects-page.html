@@ -6,17 +6,25 @@
         <div class="project-header">
           <div class="title-section">
             <h3>{{ selectedProject.name }}</h3>
-            <p class="project-role-badge">{{ selectedProject.role }}</p>
+            <p class="badge" [ngClass]="{ 'badge--owner': selectedProject.role === 'owner' }">{{ selectedProject.role }}</p>
           </div>
-          <div class="action-icons">
-            <button type="button" class="icon-btn edit-btn" (click)="editProject()" title="Edit Project">
-              <i class="fas fa-edit"></i>
-            </button>
-            @if (selectedProject.role === 'owner') {
-              <button type="button" class="icon-btn delete-btn" (click)="deleteProject()" title="Delete Project">
-                <i class="fas fa-trash"></i>
+          <div class="info-group">
+            <div class="info-content description-text">
+              {{ selectedProject.description || 'No description provided.' }}
+            </div>
+          </div>
+          <div class="info-group">
+            <h4>Actions</h4>
+            <div class="action-buttons">
+              <button type="button" (click)="editProject()" title="Edit Project">
+                <i class="fas fa-edit"></i> Edit
               </button>
-            }
+              @if (selectedProject.role === 'owner') {
+                <button type="button" class="danger" (click)="deleteProject()" title="Delete Project">
+                  <i class="fas fa-trash"></i> Delete
+                </button>
+              }
+            </div>
           </div>
         </div>
 
@@ -42,12 +50,7 @@
             </div>
           }
 
-          <div class="info-group">
-            <label>Description</label>
-            <div class="info-content description-text">
-              {{ selectedProject.description || 'No description provided.' }}
-            </div>
-          </div>
+
         </div>
       </div>
     }
