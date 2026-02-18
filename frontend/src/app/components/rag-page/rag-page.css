@@ -146,28 +146,6 @@
   white-space: nowrap;
 }
 
-.results-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 15px;
-}
-
-.results-table th, .results-table td {
-  border: 1px solid #ddd;
-  padding: 12px;
-  text-align: left;
-  vertical-align: top;
-}
-
-.results-table th {
-  background-color: #f5f5f5;
-  font-weight: 600;
-}
-
-.results-table tr:nth-child(even) {
-  background-color: #fafafa;
-}
-
 .content-cell {
   max-width: 500px;
   word-break: break-word;

@@ -2,19 +2,6 @@
   padding: 20px;
 }
 
-.agents-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 20px;
-}
-
-.agents-table th, .agents-table td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: left;
-  vertical-align: top;
-}
-
 .agents-content {
   display: block;
   margin-top: 20px;
@@ -27,19 +14,6 @@
 .agent-details {
   border-top: 1px solid #ddd;
   padding-top: 20px;
-}
-
-.agents-table tr {
-  cursor: pointer;
-}
-
-.agents-table tr:hover {
-  background-color: #f9f9f9;
-}
-
-.agents-table tr.selected {
-  background-color: var(--accent-color);
-  color: var(--dark-green-color);
 }
 
 .workflow-chart {
@@ -75,10 +49,6 @@
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-all;
-}
-
-.agents-table th {
-  background-color: #f2f2f2;
 }
 
 .loading, .error, .no-agents {

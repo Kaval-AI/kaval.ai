@@ -2,7 +2,7 @@
   <div class="header-section">
     <div class="header-top">
       @if (!showForm) {
-        <button class="add-btn" (click)="addUser()">
+        <button (click)="addUser()">
           <i class="fas fa-plus"></i> Add User
         </button>
       }
@@ -31,14 +31,14 @@
           </label>
         </div>
         <div class="form-actions">
-          <button type="button" class="btn" (click)="cancelForm()">Cancel</button>
-          <button type="submit" class="btn btn-primary" [disabled]="userForm.invalid">Save</button>
+          <button type="button" (click)="cancelForm()">Cancel</button>
+          <button type="submit" [disabled]="userForm.invalid">Save</button>
         </div>
       </form>
     </div>
   } @else {
     <div class="table-container">
-      <table class="users-table">
+      <table class="common-table">
         <thead>
           <tr>
             <th>Picture</th>
@@ -57,15 +57,15 @@
               <td>{{ user.name }}</td>
               <td>{{ user.email }}</td>
               <td>
-                <span class="badge" [ngClass]="user.is_admin ? 'admin-badge' : 'user-badge'">
+                <span class="badge" [ngStyle]="{'opacity': user.is_admin ? '1' : '0.6'}">
                   {{ user.is_admin ? 'Admin' : 'User' }}
                 </span>
               </td>
               <td class="actions">
-                <button class="action-btn edit-btn" (click)="editUser(user)" title="Edit">
+                <button class="action-btn" (click)="editUser(user)" title="Edit">
                   <i class="fas fa-edit"></i>
                 </button>
-                <button class="action-btn delete-btn" (click)="deleteUser(user)" title="Delete">
+                <button class="action-btn danger" (click)="deleteUser(user)" title="Delete">
                   <i class="fas fa-trash"></i>
                 </button>
               </td>

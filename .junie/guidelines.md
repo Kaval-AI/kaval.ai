@@ -28,3 +28,6 @@ At the end of every coding task, you must update the relevant unit tests and run
 - Try to refactor code blocks that perform specific tasks into dedicated functions.
 - Keep tests for a single file also in a single file e.g agent.py has just test_agent.py.
 - Don't update README.md
+
+## Styling guidelines
+- Prefer styles and components in common.css for styling CSS.
