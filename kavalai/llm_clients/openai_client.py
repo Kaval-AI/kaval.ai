@@ -114,6 +114,34 @@ class OpenAIClient:
         )
         return result, stats
 
+    async def generate_image(
+        self,
+        model: str,
+        prompt: str,
+        size: str = "1024x1024",
+        quality: str = "standard",
+        **kwargs,
+    ) -> Tuple[str, ModelCallStat]:
+        start_time = time.perf_counter()
+        response = await self.client.images.generate(
+            model=model,
+            prompt=prompt,
+            size=size,
+            quality=quality,
+            response_format="b64_json",
+            **kwargs,
+        )
+        duration = time.perf_counter() - start_time
+        image_base64 = response.data[0].b64_json
+
+        stats = create_model_call_stat(
+            call_type="image_generation",
+            model=f"openai/{model}",
+            duration=duration,
+            response_data={"size": size, "quality": quality},
+        )
+        return image_base64, stats
+
     async def compute_embeddings(
         self,
         model: str,

@@ -7,3 +7,4 @@ Welcome to the Kaval.AI tutorials. Here you will find step-by-step guides on how
    :maxdepth: 2
 
    getting_started
+   llm_clients

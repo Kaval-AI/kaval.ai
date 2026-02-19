@@ -43,8 +43,8 @@ test = [
     "pre-commit"
 ]
 docs = [
-    "sphinx",
-    "sphinx-rtd-theme"
+    "sphinx<9",
+    "sphinx-immaterial"
 ]
 
 [tool.setuptools.packages.find]

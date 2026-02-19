@@ -170,6 +170,32 @@ class GeminiClient:
         if "items" in schema:
             self._cleanup_schema(schema["items"])
 
+    async def generate_image(
+        self,
+        model: str,
+        prompt: str,
+        **kwargs,
+    ) -> Tuple[str, ModelCallStat]:
+        start_time = time.perf_counter()
+        response = await self.client.aio.models.generate_images(
+            model=model,
+            prompt=prompt,
+            **kwargs,
+        )
+        duration = time.perf_counter() - start_time
+
+        # Gemini returns images as a list of bytes. We take the first one and encode to base64.
+        image_bytes = response.generated_images[0].image.image_bytes
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+        stats = create_model_call_stat(
+            call_type="image_generation",
+            model=f"gemini/{model}",
+            duration=duration,
+            response_data={"prompt": prompt},
+        )
+        return image_base64, stats
+
     async def compute_embeddings(
         self,
         model: str,

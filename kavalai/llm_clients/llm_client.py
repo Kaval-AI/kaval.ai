@@ -143,6 +143,38 @@ async def chat_completions(
     return content, stats
 
 
+async def generate_image(
+    model: str,
+    prompt: str,
+    **kwargs,
+) -> tuple[str, ModelCallStat]:
+    """
+    Generate an image from a prompt and return the image as a base64 string and stats.
+    """
+    client = get_llm_client(model)
+
+    request_info = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "arguments": {
+            "model": model,
+            "prompt": prompt,
+            **kwargs,
+        },
+    }
+    _, model_name = model.split("/")
+
+    image_base64, stats = await with_retry(
+        client.generate_image,
+        model=model_name,
+        prompt=prompt,
+        **kwargs,
+    )
+
+    stats.request_data = request_info
+
+    return image_base64, stats
+
+
 async def compute_embeddings(
     model: str,
     texts: list[str],
