@@ -53,10 +53,32 @@ class OpenAIClient:
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
 
+        formatted_messages = []
+        for m in messages:
+            content = m.get("content")
+            if isinstance(content, list):
+                # Message already in content-list format
+                formatted_messages.append(m)
+            elif m.get("images"):
+                # Handle images provided in a separate field
+                msg_content = [{"type": "text", "text": content}]
+                for img_base64 in m["images"]:
+                    msg_content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_base64}"
+                            },
+                        }
+                    )
+                formatted_messages.append({"role": m["role"], "content": msg_content})
+            else:
+                formatted_messages.append(m)
+
         call_kwargs = {
             "model": model,
-            "input": messages,
-            "text_format": response_model,
+            "messages": formatted_messages,
+            "response_format": response_model,
             **kwargs,
         }
         if self.service_tier:

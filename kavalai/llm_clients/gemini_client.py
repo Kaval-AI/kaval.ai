@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import base64
 import io
 import time
 from typing import Any, Dict, List, Optional, Type, Tuple
@@ -115,9 +116,41 @@ class GeminiClient:
             role = m["role"]
             if role == "assistant":
                 role = "model"
-            gemini_messages.append(
-                types.Content(role=role, parts=[types.Part(text=m["content"])])
-            )
+
+            parts = []
+            content = m.get("content")
+            if isinstance(content, list):
+                for part in content:
+                    if part["type"] == "text":
+                        parts.append(types.Part(text=part["text"]))
+                    elif part["type"] == "image_url":
+                        # We expect data:image/jpeg;base64,BASE64_DATA
+                        url = part["image_url"]["url"]
+                        if url.startswith("data:image"):
+                            _, base64_data = url.split(",", 1)
+                            parts.append(
+                                types.Part(
+                                    inline_data=types.Blob(
+                                        mime_type="image/jpeg",
+                                        data=base64.b64decode(base64_data),
+                                    )
+                                )
+                            )
+            else:
+                parts.append(types.Part(text=content))
+
+            if m.get("images"):
+                for img_base64 in m["images"]:
+                    parts.append(
+                        types.Part(
+                            inline_data=types.Blob(
+                                mime_type="image/jpeg",
+                                data=base64.b64decode(img_base64),
+                            )
+                        )
+                    )
+
+            gemini_messages.append(types.Content(role=role, parts=parts))
         return gemini_messages
 
     def _cleanup_schema(self, schema: Dict[str, Any]):
