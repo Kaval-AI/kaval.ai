@@ -84,6 +84,12 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `backoffice/V000__users__projects.sql`: Initial schema for users, projects, and project memberships.
     - `backoffice/V001__project_details.sql`: Adds database connection details to projects.
     - `backoffice/V002__active_project.sql`: Adds `active_project_id` to users.
+- `docs/`: Sphinx documentation.
+    - `index.rst`: Main entry point.
+    - `conf.py`: Sphinx configuration (includes `autodoc`, `napoleon`, `viewcode`, `todo`, and `sphinx_rtd_theme`).
+    - `tutorials/`: Step-by-step guides for users and developers.
+    - `architecture/`: High-level concepts and architectural overviews.
+    - `api/`: Automatically generated API documentation from Python docstrings.
 - `kavalai/llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `kavalai/embedding_profiles/`: Example YAML configurations for different embedding providers (OpenAI, Gemini).
 - `scripts/`: Utility scripts.

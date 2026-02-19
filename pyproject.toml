@@ -42,6 +42,10 @@ test = [
     "python-dotenv",
     "pre-commit"
 ]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme"
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
