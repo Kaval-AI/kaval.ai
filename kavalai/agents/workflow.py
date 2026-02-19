@@ -26,12 +26,18 @@ from pydantic import BaseModel
 
 from kavalai.agents.workflow_model import (
     WorkflowModel,
-    Task,
+    LLMTask,
+    RestTask,
+    McpTask,
+    PythonTask,
+    AgentTask,
+    CombineTask,
     to_plain,
     WorkflowRunResult,
     McpServer,
     WorkflowException,
 )
+from kavalai.agents.planning_agent import PlanningAgent
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.schema_parser import SchemaParser
 from kavalai.agents.workflow_validation import (
@@ -101,7 +107,7 @@ class Workflow:
         return self.models[name]
 
     async def run_prompt(
-        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
+        self, task: LLMTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         input_data = {}
         for name, info in task.inputs.items():
@@ -170,7 +176,7 @@ class Workflow:
             )
 
     async def run_rest_tool(
-        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
+        self, task: RestTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         inputs = await run_context.prepare_tool_inputs(task)
 
@@ -238,7 +244,7 @@ class Workflow:
             )
 
     async def run_mcp_tool(
-        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
+        self, task: McpTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         inputs = await run_context.prepare_tool_inputs(task)
         mcp_server_config = self.mcp_servers[task.mcp_server]
@@ -341,7 +347,7 @@ class Workflow:
             )
 
     async def run_python_tool(
-        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
+        self, task: PythonTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         """Run a Python function using inspect."""
         if not task.python_tool:
@@ -429,7 +435,7 @@ class Workflow:
             )
 
     async def run_combine(
-        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None = None
+        self, task: CombineTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         """Combine context values into an output dict (no LLM or tool call)."""
         result = {}
@@ -460,6 +466,13 @@ class Workflow:
                     run_context.data[task.output].model_dump_json()
                 )
             logger.info(f"Combined inputs into {task.output}")
+
+    async def run_special_agent(
+        self, task: AgentTask, run_context: RunContext, queue: asyncio.Queue | None
+    ):
+        """Invoke the PlanningAgent for complex multi-step tasks."""
+        planning_agent = PlanningAgent(self)
+        await planning_agent.run(task, run_context, queue)
 
     async def run(
         self,
@@ -519,18 +532,20 @@ class Workflow:
                         continue
 
                 logger.info("Running task <%s>", task.name)
-                if task.max_steps > 1:
+                if isinstance(task, AgentTask):
                     await self.run_special_agent(task, run_context, queue)
-                elif task.prompt:
+                elif isinstance(task, LLMTask):
                     await self.run_prompt(task, run_context, queue)
-                elif task.mcp_server:
+                elif isinstance(task, McpTask):
                     await self.run_mcp_tool(task, run_context, queue)
-                elif task.python_tool:
+                elif isinstance(task, PythonTask):
                     await self.run_python_tool(task, run_context, queue)
-                elif task.tool:
+                elif isinstance(task, RestTask):
                     await self.run_rest_tool(task, run_context, queue)
-                else:
+                elif isinstance(task, CombineTask):
                     await self.run_combine(task, run_context, queue)
+                else:
+                    logger.warning("Unknown task type: %s", type(task))
 
                 if task.stop:
                     logger.info(

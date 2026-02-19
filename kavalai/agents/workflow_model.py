@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import Optional, Literal
+from typing import Optional, Literal, Union, Annotated
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, Field
 
 
 def to_plain(obj):
@@ -43,7 +43,7 @@ class TypeInputInfo(BaseModel):
     name: Optional[str] = None
 
 
-class Task(BaseModel):
+class BaseTask(BaseModel):
     name: str
     inputs: dict[str, TypeInputInfo] = {}
     output: str | dict[str, TypeInputInfo] = ""
@@ -51,7 +51,7 @@ class Task(BaseModel):
     stop: bool = False
 
     @model_validator(mode="after")
-    def validate_conditions(self) -> "Task":
+    def validate_conditions(self) -> "BaseTask":
         if self.when:
             self._validate_condition(self.when)
         return self
@@ -80,26 +80,55 @@ class Task(BaseModel):
                     raise ValueError("'not' requires a single condition dictionary.")
                 self._validate_condition(val)
 
-    # LLM call
-    prompt: Optional[str] = None
+
+class LLMTask(BaseTask):
+    type: Literal["llm"] = "llm"
+    prompt: str
     temperature: Optional[float] = None
     use_history: bool = True
-    # REST tool call
-    tool: Optional[str] = None
-    rest_server: Optional[str] = None
-    method: str = "get"
-    # LLM images
     images: list[TypeInputInfo] = []
-    # Streaming
     stream: bool = False
-    # MCP tool call
-    mcp_server: Optional[str] = None
-    # Python tool call
-    python_tool: Optional[str] = None
-    # Special agent workflow
+
+
+class RestTask(BaseTask):
+    type: Literal["rest"] = "rest"
+    tool: str
+    rest_server: str
+    method: str = "get"
+    stream: bool = False
+
+
+class McpTask(BaseTask):
+    type: Literal["mcp"] = "mcp"
+    tool: str
+    mcp_server: str
+    stream: bool = False
+
+
+class PythonTask(BaseTask):
+    type: Literal["python"] = "python"
+    python_tool: str
+    stream: bool = False
+
+
+class AgentTask(BaseTask):
+    type: Literal["agent"] = "agent"
     max_steps: int = 1
     allowed_mcp_servers: list[str] = []
     timeout: Optional[int] = None
+    prompt: Optional[str] = None
+    stream: bool = False
+
+
+class CombineTask(BaseTask):
+    type: Literal["combine"] = "combine"
+    stream: bool = False
+
+
+Task = Annotated[
+    Union[LLMTask, RestTask, McpTask, PythonTask, AgentTask, CombineTask],
+    Field(discriminator="type"),
+]
 
 
 class RestServer(BaseModel):

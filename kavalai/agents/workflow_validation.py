@@ -108,7 +108,12 @@ def get_root_context_name(info: "TypeInputInfo", fallback: str) -> str:
 
 
 def validate_workflow(workflow_model: "WorkflowModel"):
-    from kavalai.agents.workflow_model import WorkflowException
+    from kavalai.agents.workflow_model import (
+        WorkflowException,
+        LLMTask,
+        McpTask,
+        AgentTask,
+    )
 
     validate_rest_server_env_vars(workflow_model)
 
@@ -119,10 +124,11 @@ def validate_workflow(workflow_model: "WorkflowModel"):
 
     available_data = {"input"}
     for task in workflow_model.tasks:
-        if task.temperature is not None and not (0.0 <= task.temperature <= 2.0):
-            raise WorkflowException(
-                f"Task '{task.name}' temperature must be between 0.0 and 2.0, got {task.temperature}"
-            )
+        if isinstance(task, LLMTask) and task.temperature is not None:
+            if not (0.0 <= task.temperature <= 2.0):
+                raise WorkflowException(
+                    f"Task '{task.name}' temperature must be between 0.0 and 2.0, got {task.temperature}"
+                )
 
         # Check outputs
         if isinstance(task.output, str) and task.output:
@@ -148,7 +154,7 @@ def validate_workflow(workflow_model: "WorkflowModel"):
                     )
 
         # Check MCP server existence
-        if task.mcp_server:
+        if isinstance(task, McpTask):
             mcp_server_names = [s.name for s in workflow_model.mcp_servers]
             if task.mcp_server not in mcp_server_names:
                 raise WorkflowException(
@@ -156,7 +162,7 @@ def validate_workflow(workflow_model: "WorkflowModel"):
                 )
 
         # Check allowed_mcp_servers existence
-        if task.allowed_mcp_servers:
+        if isinstance(task, AgentTask) and task.allowed_mcp_servers:
             mcp_server_names = [s.name for s in workflow_model.mcp_servers]
             for s_name in task.allowed_mcp_servers:
                 if s_name not in mcp_server_names:

@@ -21,7 +21,13 @@ from typing import Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 
-from kavalai.agents.workflow_model import Task, WorkflowException, TypeInputInfo
+from kavalai.agents.workflow_model import (
+    WorkflowException,
+    TypeInputInfo,
+    AgentTask,
+    RestTask,
+    McpTask,
+)
 from kavalai.llm_clients.llm_client import chat_completions
 from kavalai.llm_clients.common import Streamer
 
@@ -56,7 +62,7 @@ class PlanningAgent:
         # Keep a reference to Workflow to reuse tool runners and context
         self.workflow = workflow
 
-    async def run(self, task: Task, run_context, queue: asyncio.Queue | None):
+    async def run(self, task: AgentTask, run_context, queue: asyncio.Queue | None):
         # 1) Resolve initial inputs
         input_data = {}
         for name, info in task.inputs.items():
@@ -138,21 +144,29 @@ class PlanningAgent:
                             f"MCP server '{directive.server}' not allowed for task '{task.name}'."
                         )
 
-                proxy = Task(
-                    name=f"{task.name}__step{steps}__tool",
-                    inputs={
-                        k: TypeInputInfo(type="literal", value=v)
-                        for k, v in (directive.arguments or {}).items()
-                    },
-                    output=directive.result_key or f"__tool_result_{steps}",
-                )
                 if directive.tool_kind == "rest":
-                    proxy.tool = directive.name
-                    proxy.rest_server = directive.server
+                    proxy = RestTask(
+                        name=f"{task.name}__step{steps}__tool",
+                        inputs={
+                            k: TypeInputInfo(type="literal", value=v)
+                            for k, v in (directive.arguments or {}).items()
+                        },
+                        output=directive.result_key or f"__tool_result_{steps}",
+                        tool=directive.name,
+                        rest_server=directive.server,
+                    )
                     await self.workflow.run_rest_tool(proxy, run_context, queue)
                 elif directive.tool_kind == "mcp":
-                    proxy.tool = directive.name
-                    proxy.mcp_server = directive.server
+                    proxy = McpTask(
+                        name=f"{task.name}__step{steps}__tool",
+                        inputs={
+                            k: TypeInputInfo(type="literal", value=v)
+                            for k, v in (directive.arguments or {}).items()
+                        },
+                        output=directive.result_key or f"__tool_result_{steps}",
+                        tool=directive.name,
+                        mcp_server=directive.server,
+                    )
                     await self.workflow.run_mcp_tool(proxy, run_context, queue)
                 else:
                     raise WorkflowException(f"Unknown tool_kind: {directive.tool_kind}")

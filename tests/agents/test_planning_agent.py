@@ -2,7 +2,7 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from kavalai.agents.planning_agent import PlanningAgent
-from kavalai.agents.workflow_model import Task, WorkflowModel, WorkflowException
+from kavalai.agents.workflow_model import AgentTask, WorkflowModel, WorkflowException
 from kavalai.agents.run_context import RunContext
 from kavalai.agents.db import ModelCallStat
 
@@ -43,7 +43,7 @@ async def test_planning_agent_loop_limit():
         )
 
         agent = PlanningAgent(workflow)
-        task = Task(name="test_task", max_steps=3, output="output")
+        task = AgentTask(name="test_task", max_steps=3, output="output")
         run_context = RunContext(data={})
 
         # We also need to mock workflow.run_rest_tool
@@ -81,7 +81,7 @@ async def test_planning_agent_finish():
         )
 
         agent = PlanningAgent(workflow)
-        task = Task(name="test_task", max_steps=5, output="output")
+        task = AgentTask(name="test_task", max_steps=5, output="output")
         # Pre-set the final result in context
         run_context = RunContext(data={"final_result": "done"})
 
@@ -119,7 +119,7 @@ async def test_planning_agent_mcp_restricted():
         )
 
         agent = PlanningAgent(workflow)
-        task = Task(
+        task = AgentTask(
             name="test_task", max_steps=5, allowed_mcp_servers=["allowed_server"]
         )
         run_context = RunContext(data={})
@@ -148,7 +148,7 @@ async def test_planning_agent_timeout():
 
     with patch("kavalai.agents.planning_agent.chat_completions", side_effect=slow_chat):
         agent = PlanningAgent(workflow)
-        task = Task(name="test_task", max_steps=5, timeout=1)
+        task = AgentTask(name="test_task", max_steps=5, timeout=1)
         run_context = RunContext(data={})
 
         with pytest.raises(WorkflowException) as exc:
