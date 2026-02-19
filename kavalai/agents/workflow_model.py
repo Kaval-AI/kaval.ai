@@ -94,6 +94,8 @@ class Task(BaseModel):
     stream: bool = False
     # MCP tool call
     mcp_server: Optional[str] = None
+    # Python tool call
+    python_tool: Optional[str] = None
     # Special agent workflow
     max_steps: int = 1
     allowed_mcp_servers: list[str] = []

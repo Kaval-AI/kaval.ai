@@ -42,6 +42,8 @@ from kavalai.llm_clients.llm_client import chat_completions
 from kavalai.llm_clients.common import Streamer
 from kavalai.agents.run_context import RunContext
 import asyncio
+import importlib
+import inspect
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.sse import sse_client
@@ -338,7 +340,93 @@ class Workflow:
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
             )
 
-    # removed: moved to PlanningAgent.run
+    async def run_python_tool(
+        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
+    ):
+        """Run a Python function using inspect."""
+        if not task.python_tool:
+            raise WorkflowException(f"Task '{task.name}' has no python_tool defined.")
+
+        try:
+            module_name, func_name = task.python_tool.rsplit(".", 1)
+            module = importlib.import_module(module_name)
+            func = getattr(module, func_name)
+        except (ValueError, ImportError, AttributeError) as e:
+            raise WorkflowException(
+                f"Failed to load python_tool '{task.python_tool}' for task '{task.name}': {e}"
+            )
+
+        # Resolve inputs
+        inputs = await run_context.prepare_tool_inputs(task)
+
+        # Validate function signature
+        sig = inspect.signature(func)
+        bound_args = None
+        try:
+            # Check if inputs match function signature
+            bound_args = sig.bind(**inputs)
+        except TypeError as e:
+            raise WorkflowException(
+                f"Python tool '{task.python_tool}' signature mismatch for task '{task.name}': {e}"
+            )
+
+        # Run the function (handle both sync and async)
+        try:
+            if inspect.iscoroutinefunction(func):
+                result = await func(*bound_args.args, **bound_args.kwargs)
+            else:
+                result = func(*bound_args.args, **bound_args.kwargs)
+        except Exception as e:
+            logger.exception(f"Error executing python_tool '{task.python_tool}'")
+            raise WorkflowException(
+                f"Error executing python_tool '{task.python_tool}' for task '{task.name}': {e}"
+            )
+
+        # Validate output type
+        if isinstance(task.output, str) and task.output:
+            output_type = self.get_data_type(task.output)
+            try:
+                if isinstance(result, dict):
+                    validated_result = output_type(**result)
+                elif isinstance(result, output_type):
+                    validated_result = result
+                else:
+                    # If the result is not a dict and not the output_type itself,
+                    # check if the output_type has exactly one field.
+                    fields = output_type.model_fields
+                    if len(fields) == 1:
+                        field_name = list(fields.keys())[0]
+                        validated_result = output_type(**{field_name: result})
+                    else:
+                        # Fallback to positional init if it's not a Pydantic model
+                        # (though in this project they usually are)
+                        validated_result = output_type(result)
+                run_context.data[task.output] = validated_result
+            except Exception as e:
+                raise WorkflowException(
+                    f"Python tool '{task.python_tool}' returned incompatible result for output '{task.output}': {e}"
+                )
+
+            if task.stream and queue is not None:
+                streamer = Streamer(task.output, queue)
+                await streamer.stream_complete(
+                    validated_result.model_dump_json()
+                    if hasattr(validated_result, "model_dump_json")
+                    else str(validated_result)
+                )
+
+        # Record in DB
+        if self.agent_service and run_context.run_id:
+            await self.agent_service.add_task(
+                agent_id=run_context.agent_id,
+                session_id=run_context.session_id,
+                run_id=run_context.run_id,
+                inputs={
+                    "python_tool": task.python_tool,
+                    "arguments": inputs,
+                },
+                output=to_plain(result),
+            )
 
     async def run_combine(
         self, task: Task, run_context: RunContext, queue: asyncio.Queue | None = None
@@ -437,6 +525,8 @@ class Workflow:
                     await self.run_prompt(task, run_context, queue)
                 elif task.mcp_server:
                     await self.run_mcp_tool(task, run_context, queue)
+                elif task.python_tool:
+                    await self.run_python_tool(task, run_context, queue)
                 elif task.tool:
                     await self.run_rest_tool(task, run_context, queue)
                 else:
