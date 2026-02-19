@@ -126,16 +126,30 @@ class McpServer(BaseModel):
     command_env: Optional[str] = None
     args: list[str] = []
     env: dict[str, str] = {}
+    url: Optional[str] = None
+    url_env: Optional[str] = None
 
     @model_validator(mode="after")
-    def check_command_configs(self) -> "McpServer":
+    def check_configs(self) -> "McpServer":
+        stdio_configured = bool(self.command or self.command_env)
+        http_configured = bool(self.url or self.url_env)
+
+        if stdio_configured and http_configured:
+            raise ValueError(
+                f"MCP server '{self.name}': Cannot specify both stdio (command/command_env) and HTTP (url/url_env) configurations."
+            )
+        if not stdio_configured and not http_configured:
+            raise ValueError(
+                f"MCP server '{self.name}': Either stdio (command/command_env) or HTTP (url/url_env) must be specified."
+            )
+
         if self.command and self.command_env:
             raise ValueError(
-                f"MCP server '{self.name}': Only one of 'command' or 'command_env' can be specified."
+                f"MCP server '{self.name}': Only one of 'command' or 'command_env' can be specified for stdio."
             )
-        if not self.command and not self.command_env:
+        if self.url and self.url_env:
             raise ValueError(
-                f"MCP server '{self.name}': Either 'command' or 'command_env' must be specified."
+                f"MCP server '{self.name}': Only one of 'url' or 'url_env' can be specified for HTTP."
             )
         return self
 

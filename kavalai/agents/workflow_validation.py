@@ -89,9 +89,15 @@ def validate_rest_server_env_vars(workflow_model: "WorkflowModel"):
                     f"Environment variable '{server.command_env}' for MCP server "
                     f"'{server.name}' command is not defined."
                 )
-        elif not server.command:
+        elif server.url_env:
+            if server.url_env not in os.environ:
+                raise WorkflowException(
+                    f"Environment variable '{server.url_env}' for MCP server "
+                    f"'{server.name}' URL is not defined."
+                )
+        elif not server.command and not server.url:
             raise WorkflowException(
-                f"MCP server '{server.name}' must have either 'command' or 'command_env'."
+                f"MCP server '{server.name}' must have either 'command', 'command_env', 'url', or 'url_env'."
             )
 
 

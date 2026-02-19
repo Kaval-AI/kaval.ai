@@ -44,6 +44,7 @@ from kavalai.agents.run_context import RunContext
 import asyncio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.sse import sse_client
 
 logger = logging.getLogger(__name__)
 
@@ -240,42 +241,63 @@ class Workflow:
         inputs = await run_context.prepare_tool_inputs(task)
         mcp_server_config = self.mcp_servers[task.mcp_server]
 
-        command = mcp_server_config.command
-        if not command and mcp_server_config.command_env:
-            command = os.environ[mcp_server_config.command_env]
+        if task.mcp_server not in run_context.mcp_sessions:
+            if mcp_server_config.url or mcp_server_config.url_env:
+                url = mcp_server_config.url
+                if not url and mcp_server_config.url_env:
+                    url = os.environ[mcp_server_config.url_env]
 
-        server_params = StdioServerParameters(
-            command=command,
-            args=mcp_server_config.args,
-            env={**os.environ, **mcp_server_config.env},
-        )
+                logger.info(f"Connecting to HTTP MCP server {task.mcp_server} at {url}")
+                # sse_client returns an async context manager
+                aclient = sse_client(url)
+                read, write = await aclient.__aenter__()
+                run_context.mcp_cleanups.append(aclient)
+            else:
+                command = mcp_server_config.command
+                if not command and mcp_server_config.command_env:
+                    command = os.environ[mcp_server_config.command_env]
 
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
+                server_params = StdioServerParameters(
+                    command=command,
+                    args=mcp_server_config.args,
+                    env={**os.environ, **mcp_server_config.env},
+                )
 
-                logger.info(f"Calling MCP tool {task.mcp_server}/{task.tool}")
-                # mcp library's call_tool might return a CallToolResult
-                response = await session.call_tool(task.tool, arguments=inputs)
+                logger.info(f"Connecting to stdio MCP server {task.mcp_server}")
+                aclient = stdio_client(server_params)
+                read, write = await aclient.__aenter__()
+                run_context.mcp_cleanups.append(aclient)
 
-                if response.isError:
-                    raise WorkflowException(
-                        f"MCP tool '{task.tool}' on server '{task.mcp_server}' failed: {response.content}"
-                    )
+            session = ClientSession(read, write)
+            await session.__aenter__()
+            run_context.mcp_cleanups.append(session)
+            await session.initialize()
+            run_context.mcp_sessions[task.mcp_server] = session
+        else:
+            session = run_context.mcp_sessions[task.mcp_server]
 
-                # MCP response content is a list of TextContent, ImageContent, or EmbeddedResource
-                # We assume the first TextContent is the result
-                result_data = None
-                for content in response.content:
-                    # TextContent has a 'text' attribute
-                    if hasattr(content, "text"):
-                        try:
-                            import json
+        logger.info(f"Calling MCP tool {task.mcp_server}/{task.tool}")
+        # mcp library's call_tool might return a CallToolResult
+        response = await session.call_tool(task.tool, arguments=inputs)
 
-                            result_data = json.loads(content.text)
-                        except (json.JSONDecodeError, TypeError):
-                            result_data = content.text
-                        break
+        if response.isError:
+            raise WorkflowException(
+                f"MCP tool '{task.tool}' on server '{task.mcp_server}' failed: {response.content}"
+            )
+
+        # MCP response content is a list of TextContent, ImageContent, or EmbeddedResource
+        # We assume the first TextContent is the result
+        result_data = None
+        for content in response.content:
+            # TextContent has a 'text' attribute
+            if hasattr(content, "text"):
+                try:
+                    import json
+
+                    result_data = json.loads(content.text)
+                except (json.JSONDecodeError, TypeError):
+                    result_data = content.text
+                break
 
         # Convert result to output type
         output_type = self.get_data_type(task.output)
@@ -401,29 +423,39 @@ class Workflow:
             )
 
         # 3. Execute Workflow Steps
-        for task in self.workflow_model.tasks:
-            if task.when:
-                if not await run_context.evaluate_condition(task.when):
-                    logger.info("Skipping task <%s> due to condition", task.name)
-                    continue
+        try:
+            for task in self.workflow_model.tasks:
+                if task.when:
+                    if not await run_context.evaluate_condition(task.when):
+                        logger.info("Skipping task <%s> due to condition", task.name)
+                        continue
 
-            logger.info("Running task <%s>", task.name)
-            if task.max_steps > 1:
-                await self.run_special_agent(task, run_context, queue)
-            elif task.prompt:
-                await self.run_prompt(task, run_context, queue)
-            elif task.mcp_server:
-                await self.run_mcp_tool(task, run_context, queue)
-            elif task.tool:
-                await self.run_rest_tool(task, run_context, queue)
-            else:
-                await self.run_combine(task, run_context, queue)
+                logger.info("Running task <%s>", task.name)
+                if task.max_steps > 1:
+                    await self.run_special_agent(task, run_context, queue)
+                elif task.prompt:
+                    await self.run_prompt(task, run_context, queue)
+                elif task.mcp_server:
+                    await self.run_mcp_tool(task, run_context, queue)
+                elif task.tool:
+                    await self.run_rest_tool(task, run_context, queue)
+                else:
+                    await self.run_combine(task, run_context, queue)
 
-            if task.stop:
-                logger.info(
-                    "Stopping workflow after task <%s> due to stop: True", task.name
-                )
-                break
+                if task.stop:
+                    logger.info(
+                        "Stopping workflow after task <%s> due to stop: True", task.name
+                    )
+                    break
+        finally:
+            # Cleanup MCP sessions/clients in reverse order
+            for item in reversed(run_context.mcp_cleanups):
+                try:
+                    await item.__aexit__(None, None, None)
+                except Exception:
+                    logger.exception("Error during MCP cleanup")
+            run_context.mcp_cleanups.clear()
+            run_context.mcp_sessions.clear()
 
         # 4. Finalize and Log Response
         output_model = run_context.data.get("output")
