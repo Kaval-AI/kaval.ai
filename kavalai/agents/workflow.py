@@ -316,6 +316,8 @@ class Workflow:
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
             )
 
+    # removed: moved to PlanningAgent.run
+
     async def run_combine(
         self, task: Task, run_context: RunContext, queue: asyncio.Queue | None = None
     ):
@@ -406,7 +408,9 @@ class Workflow:
                     continue
 
             logger.info("Running task <%s>", task.name)
-            if task.prompt:
+            if task.max_steps > 1:
+                await self.run_special_agent(task, run_context, queue)
+            elif task.prompt:
                 await self.run_prompt(task, run_context, queue)
             elif task.mcp_server:
                 await self.run_mcp_tool(task, run_context, queue)

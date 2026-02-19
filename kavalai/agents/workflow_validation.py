@@ -149,6 +149,15 @@ def validate_workflow(workflow_model: "WorkflowModel"):
                     f"Task '{task.name}' refers to undefined MCP server '{task.mcp_server}'."
                 )
 
+        # Check allowed_mcp_servers existence
+        if task.allowed_mcp_servers:
+            mcp_server_names = [s.name for s in workflow_model.mcp_servers]
+            for s_name in task.allowed_mcp_servers:
+                if s_name not in mcp_server_names:
+                    raise WorkflowException(
+                        f"Task '{task.name}' refers to undefined allowed MCP server '{s_name}'."
+                    )
+
         # After task success, its output is available for next tasks
         if isinstance(task.output, str) and task.output:
             available_data.add(task.output)

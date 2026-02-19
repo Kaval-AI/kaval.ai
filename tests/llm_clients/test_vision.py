@@ -14,75 +14,68 @@ async def test_openai_chat_completions_with_images():
     client = OpenAIClient(api_key="fake-key")
 
     mock_stream = AsyncMock()
-    # Mock the async context manager
-    mock_stream.__aenter__.return_value = [
-        MagicMock(
-            delta='{"answer": "A screenshot of a webpage"}',
-            __class__=type(
-                "ResponseTextDeltaEvent",
-                (),
-                {"delta": '{"answer": "A screenshot of a webpage"}'},
-            ),
-        ),
-        MagicMock(
-            response=MagicMock(usage=MagicMock(input_tokens=10, output_tokens=5)),
-            __class__=type(
-                "ResponseCompletedEvent",
-                (),
-                {
-                    "response": MagicMock(
-                        usage=MagicMock(input_tokens=10, output_tokens=5)
-                    )
-                },
-            ),
-        ),
-    ]
-
-    # Actually OpenAI client uses a custom stream object, let's simplify mocking
-    # by patching the stream method to return an async iterator
 
     async def mock_stream_iter():
-        yield MagicMock(delta='{"answer": "A screenshot', __class__=MagicMock)
-        yield MagicMock(delta=' of a webpage"}', __class__=MagicMock)
-        yield MagicMock(
-            response=MagicMock(usage=MagicMock(input_tokens=10, output_tokens=5)),
-            __class__=MagicMock,
+        chunk1 = MagicMock()
+        chunk1.type = "content.delta"
+        chunk1.delta = '{"answer": "A screenshot'
+        yield chunk1
+        chunk2 = MagicMock()
+        chunk2.type = "content.delta"
+        chunk2.delta = ' of a webpage"}'
+        yield chunk2
+
+    final_completion = MagicMock()
+    final_completion.usage = MagicMock()
+    final_completion.usage.prompt_tokens = 10
+    final_completion.usage.completion_tokens = 5
+    mock_stream.get_final_completion = AsyncMock(return_value=final_completion)
+
+    with patch.object(
+        client.client.beta.chat.completions, "stream"
+    ) as mock_stream_method:
+        # Create a class that mimics the stream object
+        class MockStream:
+            def __init__(self, iter_func):
+                self.iter_func = iter_func
+                self.get_final_completion = AsyncMock(return_value=final_completion)
+
+            def __aiter__(self):
+                return self.iter_func()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+
+        mock_stream_method.return_value = MockStream(mock_stream_iter)
+
+        messages = [
+            {
+                "role": "user",
+                "content": "What is in this image?",
+                "images": ["SGVsbG8="],  # "Hello" in base64
+            }
+        ]
+
+        content, stats = await client.chat_completions(
+            model="gpt-4o", messages=messages, response_model=SimpleResponse
         )
 
-    with patch.object(client.client.responses, "stream") as mock_stream_method:
-        mock_stream_method.return_value.__aenter__.return_value = mock_stream_iter()
-
-        # Patching isinstance check in openai_client.py
-        with patch(
-            "kavalai.llm_clients.openai_client.ResponseTextDeltaEvent", new=MagicMock
-        ), patch(
-            "kavalai.llm_clients.openai_client.ResponseCompletedEvent", new=MagicMock
-        ):
-            messages = [
-                {
-                    "role": "user",
-                    "content": "What is in this image?",
-                    "images": ["SGVsbG8="],  # "Hello" in base64
-                }
-            ]
-
-            content, stats = await client.chat_completions(
-                model="gpt-4o", messages=messages, response_model=SimpleResponse
-            )
-
-            assert content.answer == "A screenshot of a webpage"
-            # Verify that messages were formatted correctly for OpenAI
-            call_args = mock_stream_method.call_args[1]
-            formatted_messages = call_args["messages"]
-            assert len(formatted_messages) == 1
-            assert formatted_messages[0]["role"] == "user"
-            assert isinstance(formatted_messages[0]["content"], list)
-            assert formatted_messages[0]["content"][0]["type"] == "text"
-            assert formatted_messages[0]["content"][1]["type"] == "image_url"
-            assert (
-                "data:image/jpeg;base64,SGVsbG8="
-                in formatted_messages[0]["content"][1]["image_url"]["url"]
-            )
+        assert content.answer == "A screenshot of a webpage"
+        # Verify that messages were formatted correctly for OpenAI
+        call_args = mock_stream_method.call_args[1]
+        formatted_messages = call_args["messages"]
+        assert len(formatted_messages) == 1
+        assert formatted_messages[0]["role"] == "user"
+        assert isinstance(formatted_messages[0]["content"], list)
+        assert formatted_messages[0]["content"][0]["type"] == "text"
+        assert formatted_messages[0]["content"][1]["type"] == "image_url"
+        assert (
+            "data:image/jpeg;base64,SGVsbG8="
+            in formatted_messages[0]["content"][1]["image_url"]["url"]
+        )
 
 
 @pytest.mark.asyncio

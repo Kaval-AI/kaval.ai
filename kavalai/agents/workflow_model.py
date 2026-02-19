@@ -94,6 +94,10 @@ class Task(BaseModel):
     stream: bool = False
     # MCP tool call
     mcp_server: Optional[str] = None
+    # Special agent workflow
+    max_steps: int = 1
+    allowed_mcp_servers: list[str] = []
+    timeout: Optional[int] = None
 
 
 class RestServer(BaseModel):

@@ -19,7 +19,6 @@ import time
 from typing import Any, Dict, List, Optional, Type, Tuple
 
 from openai import AsyncOpenAI
-from openai.types.responses import ResponseTextDeltaEvent, ResponseCompletedEvent
 from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
@@ -85,16 +84,17 @@ class OpenAIClient:
             call_kwargs["service_tier"] = self.service_tier
 
         buffer = io.StringIO()
-        async with self.client.responses.stream(**call_kwargs) as stream:
+        async with self.client.beta.chat.completions.stream(**call_kwargs) as stream:
             async for chunk in stream:
-                if isinstance(chunk, ResponseTextDeltaEvent):
+                if chunk.type == "content.delta":
                     buffer.write(chunk.delta)
-                    if streamer is not None:
+                    if streamer is not None and buffer.getvalue().strip():
                         await streamer.stream_partial(ensure_json(buffer.getvalue()))
-                if isinstance(chunk, ResponseCompletedEvent):
-                    usage = chunk.response.usage
-                    input_tokens = usage.input_tokens
-                    output_tokens = usage.output_tokens
+
+            final_completion = await stream.get_final_completion()
+            usage = final_completion.usage
+            input_tokens = usage.prompt_tokens if usage else 0
+            output_tokens = usage.completion_tokens if usage else 0
         # Stream the final complete value.
         if streamer is not None:
             await streamer.stream_complete(buffer.getvalue())

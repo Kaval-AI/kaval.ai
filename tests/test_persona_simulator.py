@@ -111,7 +111,19 @@ async def test_run_simulation_real_llm(
 ):
     with patch("httpx.AsyncClient.get") as mock_get, patch(
         "httpx.AsyncClient.post"
-    ) as mock_post:
+    ) as mock_post, patch("kavalai.persona_simulator.chat_completions") as mock_chat:
+        # Mock LLM response
+        from kavalai.agents.db import ModelCallStat
+
+        mock_chat.return_value = (
+            MagicMock(
+                thought="test thought",
+                terminate=False,
+                data=MagicMock(user_message="Hello, I am a test"),
+            ),
+            ModelCallStat(call_type="llm", model="test", duration_seconds=0.1),
+        )
+
         # Mock OpenAPI spec fetch
         mock_get.return_value = MagicMock(spec=httpx.Response)
         mock_get.return_value.status_code = 200
@@ -131,6 +143,7 @@ async def test_run_simulation_real_llm(
 
         assert mock_get.called
         assert mock_post.called
+        assert mock_chat.called
 
 
 @pytest.mark.asyncio
@@ -139,7 +152,19 @@ async def test_run_simulation_http_error(
 ):
     with patch("httpx.AsyncClient.get") as mock_get, patch(
         "httpx.AsyncClient.post"
-    ) as mock_post:
+    ) as mock_post, patch("kavalai.persona_simulator.chat_completions") as mock_chat:
+        # Mock LLM response
+        from kavalai.agents.db import ModelCallStat
+
+        mock_chat.return_value = (
+            MagicMock(
+                thought="test thought",
+                terminate=False,
+                data=MagicMock(user_message="Hello, I am a test"),
+            ),
+            ModelCallStat(call_type="llm", model="test", duration_seconds=0.1),
+        )
+
         mock_get.return_value = MagicMock(spec=httpx.Response)
         mock_get.return_value.json.return_value = mock_openapi_spec
         mock_get.return_value.status_code = 200
@@ -155,3 +180,4 @@ async def test_run_simulation_http_error(
         await run_simulation(mock_task_config, mock_persona_config)
 
         assert mock_post.called
+        assert mock_chat.called

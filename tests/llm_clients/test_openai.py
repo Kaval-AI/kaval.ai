@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 from unittest.mock import AsyncMock, patch, MagicMock
 from openai import LengthFinishReasonError
-from openai.types.responses import ResponseTextDeltaEvent, ResponseCompletedEvent
 from kavalai.llm_clients.openai_client import OpenAIClient
 from kavalai.llm_clients.common import Streamer
 
@@ -22,24 +21,27 @@ async def test_openai_chat_completions_streaming():
 
     mock_stream = AsyncMock()
 
-    # Use MagicMock for chunks to avoid pydantic validation errors
-    chunk1 = MagicMock(spec=ResponseTextDeltaEvent)
+    # Use MagicMock for chunks to match the new stream implementation
+    chunk1 = MagicMock()
+    chunk1.type = "content.delta"
     chunk1.delta = '{"answer": "He'
 
-    chunk2 = MagicMock(spec=ResponseTextDeltaEvent)
+    chunk2 = MagicMock()
+    chunk2.type = "content.delta"
     chunk2.delta = 'llo", "confid'
 
-    chunk3 = MagicMock(spec=ResponseTextDeltaEvent)
+    chunk3 = MagicMock()
+    chunk3.type = "content.delta"
     chunk3.delta = 'ence": 1.0}'
 
-    chunk4 = MagicMock(spec=ResponseCompletedEvent)
-    chunk4.response = MagicMock()
-    chunk4.response.usage = MagicMock()
-    chunk4.response.usage.input_tokens = 10
-    chunk4.response.usage.output_tokens = 20
-
     # Simulate a stream of chunks
-    mock_stream.__aiter__.return_value = [chunk1, chunk2, chunk3, chunk4]
+    mock_stream.__aiter__.return_value = [chunk1, chunk2, chunk3]
+
+    final_completion = MagicMock()
+    final_completion.usage = MagicMock()
+    final_completion.usage.prompt_tokens = 10
+    final_completion.usage.completion_tokens = 20
+    mock_stream.get_final_completion = AsyncMock(return_value=final_completion)
 
     mock_stream_manager = MagicMock()
     mock_stream_manager.__aenter__.return_value = mock_stream
@@ -49,7 +51,7 @@ async def test_openai_chat_completions_streaming():
     streamer = Streamer(name="test", queue=queue)
 
     with patch.object(
-        client.client.responses, "stream", return_value=mock_stream_manager
+        client.client.beta.chat.completions, "stream", return_value=mock_stream_manager
     ) as _:
         result, stats = await client.chat_completions(
             model="gpt-4o-mini",
@@ -80,13 +82,20 @@ async def test_openai_chat_completions_streaming():
 async def test_openai_chat_completion_no_retry_in_client():
     client = OpenAIClient(api_key="fake-key")
 
+    mock_stream = AsyncMock()
+    final_completion = MagicMock()
+    final_completion.usage = MagicMock()
+    final_completion.usage.prompt_tokens = 5
+    final_completion.usage.completion_tokens = 5
+    mock_stream.get_final_completion = AsyncMock(return_value=final_completion)
+
     mock_stream_manager = MagicMock()
     mock_stream_manager.__aenter__.side_effect = LengthFinishReasonError(
         completion=MagicMock()
     )
 
     with patch.object(
-        client.client.responses, "stream", return_value=mock_stream_manager
+        client.client.beta.chat.completions, "stream", return_value=mock_stream_manager
     ):
         with pytest.raises(LengthFinishReasonError):
             await client.chat_completions(
@@ -102,23 +111,24 @@ async def test_openai_chat_completion_with_service_tier():
 
     mock_stream = AsyncMock()
 
-    chunk1 = MagicMock(spec=ResponseTextDeltaEvent)
+    chunk1 = MagicMock()
+    chunk1.type = "content.delta"
     chunk1.delta = '{"answer": "ok", "confidence": 1.0}'
 
-    chunk2 = MagicMock(spec=ResponseCompletedEvent)
-    chunk2.response = MagicMock()
-    chunk2.response.usage = MagicMock()
-    chunk2.response.usage.input_tokens = 5
-    chunk2.response.usage.output_tokens = 5
+    mock_stream.__aiter__.return_value = [chunk1]
 
-    mock_stream.__aiter__.return_value = [chunk1, chunk2]
+    final_completion = MagicMock()
+    final_completion.usage = MagicMock()
+    final_completion.usage.prompt_tokens = 5
+    final_completion.usage.completion_tokens = 5
+    mock_stream.get_final_completion = AsyncMock(return_value=final_completion)
 
     mock_stream_manager = MagicMock()
     mock_stream_manager.__aenter__.return_value = mock_stream
     mock_stream_manager.__aexit__ = AsyncMock(return_value=None)
 
     with patch.object(
-        client.client.responses, "stream", return_value=mock_stream_manager
+        client.client.beta.chat.completions, "stream", return_value=mock_stream_manager
     ) as mock_stream_method:
         await client.chat_completions(
             model="gpt-4o",
@@ -134,23 +144,24 @@ async def test_openai_chat_completion_with_temperature():
 
     mock_stream = AsyncMock()
 
-    chunk1 = MagicMock(spec=ResponseTextDeltaEvent)
+    chunk1 = MagicMock()
+    chunk1.type = "content.delta"
     chunk1.delta = '{"answer": "ok", "confidence": 1.0}'
 
-    chunk2 = MagicMock(spec=ResponseCompletedEvent)
-    chunk2.response = MagicMock()
-    chunk2.response.usage = MagicMock()
-    chunk2.response.usage.input_tokens = 5
-    chunk2.response.usage.output_tokens = 5
+    mock_stream.__aiter__.return_value = [chunk1]
 
-    mock_stream.__aiter__.return_value = [chunk1, chunk2]
+    final_completion = MagicMock()
+    final_completion.usage = MagicMock()
+    final_completion.usage.prompt_tokens = 5
+    final_completion.usage.completion_tokens = 5
+    mock_stream.get_final_completion = AsyncMock(return_value=final_completion)
 
     mock_stream_manager = MagicMock()
     mock_stream_manager.__aenter__.return_value = mock_stream
     mock_stream_manager.__aexit__ = AsyncMock(return_value=None)
 
     with patch.object(
-        client.client.responses, "stream", return_value=mock_stream_manager
+        client.client.beta.chat.completions, "stream", return_value=mock_stream_manager
     ) as mock_stream_method:
         await client.chat_completions(
             model="gpt-4o",
