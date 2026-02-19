@@ -29,6 +29,8 @@ from kavalai.agents.workflow_model import (
     Task,
     to_plain,
     WorkflowRunResult,
+    McpServer,
+    WorkflowException,
 )
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.schema_parser import SchemaParser
@@ -40,6 +42,8 @@ from kavalai.llm_clients.llm_client import chat_completions
 from kavalai.llm_clients.common import Streamer
 from kavalai.agents.run_context import RunContext
 import asyncio
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +71,9 @@ class Workflow:
         self.models: Dict[str, Type[BaseModel]] = self.parser.parse_all()
         self.rest_servers = {
             server.name: server for server in workflow_model.rest_servers
+        }
+        self.mcp_servers: Dict[str, McpServer] = {
+            server.name: server for server in workflow_model.mcp_servers
         }
         self.tasks = {task.name: task for task in workflow_model.tasks}
         validate_workflow(self.workflow_model)
@@ -159,7 +166,7 @@ class Workflow:
                 else {"result": response},
             )
 
-    async def run_tool(
+    async def run_rest_tool(
         self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
     ):
         inputs = await run_context.prepare_tool_inputs(task)
@@ -224,6 +231,88 @@ class Workflow:
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
                 inputs={"tool": task.tool, "arguments": inputs},
+                output=result.model_dump() if isinstance(result, BaseModel) else result,
+            )
+
+    async def run_mcp_tool(
+        self, task: Task, run_context: RunContext, queue: asyncio.Queue | None
+    ):
+        inputs = await run_context.prepare_tool_inputs(task)
+        mcp_server_config = self.mcp_servers[task.mcp_server]
+
+        command = mcp_server_config.command
+        if not command and mcp_server_config.command_env:
+            command = os.environ[mcp_server_config.command_env]
+
+        server_params = StdioServerParameters(
+            command=command,
+            args=mcp_server_config.args,
+            env={**os.environ, **mcp_server_config.env},
+        )
+
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+
+                logger.info(f"Calling MCP tool {task.mcp_server}/{task.tool}")
+                # mcp library's call_tool might return a CallToolResult
+                response = await session.call_tool(task.tool, arguments=inputs)
+
+                if response.isError:
+                    raise WorkflowException(
+                        f"MCP tool '{task.tool}' on server '{task.mcp_server}' failed: {response.content}"
+                    )
+
+                # MCP response content is a list of TextContent, ImageContent, or EmbeddedResource
+                # We assume the first TextContent is the result
+                result_data = None
+                for content in response.content:
+                    # TextContent has a 'text' attribute
+                    if hasattr(content, "text"):
+                        try:
+                            import json
+
+                            result_data = json.loads(content.text)
+                        except (json.JSONDecodeError, TypeError):
+                            result_data = content.text
+                        break
+
+        # Convert result to output type
+        output_type = self.get_data_type(task.output)
+        if output_type:
+            result = (
+                output_type(**result_data)
+                if isinstance(result_data, dict)
+                else result_data
+            )
+        else:
+            result = result_data
+
+        debug_data = str(result)[:50]
+        logger.info(f"Setting {task.output} = {debug_data}")
+        run_context.data[task.output] = result
+
+        # Publish to stream
+        if task.stream and queue is not None:
+            streamer = Streamer(task.output, queue)
+            stream_value = (
+                result.model_dump_json()
+                if isinstance(result, BaseModel)
+                else str(result)
+            )
+            await streamer.stream_complete(stream_value)
+
+        # Store the tool run info.
+        if self.agent_service and run_context.run_id:
+            await self.agent_service.add_task(
+                agent_id=run_context.agent_id,
+                session_id=run_context.session_id,
+                run_id=run_context.run_id,
+                inputs={
+                    "mcp_server": task.mcp_server,
+                    "tool": task.tool,
+                    "arguments": inputs,
+                },
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
             )
 
@@ -319,8 +408,10 @@ class Workflow:
             logger.info("Running task <%s>", task.name)
             if task.prompt:
                 await self.run_prompt(task, run_context, queue)
+            elif task.mcp_server:
+                await self.run_mcp_tool(task, run_context, queue)
             elif task.tool:
-                await self.run_tool(task, run_context, queue)
+                await self.run_rest_tool(task, run_context, queue)
             else:
                 await self.run_combine(task, run_context, queue)
 

@@ -56,8 +56,8 @@ class TestRunToolMethod:
     """Tests for run_tool method handling."""
 
     @pytest.mark.asyncio
-    async def test_run_tool_uses_default_get_method(self):
-        """run_tool should use GET method by default."""
+    async def test_run_rest_tool_uses_default_get_method(self):
+        """run_rest_tool should use GET method by default."""
         model = create_workflow_model_with_rest_server()
         workflow = Workflow(model)
 
@@ -87,14 +87,14 @@ class TestRunToolMethod:
             task = workflow.workflow_model.tasks[0]
             run_context = RunContext()
             run_context.data["input"] = MagicMock()
-            await workflow.run_tool(task, run_context, None)
+            await workflow.run_rest_tool(task, run_context, None)
 
         assert captured_method == "GET"
         assert captured_url == "http://localhost:8000/test_tool"
 
     @pytest.mark.asyncio
-    async def test_run_tool_uses_specified_post_method(self):
-        """run_tool should use POST method when specified."""
+    async def test_run_rest_tool_uses_specified_post_method(self):
+        """run_rest_tool should use POST method when specified."""
         model = create_workflow_model_with_rest_server(method="post")
         workflow = Workflow(model)
 
@@ -126,7 +126,7 @@ class TestRunToolMethod:
             task = workflow.workflow_model.tasks[0]
             run_context = RunContext()
             run_context.data["input"] = MagicMock()
-            await workflow.run_tool(task, run_context, None)
+            await workflow.run_rest_tool(task, run_context, None)
 
         assert captured_method == "POST"
         # For POST, it should use json
@@ -191,8 +191,8 @@ class TestWorkflowTemperatureValidation:
             Workflow(model)
 
     @pytest.mark.asyncio
-    async def test_run_tool_serializes_pydantic_models(self):
-        """run_tool should serialize Pydantic models to dicts in JSON body."""
+    async def test_run_rest_tool_serializes_pydantic_models(self):
+        """run_rest_tool should serialize Pydantic models to dicts in JSON body."""
 
         class TestModel(BaseModel):
             name: str
@@ -247,7 +247,9 @@ class TestWorkflowTemperatureValidation:
         ):
             run_context = RunContext()
             run_context.data["input"] = TestModel(name="test_value")
-            await workflow.run_tool(workflow.workflow_model.tasks[0], run_context, None)
+            await workflow.run_rest_tool(
+                workflow.workflow_model.tasks[0], run_context, None
+            )
 
         # Check that the Pydantic model was converted to a dict
         # After changing prepare_tool_inputs to always return a dict,
@@ -391,12 +393,14 @@ class TestRestServerEnvVarValidation:
         assert "must have both username_env and password_env" in str(exc_info.value)
 
 
-class TestRunToolAuth:
-    """Tests for run_tool method authentication handling."""
+class TestRunRestToolAuth:
+    """Tests for run_rest_tool method authentication handling."""
 
     @pytest.mark.asyncio
-    async def test_run_tool_uses_basic_auth_when_env_vars_defined(self, monkeypatch):
-        """run_tool should pass basic auth to AsyncClient when env vars are defined."""
+    async def test_run_rest_tool_uses_basic_auth_when_env_vars_defined(
+        self, monkeypatch
+    ):
+        """run_rest_tool should pass basic auth to AsyncClient when env vars are defined."""
         monkeypatch.setenv("TEST_USERNAME", "user123")
         monkeypatch.setenv("TEST_PASSWORD", "pass456")
 
@@ -426,13 +430,13 @@ class TestRunToolAuth:
             task = workflow.workflow_model.tasks[0]
             run_context = RunContext()
             run_context.data["input"] = MagicMock()
-            await workflow.run_tool(task, run_context, None)
+            await workflow.run_rest_tool(task, run_context, None)
 
         assert captured_auth == ("user123", "pass456")
 
     @pytest.mark.asyncio
-    async def test_run_tool_no_auth_when_env_vars_not_defined(self, monkeypatch):
-        """run_tool should not pass auth to AsyncClient when no env vars are defined."""
+    async def test_run_rest_tool_no_auth_when_env_vars_not_defined(self, monkeypatch):
+        """run_rest_tool should not pass auth to AsyncClient when no env vars are defined."""
         model = create_workflow_model_with_rest_server()
         workflow = Workflow(model)
 
@@ -457,7 +461,7 @@ class TestRunToolAuth:
             task = workflow.workflow_model.tasks[0]
             run_context = RunContext()
             run_context.data["input"] = MagicMock()
-            await workflow.run_tool(task, run_context, None)
+            await workflow.run_rest_tool(task, run_context, None)
 
         assert captured_auth is None
 

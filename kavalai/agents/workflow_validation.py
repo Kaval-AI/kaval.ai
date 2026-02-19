@@ -82,6 +82,18 @@ def validate_rest_server_env_vars(workflow_model: "WorkflowModel"):
                 f"password_env defined, or neither."
             )
 
+    for server in workflow_model.mcp_servers:
+        if server.command_env:
+            if server.command_env not in os.environ:
+                raise WorkflowException(
+                    f"Environment variable '{server.command_env}' for MCP server "
+                    f"'{server.name}' command is not defined."
+                )
+        elif not server.command:
+            raise WorkflowException(
+                f"MCP server '{server.name}' must have either 'command' or 'command_env'."
+            )
+
 
 def get_root_context_name(info: "TypeInputInfo", fallback: str) -> str:
     """Extract the root context name from a TypeInputInfo (e.g., 'input' from 'input.user_message')."""
@@ -91,6 +103,8 @@ def get_root_context_name(info: "TypeInputInfo", fallback: str) -> str:
 
 def validate_workflow(workflow_model: "WorkflowModel"):
     from kavalai.agents.workflow_model import WorkflowException
+
+    validate_rest_server_env_vars(workflow_model)
 
     if not (0.0 <= workflow_model.temperature <= 2.0):
         raise WorkflowException(
@@ -126,6 +140,14 @@ def validate_workflow(workflow_model: "WorkflowModel"):
                         f"input '{root_name}' in task '{task.name}' is not available. "
                         f"Available context: {sorted(list(available_data))}"
                     )
+
+        # Check MCP server existence
+        if task.mcp_server:
+            mcp_server_names = [s.name for s in workflow_model.mcp_servers]
+            if task.mcp_server not in mcp_server_names:
+                raise WorkflowException(
+                    f"Task '{task.name}' refers to undefined MCP server '{task.mcp_server}'."
+                )
 
         # After task success, its output is available for next tasks
         if isinstance(task.output, str) and task.output:

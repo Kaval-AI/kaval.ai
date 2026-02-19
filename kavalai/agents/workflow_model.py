@@ -92,6 +92,8 @@ class Task(BaseModel):
     images: list[TypeInputInfo] = []
     # Streaming
     stream: bool = False
+    # MCP tool call
+    mcp_server: Optional[str] = None
 
 
 class RestServer(BaseModel):
@@ -114,6 +116,26 @@ class RestServer(BaseModel):
         return self
 
 
+class McpServer(BaseModel):
+    name: str
+    command: Optional[str] = None
+    command_env: Optional[str] = None
+    args: list[str] = []
+    env: dict[str, str] = {}
+
+    @model_validator(mode="after")
+    def check_command_configs(self) -> "McpServer":
+        if self.command and self.command_env:
+            raise ValueError(
+                f"MCP server '{self.name}': Only one of 'command' or 'command_env' can be specified."
+            )
+        if not self.command and not self.command_env:
+            raise ValueError(
+                f"MCP server '{self.name}': Either 'command' or 'command_env' must be specified."
+            )
+        return self
+
+
 class WorkflowModel(BaseModel):
     name: str
     description: str = ""
@@ -122,6 +144,7 @@ class WorkflowModel(BaseModel):
     llm_model: Optional[str] = None
     data_types: dict[str, dict]
     rest_servers: list[RestServer] = []
+    mcp_servers: list[McpServer] = []
     tasks: list[Task]
 
 
