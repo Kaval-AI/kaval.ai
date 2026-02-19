@@ -43,6 +43,18 @@ language = "en"
 html_theme = "sphinx_immaterial"
 html_static_path = ["_static"]
 
+html_theme_options = {
+    "icon": {
+        "repo": "fontawesome/brands/github",
+        "edit": "material/file-edit-outline",
+    },
+    "site_url": "https://kaval.ai/",
+    "repo_url": "https://github.com/kavalai/kaval.ai/",
+    "repo_name": "Kaval.AI",
+}
+
+html_logo = "_static/logo.svg"
+
 # -- Options for todo extension ----------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/todo.html#configuration
 

@@ -3,6 +3,11 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+.. image:: _static/iconlogo.svg
+   :width: 200
+   :align: center
+   :alt: Kaval.AI Logo
+
 Welcome to Kaval.AI's documentation!
 ====================================
 
