@@ -11,7 +11,8 @@
 Welcome to Kaval.AI's documentation!
 ====================================
 
-Kaval.AI is an Enterprise Agent Management System that allows you to define, run, and manage AI agents using a flexible YAML-based workflow engine.
+Kaval.AI is a Python SDK for developing agentic workflows and chatbots.
+
 
 .. toctree::
    :maxdepth: 2

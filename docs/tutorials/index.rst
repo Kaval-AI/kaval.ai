@@ -1,7 +1,8 @@
 Tutorials
 =========
 
-Welcome to the Kaval.AI tutorials. Here you will find step-by-step guides on how to use the framework.
+Best way to learn about Kaval.AI SDK is to start using it right away.
+The tutorials in this section provide many great examples.
 
 .. toctree::
    :maxdepth: 2
