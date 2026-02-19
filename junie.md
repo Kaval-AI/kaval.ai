@@ -45,6 +45,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `project_service.py`: Service for managing project-related data and membership.
     - `tools/`: Utility tools.
         - `cli_chat.py`: Command line tool for chatting with agents. Now supports Ctrl+D (EOF) to exit and uses streaming server endpoint for real-time responses.
+        - `selenium_browser.py`: Selenium-based browser automation tool (FastAPI). Supports navigate, click, type, and screenshot actions.
         - `rss.py`: RSS feed parser tool.
         - `openapi_spec_parser.py`: Tool for parsing OpenAPI specifications.
         - `index_csv.py`: Tool for indexing large CSV files into RAG.

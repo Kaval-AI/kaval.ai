@@ -88,6 +88,8 @@ class Task(BaseModel):
     tool: Optional[str] = None
     rest_server: Optional[str] = None
     method: str = "get"
+    # LLM images
+    images: list[TypeInputInfo] = []
     # Streaming
     stream: bool = False
 
