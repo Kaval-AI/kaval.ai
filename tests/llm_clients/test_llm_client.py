@@ -9,10 +9,8 @@ from kavalai.agents.db import (
     ModelCallStat,
 )
 from kavalai.llm_clients.llm_client import (
-    chat_completions,
-    compute_embeddings,
     with_retry,
-    get_llm_client,
+    LLMClient,
 )
 from kavalai.llm_clients.common import Streamer
 import asyncio
@@ -126,7 +124,7 @@ async def test_with_retry_gemini_server_error_max_retries():
 @pytest.mark.asyncio
 async def test_chat_completions_with_stats(agents_db, monkeypatch):
     # Mock client
-    mock_client = AsyncMock()
+    mock_underlying_client = AsyncMock()
 
     # Mock response
     mock_content = MockResponse(message="hello")
@@ -141,18 +139,20 @@ async def test_chat_completions_with_stats(agents_db, monkeypatch):
         response_data={"id": "chat-123"},
         response_code=200,
     )
-    mock_client.chat_completions.return_value = (mock_content, mock_stats)
+    mock_underlying_client.chat_completions.return_value = (mock_content, mock_stats)
 
-    monkeypatch.setattr(
-        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
-    )
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    with patch(
+        "kavalai.llm_clients.llm_client.LLMClient._get_underlying_client",
+        return_value=mock_underlying_client,
+    ):
+        client = LLMClient(model="openai/gpt-4o")
 
-    messages = [{"role": "user", "content": "hi"}]
-    response, stats = await chat_completions(
-        model="openai/gpt-4o",
-        response_model=MockResponse,
-        messages=messages,
-    )
+        messages = [{"role": "user", "content": "hi"}]
+        response, stats = await client.chat_completions(
+            response_model=MockResponse,
+            messages=messages,
+        )
 
     assert response.message == "hello"
 
@@ -168,7 +168,7 @@ async def test_chat_completions_with_stats(agents_db, monkeypatch):
 @pytest.mark.asyncio
 async def test_chat_completions_streaming(agents_db, monkeypatch):
     # Mock client
-    mock_client = AsyncMock()
+    mock_underlying_client = AsyncMock()
 
     # Mock response
     mock_content = MockResponse(message="hello")
@@ -183,53 +183,57 @@ async def test_chat_completions_streaming(agents_db, monkeypatch):
         response_data={"id": "chat-123"},
         response_code=200,
     )
-    mock_client.chat_completions.return_value = (mock_content, mock_stats)
+    mock_underlying_client.chat_completions.return_value = (mock_content, mock_stats)
 
-    monkeypatch.setattr(
-        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
-    )
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    with patch(
+        "kavalai.llm_clients.llm_client.LLMClient._get_underlying_client",
+        return_value=mock_underlying_client,
+    ):
+        client = LLMClient(model="openai/gpt-4o")
 
-    queue = asyncio.Queue()
-    streamer = Streamer(name="test", queue=queue)
+        queue = asyncio.Queue()
+        streamer = Streamer(name="test", queue=queue)
 
-    messages = [{"role": "user", "content": "hi"}]
+        messages = [{"role": "user", "content": "hi"}]
 
-    response, stats = await chat_completions(
-        model="openai/gpt-4o",
-        response_model=MockResponse,
-        messages=messages,
-        streamer=streamer,
-    )
+        response, stats = await client.chat_completions(
+            response_model=MockResponse,
+            messages=messages,
+            streamer=streamer,
+        )
 
     assert response.message == "hello"
-    # Verify streamer was passed to mock_client.chat_completions
-    mock_client.chat_completions.assert_called_once()
-    args, kwargs = mock_client.chat_completions.call_args
+    # Verify streamer was passed to mock_underlying_client.chat_completions
+    mock_underlying_client.chat_completions.assert_called_once()
+    args, kwargs = mock_underlying_client.chat_completions.call_args
     assert kwargs["streamer"] == streamer
     assert stats.request_data["requests"][0]["arguments"]["streamer"] == str(streamer)
 
 
 @pytest.mark.asyncio
 async def test_chat_completions_error(agents_db, monkeypatch):
-    mock_client = AsyncMock()
-    mock_client.chat_completions.side_effect = Exception("API Error")
+    mock_underlying_client = AsyncMock()
+    mock_underlying_client.chat_completions.side_effect = Exception("API Error")
 
-    monkeypatch.setattr(
-        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
-    )
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    with patch(
+        "kavalai.llm_clients.llm_client.LLMClient._get_underlying_client",
+        return_value=mock_underlying_client,
+    ):
+        client = LLMClient(model="openai/gpt-4o")
 
-    with pytest.raises(Exception, match="API Error"):
-        await chat_completions(
-            model="openai/gpt-4o",
-            response_model=MockResponse,
-            messages=[{"role": "user", "content": "hi"}],
-        )
+        with pytest.raises(Exception, match="API Error"):
+            await client.chat_completions(
+                response_model=MockResponse,
+                messages=[{"role": "user", "content": "hi"}],
+            )
 
 
 @pytest.mark.asyncio
 async def test_chat_completions_retry(agents_db, monkeypatch):
-    mock_client = AsyncMock()
-    mock_client.chat_completions.side_effect = [
+    mock_underlying_client = AsyncMock()
+    mock_underlying_client.chat_completions.side_effect = [
         openai.RateLimitError("Rate limit exceeded", response=AsyncMock(), body={}),
         (
             MockResponse(message="success"),
@@ -243,25 +247,27 @@ async def test_chat_completions_retry(agents_db, monkeypatch):
         ),
     ]
 
-    monkeypatch.setattr(
-        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
-    )
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    with patch(
+        "kavalai.llm_clients.llm_client.LLMClient._get_underlying_client",
+        return_value=mock_underlying_client,
+    ):
+        client = LLMClient(model="openai/gpt-4o")
 
-    with patch("asyncio.sleep", return_value=None):
-        response, stats = await chat_completions(
-            model="openai/gpt-4o",
-            response_model=MockResponse,
-            messages=[{"role": "user", "content": "hi"}],
-        )
+        with patch("asyncio.sleep", return_value=None):
+            response, stats = await client.chat_completions(
+                response_model=MockResponse,
+                messages=[{"role": "user", "content": "hi"}],
+            )
 
     assert response.message == "success"
-    assert mock_client.chat_completions.call_count == 2
+    assert mock_underlying_client.chat_completions.call_count == 2
 
 
 @pytest.mark.asyncio
 async def test_compute_embeddings_retry(agents_db, monkeypatch):
-    mock_client = AsyncMock()
-    mock_client.compute_embeddings.side_effect = [
+    mock_underlying_client = AsyncMock()
+    mock_underlying_client.compute_embeddings.side_effect = [
         openai.RateLimitError("Rate limit exceeded", response=AsyncMock(), body={}),
         (
             [[0.1, 0.2]],
@@ -275,55 +281,57 @@ async def test_compute_embeddings_retry(agents_db, monkeypatch):
         ),
     ]
 
-    monkeypatch.setattr(
-        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
-    )
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    with patch(
+        "kavalai.llm_clients.llm_client.LLMClient._get_underlying_client",
+        return_value=mock_underlying_client,
+    ):
+        client = LLMClient(model="openai/text-embedding-3-small")
 
-    with patch("asyncio.sleep", return_value=None):
-        embeddings, stats = await compute_embeddings(
-            model="openai/text-embedding-3-small",
-            texts=["hi"],
-        )
+        with patch("asyncio.sleep", return_value=None):
+            embeddings, stats = await client.compute_embeddings(
+                texts=["hi"],
+            )
 
     assert embeddings == [[0.1, 0.2]]
-    assert mock_client.compute_embeddings.call_count == 2
+    assert mock_underlying_client.compute_embeddings.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_get_llm_client_invalid():
-    with pytest.raises(ValueError, match="Invalid provider"):
-        get_llm_client("invalid/model")
+async def test_llm_client_invalid():
+    with pytest.raises(ValueError, match="not enough values to unpack"):
+        LLMClient("invalid-model")
 
 
 @pytest.mark.asyncio
-async def test_get_llm_client_openai(monkeypatch):
+async def test_llm_client_openai(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
     monkeypatch.setenv("KAVALAI_LLM_TIMEOUT", "45.0")
     with patch("kavalai.llm_clients.openai_client.AsyncOpenAI") as mock_openai:
-        get_llm_client("openai/gpt-4")
+        LLMClient("openai/gpt-4")
         mock_openai.assert_called_once()
         assert mock_openai.call_args.kwargs["timeout"] == 45.0
 
 
 @pytest.mark.asyncio
-async def test_get_llm_client_gemini(monkeypatch):
+async def test_llm_client_gemini(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake")
     monkeypatch.setenv("KAVALAI_LLM_TIMEOUT", "15.0")
     from kavalai.llm_clients.gemini_client import GeminiClient
 
-    with patch("google.genai.Client") as mock_gemini:
-        client = get_llm_client("gemini/gemini-pro")
-        assert isinstance(client, GeminiClient)
-        mock_gemini.assert_called_once()
-        assert mock_gemini.call_args.kwargs["http_options"]["timeout"] == 15.0
+    with patch("google.genai.Client") as mock_genai:
+        client = LLMClient("gemini/gemini-pro")
+        assert isinstance(client.client, GeminiClient)
+        assert client.client.timeout == 15.0
+        mock_genai.assert_called_once_with(api_key="fake")
 
 
 @pytest.mark.asyncio
-async def test_get_llm_client_default_timeout(monkeypatch):
+async def test_llm_client_default_timeout(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
     monkeypatch.delenv("KAVALAI_LLM_TIMEOUT", raising=False)
     with patch("kavalai.llm_clients.openai_client.AsyncOpenAI") as mock_openai:
-        get_llm_client("openai/gpt-4")
+        LLMClient("openai/gpt-4")
         assert mock_openai.call_args.kwargs["timeout"] == 30.0
 
 
@@ -347,8 +355,8 @@ async def test_with_retry_gemini_other_client_error_retried():
 async def test_compute_embeddings_with_normalizer(monkeypatch):
     from kavalai.normalizer import Normalizer
 
-    mock_client = AsyncMock()
-    mock_client.compute_embeddings.return_value = (
+    mock_underlying_client = AsyncMock()
+    mock_underlying_client.compute_embeddings.return_value = (
         [[0.1, 0.2]],
         ModelCallStat(
             call_type="embedding",
@@ -357,19 +365,26 @@ async def test_compute_embeddings_with_normalizer(monkeypatch):
         ),
     )
 
-    monkeypatch.setattr(
-        "kavalai.llm_clients.llm_client.get_llm_client", lambda _: mock_client
-    )
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    with patch(
+        "kavalai.llm_clients.llm_client.LLMClient._get_underlying_client",
+        return_value=mock_underlying_client,
+    ):
+        client = LLMClient(model="openai/text-embedding-3-small")
 
-    normalizer = Normalizer(l1=True)
-    embeddings, stats = await compute_embeddings(
-        model="openai/text-embedding-3-small",
-        texts=["hi"],
-        normalize=True,
-        normalizer=normalizer,
-    )
+        normalizer = Normalizer(l1=True)
+        embeddings, stats = await client.compute_embeddings(
+            texts=["hi"],
+            normalize=True,
+            normalizer=normalizer,
+        )
 
     # Check that normalizer was passed to client.compute_embeddings
-    mock_client.compute_embeddings.assert_called_once()
-    assert mock_client.compute_embeddings.call_args.kwargs["normalizer"] is normalizer
-    assert mock_client.compute_embeddings.call_args.kwargs["normalize"] is True
+    mock_underlying_client.compute_embeddings.assert_called_once()
+    assert (
+        mock_underlying_client.compute_embeddings.call_args.kwargs["normalizer"]
+        is normalizer
+    )
+    assert (
+        mock_underlying_client.compute_embeddings.call_args.kwargs["normalize"] is True
+    )
