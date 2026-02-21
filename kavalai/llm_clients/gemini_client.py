@@ -24,10 +24,6 @@ from google.genai import types
 from partial_json_parser import ensure_json
 from pydantic import BaseModel
 import os
-from kavalai.prices.gemini import (
-    GEMINI_PRICES,
-    GEMINI_IMAGE_GENERATION_PRICES,
-)
 from kavalai.agents.db import ModelCallStat
 from kavalai.normalizer import Normalizer, get_default_normalizer
 from kavalai.llm_clients.common import (
@@ -37,129 +33,46 @@ from kavalai.llm_clients.common import (
 )
 
 
-def _cleanup_schema(schema: Dict[str, Any]):
-    """Recursively remove 'title' and other unsupported fields from JSON schema
-    for Gemini.
-    """
-    if not isinstance(schema, dict):
-        return
-
-    unsupported = ["title", "description", "default"]
-    for field in unsupported:
-        if field in schema:
-            del schema[field]
-
-    if "properties" in schema:
-        for prop in schema["properties"].values():
-            _cleanup_schema(prop)
-
-    if "items" in schema:
-        _cleanup_schema(schema["items"])
-
-
 def _prepare_config(
     response_model: Optional[Type[BaseModel]], **kwargs
 ) -> types.GenerateContentConfig:
-    """
-    Prepare Gemini generation config, including structured output schema and
-    reasoning parameters.
-
-    Reasoning Parameters:
-        - reasoning_effort (str): OpenAI-style effort level ("minimal", "low",
-          "medium", "high", "none").
-        - thinking_level (str): Gemini-style thinking level ("minimal", "low",
-          "medium", "high").
-        - thinking_budget (int): Gemini 2.5 specific thinking budget in tokens.
-    """
+    """Prepare Gemini generation config."""
     config_kwargs = {}
     if response_model:
-        schema = response_model.model_json_schema()
-        _cleanup_schema(schema)
         config_kwargs["response_mime_type"] = "application/json"
-        config_kwargs["response_schema"] = schema
+        config_kwargs["response_schema"] = response_model
 
     # Handle Reasoning Parameters
-    reasoning_effort = kwargs.pop("reasoning_effort", None)
-    thinking_level = kwargs.pop("thinking_level", None)
-    thinking_budget = kwargs.pop("thinking_budget", None)
+    effort = kwargs.pop("reasoning_effort", None)
+    level = kwargs.pop("thinking_level", None)
+    budget = kwargs.pop("thinking_budget", None)
 
-    if reasoning_effort or thinking_level or thinking_budget:
-        # Map reasoning_effort to Gemini thinking config if provided
-        if reasoning_effort and not (thinking_level or thinking_budget):
-            if reasoning_effort == "none":
-                # Only supported for Gemini 2.5
-                config_kwargs["thinking_config"] = types.ThinkingConfig(
-                    include_thoughts=False
-                )
-            else:
-                # Map OpenAI reasoning_effort to Gemini thinking_level/budget
-                # Based on the mapping provided in the issue description
-                level_map = {
-                    "minimal": "minimal",
-                    "low": "low",
-                    "medium": "medium",
-                    "high": "high",
+    if effort or level or budget:
+        include = effort != "none"
+        config_kwargs["thinking_config"] = types.ThinkingConfig(
+            include_thoughts=include
+        )
+        if include:
+            if effort and not (level or budget):
+                budget_map = {
+                    "minimal": 1024,
+                    "low": 1024,
+                    "medium": 8192,
+                    "high": 24576,
                 }
-                mapped_level = level_map.get(reasoning_effort)
-                if mapped_level:
-                    config_kwargs["thinking_config"] = types.ThinkingConfig(
-                        include_thoughts=True,
-                    )
-                    # Different models support different combinations.
-                    # For Gemini 2.5, thinking_budget is required.
-                    # For Gemini 3+, thinking_level is used.
-
-                    # Based on the table:
-                    # minimal/low: 1,024
-                    # medium: 8,192
-                    # high: 24,576
-                    budget_map = {
-                        "minimal": 1024,
-                        "low": 1024,
-                        "medium": 8192,
-                        "high": 24576,
-                    }
-
-                    config_kwargs["thinking_config"].thinking_budget = budget_map.get(
-                        reasoning_effort
-                    )
-
-                    # Attempt to set thinking_level for Gemini 3 models
-                    try:
-                        setattr(
-                            config_kwargs["thinking_config"],
-                            "thinking_level",
-                            mapped_level,
-                        )
-                    except Exception:
-                        pass
-
-        # Direct Gemini parameters take precedence or can be used if
-        # reasoning_effort is not present
-        if thinking_level or thinking_budget:
-            if "thinking_config" not in config_kwargs:
-                config_kwargs["thinking_config"] = types.ThinkingConfig(
-                    include_thoughts=True
+                config_kwargs["thinking_config"].thinking_budget = budget_map.get(
+                    effort
                 )
+                config_kwargs["thinking_config"].thinking_level = (
+                    effort if effort in ["minimal", "low", "medium", "high"] else None
+                )
+            if budget:
+                config_kwargs["thinking_config"].thinking_budget = budget
+            if level:
+                config_kwargs["thinking_config"].thinking_level = level
 
-            if thinking_budget:
-                config_kwargs["thinking_config"].thinking_budget = thinking_budget
-            if thinking_level:
-                try:
-                    config_kwargs["thinking_config"].thinking_level = thinking_level
-                except Exception:
-                    # Fallback for SDK versions that don't support it directly
-                    # on ThinkingConfig
-                    pass
-
-    # Map common kwargs to Gemini specific config fields
-    for key in [
-        "temperature",
-        "top_p",
-        "top_k",
-        "max_output_tokens",
-        "stop_sequences",
-    ]:
+    # Map common kwargs
+    for key in ["temperature", "top_p", "top_k", "max_output_tokens", "stop_sequences"]:
         if key in kwargs:
             config_kwargs[key] = kwargs.pop(key)
 
@@ -181,27 +94,18 @@ def _create_chat_stats(
         completion_tokens = usage.candidates_token_count or 0
         total_tokens = usage.total_token_count or 0
 
-    # Calculate cost
-    cost = None
-    if model in GEMINI_PRICES:
-        cost = GEMINI_PRICES[model].calculate_cost(prompt_tokens, completion_tokens)
-
     # Extract thought summaries if available
     # Thoughts are typically in response.candidates[0].content.parts
-    if (
-        last_response
-        and hasattr(last_response, "candidates")
-        and last_response.candidates
-    ):
+    if last_response and last_response.candidates:
         candidate = last_response.candidates[0]
-        if candidate.content and candidate.content.parts:
-            thoughts = [
+        thought_summary = (
+            "\n".join(
                 part.thought
-                for part in candidate.content.parts
-                if hasattr(part, "thought") and isinstance(part.thought, str)
-            ]
-            if thoughts:
-                thought_summary = "\n".join(thoughts)
+                for part in (candidate.content.parts or [])
+                if getattr(part, "thought", None)
+            )
+            or None
+        )
 
     stat = create_model_call_stat(
         call_type="llm",
@@ -210,7 +114,6 @@ def _create_chat_stats(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
-        cost=cost,
         response_data=str(last_response) if last_response else None,
     )
 
@@ -224,27 +127,22 @@ def _create_chat_stats(
     return stat
 
 
-def _create_image_part(base64_data: str) -> types.Part:
-    """Create a Gemini image Part from base64 data."""
-    return types.Part(
-        inline_data=types.Blob(
-            mime_type="image/jpeg",
-            data=base64.b64decode(base64_data),
-        )
-    )
-
-
-def _convert_content_part(part: Dict[str, Any]) -> List[types.Part]:
+def _convert_content_part(part: Dict[str, Any]) -> Optional[types.Part]:
     """Convert a single part of multi-part content to Gemini types.Part."""
     if part["type"] == "text":
-        return [types.Part(text=part["text"])]
+        return types.Part(text=part["text"])
     if part["type"] == "image_url":
         url = part["image_url"]["url"]
         if url.startswith("data:image"):
             # Extract base64 data from data URI
-            _, base64_data = url.split(",", 1)
-            return [_create_image_part(base64_data)]
-    return []
+            _, b64 = url.split(",", 1)
+            return types.Part(
+                inline_data=types.Blob(
+                    mime_type="image/jpeg",
+                    data=base64.b64decode(b64),
+                )
+            )
+    return None
 
 
 def _convert_single_message(message: Dict[str, Any]) -> types.Content:
@@ -257,16 +155,24 @@ def _convert_single_message(message: Dict[str, Any]) -> types.Content:
     content = message.get("content")
     if isinstance(content, list):
         # Handle multi-part content
-        for part in content:
-            parts.extend(_convert_content_part(part))
+        for p in content:
+            converted = _convert_content_part(p)
+            if converted:
+                parts.append(converted)
     elif content:
         # Handle simple text content
         parts.append(types.Part(text=content))
 
     # Handle images if provided as a separate list
-    if message.get("images"):
-        for img_base64 in message["images"]:
-            parts.append(_create_image_part(img_base64))
+    for img_base64 in message.get("images", []):
+        parts.append(
+            types.Part(
+                inline_data=types.Blob(
+                    mime_type="image/jpeg",
+                    data=base64.b64decode(img_base64),
+                )
+            )
+        )
 
     return types.Content(role=role, parts=parts)
 
@@ -323,34 +229,27 @@ class GeminiClient:
         streamer.
         """
         start_time = time.perf_counter()
-
-        # Handle timeout: override with method parameter or fallback to
-        # self.timeout
         effective_timeout = timeout if timeout is not None else self.timeout
-
         model_name = get_model_name(model)
-        contents = _convert_messages(messages)
+
+        # Remove system message and put it into config if it exists
+        system_instruction = None
+        other_messages = []
+        for m in messages:
+            if m["role"] == "system":
+                system_instruction = m["content"]
+            else:
+                other_messages.append(m)
+
+        contents = _convert_messages(other_messages)
         config = _prepare_config(response_model, **kwargs)
+        if system_instruction:
+            config.system_instruction = system_instruction
 
-        if streamer is None:
-            # Non-streaming implementation
-            response = await self.client.aio.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=config,
-            )
-            duration = time.perf_counter() - start_time
-            content = response.text
-            if response_model:
-                content = response_model.model_validate_json(content)
-            stats = _create_chat_stats(model_name, response, duration)
-            return content, stats
-
-        # Streaming implementation
         buffer = io.StringIO()
         last_response = None
 
-        # Call the streaming API
+        # Always use streaming
         api_stream = self.client.aio.models.generate_content_stream(
             model=model_name,
             contents=contents,
@@ -361,18 +260,28 @@ class GeminiClient:
             last_response = response
             if response.text:
                 buffer.write(response.text)
-                # Stream partial results if a streamer is provided
-                await streamer.stream_partial(ensure_json(buffer.getvalue()))
+                if streamer is not None:
+                    value = (
+                        ensure_json(buffer.getvalue())
+                        if response_model
+                        else buffer.getvalue()
+                    )
+                    await streamer.stream_partial(value)
 
         # Signal completion of streaming
-        await streamer.stream_complete(ensure_json(buffer.getvalue()))
+        if streamer is not None:
+            value = (
+                ensure_json(buffer.getvalue()) if response_model else buffer.getvalue()
+            )
+            await streamer.stream_complete(value)
 
         duration = time.perf_counter() - start_time
         response_text = buffer.getvalue()
-
-        content = response_text
-        if response_model:
-            content = response_model.model_validate_json(response_text)
+        content = (
+            response_model.model_validate_json(response_text)
+            if response_model
+            else response_text
+        )
 
         stats = _create_chat_stats(model_name, last_response, duration)
         return content, stats
@@ -408,14 +317,10 @@ class GeminiClient:
                 image_bytes = part.inline_data.data
                 image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-        # Calculate cost
-        cost = GEMINI_IMAGE_GENERATION_PRICES.get(model_name)
-
         stats = create_model_call_stat(
             call_type="image_generation",
             model=f"gemini/{model_name}",
             duration_sections=duration,
-            cost=cost,
             response_data={"prompt": prompt},
         )
         return image_base64, stats
@@ -460,19 +365,12 @@ class GeminiClient:
             # Fallback: estimate tokens (rough estimation: 1 token ~= 4 chars)
             total_tokens = sum(len(t) for t in texts) // 4
 
-        # Calculate cost
-        cost = None
-        if model_name in GEMINI_PRICES:
-            price_per_1m = GEMINI_PRICES[model_name].input.price_per_1m
-            cost = (total_tokens * price_per_1m) / 1_000_000
-
         stats = create_model_call_stat(
             call_type="embedding",
             model=f"gemini/{model_name}",
             duration_sections=duration,
             batch_size=len(texts),
             total_tokens=total_tokens,
-            cost=cost,
             response_data=str(response),
         )
         return embeddings, stats
