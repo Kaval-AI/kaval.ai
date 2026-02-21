@@ -1,7 +1,7 @@
 import asyncio
 from pydantic import BaseModel
 from kavalai.llm_clients.llm_client import LLMClient
-from kavalai.llm_clients.common import StreamContent
+from kavalai.llm_clients.common import StreamContent, Streamer
 
 
 # Define a Pydantic model for structured output
@@ -136,12 +136,12 @@ async def reasoning_and_thinking_example():
     ]
 
     queue = asyncio.Queue()
-
+    streamer = Streamer("streamed_output", queue)
     # thinking_budget is a Gemini-specific parameter (in seconds)
     task = asyncio.create_task(
         client.chat_completions(
             messages=messages,
-            streamer=queue,
+            streamer=streamer,
             thinking_budget=10,  # Use up to 10 seconds for thinking
         )
     )

@@ -62,7 +62,8 @@ class OpenAIClient:
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
 
-        # Handle timeout: override with method parameter or fallback to self.timeout
+        # Handle timeout: override with method parameter or fallback to
+        # self.timeout
         effective_timeout = timeout if timeout is not None else self.timeout
 
         formatted_messages = []
@@ -149,12 +150,14 @@ class OpenAIClient:
         **kwargs,
     ) -> Tuple[str, ModelCallStat]:
         start_time = time.perf_counter()
-        # Handle timeout: override with method parameter or fallback to self.timeout
+        # Handle timeout: override with method parameter or fallback to
+        # self.timeout
         effective_timeout = timeout if timeout is not None else self.timeout
 
         # Ensure response_format is always b64_json
         kwargs.pop("response_format", None)
-        # Normalize quality: OpenAI API supports 'standard' and 'hd' for DALL-E 3
+        # Normalize quality: OpenAI API supports 'standard' and 'hd' for
+        # DALL-E 3
         if quality not in {"standard", "hd"}:
             quality = "standard"
         response = await self.client.images.generate(
@@ -170,7 +173,8 @@ class OpenAIClient:
         data0 = response.data[0]
         image_base64 = getattr(data0, "b64_json", None)
         if image_base64 is None and hasattr(data0, "url") and data0.url:
-            # Fetch the URL and convert to base64 to keep a consistent return type
+            # Fetch the URL and convert to base64 to keep a consistent return
+            # type
             import base64
             import httpx
 
@@ -203,7 +207,8 @@ class OpenAIClient:
         **kwargs,
     ) -> Tuple[List[List[float]], ModelCallStat]:
         start_time = time.perf_counter()
-        # Handle timeout: override with method parameter or fallback to self.timeout
+        # Handle timeout: override with method parameter or fallback to
+        # self.timeout
         effective_timeout = timeout if timeout is not None else self.timeout
 
         call_kwargs = {

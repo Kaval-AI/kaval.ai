@@ -38,7 +38,9 @@ from kavalai.llm_clients.common import (
 
 
 def _cleanup_schema(schema: Dict[str, Any]):
-    """Recursively remove 'title' and other unsupported fields from JSON schema for Gemini."""
+    """Recursively remove 'title' and other unsupported fields from JSON schema
+    for Gemini.
+    """
     if not isinstance(schema, dict):
         return
 
@@ -59,11 +61,14 @@ def _prepare_config(
     response_model: Optional[Type[BaseModel]], **kwargs
 ) -> types.GenerateContentConfig:
     """
-    Prepare Gemini generation config, including structured output schema and reasoning parameters.
+    Prepare Gemini generation config, including structured output schema and
+    reasoning parameters.
 
     Reasoning Parameters:
-        - reasoning_effort (str): OpenAI-style effort level ("minimal", "low", "medium", "high", "none").
-        - thinking_level (str): Gemini-style thinking level ("minimal", "low", "medium", "high").
+        - reasoning_effort (str): OpenAI-style effort level ("minimal", "low",
+          "medium", "high", "none").
+        - thinking_level (str): Gemini-style thinking level ("minimal", "low",
+          "medium", "high").
         - thinking_budget (int): Gemini 2.5 specific thinking budget in tokens.
     """
     config_kwargs = {}
@@ -129,7 +134,8 @@ def _prepare_config(
                     except Exception:
                         pass
 
-        # Direct Gemini parameters take precedence or can be used if reasoning_effort is not present
+        # Direct Gemini parameters take precedence or can be used if
+        # reasoning_effort is not present
         if thinking_level or thinking_budget:
             if "thinking_config" not in config_kwargs:
                 config_kwargs["thinking_config"] = types.ThinkingConfig(
@@ -142,7 +148,8 @@ def _prepare_config(
                 try:
                     config_kwargs["thinking_config"].thinking_level = thinking_level
                 except Exception:
-                    # Fallback for SDK versions that don't support it directly on ThinkingConfig
+                    # Fallback for SDK versions that don't support it directly
+                    # on ThinkingConfig
                     pass
 
     # Map common kwargs to Gemini specific config fields
@@ -241,7 +248,9 @@ def _convert_content_part(part: Dict[str, Any]) -> List[types.Part]:
 
 
 def _convert_single_message(message: Dict[str, Any]) -> types.Content:
-    """Convert a single OpenAI-style message to a Gemini types.Content object."""
+    """
+    Convert a single OpenAI-style message to a Gemini types.Content object.
+    """
     role = "model" if message["role"] == "assistant" else message["role"]
     parts = []
 
@@ -282,14 +291,16 @@ class GeminiClient:
             timeout (float): Default timeout for API calls in seconds.
 
         Raises:
-            ValueError: If no API key is provided or found in environment variables.
+            ValueError: If no API key is provided or found in environment
+                variables.
         """
         if not api_key:
             api_key = os.getenv("GEMINI_API_KEY")
 
         if not api_key:
             raise ValueError(
-                "Gemini API key must be provided either through the api_key parameter or GEMINI_API_KEY environment variable"
+                "Gemini API key must be provided either through the "
+                "api_key parameter or GEMINI_API_KEY environment variable"
             )
 
         self.timeout = timeout
@@ -308,11 +319,13 @@ class GeminiClient:
     ) -> Tuple[Any, ModelCallStat]:
         """
         Send a chat completion request to Gemini.
-        Supports structured output via response_model and streaming via streamer.
+        Supports structured output via response_model and streaming via
+        streamer.
         """
         start_time = time.perf_counter()
 
-        # Handle timeout: override with method parameter or fallback to self.timeout
+        # Handle timeout: override with method parameter or fallback to
+        # self.timeout
         effective_timeout = timeout if timeout is not None else self.timeout
 
         model_name = get_model_name(model)
@@ -325,7 +338,6 @@ class GeminiClient:
                 model=model_name,
                 contents=contents,
                 config=config,
-                http_options={"timeout": effective_timeout},
             )
             duration = time.perf_counter() - start_time
             content = response.text
@@ -339,12 +351,13 @@ class GeminiClient:
         last_response = None
 
         # Call the streaming API
-        async for response in await self.client.aio.models.generate_content_stream(
+        api_stream = self.client.aio.models.generate_content_stream(
             model=model_name,
             contents=contents,
             config=config,
             http_options={"timeout": effective_timeout},
-        ):
+        )
+        async for response in await api_stream:
             last_response = response
             if response.text:
                 buffer.write(response.text)
@@ -371,9 +384,12 @@ class GeminiClient:
         timeout: Optional[float] = None,
         **kwargs,
     ) -> Tuple[str, ModelCallStat]:
-        """Generate an image using Gemini models (e.g., gemini-2.5-flash-image)."""
+        """
+        Generate an image using Gemini models (e.g., gemini-2.5-flash-image).
+        """
         start_time = time.perf_counter()
-        # Handle timeout: override with method parameter or fallback to self.timeout
+        # Handle timeout: override with method parameter or fallback to
+        # self.timeout
         effective_timeout = timeout if timeout is not None else self.timeout
 
         model_name = get_model_name(model)
@@ -415,7 +431,8 @@ class GeminiClient:
     ) -> Tuple[List[List[float]], ModelCallStat]:
         """Compute embeddings for a list of texts using Gemini."""
         start_time = time.perf_counter()
-        # Handle timeout: override with method parameter or fallback to self.timeout
+        # Handle timeout: override with method parameter or fallback to
+        # self.timeout
         effective_timeout = timeout if timeout is not None else self.timeout
 
         model_name = get_model_name(model)
@@ -434,7 +451,8 @@ class GeminiClient:
                 normalizer = get_default_normalizer()
             embeddings = normalizer.transform(embeddings)
 
-        # Estimated tokens if not provided (Gemini embed_content doesn't always return usage in the same way as generate_content)
+        # Estimated tokens if not provided (Gemini embed_content doesn't
+        # always return usage in the same way as generate_content)
         total_tokens = 0
         if hasattr(response, "usage_metadata") and response.usage_metadata:
             total_tokens = response.usage_metadata.total_token_count or 0
