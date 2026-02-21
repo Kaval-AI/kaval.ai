@@ -41,6 +41,8 @@ async def test_gemini_chat_completions_simple(gemini_client):
     assert stats.prompt_tokens > 0
     assert stats.completion_tokens > 0
     assert stats.model.startswith("gemini/")
+    assert stats.cost >= 0
+    assert stats.currency == "USD"
 
 
 @pytest.mark.asyncio
@@ -125,16 +127,15 @@ async def test_gemini_chat_completions_streamer(gemini_client):
 async def test_gemini_generate_image(gemini_client):
     """Test image generation."""
     prompt = "A simple red square 1x1 size."
-    try:
-        image_base64, stats = await gemini_client.generate_image(
-            model="gemini-2.0-flash-exp",  # Or another model that might support it if any
-            prompt=prompt,
-        )
-        if image_base64:
-            assert isinstance(image_base64, str)
-            assert stats.call_type == "image_generation"
-    except Exception as e:
-        pytest.skip(f"Image generation failed or not supported by model: {e}")
+    image_base64, stats = await gemini_client.generate_image(
+        model="gemini-2.5-flash-image",  # Or another model that might support it if any
+        prompt=prompt,
+    )
+    if image_base64:
+        assert isinstance(image_base64, str)
+        assert stats.call_type == "image_generation"
+        assert stats.cost >= 0
+        assert stats.currency == "USD"
 
 
 @pytest.mark.asyncio
@@ -155,6 +156,8 @@ async def test_gemini_compute_embeddings(gemini_client):
     assert len(embeddings) == 2
     assert len(embeddings[0]) > 0
     assert stats.call_type == "embedding"
+    assert stats.cost >= 0
+    assert stats.currency == "USD"
 
 
 @pytest.mark.asyncio

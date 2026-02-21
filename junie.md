@@ -37,7 +37,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `prices/`: Pricing data for different LLM providers.
         - `common.py`: Unified Pydantic models (`ModelPricing`, `TokenPricing`) for LLM pricing and cost calculation logic.
         - `openai.py`: OpenAI pricing data using the unified models. Includes `get_openai_chat_cost`, `get_openai_image_cost`, and `get_openai_embedding_cost` for calculating call costs in USD.
-        - `gemini.py`: Gemini pricing data using the unified models.
+        - `gemini.py`: Gemini pricing data using the unified models. Includes `get_gemini_chat_cost`, `get_gemini_image_cost`, and `get_gemini_embedding_cost` for calculating call costs in USD.
 - `examples/`: Runnable example scripts for users.
     - `llm_clients/`: Examples for using the LLM client framework.
         - `01_chat_completions.py`: Streaming, multimodal (images), structured output, and reasoning examples.

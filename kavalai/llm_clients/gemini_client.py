@@ -32,6 +32,11 @@ from kavalai.llm_clients.common import (
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
+from kavalai.prices.gemini import (
+    get_gemini_chat_cost,
+    get_gemini_image_cost,
+    get_gemini_embedding_cost,
+)
 
 
 class GeminiClient:
@@ -177,8 +182,10 @@ class GeminiClient:
             duration_sections=duration,
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
+            cost=get_gemini_chat_cost(model_name, input_tokens, output_tokens),
             response_data=response_data,
         )
+        stats.currency = "USD"
         return result, stats
 
     async def generate_image(
@@ -193,19 +200,16 @@ class GeminiClient:
         start_time = time.perf_counter()
         model_name = get_model_name(model)
 
-        try:
-            response = await self.client.aio.models.generate_images(
-                model=model_name,
-                prompt=prompt,
-                config=types.GenerateImagesConfig(number_of_images=1, **kwargs),
-            )
+        response = await self.client.aio.models.generate_images(
+            model=model_name,
+            prompt=prompt,
+            config=types.GenerateImagesConfig(number_of_images=1, **kwargs),
+        )
 
-            image_base64 = None
-            if response.generated_images:
-                image_bytes = response.generated_images[0].image.image_bytes
-                image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-        except Exception:
-            image_base64 = None
+        image_base64 = None
+        if response.generated_images:
+            image_bytes = response.generated_images[0].image.image_bytes
+            image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
         duration = time.perf_counter() - start_time
 
@@ -213,8 +217,10 @@ class GeminiClient:
             call_type="image_generation",
             model=f"gemini/{model_name}",
             duration_sections=duration,
+            cost=get_gemini_image_cost(model_name),
             response_data={"size": size, "quality": quality},
         )
+        stats.currency = "USD"
         return image_base64, stats
 
     async def compute_embeddings(
@@ -250,8 +256,10 @@ class GeminiClient:
             duration_sections=duration,
             batch_size=len(texts),
             total_tokens=total_tokens,
+            cost=get_gemini_embedding_cost(model_name, total_tokens),
             response_data=None,
         )
+        stats.currency = "USD"
         return embeddings, stats
 
     async def list_models(self) -> List[str]:

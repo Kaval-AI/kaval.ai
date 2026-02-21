@@ -105,6 +105,40 @@ GEMINI_PRICES: Dict[str, ModelPricing] = {
     ),
 }
 
+
+def get_gemini_chat_cost(
+    model: str, prompt_tokens: int, completion_tokens: int, cached_tokens: int = 0
+) -> float:
+    """
+    Compute the cost of a Gemini chat completion call in USD.
+    """
+    pricing = GEMINI_PRICES.get(model)
+    if not pricing:
+        return 0.0
+
+    return pricing.calculate_cost(prompt_tokens, completion_tokens, cached_tokens)
+
+
+def get_gemini_image_cost(model: str) -> float:
+    """
+    Compute the cost of a Gemini image generation call in USD.
+    """
+    return GEMINI_IMAGE_GENERATION_PRICES.get(model, 0.0)
+
+
+def get_gemini_embedding_cost(model: str, tokens: int) -> float:
+    """
+    Compute the cost of a Gemini embedding call in USD.
+    """
+    pricing = GEMINI_PRICES.get(model)
+    if not pricing:
+        return 0.0
+
+    # Pricing per 1M tokens
+    input_p = pricing.input.get_price(tokens)
+    return tokens * input_p / 1_000_000
+
+
 # Image Generation - Prices per image in USD
 GEMINI_IMAGE_GENERATION_PRICES: Dict[str, Dict[str, float]] = {
     "imagen-4.0-fast-generate-001": 0.02,
