@@ -15,35 +15,38 @@ limitations under the License.
 """
 
 import io
+import os
 import time
 from typing import Any, Dict, List, Optional, Type, Tuple
 
 from openai import AsyncOpenAI
+from openai.types.responses import (
+    ResponseTextDeltaEvent,
+    ResponseRefusalDeltaEvent,
+    ResponseErrorEvent,
+    ResponseCompletedEvent,
+)
 from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
-from kavalai.normalizer import Normalizer, get_default_normalizer
-from kavalai.prices.openai import (
-    OPENAI_TEXT_PRICES,
-    OPENAI_EMBEDDING_PRICES,
-    OPENAI_IMAGE_GENERATION_PRICES,
-    OPENAI_LEGACY_PRICES,
-)
 from kavalai.llm_clients.common import (
     create_model_call_stat,
     Streamer,
 )
+from kavalai.normalizer import Normalizer, get_default_normalizer
 
 
 class OpenAIClient:
     def __init__(
         self,
-        api_key: str,
+        api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         service_tier: Optional[str] = None,
         timeout: float = 30.0,
     ):
+        if not api_key:
+            api_key = os.getenv("OPENAI_API_KEY")
         self.timeout = timeout
         self.client = AsyncOpenAI(
             api_key=api_key, base_url=base_url, timeout=self.timeout
@@ -57,75 +60,59 @@ class OpenAIClient:
         messages: List[Dict[str, Any]],
         response_model: Optional[Type[BaseModel]] = None,
         streamer: Optional[Streamer] = None,
-        timeout: Optional[float] = None,
         **kwargs,
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
 
-        # Handle timeout: override with method parameter or fallback to
-        # self.timeout
-        effective_timeout = timeout if timeout is not None else self.timeout
-
-        formatted_messages = []
-        for m in messages:
-            content = m.get("content")
-            if isinstance(content, list):
-                # Message already in content-list format
-                formatted_messages.append(m)
-            elif m.get("images"):
-                # Handle images provided in a separate field
-                msg_content = [{"type": "text", "text": content}]
-                for img_base64 in m["images"]:
-                    msg_content.append(
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{img_base64}"
-                            },
-                        }
-                    )
-                formatted_messages.append({"role": m["role"], "content": msg_content})
-            else:
-                formatted_messages.append(m)
-
         call_kwargs = {
             "model": model,
-            "messages": formatted_messages,
-            "timeout": effective_timeout,
+            "input": messages,
             **kwargs,
         }
-        if response_model:
-            call_kwargs["response_format"] = response_model
+        if response_model and issubclass(response_model, BaseModel):
+            call_kwargs["text_format"] = response_model
+        elif response_model:
+            raise ValueError("response_model must be a pydantic BaseModel")
         if self.service_tier:
             call_kwargs["service_tier"] = self.service_tier
-
         buffer = io.StringIO()
-        async with self.client.beta.chat.completions.stream(**call_kwargs) as stream:
-            async for chunk in stream:
-                if chunk.type == "content.delta":
-                    buffer.write(chunk.delta)
-                    if streamer is not None and buffer.getvalue().strip():
-                        await streamer.stream_partial(ensure_json(buffer.getvalue()))
-
-            final_completion = await stream.get_final_completion()
-            usage = final_completion.usage
-            input_tokens = usage.prompt_tokens if usage else 0
-            output_tokens = usage.completion_tokens if usage else 0
+        async with self.client.responses.stream(**call_kwargs) as stream:
+            async for event in stream:
+                if isinstance(event, ResponseTextDeltaEvent):
+                    buffer.write(event.delta)
+                    if streamer is not None:
+                        value = (
+                            ensure_json(buffer.getvalue())
+                            if response_model
+                            else buffer.getvalue()
+                        )
+                        await streamer.stream_partial(value)
+                elif isinstance(event, ResponseRefusalDeltaEvent):
+                    buffer.write(event.delta)
+                    if streamer is not None:
+                        value = (
+                            ensure_json(buffer.getvalue())
+                            if response_model
+                            else buffer.getvalue()
+                        )
+                        await streamer.stream_partial(value)
+                elif isinstance(event, ResponseErrorEvent):
+                    raise RuntimeError(event.error)
+                elif isinstance(event, ResponseCompletedEvent):
+                    usage = event.response.usage
+                    input_tokens = usage.input_tokens
+                    output_tokens = usage.output_tokens
         # Stream the final complete value.
         if streamer is not None:
-            await streamer.stream_complete(buffer.getvalue())
-
+            value = (
+                ensure_json(buffer.getvalue()) if response_model else buffer.getvalue()
+            )
+            await streamer.stream_complete(value)
         result = buffer.getvalue()
         if response_model:
             result = response_model.model_validate_json(result)
 
         duration = time.perf_counter() - start_time
-
-        # Calculate cost
-        cost = None
-        pricing = OPENAI_TEXT_PRICES.get(model) or OPENAI_LEGACY_PRICES.get(model)
-        if pricing:
-            cost = pricing.calculate_cost(input_tokens, output_tokens)
 
         stats = create_model_call_stat(
             call_type="llm",
@@ -133,7 +120,6 @@ class OpenAIClient:
             duration_sections=duration,
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
-            cost=cost,
             response_data=result.model_dump()
             if hasattr(result, "model_dump")
             else result,
@@ -154,45 +140,32 @@ class OpenAIClient:
         # self.timeout
         effective_timeout = timeout if timeout is not None else self.timeout
 
-        # Ensure response_format is always b64_json
-        kwargs.pop("response_format", None)
-        # Normalize quality: OpenAI API supports 'standard' and 'hd' for
-        # DALL-E 3
-        if quality not in {"standard", "hd"}:
-            quality = "standard"
-        response = await self.client.images.generate(
+        # Ensure tool type is image_generation if using the new responses API
+        response = await self.client.responses.create(
             model=model,
-            prompt=prompt,
-            size=size,
-            quality=quality,
+            input=prompt,
+            tools=[{"type": "image_generation"}],
             timeout=effective_timeout,
             **kwargs,
         )
+
         duration = time.perf_counter() - start_time
-        # Prefer base64 payload if available; otherwise fall back to URL
-        data0 = response.data[0]
-        image_base64 = getattr(data0, "b64_json", None)
-        if image_base64 is None and hasattr(data0, "url") and data0.url:
-            # Fetch the URL and convert to base64 to keep a consistent return
-            # type
-            import base64
-            import httpx
 
-            with httpx.Client(timeout=60.0) as client:
-                resp = client.get(data0.url)
-                resp.raise_for_status()
-                image_base64 = base64.b64encode(resp.content).decode("utf-8")
+        # Save the image to a file
+        image_data = [
+            output.result
+            for output in response.output
+            if output.type == "image_generation_call"
+        ]
 
-        # Calculate cost
-        cost = None
-        if model in OPENAI_IMAGE_GENERATION_PRICES:
-            cost = OPENAI_IMAGE_GENERATION_PRICES[model].get(quality, {}).get(size)
+        image_base64 = None
+        if image_data:
+            image_base64 = image_data[0]
 
         stats = create_model_call_stat(
             call_type="image_generation",
             model=f"openai/{model}",
             duration_sections=duration,
-            cost=cost,
             response_data={"size": size, "quality": quality},
         )
         return image_base64, stats
@@ -228,19 +201,12 @@ class OpenAIClient:
 
         total_tokens = response.usage.total_tokens if response.usage else 0
 
-        # Calculate cost
-        cost = None
-        if model in OPENAI_EMBEDDING_PRICES:
-            price_per_1m = OPENAI_EMBEDDING_PRICES[model].get("standard", 0)
-            cost = (total_tokens * price_per_1m) / 1_000_000
-
         stats = create_model_call_stat(
             call_type="embedding",
             model=f"openai/{model}",
             duration_sections=duration,
             batch_size=len(texts),
             total_tokens=total_tokens,
-            cost=cost,
             response_data=response.model_dump()
             if hasattr(response, "model_dump")
             else response,
