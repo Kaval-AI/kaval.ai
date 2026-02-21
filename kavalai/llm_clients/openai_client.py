@@ -35,6 +35,11 @@ from kavalai.llm_clients.common import (
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
+from kavalai.prices.openai import (
+    get_openai_chat_cost,
+    get_openai_image_cost,
+    get_openai_embedding_cost,
+)
 
 
 class OpenAIClient:
@@ -102,6 +107,12 @@ class OpenAIClient:
                     usage = event.response.usage
                     input_tokens = usage.input_tokens
                     output_tokens = usage.output_tokens
+                    cached_tokens = (
+                        usage.input_tokens_details.cached_tokens
+                        if hasattr(usage, "input_tokens_details")
+                        and usage.input_tokens_details
+                        else 0
+                    )
         # Stream the final complete value.
         if streamer is not None:
             value = (
@@ -114,16 +125,25 @@ class OpenAIClient:
 
         duration = time.perf_counter() - start_time
 
+        cost = get_openai_chat_cost(
+            model,
+            prompt_tokens=input_tokens,
+            completion_tokens=output_tokens,
+            cached_tokens=cached_tokens,
+        )
+
         stats = create_model_call_stat(
             call_type="llm",
             model=f"openai/{model}",
             duration_sections=duration,
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
+            cost=cost,
             response_data=result.model_dump()
             if hasattr(result, "model_dump")
             else result,
         )
+        stats.currency = "USD"
         return result, stats
 
     async def generate_image(
@@ -140,7 +160,6 @@ class OpenAIClient:
         # self.timeout
         effective_timeout = timeout if timeout is not None else self.timeout
 
-        # Ensure tool type is image_generation if using the new responses API
         response = await self.client.responses.create(
             model=model,
             input=prompt,
@@ -162,12 +181,16 @@ class OpenAIClient:
         if image_data:
             image_base64 = image_data[0]
 
+        cost = get_openai_image_cost(model, size, quality)
+
         stats = create_model_call_stat(
             call_type="image_generation",
             model=f"openai/{model}",
             duration_sections=duration,
+            cost=cost,
             response_data={"size": size, "quality": quality},
         )
+        stats.currency = "USD"
         return image_base64, stats
 
     async def compute_embeddings(
@@ -201,16 +224,20 @@ class OpenAIClient:
 
         total_tokens = response.usage.total_tokens if response.usage else 0
 
+        cost = get_openai_embedding_cost(model, total_tokens)
+
         stats = create_model_call_stat(
             call_type="embedding",
             model=f"openai/{model}",
             duration_sections=duration,
             batch_size=len(texts),
             total_tokens=total_tokens,
+            cost=cost,
             response_data=response.model_dump()
             if hasattr(response, "model_dump")
             else response,
         )
+        stats.currency = "USD"
         return embeddings, stats
 
     async def list_models(self) -> List[str]:

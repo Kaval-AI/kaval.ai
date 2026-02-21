@@ -36,7 +36,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `gemini_client.py`: Native Gemini client wrapper. Supports structured outputs via Pydantic models passed directly to `response_schema`, and image generation via `generate_content`. Both `chat_completions`, `compute_embeddings`, and `generate_image` return a tuple of `(result, ModelCallStat)`. Now always uses streaming in `chat_completions` for both streaming and non-streaming requests, unifying text and structured output handling. Now supports `provider/model` syntax by automatically extracting the model part. Uses `GEMINI_API_KEY` from environment. Supports reasoning/thinking parameters (`reasoning_effort`, `thinking_level`, `thinking_budget`) for models that support it. Correctly handles system instructions by extracting them from messages. Extracts and processes thought summaries from responses. Includes module-level utility functions for message conversion and config preparation. Supports default timeout in `__init__` and per-call overrides.
     - `prices/`: Pricing data for different LLM providers.
         - `common.py`: Unified Pydantic models (`ModelPricing`, `TokenPricing`) for LLM pricing and cost calculation logic.
-        - `openai.py`: OpenAI pricing data using the unified models.
+        - `openai.py`: OpenAI pricing data using the unified models. Includes `get_openai_chat_cost`, `get_openai_image_cost`, and `get_openai_embedding_cost` for calculating call costs in USD.
         - `gemini.py`: Gemini pricing data using the unified models.
 - `examples/`: Runnable example scripts for users.
     - `llm_clients/`: Examples for using the LLM client framework.

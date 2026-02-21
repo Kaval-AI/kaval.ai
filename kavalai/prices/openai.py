@@ -607,3 +607,49 @@ OPENAI_LEGACY_PRICES: Dict[str, ModelPricing] = {
         output=TokenPricing(price_per_1m=0.40),
     ),
 }
+
+
+def get_openai_chat_cost(
+    model: str, prompt_tokens: int, completion_tokens: int, cached_tokens: int = 0
+) -> float:
+    """
+    Compute the cost of an OpenAI chat completion call in USD.
+    """
+    # Try text prices first
+    pricing = OPENAI_TEXT_PRICES.get(model)
+    if not pricing:
+        # Try legacy prices
+        pricing = OPENAI_LEGACY_PRICES.get(model)
+
+    if not pricing:
+        # Fallback to some default or 0 if unknown
+        return 0.0
+
+    return pricing.calculate_cost(prompt_tokens, completion_tokens, cached_tokens)
+
+
+def get_openai_image_cost(model: str, size: str, quality: str = "standard") -> float:
+    """
+    Compute the cost of an OpenAI image generation call in USD.
+    """
+    model_prices = OPENAI_IMAGE_PRICES.get(model)
+    if not model_prices:
+        return 0.0
+
+    quality_prices = model_prices.get(quality)
+    if not quality_prices:
+        return 0.0
+
+    return quality_prices.get(size, 0.0)
+
+
+def get_openai_embedding_cost(model: str, tokens: int, mode: str = "standard") -> float:
+    """
+    Compute the cost of an OpenAI embedding call in USD.
+    """
+    model_prices = OPENAI_EMBEDDING_PRICES.get(model)
+    if not model_prices:
+        return 0.0
+
+    price_per_1m = model_prices.get(mode, 0.0)
+    return tokens * price_per_1m / 1_000_000

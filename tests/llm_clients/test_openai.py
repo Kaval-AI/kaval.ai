@@ -41,6 +41,9 @@ async def test_openai_chat_completions_simple(openai_client):
     assert stats.prompt_tokens > 0
     assert stats.completion_tokens > 0
     assert stats.model == "openai/gpt-4o-mini"
+    assert stats.cost is not None
+    assert stats.cost > 0
+    assert stats.currency == "USD"
 
 
 @pytest.mark.asyncio
