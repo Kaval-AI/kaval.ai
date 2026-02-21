@@ -155,3 +155,49 @@ async def test_gemini_compute_embeddings(gemini_client):
     assert len(embeddings) == 2
     assert len(embeddings[0]) > 0
     assert stats.call_type == "embedding"
+
+
+@pytest.mark.asyncio
+async def test_gemini_chat_completions_streamer_with_response_model(gemini_client):
+    """Test streamer functionality together with structured output (response_model)."""
+    messages = [
+        {
+            "role": "user",
+            "content": "What is the capital of France? Return JSON with fields: answer (string) and confidence (number).",
+        }
+    ]
+
+    # Create async queue and real streamer
+    queue = asyncio.Queue()
+    streamer = Streamer("test_streamer_json", queue)
+
+    # Make API call with streamer and response_model
+    model = await _pick_chat_model(gemini_client)
+    result, stats = await gemini_client.chat_completions(
+        model=model, messages=messages, response_model=SimpleResponse, streamer=streamer
+    )
+
+    # Collect all streamed content
+    partials = []
+    final_streamed = None
+
+    while not queue.empty():
+        content_json = await queue.get()
+        content = StreamContent.model_validate_json(content_json)
+        if content.type == "partial":
+            partials.append(content.value)
+        elif content.type == "complete":
+            final_streamed = content.value
+
+    # Result must be parsed into the Pydantic model
+    assert isinstance(result, SimpleResponse)
+    assert "Paris" in result.answer
+    assert result.confidence >= 0
+
+    # We should have received partial JSON chunks
+    assert len(partials) > 0
+    # The final streamed value should be valid JSON for the model and match the final result
+    assert final_streamed is not None
+    final_parsed = SimpleResponse.model_validate_json(final_streamed)
+    assert final_parsed.answer == result.answer
+    assert pytest.approx(final_parsed.confidence, rel=1e-3) == result.confidence
