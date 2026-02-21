@@ -278,7 +278,6 @@ async def test_openai_compute_embeddings_custom_normalizer():
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 async def test_openai_structured_output_stream():
     api_key = os.getenv("OPENAI_API_KEY")
     client = OpenAIClient(api_key=api_key)
@@ -302,3 +301,99 @@ async def test_openai_structured_output_stream():
     assert "4" in content.answer
     assert content.confidence >= 0.0
     assert not queue.empty()
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_image():
+    client = OpenAIClient(api_key="fake-key")
+    mock_generate = AsyncMock()
+
+    mock_data = MagicMock()
+    mock_data.b64_json = "fake-base64"
+    mock_response = MagicMock()
+    mock_response.data = [mock_data]
+
+    mock_generate.return_value = mock_response
+
+    with patch.object(client.client.images, "generate", mock_generate):
+        image_base64, stats = await client.generate_image(
+            model="dall-e-3", prompt="a cat"
+        )
+
+    assert image_base64 == "fake-base64"
+    assert stats.call_type == "image_generation"
+    assert stats.model == "openai/dall-e-3"
+
+
+@pytest.mark.asyncio
+async def test_openai_list_models():
+    client = OpenAIClient(api_key="fake-key")
+    mock_list = AsyncMock()
+
+    model1 = MagicMock()
+    model1.id = "gpt-4o"
+    model2 = MagicMock()
+    model2.id = "gpt-4o-mini"
+
+    mock_response = MagicMock()
+    mock_response.data = [model1, model2]
+
+    mock_list.return_value = mock_response
+
+    with patch.object(client.client.models, "list", mock_list):
+        models = await client.list_models()
+
+    assert "gpt-4o" in models
+    assert "gpt-4o-mini" in models
+    assert len(models) == 2
+
+
+@pytest.mark.asyncio
+async def test_openai_chat_completions_multimodal():
+    client = OpenAIClient(api_key="fake-key")
+
+    mock_stream = AsyncMock()
+    # Mock chunks
+    chunk1 = MagicMock()
+    chunk1.type = "content.delta"
+    chunk1.delta = '{"answer": "A cat", "confidence": 0.9}'
+
+    mock_stream.__aiter__.return_value = [chunk1]
+
+    final_completion = MagicMock()
+    final_completion.usage = MagicMock()
+    final_completion.usage.prompt_tokens = 50
+    final_completion.usage.completion_tokens = 10
+    mock_stream.get_final_completion = AsyncMock(return_value=final_completion)
+
+    mock_stream_manager = MagicMock()
+    mock_stream_manager.__aenter__.return_value = mock_stream
+    mock_stream_manager.__aexit__ = AsyncMock(return_value=None)
+
+    messages = [
+        {
+            "role": "user",
+            "content": "What is in this image?",
+            "images": ["base64-image-data"],
+        }
+    ]
+
+    with patch.object(
+        client.client.beta.chat.completions, "stream", return_value=mock_stream_manager
+    ) as mock_stream_call:
+        result, stats = await client.chat_completions(
+            model="gpt-4o",
+            messages=messages,
+            response_model=SimpleResponse,
+        )
+
+    # Verify how it was called
+    called_messages = mock_stream_call.call_args.kwargs["messages"]
+    assert len(called_messages) == 1
+    assert called_messages[0]["role"] == "user"
+    assert isinstance(called_messages[0]["content"], list)
+    assert called_messages[0]["content"][0]["type"] == "text"
+    assert called_messages[0]["content"][1]["type"] == "image_url"
+    assert "base64-image-data" in called_messages[0]["content"][1]["image_url"]["url"]
+
+    assert result.answer == "A cat"

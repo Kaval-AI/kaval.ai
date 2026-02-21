@@ -123,16 +123,31 @@ class OpenAIClient:
         **kwargs,
     ) -> Tuple[str, ModelCallStat]:
         start_time = time.perf_counter()
+        # Ensure response_format is always b64_json
+        kwargs.pop("response_format", None)
+        # Normalize quality: OpenAI API supports 'standard' and 'hd' for DALL-E 3
+        if quality not in {"standard", "hd"}:
+            quality = "standard"
         response = await self.client.images.generate(
             model=model,
             prompt=prompt,
             size=size,
             quality=quality,
-            response_format="b64_json",
             **kwargs,
         )
         duration = time.perf_counter() - start_time
-        image_base64 = response.data[0].b64_json
+        # Prefer base64 payload if available; otherwise fall back to URL
+        data0 = response.data[0]
+        image_base64 = getattr(data0, "b64_json", None)
+        if image_base64 is None and hasattr(data0, "url") and data0.url:
+            # Fetch the URL and convert to base64 to keep a consistent return type
+            import base64
+            import httpx
+
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.get(data0.url)
+                resp.raise_for_status()
+                image_base64 = base64.b64encode(resp.content).decode("utf-8")
 
         stats = create_model_call_stat(
             call_type="image_generation",
@@ -177,5 +192,8 @@ class OpenAIClient:
             if hasattr(response, "model_dump")
             else response,
         )
-
         return embeddings, stats
+
+    async def list_models(self) -> List[str]:
+        response = await self.client.models.list()
+        return [model.id for model in response.data]
