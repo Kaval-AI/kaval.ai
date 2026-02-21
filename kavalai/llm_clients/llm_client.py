@@ -71,7 +71,7 @@ async def with_retry(
 
             delay = min(base_delay * (2**attempt) + random.uniform(0, 1), max_delay)
             logger.warning(
-                f"LLM call failed with {type(e).__name__}: {e}. "
+                f"LLM call to {args[0] if args else 'unknown'} failed with {type(e).__name__}: {str(e)}. "
                 f"Retrying in {delay:.2f} seconds (attempt {attempt + 1}/{max_retries})..."
             )
             await asyncio.sleep(delay)
@@ -82,6 +82,140 @@ async def with_retry(
     raise last_exception
 
 
+class LLMClient:
+    """
+    Unified LLM client that handles provider selection, retries, and statistics.
+    """
+
+    def __init__(self, model: str):
+        self.full_model = model
+        self.provider, self.model_name = model.split("/")
+        self.client = self._get_underlying_client()
+
+    def _get_underlying_client(self) -> OpenAIClient | GeminiClient:
+        """
+        Factory method to get the appropriate LLM client.
+        """
+        timeout = float(os.environ.get("KAVALAI_LLM_TIMEOUT", 30.0))
+        if self.provider == "openai":
+            return OpenAIClient(
+                api_key=os.environ["OPENAI_API_KEY"],
+                service_tier=os.environ.get("KAVALAI_OPENAI_SERVICE_TIER"),
+                timeout=timeout
+                if "dalle" not in self.model_name and "gpt-image" not in self.model_name
+                else max(timeout, 120.0),
+            )
+        elif self.provider == "gemini":
+            return GeminiClient(
+                api_key=os.environ["GEMINI_API_KEY"],
+                timeout=timeout
+                if "imagen" not in self.model_name
+                and "image-preview" not in self.model_name
+                else max(timeout, 120.0),
+            )
+        else:
+            raise ValueError(f"Invalid provider: {self.provider}")
+
+    async def chat_completions(
+        self,
+        response_model: type[BaseModel],
+        messages: list[dict],
+        streamer: Streamer | None = None,
+        **kwargs,
+    ) -> tuple[Any, ModelCallStat]:
+        """
+        Execute a chat completion with native clients and return result and stats.
+        """
+        # We want to keep track of the request for stats
+        request_info = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "arguments": {
+                "model": self.full_model,
+                "messages": messages,
+                "response_model": str(response_model),
+                "streamer": str(streamer) if streamer else None,
+                **kwargs,
+            },
+        }
+
+        content, stats = await with_retry(
+            self.client.chat_completions,
+            model=self.model_name,
+            messages=messages,
+            response_model=response_model,
+            streamer=streamer,
+            **kwargs,
+        )
+
+        stats.request_data = {"requests": [request_info]}
+
+        return content, stats
+
+    async def generate_image(
+        self,
+        prompt: str,
+        **kwargs,
+    ) -> tuple[str, ModelCallStat]:
+        """
+        Generate an image from a prompt and return the image as a base64 string and stats.
+        """
+        request_info = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "arguments": {
+                "model": self.full_model,
+                "prompt": prompt,
+                **kwargs,
+            },
+        }
+
+        image_base64, stats = await with_retry(
+            self.client.generate_image,
+            model=self.model_name,
+            prompt=prompt,
+            **kwargs,
+        )
+
+        stats.request_data = request_info
+
+        return image_base64, stats
+
+    async def list_models(self) -> list[str]:
+        return await self.client.list_models()
+
+    async def compute_embeddings(
+        self,
+        texts: list[str],
+        normalize: bool = False,
+        normalizer: Normalizer | None = None,
+        **kwargs,
+    ) -> tuple[list[list[float]], ModelCallStat]:
+        """
+        Compute embeddings for a list of texts and return embeddings and stats.
+        """
+        request_info = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "arguments": {
+                "model": self.full_model,
+                "texts_count": len(texts),
+                "normalize": normalize,
+                **kwargs,
+            },
+        }
+
+        embeddings, stats = await with_retry(
+            self.client.compute_embeddings,
+            model=self.model_name,
+            texts=texts,
+            normalize=normalize,
+            normalizer=normalizer,
+            **kwargs,
+        )
+
+        stats.request_data = request_info
+
+        return embeddings, stats
+
+
 def get_llm_client(
     model: str,
 ) -> OpenAIClient | GeminiClient:
@@ -90,18 +224,7 @@ def get_llm_client(
 
     Model parameter is a provider/model combo like openai/text-embedding-3-small
     """
-    timeout = float(os.environ.get("KAVALAI_LLM_TIMEOUT", 30.0))
-    provider, model_name = model.split("/")
-    if provider == "openai":
-        return OpenAIClient(
-            api_key=os.environ["OPENAI_API_KEY"],
-            service_tier=os.environ.get("KAVALAI_OPENAI_SERVICE_TIER"),
-            timeout=timeout,
-        )
-    elif provider == "gemini":
-        return GeminiClient(api_key=os.environ["GEMINI_API_KEY"], timeout=timeout)
-    else:
-        raise ValueError(f"Invalid provider: {provider}")
+    return LLMClient(model).client
 
 
 async def chat_completions(
@@ -114,33 +237,10 @@ async def chat_completions(
     """
     Execute a chat completion with native clients and return result and stats.
     """
-    client = get_llm_client(model)
-
-    # We want to keep track of the request for stats
-    request_info = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "arguments": {
-            "model": model,
-            "messages": messages,
-            "response_model": str(response_model),
-            "streamer": str(streamer) if streamer else None,
-            **kwargs,
-        },
-    }
-    _, model_name = model.split("/")
-
-    content, stats = await with_retry(
-        client.chat_completions,
-        model=model_name,
-        messages=messages,
-        response_model=response_model,
-        streamer=streamer,
-        **kwargs,
+    client = LLMClient(model)
+    return await client.chat_completions(
+        response_model=response_model, messages=messages, streamer=streamer, **kwargs
     )
-
-    stats.request_data = {"requests": [request_info]}
-
-    return content, stats
 
 
 async def generate_image(
@@ -151,28 +251,13 @@ async def generate_image(
     """
     Generate an image from a prompt and return the image as a base64 string and stats.
     """
-    client = get_llm_client(model)
+    client = LLMClient(model)
+    return await client.generate_image(prompt=prompt, **kwargs)
 
-    request_info = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "arguments": {
-            "model": model,
-            "prompt": prompt,
-            **kwargs,
-        },
-    }
-    _, model_name = model.split("/")
 
-    image_base64, stats = await with_retry(
-        client.generate_image,
-        model=model_name,
-        prompt=prompt,
-        **kwargs,
-    )
-
-    stats.request_data = request_info
-
-    return image_base64, stats
+async def list_models(model_prefix: str) -> list[str]:
+    client = LLMClient(f"{model_prefix}/")
+    return await client.list_models()
 
 
 async def compute_embeddings(
@@ -185,28 +270,7 @@ async def compute_embeddings(
     """
     Compute embeddings for a list of texts and return embeddings and stats.
     """
-    client = get_llm_client(model)
-
-    request_info = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "arguments": {
-            "model": model,
-            "texts_count": len(texts),
-            "normalize": normalize,
-            **kwargs,
-        },
-    }
-    _, model_name = model.split("/")
-
-    embeddings, stats = await with_retry(
-        client.compute_embeddings,
-        model=model_name,
-        texts=texts,
-        normalize=normalize,
-        normalizer=normalizer,
-        **kwargs,
+    client = LLMClient(model)
+    return await client.compute_embeddings(
+        texts=texts, normalize=normalize, normalizer=normalizer, **kwargs
     )
-
-    stats.request_data = request_info
-
-    return embeddings, stats
