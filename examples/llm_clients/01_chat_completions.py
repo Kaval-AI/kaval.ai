@@ -70,18 +70,21 @@ async def streaming_example():
     messages = [{"role": "user", "content": "Write a short poem about coding."}]
 
     queue = asyncio.Queue()
+    streamer = Streamer("response_text", queue)
 
     # Run chat_completions in a task to consume the queue concurrently
     task = asyncio.create_task(
-        client.chat_completions(messages=messages, streamer=queue)
+        client.chat_completions(messages=messages, streamer=streamer)
     )
 
     print("Streaming: ", end="", flush=True)
     while True:
-        chunk: StreamContent = await queue.get()
-        if chunk is None:  # End of stream
+        chunk = StreamContent.model_validate_json(await queue.get())
+        if chunk.type == "partial":
+            print(f"Partial message received: {chunk.value}")
+        if chunk.type == "complete":
+            print(f"Complete message received: {chunk.value}")
             break
-        print(chunk.content, end="", flush=True)
 
     result, stats = await task
     print(f"\nFinal Stats: {stats.total_tokens} tokens, Cost: ${stats.cost:.4f}")
@@ -189,8 +192,8 @@ async def main():
     # os.environ["OPENAI_API_KEY"] = "..."
     # os.environ["GEMINI_API_KEY"] = "..."
 
-    await basic_text_example()
-    await structured_output_example()
+    # await basic_text_example()
+    # await structured_output_example()
     await streaming_example()
     await multimodal_image_example()
     await reasoning_and_thinking_example()
