@@ -46,6 +46,13 @@ class Streamer:
         )
 
 
+def get_model_name(model: str) -> str:
+    """Extract model name from 'provider/model' syntax."""
+    if "/" in model:
+        return model.split("/")[-1]
+    return model
+
+
 def create_model_call_stat(
     call_type: str,
     model: str,

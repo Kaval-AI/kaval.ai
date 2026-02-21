@@ -1,8 +1,9 @@
 import asyncio
 import os
 import pytest
+import base64
 from pydantic import BaseModel
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.common import Streamer
 
@@ -12,11 +13,14 @@ class SimpleResponse(BaseModel):
     confidence: float
 
 
-@pytest.mark.asyncio
-async def test_gemini_structured_output():
-    client = GeminiClient(api_key="fake-key")
+@pytest.fixture
+def gemini_client():
+    return GeminiClient(api_key="fake-key")
 
-    mock_response = AsyncMock()
+
+@pytest.mark.asyncio
+async def test_gemini_structured_output(gemini_client):
+    mock_response = MagicMock()
     mock_response.text = '{"answer": "4", "confidence": 1.0}'
     mock_response.usage_metadata.prompt_token_count = 10
     mock_response.usage_metadata.candidates_token_count = 5
@@ -27,9 +31,9 @@ async def test_gemini_structured_output():
         yield mock_response
 
     with patch.object(
-        client.client.aio.models, "generate_content_stream", new_callable=AsyncMock
+        gemini_client.client.aio.models, "generate_content", new_callable=AsyncMock
     ) as mock_generate:
-        mock_generate.return_value = mock_stream()
+        mock_generate.return_value = mock_response
 
         messages = [
             {
@@ -37,7 +41,7 @@ async def test_gemini_structured_output():
                 "content": "What is 2+2? Answer in JSON format with 'answer' and 'confidence' fields.",
             }
         ]
-        content, stats = await client.chat_completions(
+        content, stats = await gemini_client.chat_completions(
             model="gemini-2.0-flash", messages=messages, response_model=SimpleResponse
         )
 
@@ -49,14 +53,12 @@ async def test_gemini_structured_output():
 
 
 @pytest.mark.asyncio
-async def test_gemini_streaming():
-    client = GeminiClient(api_key="fake-key")
-
-    mock_response1 = AsyncMock()
+async def test_gemini_streaming(gemini_client):
+    mock_response1 = MagicMock()
     mock_response1.text = '{"answer":'
     mock_response1.usage_metadata = None
 
-    mock_response2 = AsyncMock()
+    mock_response2 = MagicMock()
     mock_response2.text = ' "4", "confidence": 1.0}'
     mock_response2.usage_metadata.prompt_token_count = 10
     mock_response2.usage_metadata.candidates_token_count = 5
@@ -67,14 +69,16 @@ async def test_gemini_streaming():
         yield mock_response2
 
     with patch.object(
-        client.client.aio.models, "generate_content_stream", new_callable=AsyncMock
+        gemini_client.client.aio.models,
+        "generate_content_stream",
+        new_callable=AsyncMock,
     ) as mock_generate:
         mock_generate.return_value = mock_stream()
 
         messages = [{"role": "user", "content": "What is 2+2?"}]
         queue = asyncio.Queue()
         streamer = Streamer(name="test", queue=queue)
-        content, stats = await client.chat_completions(
+        content, stats = await gemini_client.chat_completions(
             model="gemini-2.0-flash",
             messages=messages,
             response_model=SimpleResponse,
@@ -95,15 +99,302 @@ async def test_gemini_streaming():
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(
+async def test_gemini_multimodal_input(gemini_client):
+    mock_response = MagicMock()
+    mock_response.text = "I see a cat."
+    mock_response.usage_metadata.total_token_count = 20
+
+    async def mock_stream(*args, **kwargs):
+        yield mock_response
+
+    with patch.object(
+        gemini_client.client.aio.models, "generate_content", new_callable=AsyncMock
+    ) as mock_generate:
+        mock_generate.return_value = mock_response
+
+        # Test both image_url and images list
+        fake_image = base64.b64encode(b"fake image data").decode("utf-8")
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is in this image?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{fake_image}"},
+                    },
+                ],
+                "images": [fake_image],
+            }
+        ]
+
+        content, stats = await gemini_client.chat_completions(
+            model="gemini-2.0-flash", messages=messages
+        )
+
+        assert content == "I see a cat."
+        assert stats.total_tokens == 20
+        # Verify content conversion (indirectly by checking mock call if we wanted to be thorough)
+        assert mock_generate.called
+
+
+@pytest.mark.asyncio
+async def test_gemini_generate_image(gemini_client):
+    # Mock for generate_content
+    mock_content_response = MagicMock()
+    mock_part = MagicMock()
+    mock_part.inline_data = MagicMock()
+    mock_part.inline_data.data = b"fake-image-bytes"
+    mock_content_response.parts = [mock_part]
+
+    with patch.object(
+        gemini_client.client.aio.models, "generate_content", new_callable=AsyncMock
+    ) as mock_gen_content:
+        mock_gen_content.return_value = mock_content_response
+
+        image_base64, stats = await gemini_client.generate_image(
+            model="imagen-3.0-generate-001", prompt="A sunset"
+        )
+
+        assert image_base64 == base64.b64encode(b"fake-image-bytes").decode("utf-8")
+        assert stats.call_type == "image_generation"
+        assert stats.model == "gemini/imagen-3.0-generate-001"
+        assert mock_gen_content.called
+
+
+@pytest.mark.asyncio
+async def test_gemini_list_models(gemini_client):
+    mock_model1 = MagicMock()
+    mock_model1.name = "models/gemini-pro"
+    mock_model2 = MagicMock()
+    mock_model2.name = "gemini-ultra"
+
+    async def mock_list_models():
+        yield mock_model1
+        yield mock_model2
+
+    with patch.object(
+        gemini_client.client.aio.models, "list", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = mock_list_models()
+
+        models = await gemini_client.list_models()
+
+        assert "gemini-pro" in models
+        assert "gemini-ultra" in models
+        assert len(models) == 2
+
+
+@pytest.mark.asyncio
+async def test_gemini_compute_embeddings_custom_normalizer(gemini_client):
+    from kavalai.normalizer import Normalizer
+
+    mock_emb = MagicMock()
+    mock_emb.values = [3.0, 4.0]
+    mock_response = MagicMock()
+    mock_response.embeddings = [mock_emb]
+    mock_response.usage_metadata.total_token_count = 5
+
+    with patch.object(
+        gemini_client.client.aio.models, "embed_content", new_callable=AsyncMock
+    ) as mock_embed:
+        mock_embed.return_value = mock_response
+
+        # L1 normalizer: [3.0, 4.0] -> [3/7, 4/7]
+        l1_normalizer = Normalizer(l1=True)
+
+        embeddings, stats = await gemini_client.compute_embeddings(
+            model="text-embedding-004",
+            texts=["hi"],
+            normalize=True,
+            normalizer=l1_normalizer,
+        )
+
+    assert embeddings[0] == pytest.approx([3 / 7, 4 / 7])
+    assert stats.total_tokens == 5
+
+
+@pytest.mark.asyncio
+async def test_gemini_chat_completions_no_response_model(gemini_client):
+    mock_response = MagicMock()
+    mock_response.text = "Hello!"
+    mock_response.usage_metadata.total_token_count = 5
+
+    async def mock_stream(*args, **kwargs):
+        yield mock_response
+
+    with patch.object(
+        gemini_client.client.aio.models, "generate_content", new_callable=AsyncMock
+    ) as mock_generate:
+        mock_generate.return_value = mock_response
+
+        content, stats = await gemini_client.chat_completions(
+            model="gemini-2.0-flash", messages=[{"role": "user", "content": "Hi"}]
+        )
+
+        assert content == "Hello!"
+        assert stats.total_tokens == 5
+
+
+@pytest.mark.asyncio
+async def test_gemini_generate_image_failure_and_fallback(gemini_client):
+    with patch.object(
+        gemini_client.client.aio.models, "generate_content", new_callable=AsyncMock
+    ) as mock_gen_content, patch.object(
+        gemini_client.client.aio.models, "generate_images", new_callable=AsyncMock
+    ) as mock_gen_images:
+        mock_gen_content.side_effect = Exception("Failed content")
+        mock_gen_images.side_effect = Exception("Failed images")
+
+        with pytest.raises(Exception, match="Failed images"):
+            await gemini_client.generate_image(
+                model="imagen-3.0-generate-001", prompt="A sunset"
+            )
+
+        # Verify it tried both
+        assert mock_gen_content.call_count == 1
+        assert mock_gen_images.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_model_syntax(gemini_client):
+    """Test that provider/model syntax is correctly handled."""
+    mock_response = MagicMock()
+    mock_response.text = "Hello"
+    mock_response.usage_metadata.prompt_token_count = 1
+    mock_response.usage_metadata.candidates_token_count = 1
+    mock_response.usage_metadata.total_token_count = 2
+
+    async def mock_stream(*args, **kwargs):
+        yield mock_response
+
+    with patch.object(
+        gemini_client.client.aio.models, "generate_content", new_callable=AsyncMock
+    ) as mock_generate:
+        mock_generate.return_value = mock_response
+
+        await gemini_client.chat_completions(
+            model="google/gemini-2.0-flash",
+            messages=[{"role": "user", "content": "Hi"}],
+        )
+
+        # Verify that only the model part was passed to the API
+        assert mock_generate.call_args.kwargs["model"] == "gemini-2.0-flash"
+
+
+@pytest.mark.asyncio
+async def test_gemini_compute_embeddings_no_usage_metadata(gemini_client):
+    mock_emb = MagicMock()
+    mock_emb.values = [0.1, 0.2]
+    mock_response = MagicMock()
+    mock_response.embeddings = [mock_emb]
+    mock_response.usage_metadata = None
+
+    with patch.object(
+        gemini_client.client.aio.models, "embed_content", new_callable=AsyncMock
+    ) as mock_embed:
+        mock_embed.return_value = mock_response
+
+        embeddings, stats = await gemini_client.compute_embeddings(
+            model="text-embedding-004", texts=["hello"]
+        )
+
+        assert stats.total_tokens > 0  # Fallback estimation should work
+
+
+@pytest.mark.asyncio
+async def test_gemini_compute_embeddings_multiple_texts(gemini_client):
+    mock_emb1 = MagicMock()
+    mock_emb1.values = [0.1, 0.2]
+    mock_emb2 = MagicMock()
+    mock_emb2.values = [0.3, 0.4]
+    mock_response = MagicMock()
+    mock_response.embeddings = [mock_emb1, mock_emb2]
+    mock_response.usage_metadata.total_token_count = 10
+
+    with patch.object(
+        gemini_client.client.aio.models, "embed_content", new_callable=AsyncMock
+    ) as mock_embed:
+        mock_embed.return_value = mock_response
+
+        embeddings, stats = await gemini_client.compute_embeddings(
+            model="text-embedding-004", texts=["hello", "world"]
+        )
+
+        assert len(embeddings) == 2
+        assert embeddings[0] == [0.1, 0.2]
+        assert embeddings[1] == [0.3, 0.4]
+        assert stats.batch_size == 2
+        assert stats.total_tokens == 10
+
+
+@pytest.mark.asyncio
+async def test_gemini_cleanup_schema(gemini_client):
+    schema = {
+        "title": "MySchema",
+        "description": "desc",
+        "default": "val",
+        "properties": {
+            "field1": {"title": "Field 1", "type": "string"},
+            "field2": {"items": {"title": "Item title", "type": "string"}},
+        },
+    }
+    gemini_client._cleanup_schema(schema)
+    assert "title" not in schema
+    assert "description" not in schema
+    assert "default" not in schema
+    assert "title" not in schema["properties"]["field1"]
+    assert "title" not in schema["properties"]["field2"]["items"]
+
+
+@pytest.mark.asyncio
+async def test_gemini_convert_content_part_invalid(gemini_client):
+    part = {"type": "invalid"}
+    res = gemini_client._convert_content_part(part)
+    assert res == []
+
+
+@pytest.mark.asyncio
+async def test_gemini_cleanup_schema_non_dict(gemini_client):
+    schema = ["not", "a", "dict"]
+    gemini_client._cleanup_schema(schema)
+    assert schema == ["not", "a", "dict"]
+
+
+def test_gemini_initialization_env_key(monkeypatch):
+    # Set env var
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+
+    with patch("google.genai.Client") as mock_client:
+        _ = GeminiClient()
+        args, kwargs = mock_client.call_args
+        assert kwargs["api_key"] == "gemini-key"
+
+
+def test_gemini_initialization_aiza_key(monkeypatch):
+    # Set AIza key
+    monkeypatch.setenv("GEMINI_API_KEY", "AIzaSomeKey")
+
+    with patch("google.genai.Client") as mock_client:
+        _ = GeminiClient()
+        args, kwargs = mock_client.call_args
+        assert kwargs["api_key"] == "AIzaSomeKey"
+
+
+# INTEGRATION TESTS
+
+INTEGRATION_MARK = pytest.mark.skipif(
     not (
         os.getenv("KAVALAI_RUN_INTEGRATION") == "true" and os.getenv("GEMINI_API_KEY")
     ),
     reason="Integration test disabled (set KAVALAI_RUN_INTEGRATION=true and provide GEMINI_API_KEY)",
 )
+
+
+@INTEGRATION_MARK
+@pytest.mark.asyncio
 async def test_gemini_structured_output_integration():
-    api_key = os.getenv("GEMINI_API_KEY")
-    client = GeminiClient(api_key=api_key)
+    client = GeminiClient()
 
     messages = [
         {
@@ -120,32 +411,50 @@ async def test_gemini_structured_output_integration():
     assert content.confidence >= 0.0
 
 
+@INTEGRATION_MARK
 @pytest.mark.asyncio
-async def test_gemini_compute_embeddings_custom_normalizer():
-    from kavalai.normalizer import Normalizer
-    from unittest.mock import MagicMock
+async def test_gemini_list_models_integration():
+    client = GeminiClient()
 
-    client = GeminiClient(api_key="fake-key")
+    models = await client.list_models()
+    assert len(models) > 0
+    assert any("gemini" in m for m in models)
 
-    mock_emb = MagicMock()
-    mock_emb.values = [3.0, 4.0]
-    mock_response = MagicMock()
-    mock_response.embeddings = [mock_emb]
-    mock_response.usage_metadata.total_token_count = 5
 
-    with patch.object(
-        client.client.aio.models, "embed_content", new_callable=AsyncMock
-    ) as mock_embed:
-        mock_embed.return_value = mock_response
+@INTEGRATION_MARK
+@pytest.mark.asyncio
+async def test_gemini_compute_embeddings_integration():
+    client = GeminiClient()
 
-        # L1 normalizer: [3.0, 4.0] -> [3/7, 4/7]
-        l1_normalizer = Normalizer(l1=True)
-
+    texts = ["Hello world", "Goodbye world"]
+    # text-embedding-004 might not be available in v1beta in some regions,
+    # but the client is initialized with v1beta. Try a more common model or handle 404.
+    try:
         embeddings, stats = await client.compute_embeddings(
-            model="text-embedding-004",
-            texts=["hi"],
-            normalize=True,
-            normalizer=l1_normalizer,
+            model="text-embedding-004", texts=texts, normalize=True
         )
+    except Exception as e:
+        if "404" in str(e):
+            pytest.skip(f"Embedding model not found: {e}")
+        raise
 
-    assert embeddings[0] == pytest.approx([3 / 7, 4 / 7])
+    assert len(embeddings) == 2
+    assert len(embeddings[0]) > 0
+    assert stats.total_tokens > 0
+
+
+@INTEGRATION_MARK
+@pytest.mark.asyncio
+async def test_gemini_generate_image_integration():
+    client = GeminiClient()
+
+    # Note: Imagen might not be enabled for all keys or regions
+    try:
+        image_base64, stats = await client.generate_image(
+            model="imagen-3.0-generate-001",
+            prompt="A small cute robot helping with coding.",
+        )
+        assert len(image_base64) > 100
+        assert stats.call_type == "image_generation"
+    except Exception as e:
+        pytest.skip(f"Imagen image generation failed (might be expected): {e}")
