@@ -33,12 +33,12 @@ async def test_gemini_generate_image():
     client = GeminiClient(api_key="fake-key")
 
     mock_response = MagicMock()
-    mock_generated_image = MagicMock()
-    mock_generated_image.image.image_bytes = b"Hello"
-    mock_response.generated_images = [mock_generated_image]
+    mock_part = MagicMock()
+    mock_part.inline_data.data = b"Hello"
+    mock_response.parts = [mock_part]
 
     with patch.object(
-        client.client.aio.models, "generate_images", new_callable=AsyncMock
+        client.client.aio.models, "generate_content", new_callable=AsyncMock
     ) as mock_generate:
         mock_generate.return_value = mock_response
 
@@ -50,3 +50,4 @@ async def test_gemini_generate_image():
         assert stats.call_type == "image_generation"
         assert stats.model == "gemini/imagen-3.0-generate-002"
         mock_generate.assert_called_once()
+        assert mock_generate.call_args[1]["http_options"] == {"timeout": 30.0}

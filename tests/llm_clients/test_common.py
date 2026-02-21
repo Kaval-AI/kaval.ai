@@ -14,7 +14,7 @@ def test_create_model_call_stat_basic():
     stat = create_model_call_stat(
         call_type="llm",
         model="test-model",
-        duration=1.5,
+        duration_sections=1.5,
         prompt_tokens=10,
         completion_tokens=20,
         response_data={"foo": "bar"},
@@ -32,14 +32,17 @@ def test_create_model_call_stat_basic():
 
 def test_create_model_call_stat_string_response():
     stat = create_model_call_stat(
-        call_type="llm", model="test-model", duration=1.0, response_data="just a string"
+        call_type="llm",
+        model="test-model",
+        duration_sections=1.0,
+        response_data="just a string",
     )
     assert stat.response_data == "just a string"
 
 
 def test_create_model_call_stat_none_response():
     stat = create_model_call_stat(
-        call_type="llm", model="test-model", duration=1.0, response_data=None
+        call_type="llm", model="test-model", duration_sections=1.0, response_data=None
     )
     assert stat.response_data is None
 

@@ -5,12 +5,39 @@ This tutorial covers the usage of the LLM clients in Kaval.AI SDK.
 While Kaval.AI LLM clients are designed to be used internally with the SDK, they are still useful
 abstractions for common LLM tasks.
 
-Kaval.AI currently only supports models provideed by OpenAI and Gemini.
+Kaval.AI currently only supports models provided by OpenAI and Gemini.
+
+Comparison with Other Frameworks
+--------------------------------
+
+The Kaval.AI LLM client framework shares similarities with other industry-standard frameworks like `instructor`, but it is tailored for the Kaval.AI agent ecosystem.
+
+**Similarities:**
+
+* **Pydantic Integration:** Like `instructor`, we use Pydantic models to define the expected structure of LLM responses, ensuring type safety and easy data validation.
+* **Multi-Provider Support:** We provide a unified interface for different LLM providers (currently OpenAI and Gemini).
+* **Retry Logic:** Built-in support for retrying failed API calls with exponential backoff.
+
+**Differences:**
+
+* **Agent-Centric Design:** Kaval.AI clients are optimized for use within autonomous agents, with built-in support for tracking metrics like token usage, costs, and execution duration across complex workflows.
+* **Native Provider Features:** We leverage native provider features (like OpenAI's Structured Outputs and Gemini's `response_schema`) directly, rather than relying solely on prompting techniques, which improves reliability and reduces latency.
+* **Streaming & Multimodal:** First-class support for streaming responses and multimodal inputs (images) across all supported providers.
+* **Integrated Pricing:** Automatic cost calculation based on the latest pricing models for each provider.
+
+Examples
+--------
+
+All examples in this tutorial can be found in the `examples/llm_clients/` directory of the repository.
+
+* `GitHub: Chat Completions <https://github.com/kavalai/kaval.ai/blob/main/examples/llm_clients/01_chat_completions.py>`_
+* `GitHub: Embeddings <https://github.com/kavalai/kaval.ai/blob/main/examples/llm_clients/02_embeddings.py>`_
+* `GitHub: Image Generation <https://github.com/kavalai/kaval.ai/blob/main/examples/llm_clients/03_image_generation.py>`_
 
 Simple Usage
 ------------
 
-The easiest way to use LLM clients is through the `kavalai.llm_clients.llm_client` module. It provides high-level functions that handle client initialization, retries, and statistics collection.
+The recommended way to use LLM clients is through the `LLMClient` class in the `kavalai.llm_clients.llm_client` module.
 
 Basic Prompt with Pydantic Response
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -21,7 +48,7 @@ Kaval.AI uses Pydantic models to ensure structured responses from LLMs.
 
    import asyncio
    from pydantic import BaseModel
-   from kavalai.llm_clients.llm_client import chat_completions
+   from kavalai.llm_clients.llm_client import LLMClient
 
    class Greeting(BaseModel):
        message: str
@@ -33,16 +60,16 @@ Kaval.AI uses Pydantic models to ensure structured responses from LLMs.
        ]
 
        # Use OpenAI
-       result, stats = await chat_completions(
-           model="openai/gpt-4o",
+       client_oa = LLMClient(model="openai/gpt-4o")
+       result, stats = await client_oa.chat_completions(
            messages=messages,
            response_model=Greeting
        )
        print(f"OpenAI: {result.message} ({result.language})")
 
        # Use Gemini
-       result, stats = await chat_completions(
-           model="gemini/gemini-2.0-flash",
+       client_gem = LLMClient(model="gemini/gemini-2.0-flash")
+       result, stats = await client_gem.chat_completions(
            messages=messages,
            response_model=Greeting
        )
@@ -51,33 +78,50 @@ Kaval.AI uses Pydantic models to ensure structured responses from LLMs.
    if __name__ == "__main__":
        asyncio.run(main())
 
+**Demo Output:**
+
+.. code-block:: text
+
+   OpenAI: Bonjour! (French)
+   Gemini: Salut! (French)
+
 Computing Embeddings
 --------------------
 
-You can compute embeddings for a list of strings using the `compute_embeddings` function.
+You can compute embeddings for a list of strings using the `LLMClient.compute_embeddings` method.
 
 .. code-block:: python
 
-   from kavalai.llm_clients.llm_client import compute_embeddings
+   from kavalai.llm_clients.llm_client import LLMClient
 
    async def get_embeddings():
        texts = ["Kaval.AI is an agent management system", "LLMs are powerful"]
 
-       embeddings, stats = await compute_embeddings(
-           model="openai/text-embedding-3-small",
+       client = LLMClient(model="openai/text-embedding-3-small")
+       embeddings, stats = await client.compute_embeddings(
            texts=texts
        )
        print(f"Computed {len(embeddings)} embeddings")
        return embeddings
 
+**Demo Output:**
+
+.. code-block:: text
+
+   Computing embeddings for 2 strings...
+   Computed 2 embeddings
+   Text: 'Kaval.AI is an agent management system' -> Vector size: 1536
+   Text: 'LLMs are powerful' -> Vector size: 1536
+   Stats: Tokens: 12, Cost: $0.000001
+
 Using Images (Multimodal)
 -------------------------
 
-Both OpenAI and Gemini clients support multimodal inputs. You can provide images as base64 strings in the `messages` list.
+Both OpenAI and Gemini clients support multimodal inputs. You can provide images using a standard OpenAI-compatible format in the `messages` list.
 
 .. code-block:: python
 
-   from kavalai.llm_clients.llm_client import chat_completions
+   from kavalai.llm_clients.llm_client import LLMClient
    from pydantic import BaseModel
 
    class ImageDescription(BaseModel):
@@ -88,17 +132,29 @@ Both OpenAI and Gemini clients support multimodal inputs. You can provide images
        messages = [
            {
                "role": "user",
-               "content": "What is in this image?",
-               "images": [image_base64]
+               "content": [
+                   {"type": "text", "text": "What is in this image?"},
+                   {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+               ]
            }
        ]
 
-       result, stats = await chat_completions(
-           model="openai/gpt-4o",
+       client = LLMClient(model="openai/gpt-4o")
+       result, stats = await client.chat_completions(
            messages=messages,
            response_model=ImageDescription
        )
        print(result.description)
+
+**Demo Output:**
+
+.. code-block:: text
+
+   --- Analyzing image with OpenAI ---
+   Description: The image shows the Kaval.AI logo, which consists of a stylized geometric 'K' inside a dark circle.
+   Objects: Logo, 'K' symbol, Circle
+   Colors: White, Dark Blue/Gray
+   Stats: Tokens: 450, Cost: $0.0025
 
 Generating Images
 -----------------
@@ -107,20 +163,36 @@ Kaval.AI also supports image generation via DALL-E (OpenAI) and Imagen (Gemini).
 
 .. code-block:: python
 
-   from kavalai.llm_clients.llm_client import generate_image
+   from kavalai.llm_clients.llm_client import LLMClient
 
    async def create_art():
        # Generate with OpenAI DALL-E 3
-       img_base64, stats = await generate_image(
-           model="openai/dalle-3",
-           prompt="A futuristic city with flying cars in cyberpunk style",
+       client_oa = LLMClient(model="openai/dall-e-3")
+       img_base64, stats = await client_oa.generate_image(
+           prompt="A futuristic laboratory where tiny robots are building a glowing crystal",
            size="1024x1024"
        )
 
        # Generate with Gemini Imagen
-       img_base64, stats = await generate_image(
-           model="gemini/imagen-3.0-generate-002",
-           prompt="A serene landscape with mountains and a lake at sunset"
+       client_gem = LLMClient(model="gemini/imagen-3.0-generate-001")
+       img_base64, stats = await client_gem.generate_image(
+           prompt="A futuristic laboratory where tiny robots are building a glowing crystal"
        )
 
-       # The returned img_base64 can be saved to a file or displayed
+**Demo Results:**
+
+.. list-table::
+   :widths: 50 50
+   :header-rows: 1
+
+   * - OpenAI (DALL-E 3)
+     - Gemini (Imagen 3)
+   * - .. image:: /assets/images/llm_clients/generated_openai.png
+          :width: 100%
+          :alt: DALL-E 3 Generated Image
+     - .. image:: /assets/images/llm_clients/generated_gemini.png
+          :width: 100%
+          :alt: Imagen 3 Generated Image
+
+.. note::
+   The returned `img_base64` can be saved to a file or displayed directly in your application.

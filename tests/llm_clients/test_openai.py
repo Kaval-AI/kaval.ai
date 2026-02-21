@@ -218,6 +218,7 @@ async def test_openai_compute_embeddings():
         [0.1 / (0.1**2 + 0.2**2) ** 0.5, 0.2 / (0.1**2 + 0.2**2) ** 0.5]
     )
     assert stats.total_tokens == 5
+    assert stats.cost == (5 * 0.02) / 1_000_000
     assert mock_create.call_count == 1
 
 

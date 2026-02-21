@@ -280,10 +280,11 @@ async def test_gemini_compute_embeddings_no_usage_metadata(gemini_client):
         mock_embed.return_value = mock_response
 
         embeddings, stats = await gemini_client.compute_embeddings(
-            model="text-embedding-004", texts=["hello"]
+            model="gemini-embedding-001", texts=["hello"]
         )
 
         assert stats.total_tokens > 0  # Fallback estimation should work
+        assert stats.cost == (stats.total_tokens * 0.075) / 1_000_000
 
 
 @pytest.mark.asyncio
@@ -302,7 +303,7 @@ async def test_gemini_compute_embeddings_multiple_texts(gemini_client):
         mock_embed.return_value = mock_response
 
         embeddings, stats = await gemini_client.compute_embeddings(
-            model="text-embedding-004", texts=["hello", "world"]
+            model="gemini-embedding-001", texts=["hello", "world"]
         )
 
         assert len(embeddings) == 2
@@ -310,6 +311,7 @@ async def test_gemini_compute_embeddings_multiple_texts(gemini_client):
         assert embeddings[1] == [0.3, 0.4]
         assert stats.batch_size == 2
         assert stats.total_tokens == 10
+        assert stats.cost == (10 * 0.075) / 1_000_000
 
 
 @pytest.mark.asyncio

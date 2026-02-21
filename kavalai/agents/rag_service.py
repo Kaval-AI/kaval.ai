@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from kavalai.agents.db import RagIndex, Agent, db_manager
-from kavalai.llm_clients.llm_client import compute_embeddings
+from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.normalizer import Normalizer
 
 logger = logging.getLogger(__name__)
@@ -98,6 +98,7 @@ class RagService:
         self.model = model
         self.agent = agent
         self.normalizer = normalizer
+        self.llm_client = LLMClient(model)
 
     async def batch_index(
         self,
@@ -135,8 +136,7 @@ class RagService:
             raise ValueError("The number of texts and source_ids must be the same.")
 
         async with self.session_maker() as session:
-            embeddings, stats = await compute_embeddings(
-                model=self.model,
+            embeddings, stats = await self.llm_client.compute_embeddings(
                 texts=texts,
                 normalizer=self.normalizer,
             )
@@ -238,8 +238,7 @@ class RagService:
             list[RagServiceResult]: List of results with similarity scores.
         """
         async with self.session_maker() as session:
-            embeddings, stats = await compute_embeddings(
-                model=self.model,
+            embeddings, stats = await self.llm_client.compute_embeddings(
                 texts=[text],
                 normalizer=self.normalizer,
             )
@@ -351,8 +350,7 @@ class RagService:
             return [[0.0 for _ in source_ids] for _ in texts]
 
         async with self.session_maker() as session:
-            embeddings, stats = await compute_embeddings(
-                model=self.model,
+            embeddings, stats = await self.llm_client.compute_embeddings(
                 texts=texts,
                 normalizer=self.normalizer,
             )

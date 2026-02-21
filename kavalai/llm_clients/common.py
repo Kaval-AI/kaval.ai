@@ -56,13 +56,14 @@ def get_model_name(model: str) -> str:
 def create_model_call_stat(
     call_type: str,
     model: str,
-    duration: float,
+    duration_sections: float,
     prompt_tokens: Optional[int] = None,
     completion_tokens: Optional[int] = None,
     total_tokens: Optional[int] = None,
     batch_size: Optional[int] = None,
     response_code: int = 200,
     response_data: Any = None,
+    cost: Optional[float] = None,
 ) -> ModelCallStat:
     if (
         total_tokens is None
@@ -79,8 +80,8 @@ def create_model_call_stat(
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
         batch_size=batch_size,
-        duration_seconds=duration,
-        cost=None,  # We will compute cost later
+        duration_seconds=duration_sections,
+        cost=cost,
         response_data=response_data
         if isinstance(response_data, (dict, list)) or response_data is None
         else str(response_data),

@@ -24,6 +24,12 @@ from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
 from kavalai.normalizer import Normalizer, get_default_normalizer
+from kavalai.prices.openai import (
+    OPENAI_TEXT_PRICES,
+    OPENAI_EMBEDDING_PRICES,
+    OPENAI_IMAGE_GENERATION_PRICES,
+    OPENAI_LEGACY_PRICES,
+)
 from kavalai.llm_clients.common import (
     create_model_call_stat,
     Streamer,
@@ -114,12 +120,19 @@ class OpenAIClient:
 
         duration = time.perf_counter() - start_time
 
+        # Calculate cost
+        cost = None
+        pricing = OPENAI_TEXT_PRICES.get(model) or OPENAI_LEGACY_PRICES.get(model)
+        if pricing:
+            cost = pricing.calculate_cost(input_tokens, output_tokens)
+
         stats = create_model_call_stat(
             call_type="llm",
             model=f"openai/{model}",
-            duration=duration,
+            duration_sections=duration,
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
+            cost=cost,
             response_data=result.model_dump()
             if hasattr(result, "model_dump")
             else result,
@@ -166,10 +179,16 @@ class OpenAIClient:
                 resp.raise_for_status()
                 image_base64 = base64.b64encode(resp.content).decode("utf-8")
 
+        # Calculate cost
+        cost = None
+        if model in OPENAI_IMAGE_GENERATION_PRICES:
+            cost = OPENAI_IMAGE_GENERATION_PRICES[model].get(quality, {}).get(size)
+
         stats = create_model_call_stat(
             call_type="image_generation",
             model=f"openai/{model}",
-            duration=duration,
+            duration_sections=duration,
+            cost=cost,
             response_data={"size": size, "quality": quality},
         )
         return image_base64, stats
@@ -204,12 +223,19 @@ class OpenAIClient:
 
         total_tokens = response.usage.total_tokens if response.usage else 0
 
+        # Calculate cost
+        cost = None
+        if model in OPENAI_EMBEDDING_PRICES:
+            price_per_1m = OPENAI_EMBEDDING_PRICES[model].get("standard", 0)
+            cost = (total_tokens * price_per_1m) / 1_000_000
+
         stats = create_model_call_stat(
             call_type="embedding",
             model=f"openai/{model}",
-            duration=duration,
+            duration_sections=duration,
             batch_size=len(texts),
             total_tokens=total_tokens,
+            cost=cost,
             response_data=response.model_dump()
             if hasattr(response, "model_dump")
             else response,

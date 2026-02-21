@@ -24,6 +24,10 @@ from google.genai import types
 from partial_json_parser import ensure_json
 from pydantic import BaseModel
 import os
+from kavalai.prices.gemini import (
+    GEMINI_PRICES,
+    GEMINI_IMAGE_GENERATION_PRICES,
+)
 from kavalai.agents.db import ModelCallStat
 from kavalai.normalizer import Normalizer, get_default_normalizer
 from kavalai.llm_clients.common import (
@@ -170,6 +174,11 @@ def _create_chat_stats(
         completion_tokens = usage.candidates_token_count or 0
         total_tokens = usage.total_token_count or 0
 
+    # Calculate cost
+    cost = None
+    if model in GEMINI_PRICES:
+        cost = GEMINI_PRICES[model].calculate_cost(prompt_tokens, completion_tokens)
+
     # Extract thought summaries if available
     # Thoughts are typically in response.candidates[0].content.parts
     if (
@@ -182,7 +191,7 @@ def _create_chat_stats(
             thoughts = [
                 part.thought
                 for part in candidate.content.parts
-                if hasattr(part, "thought") and part.thought
+                if hasattr(part, "thought") and isinstance(part.thought, str)
             ]
             if thoughts:
                 thought_summary = "\n".join(thoughts)
@@ -190,10 +199,11 @@ def _create_chat_stats(
     stat = create_model_call_stat(
         call_type="llm",
         model=f"gemini/{model}",
-        duration=duration,
+        duration_sections=duration,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
+        cost=cost,
         response_data=str(last_response) if last_response else None,
     )
 
@@ -382,10 +392,14 @@ class GeminiClient:
                 image_bytes = part.inline_data.data
                 image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
+        # Calculate cost
+        cost = GEMINI_IMAGE_GENERATION_PRICES.get(model_name)
+
         stats = create_model_call_stat(
             call_type="image_generation",
             model=f"gemini/{model_name}",
-            duration=duration,
+            duration_sections=duration,
+            cost=cost,
             response_data={"prompt": prompt},
         )
         return image_base64, stats
@@ -428,12 +442,19 @@ class GeminiClient:
             # Fallback: estimate tokens (rough estimation: 1 token ~= 4 chars)
             total_tokens = sum(len(t) for t in texts) // 4
 
+        # Calculate cost
+        cost = None
+        if model_name in GEMINI_PRICES:
+            price_per_1m = GEMINI_PRICES[model_name].input.price_per_1m
+            cost = (total_tokens * price_per_1m) / 1_000_000
+
         stats = create_model_call_stat(
             call_type="embedding",
             model=f"gemini/{model_name}",
-            duration=duration,
+            duration_sections=duration,
             batch_size=len(texts),
             total_tokens=total_tokens,
+            cost=cost,
             response_data=str(response),
         )
         return embeddings, stats

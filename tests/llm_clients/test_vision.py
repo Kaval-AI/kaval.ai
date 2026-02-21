@@ -84,6 +84,9 @@ async def test_gemini_chat_completions_with_images():
 
     mock_response = AsyncMock()
     mock_response.text = '{"answer": "A screenshot"}'
+    mock_part = MagicMock()
+    mock_part.text = '{"answer": "A screenshot"}'
+    mock_response.candidates = [MagicMock(content=MagicMock(parts=[mock_part]))]
     mock_response.usage_metadata.prompt_token_count = 10
     mock_response.usage_metadata.candidates_token_count = 5
     mock_response.usage_metadata.total_token_count = 15
@@ -92,9 +95,9 @@ async def test_gemini_chat_completions_with_images():
         yield mock_response
 
     with patch.object(
-        client.client.aio.models, "generate_content_stream"
+        client.client.aio.models, "generate_content", new_callable=AsyncMock
     ) as mock_generate:
-        mock_generate.return_value = mock_stream()
+        mock_generate.return_value = mock_response
 
         messages = [
             {
@@ -111,6 +114,7 @@ async def test_gemini_chat_completions_with_images():
         assert content.answer == "A screenshot"
         # Verify Gemini formatting
         call_kwargs = mock_generate.call_args[1]
+        assert call_kwargs["http_options"] == {"timeout": 30.0}
         contents = call_kwargs["contents"]
         assert len(contents) == 1
         assert contents[0].role == "user"

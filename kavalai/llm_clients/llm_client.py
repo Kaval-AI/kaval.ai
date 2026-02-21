@@ -31,6 +31,7 @@ from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.openai_client import OpenAIClient
 from kavalai.llm_clients.common import Streamer
 
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -118,8 +119,8 @@ class LLMClient:
 
     async def chat_completions(
         self,
-        response_model: type[BaseModel],
         messages: list[dict],
+        response_model: type[BaseModel] | None = None,
         streamer: Streamer | None = None,
         **kwargs,
     ) -> tuple[Any, ModelCallStat]:
@@ -132,7 +133,7 @@ class LLMClient:
             "arguments": {
                 "model": self.full_model,
                 "messages": messages,
-                "response_model": str(response_model),
+                "response_model": str(response_model) if response_model else None,
                 "streamer": str(streamer) if streamer else None,
                 **kwargs,
             },

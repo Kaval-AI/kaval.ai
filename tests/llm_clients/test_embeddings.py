@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from kavalai.agents.db import ModelCallStat
-from kavalai.llm_clients.llm_client import compute_embeddings
+from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.openai_client import OpenAIClient
 
@@ -36,7 +36,9 @@ async def test_openai_compute_embeddings_mock():
     assert embeddings[1] == [0.4, 0.5, 0.6]
     assert stats.total_tokens == 0
     assert stats.model == f"openai/{model}"
-    client.client.embeddings.create.assert_called_once_with(input=texts, model=model)
+    client.client.embeddings.create.assert_called_once_with(
+        input=texts, model=model, timeout=30.0
+    )
 
     # Test with normalization
     client.client.embeddings.create.reset_mock()
@@ -89,7 +91,7 @@ async def test_gemini_compute_embeddings_mock():
 
 @pytest.mark.asyncio
 async def test_common_compute_embeddings_mock():
-    with patch("kavalai.llm_clients.llm_client.get_llm_client") as mock_get_client:
+    with patch("kavalai.llm_clients.llm_client.LLMClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_stats = ModelCallStat(
             call_type="embedding",
@@ -99,17 +101,15 @@ async def test_common_compute_embeddings_mock():
             response_data={},
         )
         mock_client.compute_embeddings.return_value = ([[0.1, 0.2, 0.3]], mock_stats)
-        mock_get_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         texts = ["hello"]
-        result, stats = await compute_embeddings(
-            "openai/text-embedding-3-small", texts, normalize=True
-        )
+        client = LLMClient(model="openai/text-embedding-3-small")
+        result, stats = await client.compute_embeddings(texts=texts, normalize=True)
 
         assert result == [[0.1, 0.2, 0.3]]
         assert stats.total_tokens == 10
         mock_client.compute_embeddings.assert_called_once_with(
-            model="text-embedding-3-small",
             texts=texts,
             normalize=True,
             normalizer=None,
@@ -138,7 +138,7 @@ async def test_openai_embeddings_integration():
 
 
 async def test_compute_embeddings_with_stats(agents_db):
-    with patch("kavalai.llm_clients.llm_client.get_llm_client") as mock_get_client:
+    with patch("kavalai.llm_clients.llm_client.LLMClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_stats = ModelCallStat(
             call_type="embedding",
@@ -150,12 +150,11 @@ async def test_compute_embeddings_with_stats(agents_db):
             batch_size=1,
         )
         mock_client.compute_embeddings.return_value = ([[0.1] * 1536], mock_stats)
-        mock_get_client.return_value = mock_client
+        mock_client_class.return_value = mock_client
 
         texts = ["hello"]
-        embeddings, stats = await compute_embeddings(
-            "openai/text-embedding-3-small", texts
-        )
+        client = LLMClient(model="openai/text-embedding-3-small")
+        embeddings, stats = await client.compute_embeddings(texts=texts)
 
         assert embeddings == [[0.1] * 1536]
         assert stats.total_tokens == 100
@@ -164,7 +163,6 @@ async def test_compute_embeddings_with_stats(agents_db):
         assert stats.response_code == 200
 
         mock_client.compute_embeddings.assert_called_once_with(
-            model="text-embedding-3-small",
             texts=texts,
             normalize=False,
             normalizer=None,

@@ -124,10 +124,13 @@ async def test_rag_service_with_normalizer():
     model = "openai/text-embedding-3-small"
     normalizer = Normalizer(l2=True)
 
-    # We need to mock compute_embeddings in rag_service
-    with patch("kavalai.agents.rag_service.compute_embeddings") as mock_compute:
+    # We need to mock LLMClient's compute_embeddings in RagService
+    with patch("kavalai.agents.rag_service.LLMClient") as mock_llm_client_cls:
+        mock_llm_client = mock_llm_client_cls.return_value
         mock_stats = MagicMock(spec=ModelCallStat)
-        mock_compute.return_value = ([[0.1, 0.2, 0.3]], mock_stats)
+        mock_llm_client.compute_embeddings = AsyncMock(
+            return_value=([[0.1, 0.2, 0.3]], mock_stats)
+        )
 
         # Initialize RagService with normalizer
         # Pass a session instead of URI to avoid real DB engine creation
@@ -142,24 +145,24 @@ async def test_rag_service_with_normalizer():
             texts=["test"], metadata_list=[{}], collection_name="test_coll"
         )
 
-        mock_compute.assert_called_with(
-            model=model, texts=["test"], normalizer=normalizer
+        mock_llm_client.compute_embeddings.assert_called_with(
+            texts=["test"], normalizer=normalizer
         )
 
         # 2. Test query
-        mock_compute.reset_mock()
+        mock_llm_client.compute_embeddings.reset_mock()
         await service.query("test query")
 
-        mock_compute.assert_called_with(
-            model=model, texts=["test query"], normalizer=normalizer
+        mock_llm_client.compute_embeddings.assert_called_with(
+            texts=["test query"], normalizer=normalizer
         )
 
         # 3. Test compute_similarity_matrix
-        mock_compute.reset_mock()
+        mock_llm_client.compute_embeddings.reset_mock()
         await service.compute_similarity_matrix(texts=["t1"], source_ids=["s1"])
 
-        mock_compute.assert_called_with(
-            model=model, texts=["t1"], normalizer=normalizer
+        mock_llm_client.compute_embeddings.assert_called_with(
+            texts=["t1"], normalizer=normalizer
         )
 
 
@@ -171,9 +174,12 @@ async def test_rag_service_without_normalizer():
 
     model = "openai/text-embedding-3-small"
 
-    with patch("kavalai.agents.rag_service.compute_embeddings") as mock_compute:
+    with patch("kavalai.agents.rag_service.LLMClient") as mock_llm_client_cls:
+        mock_llm_client = mock_llm_client_cls.return_value
         mock_stats = MagicMock(spec=ModelCallStat)
-        mock_compute.return_value = ([[0.1, 0.2, 0.3]], mock_stats)
+        mock_llm_client.compute_embeddings = AsyncMock(
+            return_value=([[0.1, 0.2, 0.3]], mock_stats)
+        )
 
         # Initialize RagService without normalizer
         service = RagService(uri_or_session=mock_session, model=model)
@@ -182,8 +188,8 @@ async def test_rag_service_without_normalizer():
 
         await service.query("test query")
 
-        mock_compute.assert_called_with(
-            model=model, texts=["test query"], normalizer=None
+        mock_llm_client.compute_embeddings.assert_called_with(
+            texts=["test query"], normalizer=None
         )
 
 
