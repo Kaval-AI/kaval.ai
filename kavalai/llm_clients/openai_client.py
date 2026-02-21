@@ -38,7 +38,10 @@ class OpenAIClient:
         service_tier: Optional[str] = None,
         timeout: float = 30.0,
     ):
-        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+        self.timeout = timeout
+        self.client = AsyncOpenAI(
+            api_key=api_key, base_url=base_url, timeout=self.timeout
+        )
         self.service_tier = service_tier
         assert service_tier in ["auto", "default", "flex", "priority", None]
 
@@ -46,11 +49,15 @@ class OpenAIClient:
         self,
         model: str,
         messages: List[Dict[str, Any]],
-        response_model: Type[BaseModel],
+        response_model: Optional[Type[BaseModel]] = None,
         streamer: Optional[Streamer] = None,
+        timeout: Optional[float] = None,
         **kwargs,
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
+
+        # Handle timeout: override with method parameter or fallback to self.timeout
+        effective_timeout = timeout if timeout is not None else self.timeout
 
         formatted_messages = []
         for m in messages:
@@ -77,9 +84,11 @@ class OpenAIClient:
         call_kwargs = {
             "model": model,
             "messages": formatted_messages,
-            "response_format": response_model,
+            "timeout": effective_timeout,
             **kwargs,
         }
+        if response_model:
+            call_kwargs["response_format"] = response_model
         if self.service_tier:
             call_kwargs["service_tier"] = self.service_tier
 
@@ -99,7 +108,10 @@ class OpenAIClient:
         if streamer is not None:
             await streamer.stream_complete(buffer.getvalue())
 
-        result = response_model.model_validate_json(buffer.getvalue())
+        result = buffer.getvalue()
+        if response_model:
+            result = response_model.model_validate_json(result)
+
         duration = time.perf_counter() - start_time
 
         stats = create_model_call_stat(
@@ -120,9 +132,13 @@ class OpenAIClient:
         prompt: str,
         size: str = "1024x1024",
         quality: str = "standard",
+        timeout: Optional[float] = None,
         **kwargs,
     ) -> Tuple[str, ModelCallStat]:
         start_time = time.perf_counter()
+        # Handle timeout: override with method parameter or fallback to self.timeout
+        effective_timeout = timeout if timeout is not None else self.timeout
+
         # Ensure response_format is always b64_json
         kwargs.pop("response_format", None)
         # Normalize quality: OpenAI API supports 'standard' and 'hd' for DALL-E 3
@@ -133,6 +149,7 @@ class OpenAIClient:
             prompt=prompt,
             size=size,
             quality=quality,
+            timeout=effective_timeout,
             **kwargs,
         )
         duration = time.perf_counter() - start_time
@@ -163,12 +180,17 @@ class OpenAIClient:
         texts: List[str],
         normalize: bool = False,
         normalizer: Optional[Normalizer] = None,
+        timeout: Optional[float] = None,
         **kwargs,
     ) -> Tuple[List[List[float]], ModelCallStat]:
         start_time = time.perf_counter()
+        # Handle timeout: override with method parameter or fallback to self.timeout
+        effective_timeout = timeout if timeout is not None else self.timeout
+
         call_kwargs = {
             "input": texts,
             "model": model,
+            "timeout": effective_timeout,
             **kwargs,
         }
         response = await self.client.embeddings.create(**call_kwargs)

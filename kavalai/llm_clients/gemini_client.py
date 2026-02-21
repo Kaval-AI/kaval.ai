@@ -261,6 +261,7 @@ class GeminiClient:
     def __init__(
         self,
         api_key: Optional[str] = None,
+        timeout: float = 30.0,
     ):
         """
         Initialize the Gemini client.
@@ -268,6 +269,7 @@ class GeminiClient:
         Args:
             api_key (Optional[str]): The API key for Gemini. If not provided,
                 will attempt to get from GEMINI_API_KEY environment variable.
+            timeout (float): Default timeout for API calls in seconds.
 
         Raises:
             ValueError: If no API key is provided or found in environment variables.
@@ -280,6 +282,7 @@ class GeminiClient:
                 "Gemini API key must be provided either through the api_key parameter or GEMINI_API_KEY environment variable"
             )
 
+        self.timeout = timeout
         self.client = genai.Client(
             api_key=api_key,
         )
@@ -290,6 +293,7 @@ class GeminiClient:
         messages: List[Dict[str, Any]],
         response_model: Optional[Type[BaseModel]] = None,
         streamer: Optional[Streamer] = None,
+        timeout: Optional[float] = None,
         **kwargs,
     ) -> Tuple[Any, ModelCallStat]:
         """
@@ -297,6 +301,9 @@ class GeminiClient:
         Supports structured output via response_model and streaming via streamer.
         """
         start_time = time.perf_counter()
+
+        # Handle timeout: override with method parameter or fallback to self.timeout
+        effective_timeout = timeout if timeout is not None else self.timeout
 
         model_name = get_model_name(model)
         contents = _convert_messages(messages)
@@ -308,6 +315,7 @@ class GeminiClient:
                 model=model_name,
                 contents=contents,
                 config=config,
+                http_options={"timeout": effective_timeout},
             )
             duration = time.perf_counter() - start_time
             content = response.text
@@ -325,6 +333,7 @@ class GeminiClient:
             model=model_name,
             contents=contents,
             config=config,
+            http_options={"timeout": effective_timeout},
         ):
             last_response = response
             if response.text:
@@ -349,15 +358,20 @@ class GeminiClient:
         self,
         model: str,
         prompt: str,
+        timeout: Optional[float] = None,
         **kwargs,
     ) -> Tuple[str, ModelCallStat]:
         """Generate an image using Gemini models (e.g., gemini-2.5-flash-image)."""
         start_time = time.perf_counter()
+        # Handle timeout: override with method parameter or fallback to self.timeout
+        effective_timeout = timeout if timeout is not None else self.timeout
+
         model_name = get_model_name(model)
 
         response = await self.client.aio.models.generate_content(
             model=model_name,
             contents=[prompt],
+            http_options={"timeout": effective_timeout},
             **kwargs,
         )
         duration = time.perf_counter() - start_time
@@ -382,15 +396,20 @@ class GeminiClient:
         texts: List[str],
         normalize: bool = False,
         normalizer: Optional[Normalizer] = None,
+        timeout: Optional[float] = None,
         **kwargs,
     ) -> Tuple[List[List[float]], ModelCallStat]:
         """Compute embeddings for a list of texts using Gemini."""
         start_time = time.perf_counter()
+        # Handle timeout: override with method parameter or fallback to self.timeout
+        effective_timeout = timeout if timeout is not None else self.timeout
+
         model_name = get_model_name(model)
 
         response = await self.client.aio.models.embed_content(
             model=model_name,
             contents=texts,
+            http_options={"timeout": effective_timeout},
             **kwargs,
         )
         duration = time.perf_counter() - start_time
