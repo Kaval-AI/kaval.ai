@@ -32,7 +32,6 @@ All examples in this tutorial can be found in the `examples/llm_clients/` direct
 
 * `GitHub: Chat Completions <https://github.com/kavalai/kaval.ai/blob/main/examples/llm_clients/01_chat_completions.py>`_
 * `GitHub: Embeddings <https://github.com/kavalai/kaval.ai/blob/main/examples/llm_clients/02_embeddings.py>`_
-* `GitHub: Image Generation <https://github.com/kavalai/kaval.ai/blob/main/examples/llm_clients/03_image_generation.py>`_
 
 Simple Usage
 ------------
@@ -155,44 +154,3 @@ Both OpenAI and Gemini clients support multimodal inputs. You can provide images
    Objects: Logo, 'K' symbol, Circle
    Colors: White, Dark Blue/Gray
    Stats: Tokens: 450, Cost: $0.0025
-
-Generating Images
------------------
-
-Kaval.AI also supports image generation via DALL-E (OpenAI) and Imagen (Gemini).
-
-.. code-block:: python
-
-   from kavalai.llm_clients.llm_client import LLMClient
-
-   async def create_art():
-       # Generate with OpenAI DALL-E 3
-       client_oa = LLMClient(model="openai/dall-e-3")
-       img_base64, stats = await client_oa.generate_image(
-           prompt="A futuristic laboratory where tiny robots are building a glowing crystal",
-           size="1024x1024"
-       )
-
-       # Generate with Gemini Imagen
-       client_gem = LLMClient(model="gemini/imagen-3.0-generate-001")
-       img_base64, stats = await client_gem.generate_image(
-           prompt="A futuristic laboratory where tiny robots are building a glowing crystal"
-       )
-
-**Demo Results:**
-
-.. list-table::
-   :widths: 50 50
-   :header-rows: 1
-
-   * - OpenAI (DALL-E 3)
-     - Gemini (Imagen 3)
-   * - .. image:: /assets/images/llm_clients/generated_openai.png
-          :width: 100%
-          :alt: DALL-E 3 Generated Image
-     - .. image:: /assets/images/llm_clients/generated_gemini.png
-          :width: 100%
-          :alt: Imagen 3 Generated Image
-
-.. note::
-   The returned `img_base64` can be saved to a file or displayed directly in your application.

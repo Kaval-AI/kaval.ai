@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import Dict, Any
+from typing import Dict
 from kavalai.prices.common import ModelPricing, TokenPricing
 
 # Prices per 1M tokens in USD unless otherwise specified
@@ -119,13 +119,6 @@ def get_gemini_chat_cost(
     return pricing.calculate_cost(prompt_tokens, completion_tokens, cached_tokens)
 
 
-def get_gemini_image_cost(model: str) -> float:
-    """
-    Compute the cost of a Gemini image generation call in USD.
-    """
-    return GEMINI_IMAGE_GENERATION_PRICES.get(model, 0.0)
-
-
 def get_gemini_embedding_cost(model: str, tokens: int) -> float:
     """
     Compute the cost of a Gemini embedding call in USD.
@@ -137,27 +130,3 @@ def get_gemini_embedding_cost(model: str, tokens: int) -> float:
     # Pricing per 1M tokens
     input_p = pricing.input.get_price(tokens)
     return tokens * input_p / 1_000_000
-
-
-# Image Generation - Prices per image in USD
-GEMINI_IMAGE_GENERATION_PRICES: Dict[str, Dict[str, float]] = {
-    "imagen-4.0-fast-generate-001": 0.02,
-    "imagen-4.0-generate-001": 0.04,
-    "imagen-4.0-ultra-generate-001": 0.06,
-    "imagen-3.0-generate-002": 0.03,
-}
-
-# Video Generation - Prices per second in USD
-GEMINI_VIDEO_GENERATION_PRICES: Dict[str, Dict[str, Any]] = {
-    "veo-3.1-generate-preview": {
-        "720p_1080p": 0.40,
-        "4k": 0.60,
-    },
-    "veo-3.1-fast-generate-preview": {
-        "720p_1080p": 0.15,
-        "4k": 0.35,
-    },
-    "veo-3.0-generate-001": 0.40,
-    "veo-3.0-fast-generate-001": 0.15,
-    "veo-2.0-generate-001": 0.35,
-}

@@ -37,7 +37,6 @@ from kavalai.llm_clients.common import (
 from kavalai.normalizer import Normalizer, get_default_normalizer
 from kavalai.prices.openai import (
     get_openai_chat_cost,
-    get_openai_image_cost,
     get_openai_embedding_cost,
 )
 
@@ -145,53 +144,6 @@ class OpenAIClient:
         )
         stats.currency = "USD"
         return result, stats
-
-    async def generate_image(
-        self,
-        model: str,
-        prompt: str,
-        size: str = "1024x1024",
-        quality: str = "standard",
-        timeout: Optional[float] = None,
-        **kwargs,
-    ) -> Tuple[str, ModelCallStat]:
-        start_time = time.perf_counter()
-        # Handle timeout: override with method parameter or fallback to
-        # self.timeout
-        effective_timeout = timeout if timeout is not None else self.timeout
-
-        response = await self.client.responses.create(
-            model=model,
-            input=prompt,
-            tools=[{"type": "image_generation"}],
-            timeout=effective_timeout,
-            **kwargs,
-        )
-
-        duration = time.perf_counter() - start_time
-
-        # Save the image to a file
-        image_data = [
-            output.result
-            for output in response.output
-            if output.type == "image_generation_call"
-        ]
-
-        image_base64 = None
-        if image_data:
-            image_base64 = image_data[0]
-
-        cost = get_openai_image_cost(model, size, quality)
-
-        stats = create_model_call_stat(
-            call_type="image_generation",
-            model=f"openai/{model}",
-            duration_sections=duration,
-            cost=cost,
-            response_data={"size": size, "quality": quality},
-        )
-        stats.currency = "USD"
-        return image_base64, stats
 
     async def compute_embeddings(
         self,

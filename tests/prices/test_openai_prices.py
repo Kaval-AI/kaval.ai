@@ -1,15 +1,12 @@
 from kavalai.prices.openai import (
     OPENAI_TEXT_PRICES,
-    OPENAI_IMAGE_PRICES,
     OPENAI_AUDIO_PRICES,
-    OPENAI_VIDEO_PRICES,
     OPENAI_FINE_TUNING_PRICES,
     OPENAI_TOOL_PRICES,
     OPENAI_AGENTKIT_PRICES,
     OPENAI_TRANSCRIPTION_SPEECH_TEXT_PRICES,
     OPENAI_TRANSCRIPTION_SPEECH_AUDIO_PRICES,
     OPENAI_TRANSCRIPTION_SPEECH_OTHER_PRICES,
-    OPENAI_IMAGE_GENERATION_PRICES,
     OPENAI_EMBEDDING_PRICES,
     OPENAI_LEGACY_PRICES,
 )
@@ -22,24 +19,9 @@ def test_openai_text_prices():
     assert OPENAI_TEXT_PRICES["gpt-image-1"].output.price_per_1m == 0.0
 
 
-def test_openai_image_prices():
-    assert OPENAI_IMAGE_PRICES["gpt-image-1.5"]["input"] == 8.00
-    assert OPENAI_IMAGE_PRICES["gpt-realtime"]["output"] is None
-
-
 def test_openai_audio_prices():
     assert OPENAI_AUDIO_PRICES["gpt-realtime"]["input"] == 32.00
     assert OPENAI_AUDIO_PRICES["gpt-4o-audio-preview"]["output"] == 80.00
-
-
-def test_openai_video_prices():
-    assert (
-        OPENAI_VIDEO_PRICES["sora-2"]["Portrait: 720x1280 Landscape: 1280x720"] == 0.10
-    )
-    assert (
-        OPENAI_VIDEO_PRICES["sora-2-pro"]["Portrait: 1024x1792 Landscape: 1792x1024"]
-        == 0.50
-    )
 
 
 def test_openai_fine_tuning_prices():
@@ -63,11 +45,6 @@ def test_openai_transcription_speech_prices():
         OPENAI_TRANSCRIPTION_SPEECH_AUDIO_PRICES["gpt-4o-mini-tts"]["output"] == 12.00
     )
     assert OPENAI_TRANSCRIPTION_SPEECH_OTHER_PRICES["whisper"] == 0.006
-
-
-def test_openai_image_generation_prices():
-    assert OPENAI_IMAGE_GENERATION_PRICES["gpt-image-1.5"]["high"]["1024x1024"] == 0.133
-    assert OPENAI_IMAGE_GENERATION_PRICES["dalle-3"]["standard"]["1024x1792"] == 0.08
 
 
 def test_openai_embedding_prices():

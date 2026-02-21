@@ -118,16 +118,3 @@ async def test_openai_chat_completions_streamer(openai_client):
     assert "Hi" in result
     assert len(partials) > 0  # Verify we got partial updates
     assert final_streamed == result  # Verify final streamed matches result
-
-
-@pytest.mark.asyncio
-async def test_openai_generate_image(openai_client):
-    """Test image generation."""
-    prompt = "A simple red square 1x1 size."
-    image_base64, stats = await openai_client.generate_image(
-        model="gpt-5",
-        prompt=prompt,
-    )
-    assert image_base64 is not None
-    assert isinstance(image_base64, str)
-    assert stats.call_type == "image_generation"

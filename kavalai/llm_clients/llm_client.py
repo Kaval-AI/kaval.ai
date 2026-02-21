@@ -102,17 +102,12 @@ class LLMClient:
             return OpenAIClient(
                 api_key=os.environ["OPENAI_API_KEY"],
                 service_tier=os.environ.get("KAVALAI_OPENAI_SERVICE_TIER"),
-                timeout=timeout
-                if "dalle" not in self.model_name and "gpt-image" not in self.model_name
-                else max(timeout, 120.0),
+                timeout=timeout,
             )
         elif self.provider == "gemini":
             return GeminiClient(
                 api_key=os.environ["GEMINI_API_KEY"],
-                timeout=timeout
-                if "imagen" not in self.model_name
-                and "image-preview" not in self.model_name
-                else max(timeout, 120.0),
+                timeout=timeout,
             )
         else:
             raise ValueError(f"Invalid provider: {self.provider}")
@@ -151,34 +146,6 @@ class LLMClient:
         stats.request_data = {"requests": [request_info]}
 
         return content, stats
-
-    async def generate_image(
-        self,
-        prompt: str,
-        **kwargs,
-    ) -> tuple[str, ModelCallStat]:
-        """
-        Generate an image from a prompt and return the image as a base64 string and stats.
-        """
-        request_info = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "arguments": {
-                "model": self.full_model,
-                "prompt": prompt,
-                **kwargs,
-            },
-        }
-
-        image_base64, stats = await with_retry(
-            self.client.generate_image,
-            model=self.model_name,
-            prompt=prompt,
-            **kwargs,
-        )
-
-        stats.request_data = request_info
-
-        return image_base64, stats
 
     async def list_models(self) -> list[str]:
         return await self.client.list_models()

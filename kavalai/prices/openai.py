@@ -290,17 +290,6 @@ OPENAI_TEXT_PRICES: Dict[str, ModelPricing] = {
     ),
 }
 
-# Image tokens
-# Prices per 1M tokens
-OPENAI_IMAGE_PRICES: Dict[str, Dict[str, Any]] = {
-    "gpt-image-1.5": {"input": 8.00, "cached_input": 2.00, "output": 32.00},
-    "chatgpt-image-latest": {"input": 8.00, "cached_input": 2.00, "output": 32.00},
-    "gpt-image-1": {"input": 10.00, "cached_input": 2.50, "output": 40.00},
-    "gpt-image-1-mini": {"input": 2.50, "cached_input": 0.25, "output": 8.00},
-    "gpt-realtime": {"input": 5.00, "cached_input": 0.50, "output": None},
-    "gpt-realtime-mini": {"input": 0.80, "cached_input": 0.08, "output": None},
-}
-
 # Audio tokens
 # Prices per 1M tokens
 OPENAI_AUDIO_PRICES: Dict[str, Dict[str, Any]] = {
@@ -319,16 +308,6 @@ OPENAI_AUDIO_PRICES: Dict[str, Dict[str, Any]] = {
         "input": 10.00,
         "cached_input": None,
         "output": 20.00,
-    },
-}
-
-# Video tokens
-# Price per second
-OPENAI_VIDEO_PRICES: Dict[str, Dict[str, Any]] = {
-    "sora-2": {"Portrait: 720x1280 Landscape: 1280x720": 0.10},
-    "sora-2-pro": {
-        "Portrait: 720x1280 Landscape: 1280x720": 0.30,
-        "Portrait: 1024x1792 Landscape: 1792x1024": 0.50,
     },
 }
 
@@ -478,38 +457,6 @@ OPENAI_TRANSCRIPTION_SPEECH_OTHER_PRICES: Dict[str, Any] = {
     "tts_hd": 30.00,  # per 1M characters
 }
 
-# Image generation
-# Prices per image
-OPENAI_IMAGE_GENERATION_PRICES: Dict[str, Dict[str, Any]] = {
-    "gpt-image-1.5": {
-        "low": {"1024x1024": 0.009, "1024x1536": 0.013, "1536x1024": 0.013},
-        "medium": {"1024x1024": 0.034, "1024x1536": 0.05, "1536x1024": 0.05},
-        "high": {"1024x1024": 0.133, "1024x1536": 0.2, "1536x1024": 0.2},
-    },
-    "chatgpt-image-latest": {
-        "low": {"1024x1024": 0.009, "1024x1536": 0.013, "1536x1024": 0.013},
-        "medium": {"1024x1024": 0.034, "1024x1536": 0.05, "1536x1024": 0.05},
-        "high": {"1024x1024": 0.133, "1024x1536": 0.2, "1536x1024": 0.2},
-    },
-    "gpt-image-1": {
-        "low": {"1024x1024": 0.011, "1024x1536": 0.016, "1536x1024": 0.016},
-        "medium": {"1024x1024": 0.042, "1024x1536": 0.063, "1536x1024": 0.063},
-        "high": {"1024x1024": 0.167, "1024x1536": 0.25, "1536x1024": 0.25},
-    },
-    "gpt-image-1-mini": {
-        "low": {"1024x1024": 0.005, "1024x1536": 0.006, "1536x1024": 0.006},
-        "medium": {"1024x1024": 0.011, "1024x1536": 0.015, "1536x1024": 0.015},
-        "high": {"1024x1024": 0.036, "1024x1536": 0.052, "1536x1024": 0.052},
-    },
-    "dalle-3": {
-        "standard": {"1024x1024": 0.04, "1024x1792": 0.08, "1792x1024": 0.08},
-        "hd": {"1024x1024": 0.08, "1024x1792": 0.12, "1792x1024": 0.12},
-    },
-    "dalle-2": {
-        "standard": {"256x256": 0.016, "512x512": 0.018, "1024x1024": 0.02},
-    },
-}
-
 # Embeddings
 # Prices per 1M tokens
 OPENAI_EMBEDDING_PRICES: Dict[str, Dict[str, float]] = {
@@ -626,21 +573,6 @@ def get_openai_chat_cost(
         return 0.0
 
     return pricing.calculate_cost(prompt_tokens, completion_tokens, cached_tokens)
-
-
-def get_openai_image_cost(model: str, size: str, quality: str = "standard") -> float:
-    """
-    Compute the cost of an OpenAI image generation call in USD.
-    """
-    model_prices = OPENAI_IMAGE_PRICES.get(model)
-    if not model_prices:
-        return 0.0
-
-    quality_prices = model_prices.get(quality)
-    if not quality_prices:
-        return 0.0
-
-    return quality_prices.get(size, 0.0)
 
 
 def get_openai_embedding_cost(model: str, tokens: int, mode: str = "standard") -> float:

@@ -34,7 +34,6 @@ from kavalai.llm_clients.common import (
 from kavalai.normalizer import Normalizer, get_default_normalizer
 from kavalai.prices.gemini import (
     get_gemini_chat_cost,
-    get_gemini_image_cost,
     get_gemini_embedding_cost,
 )
 
@@ -187,41 +186,6 @@ class GeminiClient:
         )
         stats.currency = "USD"
         return result, stats
-
-    async def generate_image(
-        self,
-        model: str,
-        prompt: str,
-        size: str = "1024x1024",
-        quality: str = "standard",
-        timeout: Optional[float] = None,
-        **kwargs,
-    ) -> Tuple[Optional[str], ModelCallStat]:
-        start_time = time.perf_counter()
-        model_name = get_model_name(model)
-
-        response = await self.client.aio.models.generate_images(
-            model=model_name,
-            prompt=prompt,
-            config=types.GenerateImagesConfig(number_of_images=1, **kwargs),
-        )
-
-        image_base64 = None
-        if response.generated_images:
-            image_bytes = response.generated_images[0].image.image_bytes
-            image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-
-        duration = time.perf_counter() - start_time
-
-        stats = create_model_call_stat(
-            call_type="image_generation",
-            model=f"gemini/{model_name}",
-            duration_sections=duration,
-            cost=get_gemini_image_cost(model_name),
-            response_data={"size": size, "quality": quality},
-        )
-        stats.currency = "USD"
-        return image_base64, stats
 
     async def compute_embeddings(
         self,
