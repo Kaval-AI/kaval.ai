@@ -250,12 +250,20 @@ class GeminiClient:
         last_response = None
 
         # Always use streaming
-        api_stream = self.client.aio.models.generate_content_stream(
-            model=model_name,
-            contents=contents,
-            config=config,
-            http_options={"timeout": effective_timeout},
-        )
+        try:
+            api_stream = self.client.aio.models.generate_content_stream(
+                model=model_name,
+                contents=contents,
+                config=config,
+                http_options={"timeout": effective_timeout},
+            )
+        except TypeError:
+            # Fallback for older google-genai versions without http_options support
+            api_stream = self.client.aio.models.generate_content_stream(
+                model=model_name,
+                contents=contents,
+                config=config,
+            )
         async for response in await api_stream:
             last_response = response
             if response.text:
@@ -303,12 +311,19 @@ class GeminiClient:
 
         model_name = get_model_name(model)
 
-        response = await self.client.aio.models.generate_content(
-            model=model_name,
-            contents=[prompt],
-            http_options={"timeout": effective_timeout},
-            **kwargs,
-        )
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=model_name,
+                contents=[prompt],
+                http_options={"timeout": effective_timeout},
+                **kwargs,
+            )
+        except TypeError:
+            response = await self.client.aio.models.generate_content(
+                model=model_name,
+                contents=[prompt],
+                **kwargs,
+            )
         duration = time.perf_counter() - start_time
 
         image_base64 = None
@@ -342,12 +357,19 @@ class GeminiClient:
 
         model_name = get_model_name(model)
 
-        response = await self.client.aio.models.embed_content(
-            model=model_name,
-            contents=texts,
-            http_options={"timeout": effective_timeout},
-            **kwargs,
-        )
+        try:
+            response = await self.client.aio.models.embed_content(
+                model=model_name,
+                contents=texts,
+                http_options={"timeout": effective_timeout},
+                **kwargs,
+            )
+        except TypeError:
+            response = await self.client.aio.models.embed_content(
+                model=model_name,
+                contents=texts,
+                **kwargs,
+            )
         duration = time.perf_counter() - start_time
 
         embeddings = [emb.values for emb in response.embeddings]
