@@ -19,7 +19,7 @@ import os
 import asyncio
 import random
 from datetime import datetime, timezone
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, Optional
 
 from pydantic import BaseModel
 import openai
@@ -38,16 +38,22 @@ T = TypeVar("T")
 
 
 async def with_retry(
-    func: Callable[..., T],
+    func: Callable,
     *args,
     max_retries: int = 5,
     base_delay: float = 1.0,
     max_delay: float = 60.0,
     **kwargs,
-) -> T:
+) -> Any:
     """
     Exponential backoff retry wrapper for LLM client calls.
     Retries only on specific OpenAI and Gemini exceptions.
+
+    :param func: The function to call.
+    :param max_retries: Maximum number of retries.
+    :param base_delay: Initial delay in seconds.
+    :param max_delay: Maximum delay in seconds.
+    :return: The result of the function call.
     """
     retriable_exceptions = (
         # OpenAI exceptions
@@ -124,6 +130,8 @@ class LLMClient:
         messages: list[dict],
         response_model: type[BaseModel] | None = None,
         streamer: Streamer | None = None,
+        thinking_budget: Optional[int] = None,
+        stream_delta: bool = False,
         **kwargs,
     ) -> tuple[Any, ModelCallStat]:
         """
@@ -137,6 +145,8 @@ class LLMClient:
                 "messages": messages,
                 "response_model": str(response_model) if response_model else None,
                 "streamer": str(streamer) if streamer else None,
+                "thinking_budget": thinking_budget,
+                "stream_delta": stream_delta,
                 **kwargs,
             },
         }

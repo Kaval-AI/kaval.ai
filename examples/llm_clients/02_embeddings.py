@@ -1,7 +1,8 @@
 import asyncio
+
 import numpy as np
-from kavalai.llm_clients.llm_client import LLMClient
-from kavalai.normalizer import Normalizer
+
+from kavalai import LLMClient, Normalizer
 
 
 async def basic_embeddings_example():

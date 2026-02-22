@@ -152,9 +152,11 @@ class AgentService:
     async def get_history_value(self, session_id: UUID, key: str) -> Optional[Any]:
         """
         Retrieves a value from the context of previous runs in the same session.
+
         - If `key` is a dotted path (e.g., "output.search_results"), resolves it as such.
         - If `key` is a plain name (e.g., "search_results"), searches recursively for the
           first matching key in the context dicts of previous runs (newest first).
+
         Returns the most recent value found for the given key.
         """
         is_path = "." in key

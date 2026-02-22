@@ -1,7 +1,8 @@
 import asyncio
+
 from pydantic import BaseModel
-from kavalai.llm_clients.llm_client import LLMClient
-from kavalai.llm_clients.common import StreamContent, Streamer
+
+from kavalai import LLMClient, Streamer, StreamContent
 
 
 # Define a Pydantic model for structured output

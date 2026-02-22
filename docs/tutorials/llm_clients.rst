@@ -1,156 +1,192 @@
 LLM Clients Tutorial
-===================
+====================
 
-This tutorial covers the usage of the LLM clients in Kaval.AI SDK.
-While Kaval.AI LLM clients are designed to be used internally with the SDK, they are still useful
-abstractions for common LLM tasks.
+This tutorial explains how to use the LLM clients in the Kaval.AI SDK. Our clients are lightweight wrappers around official libraries (like OpenAI and Google GenAI), designed to unify the interface for common Generative AI operations.
 
-Kaval.AI currently only supports models provided by OpenAI and Gemini.
+Why use Kaval.AI clients?
+-------------------------
 
-Comparison with Other Frameworks
---------------------------------
+If you are new to Python or AI development, you might wonder why we don't just use the official libraries directly.
 
-The Kaval.AI LLM client framework shares similarities with other industry-standard frameworks like `instructor`, but it is tailored for the Kaval.AI agent ecosystem.
+1. **Unified Interface:** Whether you use OpenAI or Gemini, the code remains almost identical.
+2. **Built-in Resilience:** We include automatic retry logic with exponential backoff for common API errors.
+3. **Integrated Metrics:** Every call automatically tracks token usage, costs, and execution time.
+4. **Structured Output:** Easy integration with Pydantic for getting guaranteed data formats.
 
-**Similarities:**
+Basic Chat Completion
+---------------------
 
-* **Pydantic Integration:** Like `instructor`, we use Pydantic models to define the expected structure of LLM responses, ensuring type safety and easy data validation.
-* **Multi-Provider Support:** We provide a unified interface for different LLM providers (currently OpenAI and Gemini).
-* **Retry Logic:** Built-in support for retrying failed API calls with exponential backoff.
+The most common way to interact with an LLM is through chat completions. In Kaval.AI, we use a list of "messages" to represent the conversation.
 
-**Differences:**
+Each message has a **role** (system, user, or assistant) and **content**.
 
-* **Agent-Centric Design:** Kaval.AI clients are optimized for use within autonomous agents, with built-in support for tracking metrics like token usage, costs, and execution duration across complex workflows.
-* **Native Provider Features:** We leverage native provider features (like OpenAI's Structured Outputs and Gemini's `response_schema`) directly, rather than relying solely on prompting techniques, which improves reliability and reduces latency.
-* **Streaming & Multimodal:** First-class support for streaming responses and multimodal inputs (images) across all supported providers.
-* **Integrated Pricing:** Automatic cost calculation based on the latest pricing models for each provider.
+*   **system**: Sets the behavior of the AI (e.g., "You are a chess Grandmaster").
+*   **user**: Your prompt or question.
+*   **assistant**: The AI's previous responses (used for conversation history).
 
-Examples
---------
-
-All examples in this tutorial can be found in the `examples/llm_clients/` directory of the repository.
-
-* `GitHub: Chat Completions <https://github.com/kavalai/kaval.ai/blob/main/examples/llm_clients/01_chat_completions.py>`_
-* `GitHub: Embeddings <https://github.com/kavalai/kaval.ai/blob/main/examples/llm_clients/02_embeddings.py>`_
-
-Simple Usage
-------------
-
-The recommended way to use LLM clients is through the `LLMClient` class in the `kavalai.llm_clients.llm_client` module.
-
-Basic Prompt with Pydantic Response
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Kaval.AI uses Pydantic models to ensure structured responses from LLMs.
+Let's look at a "nerdy" example: analyzing a chess position.
 
 .. code-block:: python
 
    import asyncio
-   from pydantic import BaseModel
    from kavalai.llm_clients.llm_client import LLMClient
 
-   class Greeting(BaseModel):
-       message: str
-       language: str
+   async def analyze_chess():
+       # Initialize the client for OpenAI's GPT-4o
+       client = LLMClient(model="openai/gpt-4o")
 
-   async def main():
        messages = [
-           {"role": "user", "content": "Say hello in French"}
+           {"role": "system", "content": "You are a chess expert. Use algebraic notation."},
+           {"role": "user", "content": "What is the best move for white in the Ruy Lopez opening after 3... a6?"}
        ]
 
-       # Use OpenAI
-       client_oa = LLMClient(model="openai/gpt-4o")
-       result, stats = await client_oa.chat_completions(
-           messages=messages,
-           response_model=Greeting
-       )
-       print(f"OpenAI: {result.message} ({result.language})")
+       # chat_completions returns (result, stats)
+       result, stats = await client.chat_completions(messages=messages)
 
-       # Use Gemini
-       client_gem = LLMClient(model="gemini/gemini-2.0-flash")
-       result, stats = await client_gem.chat_completions(
-           messages=messages,
-           response_model=Greeting
-       )
-       print(f"Gemini: {result.message} ({result.language})")
+       print(f"AI Analysis: {result}")
+       print(f"Tokens Used: {stats.total_tokens}")
+       print(f"Cost: ${stats.cost:.4f}")
 
    if __name__ == "__main__":
-       asyncio.run(main())
+       asyncio.run(analyze_chess())
 
-**Demo Output:**
-
-.. code-block:: text
-
-   OpenAI: Bonjour! (French)
-   Gemini: Salut! (French)
-
-Computing Embeddings
---------------------
-
-You can compute embeddings for a list of strings using the `LLMClient.compute_embeddings` method.
-
-.. code-block:: python
-
-   from kavalai.llm_clients.llm_client import LLMClient
-
-   async def get_embeddings():
-       texts = ["Kaval.AI is an agent management system", "LLMs are powerful"]
-
-       client = LLMClient(model="openai/text-embedding-3-small")
-       embeddings, stats = await client.compute_embeddings(
-           texts=texts
-       )
-       print(f"Computed {len(embeddings)} embeddings")
-       return embeddings
-
-**Demo Output:**
+**Expected Output:**
 
 .. code-block:: text
 
-   Computing embeddings for 2 strings...
-   Computed 2 embeddings
-   Text: 'Kaval.AI is an agent management system' -> Vector size: 1536
-   Text: 'LLMs are powerful' -> Vector size: 1536
-   Stats: Tokens: 12, Cost: $0.000001
+   AI Analysis: The most common and strongest move for White is 4. Ba4, maintaining the pressure on the knight on c6. Another option is 4. Bxc6, the Exchange Variation...
+   Tokens Used: 85
+   Cost: $0.0004
 
-Using Images (Multimodal)
--------------------------
+Writing a Good Prompt
+~~~~~~~~~~~~~~~~~~~~~
 
-Both OpenAI and Gemini clients support multimodal inputs. You can provide images using a standard OpenAI-compatible format in the `messages` list.
+A good prompt is clear and provides context. Instead of "Fix my code", try "You are a Python expert. Identify the bug in this function and explain why it occurs."
+
+Multimodal Execution (Using Images)
+-----------------------------------
+
+Modern AI models can "see". This is called "multimodal" execution. You can send images along with your text. This is useful for identifying computer parts or analyzing diagrams.
 
 .. code-block:: python
 
+   import asyncio
    from kavalai.llm_clients.llm_client import LLMClient
-   from pydantic import BaseModel
 
-   class ImageDescription(BaseModel):
-       description: str
-       objects_found: list[str]
+   async def identify_hardware(image_base64: str):
+       client = LLMClient(model="openai/gpt-4o")
 
-   async def describe_image(image_base64: str):
        messages = [
            {
                "role": "user",
                "content": [
-                   {"type": "text", "text": "What is in this image?"},
-                   {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+                   {"type": "input_text", "text": "What computer component is this?"},
+                   {
+                       "type": "input_image",
+                       "image_url": f"data:image/jpeg;base64,{image_base64}"
+                   }
                ]
            }
        ]
 
-       client = LLMClient(model="openai/gpt-4o")
-       result, stats = await client.chat_completions(
-           messages=messages,
-           response_model=ImageDescription
-       )
-       print(result.description)
+       result, _ = await client.chat_completions(messages=messages)
+       print(f"Identification: {result}")
 
-**Demo Output:**
+**Expected Output:**
 
 .. code-block:: text
 
-   --- Analyzing image with OpenAI ---
-   Description: The image shows the Kaval.AI logo, which consists of a stylized geometric 'K' inside a dark circle.
-   Objects: Logo, 'K' symbol, Circle
-   Colors: White, Dark Blue/Gray
-   Stats: Tokens: 450, Cost: $0.0025
+   Identification: This is an NVIDIA GeForce RTX 4090 graphics card. It features a triple-fan cooling system and requires a 16-pin power connector...
+
+Streaming and Delta Mode
+------------------------
+
+When you use ChatGPT, the text appears word-by-word. This is called **streaming**.
+
+Kaval.AI supports streaming via the `Streamer` class. You can also enable `stream_delta`, which only sends the *new* characters (the "delta") rather than the whole message every time.
+
+**Trade-offs:**
+*   **On (Streaming):** Feels much faster for users because they see progress immediately.
+*   **Off (Non-streaming):** Simpler to write code for, but the user has to wait for the entire response to finish before seeing anything.
+
+.. code-block:: python
+
+   import asyncio
+   from kavalai.llm_clients.llm_client import LLMClient
+   from kavalai.llm_clients.common import Streamer, StreamContent
+
+   async def stream_poem():
+       client = LLMClient(model="openai/gpt-4o")
+       messages = [{"role": "user", "content": "Write a 4-line poem about artificial intelligence."}]
+
+       queue = asyncio.Queue()
+       streamer = Streamer("poem_stream", queue)
+
+       # Start the request in the background
+       task = asyncio.create_task(
+           client.chat_completions(messages=messages, streamer=streamer, stream_delta=True)
+       )
+
+       print("AI is writing: ", end="", flush=True)
+       while True:
+           # Get a chunk of data from the queue
+           raw_chunk = await queue.get()
+           chunk = StreamContent.model_validate_json(raw_chunk)
+
+           if chunk.type == "partial":
+               print(chunk.value, end="", flush=True)
+           elif chunk.type == "complete":
+               break
+
+       await task
+
+**Expected Output:**
+
+.. code-block:: text
+
+   AI is writing: Silicon minds begin to wake,
+   Through the data, paths they take.
+   Learning patterns, fast and deep,
+   Secrets that the bitstreams keep.
+
+Structured Output with Pydantic
+-------------------------------
+
+If you need the AI to return data in a specific format (like a JSON object or a Python class), use Pydantic. This is extremely powerful for building apps.
+
+.. code-block:: python
+
+   from pydantic import BaseModel
+   from kavalai.llm_clients.llm_client import LLMClient
+
+   class ComputerSpec(BaseModel):
+       cpu: str
+       ram_gb: int
+       is_gaming_pc: bool
+
+   async def get_specs():
+       client = LLMClient(model="openai/gpt-4o")
+       messages = [{"role": "user", "content": "Extract specs from: 'I have a Ryzen 9 with 32GB RAM for gaming.'"}]
+
+       result, _ = await client.chat_completions(
+           messages=messages,
+           response_model=ComputerSpec
+       )
+
+       print(f"CPU: {result.cpu}")
+       print(f"RAM: {result.ram_gb}GB")
+
+**Expected Output:**
+
+.. code-block:: text
+
+   CPU: Ryzen 9
+   RAM: 32GB
+
+Further Examples
+----------------
+
+You can find more advanced examples in the `examples/llm_clients/` directory:
+
+*   `01_chat_completions.py`: Detailed usage of chat, streaming, and multimodal.
+*   `02_embeddings.py`: How to turn text into numbers (vectors) for search and AI memory.
