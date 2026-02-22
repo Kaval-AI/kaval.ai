@@ -225,4 +225,4 @@ async def test_openai_compute_embeddings(openai_client):
     )
 
     assert len(embeddings) == 2  # Assert number of embeddings
-    assert len(embeddings[0]) == 1536  # Assert embedding dimension
+    assert len(embeddings[1]) == 1536  # Assert embedding dimension

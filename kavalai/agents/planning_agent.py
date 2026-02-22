@@ -28,7 +28,7 @@ from kavalai.agents.workflow_model import (
     RestTask,
     McpTask,
 )
-from kavalai.llm_clients.llm_client import chat_completions
+from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
 
 logger = logging.getLogger(__name__)
@@ -82,11 +82,13 @@ class PlanningAgent:
             steps += 1
 
             async def _ask():
-                return await chat_completions(
+                client = LLMClient(
                     model=self.workflow.workflow_model.llm_model
-                    or os.environ["KAVALAI_DEFAULT_LLM_MODEL"],
-                    response_model=_ToolDirective,
+                    or os.environ["KAVALAI_DEFAULT_LLM_MODEL"]
+                )
+                return await client.chat_completions(
                     messages=messages,
+                    response_model=_ToolDirective,
                 )
 
             if getattr(task, "timeout", None):

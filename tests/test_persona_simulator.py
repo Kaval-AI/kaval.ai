@@ -111,7 +111,9 @@ async def test_run_simulation_real_llm(
 ):
     with patch("httpx.AsyncClient.get") as mock_get, patch(
         "httpx.AsyncClient.post"
-    ) as mock_post, patch("kavalai.persona_simulator.chat_completions") as mock_chat:
+    ) as mock_post, patch(
+        "kavalai.persona_simulator.LLMClient.chat_completions"
+    ) as mock_chat:
         # Mock LLM response
         from kavalai.agents.db import ModelCallStat
 
@@ -152,7 +154,9 @@ async def test_run_simulation_http_error(
 ):
     with patch("httpx.AsyncClient.get") as mock_get, patch(
         "httpx.AsyncClient.post"
-    ) as mock_post, patch("kavalai.persona_simulator.chat_completions") as mock_chat:
+    ) as mock_post, patch(
+        "kavalai.persona_simulator.LLMClient.chat_completions"
+    ) as mock_chat:
         # Mock LLM response
         from kavalai.agents.db import ModelCallStat
 

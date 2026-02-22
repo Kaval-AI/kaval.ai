@@ -7,6 +7,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from kavalai.agents.workflow import Workflow
+from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.agents.run_context import RunContext
 from kavalai.agents.agent_service import AgentService
 from kavalai.llm_clients.common import StreamContent
@@ -182,7 +183,15 @@ class TestWorkflowTemperatureValidation:
                 "input": {"type": "object", "properties": {}},
                 "output": {"type": "object", "properties": {}},
             },
-            "tasks": [{"name": "task1", "temperature": 2.5, "output": "output"}],
+            "tasks": [
+                {
+                    "name": "task1",
+                    "type": "llm",
+                    "prompt": "test prompt",
+                    "temperature": 2.5,
+                    "output": "output",
+                }
+            ],
         }
         model = WorkflowModel(**data)
         with pytest.raises(
@@ -507,6 +516,7 @@ data_types:
       final_msg: { type: string }
 tasks:
   - name: Combine
+    type: combine
     output:
       final_msg: { value: input.msg, type: context }
 """
@@ -535,10 +545,12 @@ data_types:
       final_msg: { type: string }
 tasks:
   - name: Combine Intermediate
+    type: combine
     inputs:
       text: { value: input.msg, type: context }
     output: intermediate
   - name: Final Output
+    type: combine
     output:
       final_msg: { value: intermediate.text, type: context }
 """
@@ -569,6 +581,7 @@ data_types:
         type: string
 tasks:
   - name: Conditional Task
+    type: combine
     when:
       eq: [ { type: context, value: input.run_task }, true ]
     inputs:
@@ -580,6 +593,7 @@ tasks:
         type: literal
         value: "Task executed"
   - name: GT Task
+    type: combine
     when:
       gt: [ { type: context, value: input.value }, 10 ]
     output:
@@ -587,6 +601,7 @@ tasks:
         type: literal
         value: "Value is large"
   - name: All Task
+    type: combine
     when:
       all:
         - eq: [ { type: context, value: input.run_task }, true ]
@@ -631,6 +646,7 @@ data_types:
         type: string
 tasks:
   - name: Any Task
+    type: combine
     when:
       any:
         - eq: [ { type: context, value: input.val }, 1 ]
@@ -640,6 +656,7 @@ tasks:
         type: literal
         value: "One or Two"
   - name: Not Task
+    type: combine
     when:
       not:
         eq: [ { type: context, value: input.val }, 1 ]
@@ -684,6 +701,7 @@ data_types:
         type: string
 tasks:
   - name: Search
+    type: combine
     when:
       gt: [ { type: context, value: "input.criteria.keywords.length" }, 0 ]
     output:
@@ -720,6 +738,7 @@ data_types:
         type: string
 tasks:
   - name: Tag Check
+    type: combine
     when:
       contains: [ { type: context, value: "input.tags" }, "vip" ]
     output:
@@ -754,6 +773,7 @@ data_types:
         type: string
 tasks:
   - name: Invalid Task
+    type: combine
     when:
       eq: [ { type: context, value: input.val }, 1 , 2]
     output:
@@ -784,6 +804,7 @@ data_types:
         type: string
 tasks:
   - name: GTE Task
+    type: combine
     when:
       gte: [ { type: context, value: input.val }, 10 ]
     output:
@@ -791,6 +812,7 @@ tasks:
         type: literal
         value: "GTE 10"
   - name: LT Task
+    type: combine
     when:
       lt: [ { type: context, value: input.val }, 5 ]
     output:
@@ -798,6 +820,7 @@ tasks:
         type: literal
         value: "LT 5"
   - name: NotEQ Task
+    type: combine
     when:
       not_eq: [ { type: context, value: input.val }, 7 ]
     output:
@@ -840,6 +863,7 @@ data_types:
         type: string
 tasks:
   - name: Active Check
+    type: combine
     when:
       is_true: { type: context, value: input.is_active }
     output:
@@ -847,6 +871,7 @@ tasks:
         type: literal
         value: "Active"
   - name: Length Check
+    type: combine
     when:
       len: [ { type: context, value: input.tags }, 3 ]
     output:
@@ -889,6 +914,7 @@ data_types:
       search_results: { type: string }
 tasks:
   - name: combine
+    type: combine
     inputs:
       search_results: { type: literal, value: "initial results" }
     output:
@@ -919,6 +945,7 @@ data_types:
       current_msg: { type: string }
 tasks:
   - name: load_and_combine
+    type: combine
     inputs:
       prev_results: { type: history, value: search_results }
       current_msg: { type: context, value: input.user_message }
@@ -946,6 +973,7 @@ data_types:
   output: { type: object, properties: { status: { type: string } } }
 tasks:
   - name: t1
+    type: combine
     inputs: { status: { type: literal, value: "completed" } }
     output: { status: { type: literal, value: "completed" } }
 """
@@ -962,6 +990,7 @@ data_types:
   output: { type: object, properties: { result: { type: string } } }
 tasks:
   - name: conditional_task
+    type: combine
     when:
       eq:
         - { type: history, value: status }
@@ -985,6 +1014,7 @@ data_types:
   output: { type: object, properties: { result: { type: string } } }
 tasks:
   - name: conditional_task
+    type: combine
     when:
       eq:
         - { type: history, value: status }
@@ -1023,12 +1053,14 @@ data_types:
         default: false
 tasks:
   - name: Task 1
+    type: combine
     stop: true
     output:
       task1_run:
         type: literal
         value: true
   - name: Task 2
+    type: combine
     output:
       task2_run:
         type: literal
@@ -1060,6 +1092,7 @@ data_types:
         type: string
 tasks:
   - name: Step 1
+    type: combine
     when:
       eq: [ { type: context, value: input.stop_early }, true ]
     stop: true
@@ -1068,6 +1101,7 @@ tasks:
         type: literal
         value: "stopped at step 1"
   - name: Step 2
+    type: combine
     output:
       step:
         type: literal
@@ -1105,15 +1139,16 @@ data_types:
         type: string
 tasks:
   - name: generate
+    type: llm
     prompt: "Hello {{input.user_message}}"
     output: output
     stream: true
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 
-        # 2. Mock chat_completions to simulate streaming
+        # 2. Mock LLMClient.chat_completions to simulate streaming
         async def mock_chat_completions(
-            model, response_model, messages, streamer=None, **kwargs
+            self, response_model, messages, streamer=None, **kwargs
         ):
             if streamer:
                 # Simulate partial stream
@@ -1125,9 +1160,7 @@ tasks:
             stats = None  # Not needed for this test
             return response, stats
 
-        monkeypatch.setattr(
-            "kavalai.agents.workflow.chat_completions", mock_chat_completions
-        )
+        monkeypatch.setattr(LLMClient, "chat_completions", mock_chat_completions)
 
         # 3. Run Workflow with stream
         queue = asyncio.Queue()
@@ -1186,6 +1219,7 @@ data_types:
         type: string
 tasks:
   - name: tool_call
+    type: rest
     tool: "test"
     rest_server: mock
     inputs:

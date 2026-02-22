@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from unittest.mock import AsyncMock
 
 from kavalai.agents.run_context import RunContext
-from kavalai.agents.workflow_model import Task, TypeInputInfo
+from kavalai.agents.workflow_model import PythonTask, TypeInputInfo
 
 
 class MockModel(BaseModel):
@@ -76,8 +76,9 @@ async def test_resolve_input_info_history_missing_service(caplog):
 @pytest.mark.asyncio
 async def test_prepare_tool_inputs():
     rc = RunContext(data={"val": "from_context"})
-    task = Task(
+    task = PythonTask(
         name="test_task",
+        python_tool="test_tool",
         inputs={
             "lit": TypeInputInfo(type="literal", value="fixed"),
             "ctx": TypeInputInfo(type="context", value="val"),
@@ -95,8 +96,9 @@ async def test_prepare_tool_inputs():
 async def test_prepare_tool_inputs_with_pydantic_model():
     rc = RunContext()
     model_instance = MockModel(field="test")
-    task = Task(
+    task = PythonTask(
         name="test_task",
+        python_tool="test_tool",
         inputs={"mod": TypeInputInfo(type="literal", value=model_instance)},
     )
 

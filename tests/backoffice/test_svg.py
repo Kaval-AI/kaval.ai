@@ -15,12 +15,14 @@ def test_generate_workflow_svg(tmp_path):
         "tasks": [
             {
                 "name": "Task 1",
+                "type": "llm",
                 "inputs": {"input": {"type": "context"}},
                 "output": "output",
                 "prompt": "Say hello",
             },
             {
                 "name": "Task 2",
+                "type": "rest",
                 "inputs": {"output": {"type": "context"}},
                 "output": "output",
                 "tool": "my_tool",
@@ -61,6 +63,7 @@ def test_generate_workflow_svg_with_ref():
         "tasks": [
             {
                 "name": "Task 1",
+                "type": "llm",
                 "inputs": {"input": {"type": "context"}},
                 "output": "output",
                 "prompt": "Say hello",
@@ -115,6 +118,8 @@ def test_generate_workflow_svg_task_with_tool():
         "tasks": [
             {
                 "name": "Tool Task",
+                "type": "rest",
+                "rest_server": "my_server",
                 "inputs": {"input": {"type": "context"}},
                 "output": "output",
                 "tool": "my_tool",
@@ -145,6 +150,7 @@ def test_generate_workflow_svg_unreferenced_type():
         "tasks": [
             {
                 "name": "Task 1",
+                "type": "llm",
                 "inputs": {"input": {"type": "context"}},
                 "output": "output",
                 "prompt": "Say hello",
@@ -178,6 +184,8 @@ def test_generate_workflow_svg_complex_paths():
         "tasks": [
             {
                 "name": "Task 1",
+                "type": "rest",
+                "rest_server": "my_server",
                 "inputs": {
                     "user_name": {"value": "input.user.name", "type": "context"}
                 },
@@ -186,6 +194,7 @@ def test_generate_workflow_svg_complex_paths():
             },
             {
                 "name": "Task 2",
+                "type": "combine",
                 "inputs": {"data": {"value": "intermediate", "type": "context"}},
                 "output": {
                     "result": {"value": "Task 1.output", "type": "context"},

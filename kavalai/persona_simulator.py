@@ -33,7 +33,7 @@ from json_schema_to_pydantic import create_model
 from pydantic import BaseModel, Field, HttpUrl
 from rich.console import Console
 
-from kavalai.llm_clients.llm_client import chat_completions
+from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
 
 logger = logging.getLogger(__name__)
@@ -138,8 +138,8 @@ async def run_simulation(task_yaml_path: str, persona_yaml_path: str):
             """
             all_messages = [{"role": "system", "content": system_message}] + history
 
-            resp, stats = await chat_completions(
-                model=os.environ["KAVALAI_DEFAULT_LLM_MODEL"],
+            client_llm = LLMClient(model=os.environ["KAVALAI_DEFAULT_LLM_MODEL"])
+            resp, stats = await client_llm.chat_completions(
                 response_model=PersonaResponse,
                 messages=all_messages,
             )

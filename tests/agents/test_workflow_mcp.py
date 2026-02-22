@@ -2,7 +2,12 @@ import json
 import pytest
 
 from kavalai.agents.workflow import Workflow
-from kavalai.agents.workflow_model import WorkflowModel, Task, TypeInputInfo, McpServer
+from kavalai.agents.workflow_model import (
+    WorkflowModel,
+    McpTask,
+    TypeInputInfo,
+    McpServer,
+)
 
 
 class FakeResponse:
@@ -75,7 +80,7 @@ async def test_workflow_mcp_tool_call(monkeypatch):
         rest_servers=[],
         mcp_servers=[McpServer(name="demo", command="dummy")],
         tasks=[
-            Task(
+            McpTask(
                 name="call_mcp",
                 tool="echo",
                 mcp_server="demo",
@@ -131,7 +136,7 @@ async def test_workflow_mcp_tool_call_env(monkeypatch):
         rest_servers=[],
         mcp_servers=[McpServer(name="demo", command_env="MCP_CMD")],
         tasks=[
-            Task(
+            McpTask(
                 name="call_mcp",
                 tool="echo",
                 mcp_server="demo",

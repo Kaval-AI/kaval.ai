@@ -37,6 +37,7 @@ tasks:
     inputs:
       a: {type: context, value: input.a}
       b: {type: context, value: input.b}
+    type: python
     python_tool: tests.agents.test_python_tool.sync_add
     output: output
 """
@@ -64,6 +65,7 @@ tasks:
     inputs:
       x: {type: context, value: input.x}
       y: {type: context, value: input.y}
+    type: python
     python_tool: tests.agents.test_python_tool.async_multiply
     output: output
 """
@@ -89,6 +91,7 @@ tasks:
   - name: greet_task
     inputs:
       name: {type: context, value: input.user_name}
+    type: python
     python_tool: tests.agents.test_python_tool.dict_output
     output: output
 """
@@ -109,6 +112,7 @@ data_types:
       res: {type: string}
 tasks:
   - name: fail_task
+    type: python
     python_tool: non_existent_module.func
     output: output
 """
@@ -136,6 +140,7 @@ tasks:
     inputs:
       a: {type: context, value: input.a}
     # sync_add needs a and b
+    type: python
     python_tool: tests.agents.test_python_tool.sync_add
     output: output
 """
@@ -165,6 +170,7 @@ data_types:
 tasks:
   - name: task1
     inputs: {a: {type: context, value: input.a}}
+    type: python
     python_tool: tests.agents.test_python_tool.multi_field_test
     output: output
 """
@@ -194,6 +200,7 @@ data_types:
 tasks:
   - name: task1
     inputs: {a: {type: context, value: input.a}}
+    type: python
     python_tool: tests.agents.test_python_tool.multi_field_mismatch_test
     output: output
 """
@@ -221,6 +228,7 @@ data_types:
       res: {type: integer}
 tasks:
   - name: fail_task
+    type: python
     python_tool: tests.agents.test_python_tool.error_func_test
     output: output
 """

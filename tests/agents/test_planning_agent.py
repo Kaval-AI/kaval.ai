@@ -2,6 +2,7 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from kavalai.agents.planning_agent import PlanningAgent
+from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.agents.workflow_model import AgentTask, WorkflowModel, WorkflowException
 from kavalai.agents.run_context import RunContext
 from kavalai.agents.db import ModelCallStat
@@ -25,8 +26,8 @@ async def test_planning_agent_loop_limit():
     # Mock chat_completions to always return a tool call
     mock_stats = ModelCallStat(call_type="llm", model="test", duration_seconds=0.1)
 
-    with patch(
-        "kavalai.agents.planning_agent.chat_completions", new_callable=AsyncMock
+    with patch.object(
+        LLMClient, "chat_completions", new_callable=AsyncMock
     ) as mock_chat:
         from kavalai.agents.planning_agent import _ToolDirective
 
@@ -70,8 +71,8 @@ async def test_planning_agent_finish():
 
     mock_stats = ModelCallStat(call_type="llm", model="test", duration_seconds=0.1)
 
-    with patch(
-        "kavalai.agents.planning_agent.chat_completions", new_callable=AsyncMock
+    with patch.object(
+        LLMClient, "chat_completions", new_callable=AsyncMock
     ) as mock_chat:
         from kavalai.agents.planning_agent import _ToolDirective
 
@@ -106,8 +107,8 @@ async def test_planning_agent_mcp_restricted():
 
     mock_stats = ModelCallStat(call_type="llm", model="test", duration_seconds=0.1)
 
-    with patch(
-        "kavalai.agents.planning_agent.chat_completions", new_callable=AsyncMock
+    with patch.object(
+        LLMClient, "chat_completions", new_callable=AsyncMock
     ) as mock_chat:
         from kavalai.agents.planning_agent import _ToolDirective
 
@@ -146,7 +147,7 @@ async def test_planning_agent_timeout():
         await asyncio.sleep(2)
         return None, None
 
-    with patch("kavalai.agents.planning_agent.chat_completions", side_effect=slow_chat):
+    with patch.object(LLMClient, "chat_completions", side_effect=slow_chat):
         agent = PlanningAgent(workflow)
         task = AgentTask(name="test_task", max_steps=5, timeout=1)
         run_context = RunContext(data={})

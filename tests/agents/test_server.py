@@ -71,6 +71,7 @@ data_types:
         type: string
 tasks:
   - name: generate
+    type: llm
     prompt: "Hello {{input.user_message}}"
     output: output
     stream: true
@@ -204,12 +205,16 @@ async def test_stream_agent_endpoint(
         from kavalai.agents.db import ModelCallStat
 
         stats = ModelCallStat(
-            call_type="llm", model=model, response_code=200, duration_seconds=0.1
+            call_type="llm",
+            model="test-model",
+            response_code=200,
+            duration_seconds=0.1,
+            cost=0,
         )
         return response, stats
 
     monkeypatch.setattr(
-        "kavalai.agents.workflow.chat_completions", mock_chat_completions
+        "kavalai.agents.workflow.LLMClient.chat_completions", mock_chat_completions
     )
 
     async with AsyncClient(

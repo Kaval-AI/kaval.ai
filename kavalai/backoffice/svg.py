@@ -128,9 +128,10 @@ def generate_workflow_svg(
     # 2. Define Task Nodes and Edges
     for task in model.tasks:
         task_id = f"task_{task.name.replace(' ', '_')}"
+        tool_name = getattr(task, "tool", None) or getattr(task, "python_tool", None)
         label = (
-            f"{task.name}\n(Tool: {task.tool})"
-            if task.tool
+            f"{task.name}\n(Tool: {tool_name})"
+            if tool_name
             else f"{task.name}\n(LLM Prompt)"
         )
 
