@@ -74,7 +74,7 @@ async def streaming_example():
 
     # Run chat_completions in a task to consume the queue concurrently
     task = asyncio.create_task(
-        client.chat_completions(messages=messages, streamer=streamer)
+        client.chat_completions(messages=messages, streamer=streamer, stream_delta=True)
     )
 
     print("Streaming: ", end="", flush=True)
@@ -146,6 +146,7 @@ async def reasoning_and_thinking_example():
             messages=messages,
             streamer=streamer,
             thinking_budget=10,  # Use up to 10 seconds for thinking
+            stream_delta=True,
         )
     )
 
