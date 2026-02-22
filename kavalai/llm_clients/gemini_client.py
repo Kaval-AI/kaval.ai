@@ -96,6 +96,7 @@ class GeminiClient:
         response_model: Optional[Type[BaseModel]] = None,
         streamer: Optional[Streamer] = None,
         thinking_budget: Optional[int] = None,
+        stream_delta: bool = False,
         **kwargs,
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
@@ -135,7 +136,10 @@ class GeminiClient:
                     for part in candidate.content.parts:
                         if part.text:
                             if streamer is not None:
-                                if response_model:
+                                if stream_delta:
+                                    await streamer.stream_partial(part.text)
+                                    buffer.write(part.text)
+                                elif response_model:
                                     # For structured output, we still want to stream the full partial JSON
                                     # to allow the UI to parse it.
                                     buffer.write(part.text)
@@ -149,9 +153,15 @@ class GeminiClient:
                         if part.thought:
                             thought_buffer.write(part.text)
                             if streamer is not None:
-                                await streamer.stream_partial(
-                                    part.text, name=f"{streamer.name}_thought"
-                                )
+                                if stream_delta:
+                                    await streamer.stream_partial(
+                                        part.text, name=f"{streamer.name}_thought"
+                                    )
+                                else:
+                                    await streamer.stream_partial(
+                                        thought_buffer.getvalue(),
+                                        name=f"{streamer.name}_thought",
+                                    )
 
             if chunk.usage_metadata:
                 input_tokens = chunk.usage_metadata.prompt_token_count

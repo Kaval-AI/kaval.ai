@@ -24,7 +24,7 @@ from typing import List, Tuple
 import psycopg2
 from psycopg2 import sql
 
-from kavalai import SQL_MIGRATIONS_PATH
+from kavalai.paths import SQL_MIGRATIONS_PATH
 from kavalai.agents.db import parse_db_uri
 
 

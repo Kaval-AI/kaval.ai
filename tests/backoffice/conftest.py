@@ -3,7 +3,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import text
 from kavalai.migrate_db import migrate
-from kavalai import SQL_MIGRATIONS_PATH
+from kavalai.paths import SQL_MIGRATIONS_PATH
 from kavalai.agents.db import build_db_uri
 
 

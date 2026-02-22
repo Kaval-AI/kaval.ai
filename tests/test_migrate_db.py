@@ -4,7 +4,7 @@ import psycopg2
 from unittest.mock import patch
 from testcontainers.postgres import PostgresContainer
 from kavalai.migrate_db import migrate, main
-from kavalai import SQL_MIGRATIONS_PATH
+from kavalai.paths import SQL_MIGRATIONS_PATH
 
 
 @pytest.fixture(scope="module")

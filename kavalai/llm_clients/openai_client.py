@@ -64,6 +64,7 @@ class OpenAIClient:
         messages: List[Dict[str, Any]],
         response_model: Optional[Type[BaseModel]] = None,
         streamer: Optional[Streamer] = None,
+        stream_delta: bool = False,
         **kwargs,
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
@@ -85,21 +86,27 @@ class OpenAIClient:
                 if isinstance(event, ResponseTextDeltaEvent):
                     buffer.write(event.delta)
                     if streamer is not None:
-                        value = (
-                            ensure_json(buffer.getvalue())
-                            if response_model
-                            else buffer.getvalue()
-                        )
-                        await streamer.stream_partial(value)
+                        if stream_delta:
+                            await streamer.stream_partial(event.delta)
+                        else:
+                            value = (
+                                ensure_json(buffer.getvalue())
+                                if response_model
+                                else buffer.getvalue()
+                            )
+                            await streamer.stream_partial(value)
                 elif isinstance(event, ResponseRefusalDeltaEvent):
                     buffer.write(event.delta)
                     if streamer is not None:
-                        value = (
-                            ensure_json(buffer.getvalue())
-                            if response_model
-                            else buffer.getvalue()
-                        )
-                        await streamer.stream_partial(value)
+                        if stream_delta:
+                            await streamer.stream_partial(event.delta)
+                        else:
+                            value = (
+                                ensure_json(buffer.getvalue())
+                                if response_model
+                                else buffer.getvalue()
+                            )
+                            await streamer.stream_partial(value)
                 elif isinstance(event, ResponseErrorEvent):
                     raise RuntimeError(event.error)
                 elif isinstance(event, ResponseCompletedEvent):
