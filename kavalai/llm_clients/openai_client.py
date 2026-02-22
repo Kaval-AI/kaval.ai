@@ -69,6 +69,22 @@ class OpenAIClient:
     ) -> Tuple[Any, ModelCallStat]:
         start_time = time.perf_counter()
 
+        for msg in messages:
+            content = msg.get("content")
+            if isinstance(content, list):
+                new_content = []
+                for item in content:
+                    if item.get("type") == "text":
+                        new_content.append(
+                            {"type": "input_text", "text": item.get("text")}
+                        )
+                    elif item.get("type") == "image_url":
+                        url = item.get("image_url", {}).get("url", "")
+                        new_content.append({"type": "input_image", "image_url": url})
+                    else:
+                        new_content.append(item)
+                msg["content"] = new_content
+
         call_kwargs = {
             "model": model,
             "input": messages,

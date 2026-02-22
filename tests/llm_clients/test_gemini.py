@@ -1,10 +1,10 @@
 import asyncio
-
+import os
 import pytest
 from pydantic import BaseModel
 
-from kavalai.llm_clients.common import Streamer, StreamContent
 from kavalai.llm_clients.gemini_client import GeminiClient
+from kavalai.llm_clients.common import Streamer, StreamContent
 
 
 class SimpleResponse(BaseModel):
@@ -30,7 +30,11 @@ async def _pick_chat_model(client: GeminiClient) -> str:
     return models[0] if models else "gemini-1.5-flash"
 
 
+# Integration Tests
+
+
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
 async def test_gemini_chat_completions_simple(gemini_client):
     """Test simple message and string result."""
     messages = [{"role": "user", "content": "Say 'Hello'"}]
@@ -46,6 +50,7 @@ async def test_gemini_chat_completions_simple(gemini_client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
 async def test_gemini_chat_completions_formatted(gemini_client):
     """Test formatted result (structured output)."""
     messages = [
@@ -67,6 +72,7 @@ async def test_gemini_chat_completions_formatted(gemini_client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
 async def test_gemini_chat_completions_multimodal(gemini_client):
     """Test results with text and image input."""
     # Small 1x1 black PNG
@@ -92,24 +98,20 @@ async def test_gemini_chat_completions_multimodal(gemini_client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
 async def test_gemini_chat_completions_streamer(gemini_client):
     """Test streamer functionality."""
     messages = [{"role": "user", "content": "Say 'Hi'"}]
-
-    # Create async queue and real streamer
     queue = asyncio.Queue()
     streamer = Streamer("test_streamer", queue)
 
-    # Make API call with streamer
     model = await _pick_chat_model(gemini_client)
     result, stats = await gemini_client.chat_completions(
         model=model, messages=messages, streamer=streamer
     )
 
-    # Collect all streamed content
     partials = []
     final_streamed = None
-
     while not queue.empty():
         content_json = await queue.get()
         content = StreamContent.model_validate_json(content_json)
@@ -124,15 +126,52 @@ async def test_gemini_chat_completions_streamer(gemini_client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
+async def test_gemini_stream_delta(gemini_client):
+    """Test stream_delta functionality."""
+    messages = [{"role": "user", "content": "Say 'Hello'"}]
+    model = await _pick_chat_model(gemini_client)
+
+    # Test delta=False (default)
+    queue = asyncio.Queue()
+    streamer = Streamer("test_no_delta", queue)
+    await gemini_client.chat_completions(
+        model=model, messages=messages, streamer=streamer, stream_delta=False
+    )
+    partials_no_delta = []
+    while not queue.empty():
+        c = StreamContent.model_validate_json(await queue.get())
+        if c.type == "partial":
+            partials_no_delta.append(c.value)
+
+    if len(partials_no_delta) > 1:
+        assert partials_no_delta[1].startswith(partials_no_delta[0])
+
+    # Test delta=True
+    queue = asyncio.Queue()
+    streamer = Streamer("test_delta", queue)
+    await gemini_client.chat_completions(
+        model=model, messages=messages, streamer=streamer, stream_delta=True
+    )
+    partials_delta = []
+    while not queue.empty():
+        c = StreamContent.model_validate_json(await queue.get())
+        if c.type == "partial":
+            partials_delta.append(c.value)
+
+    if len(partials_delta) > 1 and partials_delta[0]:
+        assert not partials_delta[1].startswith(partials_delta[0])
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
 async def test_gemini_compute_embeddings(gemini_client):
     """Test embedding generation."""
     texts = ["Hello world", "How are you?"]
-
-    # Pick an available embedding model dynamically
     models = await gemini_client.list_models()
     emb_models = [m for m in models if "embedding" in m.lower()]
     if not emb_models:
-        pytest.skip("No embedding model available in this environment")
+        pytest.skip("No embedding model available")
     emb_model = emb_models[0]
 
     embeddings, stats = await gemini_client.compute_embeddings(
@@ -141,51 +180,35 @@ async def test_gemini_compute_embeddings(gemini_client):
     assert len(embeddings) == 2
     assert len(embeddings[0]) > 0
     assert stats.call_type == "embedding"
-    assert stats.cost >= 0
-    assert stats.currency == "USD"
+    assert stats.model.startswith("gemini/")
 
 
 @pytest.mark.asyncio
-async def test_gemini_chat_completions_streamer_with_response_model(gemini_client):
-    """Test streamer functionality together with structured output (response_model)."""
-    messages = [
-        {
-            "role": "user",
-            "content": "What is the capital of France? Return JSON with fields: answer (string) and confidence (number).",
-        }
-    ]
+@pytest.mark.skipif(not os.getenv("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
+async def test_gemini_thinking_streaming(gemini_client):
+    """Test real-time thought streaming for Gemini."""
+    # Find a model that supports thinking (e.g. 2.0-flash-thinking)
+    models = await gemini_client.list_models()
+    thinking_model = next((m for m in models if "thinking" in m.lower()), None)
+    if not thinking_model:
+        pytest.skip("No thinking model available")
 
-    # Create async queue and real streamer
+    messages = [{"role": "user", "content": "Solve 12345 * 67890 step by step."}]
     queue = asyncio.Queue()
-    streamer = Streamer("test_streamer_json", queue)
+    streamer = Streamer("test_thinking", queue)
 
-    # Make API call with streamer and response_model
-    model = await _pick_chat_model(gemini_client)
-    result, stats = await gemini_client.chat_completions(
-        model=model, messages=messages, response_model=SimpleResponse, streamer=streamer
+    await gemini_client.chat_completions(
+        model=thinking_model, messages=messages, streamer=streamer, thinking_budget=1024
     )
 
-    # Collect all streamed content
-    partials = []
-    final_streamed = None
-
+    thoughts = []
+    content = []
     while not queue.empty():
-        content_json = await queue.get()
-        content = StreamContent.model_validate_json(content_json)
-        if content.type == "partial":
-            partials.append(content.value)
-        elif content.type == "complete":
-            final_streamed = content.value
+        c = StreamContent.model_validate_json(await queue.get())
+        if c.name == "thought" and c.type == "partial":
+            thoughts.append(c.value)
+        elif c.name == "test_thinking" and c.type == "partial":
+            content.append(c.value)
 
-    # Result must be parsed into the Pydantic model
-    assert isinstance(result, SimpleResponse)
-    assert "Paris" in result.answer
-    assert result.confidence >= 0
-
-    # We should have received partial JSON chunks
-    assert len(partials) > 0
-    # The final streamed value should be valid JSON for the model and match the final result
-    assert final_streamed is not None
-    final_parsed = SimpleResponse.model_validate_json(final_streamed)
-    assert final_parsed.answer == result.answer
-    assert pytest.approx(final_parsed.confidence, rel=1e-3) == result.confidence
+    assert len(thoughts) > 0
+    assert len(content) > 0

@@ -65,6 +65,13 @@ async def with_retry(
     for attempt in range(max_retries + 1):
         try:
             return await func(*args, **kwargs)
+        except errors.ClientError as e:
+            # Special handling for Gemini ClientError to avoid retrying on 404
+            if hasattr(e, "status") and e.status == 404:
+                raise e
+            if "404" in str(e):
+                raise e
+            last_exception = e
         except retriable_exceptions as e:
             last_exception = e
             if attempt == max_retries:

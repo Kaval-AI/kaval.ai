@@ -1,9 +1,10 @@
-import pytest
-from typing import Any
-from pydantic import BaseModel
-from kavalai.llm_clients.openai_client import OpenAIClient
 import asyncio
+import os
+import pytest
+from pydantic import BaseModel
+from unittest.mock import AsyncMock, patch, MagicMock
 
+from kavalai.llm_clients.openai_client import OpenAIClient
 from kavalai.llm_clients.common import Streamer, StreamContent
 
 
@@ -12,24 +13,16 @@ class SimpleResponse(BaseModel):
     confidence: float
 
 
-class MockStreamer(Streamer):
-    def __init__(self):
-        self.partials = []
-        self.final = None
-
-    async def stream_partial(self, content: Any):
-        self.partials.append(content)
-
-    async def stream_complete(self, content: Any):
-        self.final = content
-
-
 @pytest.fixture
 def openai_client():
     return OpenAIClient()
 
 
+# Integration Tests
+
+
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 async def test_openai_chat_completions_simple(openai_client):
     """Test simple message and string result."""
     messages = [{"role": "user", "content": "Say 'Hello'"}]
@@ -47,6 +40,7 @@ async def test_openai_chat_completions_simple(openai_client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 async def test_openai_chat_completions_formatted(openai_client):
     """Test formatted result (structured output)."""
     messages = [{"role": "user", "content": "What is the capital of France?"}]
@@ -62,6 +56,7 @@ async def test_openai_chat_completions_formatted(openai_client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 async def test_openai_chat_completions_multimodal(openai_client):
     """Test results with text and image input."""
     # Small 1x1 black PNG
@@ -70,10 +65,10 @@ async def test_openai_chat_completions_multimodal(openai_client):
         {
             "role": "user",
             "content": [
-                {"type": "input_text", "text": "What color is this image?"},
+                {"type": "text", "text": "What color is this image?"},
                 {
-                    "type": "input_image",
-                    "image_url": f"data:image/png;base64,{dummy_image_b64}",
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{dummy_image_b64}"},
                 },
             ],
         }
@@ -89,32 +84,166 @@ async def test_openai_chat_completions_multimodal(openai_client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 async def test_openai_chat_completions_streamer(openai_client):
     """Test streamer functionality."""
     messages = [{"role": "user", "content": "Say 'Hi'"}]
-
-    # Create async queue and real streamer
     queue = asyncio.Queue()
     streamer = Streamer("test_streamer", queue)
 
-    # Make API call with streamer
     result, stats = await openai_client.chat_completions(
         model="gpt-4o-mini", messages=messages, streamer=streamer
     )
 
-    # Collect all streamed content
     partials = []
     final_streamed = None
-
     while not queue.empty():
         content_json = await queue.get()
         content = StreamContent.model_validate_json(content_json)
-        if isinstance(content, StreamContent):
-            if content.type == "partial":
-                partials.append(content.value)
-            elif content.type == "complete":
-                final_streamed = content.value
+        if content.type == "partial":
+            partials.append(content.value)
+        elif content.type == "complete":
+            final_streamed = content.value
 
     assert "Hi" in result
-    assert len(partials) > 0  # Verify we got partial updates
-    assert final_streamed == result  # Verify final streamed matches result
+    assert len(partials) > 0
+    assert final_streamed == result
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
+async def test_openai_stream_delta(openai_client):
+    """Test stream_delta functionality."""
+    messages = [{"role": "user", "content": "Say 'Hello'"}]
+
+    # Test delta=False (default)
+    queue = asyncio.Queue()
+    streamer = Streamer("test_no_delta", queue)
+    await openai_client.chat_completions(
+        model="gpt-4o-mini", messages=messages, streamer=streamer, stream_delta=False
+    )
+    partials_no_delta = []
+    while not queue.empty():
+        c = StreamContent.model_validate_json(await queue.get())
+        if c.type == "partial":
+            partials_no_delta.append(c.value)
+
+    if len(partials_no_delta) > 1:
+        assert partials_no_delta[1].startswith(partials_no_delta[0])
+
+    # Test delta=True
+    queue = asyncio.Queue()
+    streamer = Streamer("test_delta", queue)
+    await openai_client.chat_completions(
+        model="gpt-4o-mini", messages=messages, streamer=streamer, stream_delta=True
+    )
+    partials_delta = []
+    while not queue.empty():
+        c = StreamContent.model_validate_json(await queue.get())
+        if c.type == "partial":
+            partials_delta.append(c.value)
+
+    if len(partials_delta) > 1 and partials_delta[0]:
+        assert not partials_delta[1].startswith(partials_delta[0])
+
+
+@pytest.mark.asyncio
+async def test_openai_compute_embeddings_unit(openai_client):
+    """Unit test for compute_embeddings with mocking."""
+    texts = ["This is a test document.", "Another test document."]
+    model = "text-embedding-3-small"
+
+    # Mock response from OpenAI API
+    mock_data = [MagicMock(embedding=[0.1] * 1536), MagicMock(embedding=[0.2] * 1536)]
+    mock_usage = MagicMock(total_tokens=10)
+    mock_response = MagicMock(data=mock_data, usage=mock_usage)
+    mock_response_dict = {
+        "data": [{"embedding": [0.1] * 1536}, {"embedding": [0.2] * 1536}],
+        "usage": {"total_tokens": 10},
+    }
+    mock_response.model_dump.return_value = mock_response_dict
+
+    with patch.object(
+        openai_client.client.embeddings, "create", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.return_value = mock_response
+
+        embeddings, stats = await openai_client.compute_embeddings(
+            model=model, texts=texts, normalize=False
+        )
+
+        assert len(embeddings) == 2
+        assert embeddings[0] == [0.1] * 1536
+        assert embeddings[1] == [0.2] * 1536
+        assert stats.call_type == "embedding"
+        assert stats.model == f"openai/{model}"
+        assert stats.total_tokens == 10
+        assert stats.cost == (10 * 0.02 / 1_000_000)
+        assert stats.response_data == mock_response_dict
+
+        mock_create.assert_called_once_with(
+            input=texts, model=model, timeout=openai_client.timeout
+        )
+
+
+@pytest.mark.asyncio
+async def test_openai_compute_embeddings_normalize_unit(openai_client):
+    """Unit test for compute_embeddings with normalization."""
+    texts = ["test"]
+    model = "text-embedding-3-small"
+
+    # Vector that is not normalized: [3.0, 4.0]
+    # Its norm is sqrt(3^2 + 4^2) = 5.0
+    # Normalized it should be [0.6, 0.8]
+
+    mock_data = [MagicMock(embedding=[3.0, 4.0])]
+    mock_usage = MagicMock(total_tokens=5)
+    mock_response = MagicMock(data=mock_data, usage=mock_usage)
+    mock_response_dict = {
+        "data": [{"embedding": [3.0, 4.0]}],
+        "usage": {"total_tokens": 5},
+    }
+    mock_response.model_dump.return_value = mock_response_dict
+
+    with patch.object(
+        openai_client.client.embeddings, "create", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.return_value = mock_response
+
+        embeddings, stats = await openai_client.compute_embeddings(
+            model=model, texts=texts, normalize=True
+        )
+
+        assert len(embeddings) == 1
+        assert isinstance(embeddings, list)
+        assert isinstance(embeddings[0], list)
+        import math
+
+        norm = math.sqrt(sum(x * x for x in embeddings[0]))
+        assert math.isclose(norm, 1.0, rel_tol=1e-5)
+        assert math.isclose(embeddings[0][0], 0.6)
+        assert math.isclose(embeddings[0][1], 0.8)
+        assert stats.response_data == mock_response_dict
+        assert stats.total_tokens == 5
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
+async def test_openai_compute_embeddings(openai_client):
+    """Test embedding generation."""
+    texts = ["This is a test document.", "Another test document."]
+    model = "text-embedding-3-small"
+
+    embeddings, stats = await openai_client.compute_embeddings(
+        model=model, texts=texts, normalize=True
+    )
+
+    assert len(embeddings) == 2
+    import math
+
+    for emb in embeddings:
+        assert len(emb) == 1536
+        norm = math.sqrt(sum(x * x for x in emb))
+        assert math.isclose(norm, 1.0, rel_tol=1e-5)
+    assert stats.call_type == "embedding"
+    assert stats.model == f"openai/{model}"
