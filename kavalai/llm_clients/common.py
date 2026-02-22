@@ -33,15 +33,17 @@ class Streamer:
         self.name = name
         self.queue = queue
 
-    async def stream_partial(self, value: str):
-        await self.queue.put(
-            StreamContent(type="partial", name=self.name, value=value).model_dump_json()
-        )
-
-    async def stream_complete(self, value: str):
+    async def stream_partial(self, value: str, name: Optional[str] = None):
         await self.queue.put(
             StreamContent(
-                type="complete", name=self.name, value=value
+                type="partial", name=name or self.name, value=value
+            ).model_dump_json()
+        )
+
+    async def stream_complete(self, value: str, name: Optional[str] = None):
+        await self.queue.put(
+            StreamContent(
+                type="complete", name=name or self.name, value=value
             ).model_dump_json()
         )
 

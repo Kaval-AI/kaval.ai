@@ -95,8 +95,6 @@ class GeminiClient:
         messages: List[Dict[str, Any]],
         response_model: Optional[Type[BaseModel]] = None,
         streamer: Optional[Streamer] = None,
-        reasoning_effort: Optional[str] = None,
-        thinking_level: Optional[str] = None,
         thinking_budget: Optional[int] = None,
         **kwargs,
     ) -> Tuple[Any, ModelCallStat]:
@@ -115,12 +113,9 @@ class GeminiClient:
 
         # Support for reasoning/thinking (e.g. for Gemini 2.0 Flash Thinking)
         if thinking_budget is not None:
-            config_kwargs["thinking_config"] = {
-                "include_thoughts": True,
-                "include_thoughts_in_response": True,
-            }
-            # Note: actual thinking budget param name might vary or be part of thinking_config
-
+            config_kwargs["thinking_config"] = types.ThinkingConfig(
+                include_thoughts=True,
+            )
         config = types.GenerateContentConfig(**config_kwargs)
 
         buffer = io.StringIO()
@@ -139,16 +134,24 @@ class GeminiClient:
                 if candidate.content and candidate.content.parts:
                     for part in candidate.content.parts:
                         if part.text:
-                            buffer.write(part.text)
                             if streamer is not None:
-                                value = (
-                                    ensure_json(buffer.getvalue())
-                                    if response_model
-                                    else buffer.getvalue()
-                                )
-                                await streamer.stream_partial(value)
+                                if response_model:
+                                    # For structured output, we still want to stream the full partial JSON
+                                    # to allow the UI to parse it.
+                                    buffer.write(part.text)
+                                    value = ensure_json(buffer.getvalue())
+                                    await streamer.stream_partial(value)
+                                else:
+                                    await streamer.stream_partial(part.text)
+                                    buffer.write(part.text)
+                            else:
+                                buffer.write(part.text)
                         if part.thought:
                             thought_buffer.write(part.text)
+                            if streamer is not None:
+                                await streamer.stream_partial(
+                                    part.text, name=f"{streamer.name}_thought"
+                                )
 
             if chunk.usage_metadata:
                 input_tokens = chunk.usage_metadata.prompt_token_count

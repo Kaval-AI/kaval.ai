@@ -67,7 +67,7 @@ async def streaming_example():
     """
     print("\n--- Streaming Response ---")
     client = LLMClient(model="openai/gpt-4o")
-    messages = [{"role": "user", "content": "Write a short poem about coding."}]
+    messages = [{"role": "user", "content": "Write 4 line poem about coding."}]
 
     queue = asyncio.Queue()
     streamer = Streamer("response_text", queue)
@@ -81,9 +81,9 @@ async def streaming_example():
     while True:
         chunk = StreamContent.model_validate_json(await queue.get())
         if chunk.type == "partial":
-            print(f"Partial message received: {chunk.value}")
+            print(f"{chunk.value}", end="", flush=True)
         if chunk.type == "complete":
-            print(f"Complete message received: {chunk.value}")
+            print(f"\nComplete message received: {chunk.value}")
             break
 
     result, stats = await task
@@ -105,10 +105,10 @@ async def multimodal_image_example():
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "What is in this image?"},
+                {"type": "input_text", "text": "What is in this image?"},
                 {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{dummy_image_b64}"},
+                    "type": "input_image",
+                    "image_url": f"data:image/png;base64,{dummy_image_b64}",
                 },
             ],
         }
@@ -130,7 +130,7 @@ async def reasoning_and_thinking_example():
     """
     print("\n--- Reasoning and Thinking (Gemini Example) ---")
     # Gemini 2.0 Flash Thinking supports reasoning parameters.
-    client = LLMClient(model="gemini/gemini-2.0-flash-thinking-exp-01-21")
+    client = LLMClient(model="gemini/gemini-3-flash-preview")
     messages = [
         {
             "role": "user",
@@ -150,17 +150,20 @@ async def reasoning_and_thinking_example():
     )
 
     print("Thinking/Reasoning: ", end="", flush=True)
+    has_answer_started = False
     while True:
-        chunk: StreamContent = await queue.get()
-        if chunk is None:
+        chunk = StreamContent.model_validate_json(await queue.get())
+        if chunk.type == "partial":
+            if chunk.name.endswith("_thought"):
+                print(f"{chunk.value}", end="", flush=True)
+            else:
+                if not has_answer_started:
+                    print("\nAnswer: ", end="", flush=True)
+                    has_answer_started = True
+                print(f"{chunk.value}", end="", flush=True)
+        if chunk.type == "complete":
+            print(f"\nComplete message received: {chunk.value}")
             break
-
-        # StreamContent has a 'thought' boolean indicating if the content is reasoning
-        if getattr(chunk, "thought", False):
-            # Print thoughts in a different style or just ignore them for the final UI
-            print(f"[Thought: {chunk.content}]", end="", flush=True)
-        else:
-            print(chunk.content, end="", flush=True)
 
     result, stats = await task
     print(f"\nFinal Stats: {stats.total_tokens} tokens")
@@ -176,15 +179,10 @@ async def openai_reasoning_example():
     messages = [{"role": "user", "content": "Solve for x: 2x + 5 = 15"}]
 
     # reasoning_effort can be 'low', 'medium', or 'high'
-    try:
-        result, stats = await client.chat_completions(
-            messages=messages, reasoning_effort="low"
-        )
-        print(f"Result: {result}")
-    except Exception as e:
-        print(
-            f"Skipping OpenAI reasoning example (likely due to model access or API key): {e}"
-        )
+    result, stats = await client.chat_completions(
+        messages=messages, reasoning={"effort": "low"}
+    )
+    print(f"Result: {result}")
 
 
 async def main():
@@ -192,8 +190,8 @@ async def main():
     # os.environ["OPENAI_API_KEY"] = "..."
     # os.environ["GEMINI_API_KEY"] = "..."
 
-    # await basic_text_example()
-    # await structured_output_example()
+    await basic_text_example()
+    await structured_output_example()
     await streaming_example()
     await multimodal_image_example()
     await reasoning_and_thinking_example()

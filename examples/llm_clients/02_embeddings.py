@@ -96,32 +96,11 @@ async def normalizer_example():
     print(f"Embedding norm with L2 normalizer: {norm:.4f}")
 
 
-async def use_cases_explanation():
-    """
-    Explains common use cases for embeddings.
-    """
-    print("\n--- Embedding Use Cases ---")
-    print(
-        "1. RAG (Retrieval-Augmented Generation): Search for relevant documents to provide as context to an LLM."
-    )
-    print(
-        "2. Semantic Search: Find documents that are conceptually similar to a query, even if they don't share keywords."
-    )
-    print("3. Clustering: Group similar documents together automatically.")
-    print(
-        "4. Recommendation Systems: Suggest items similar to what a user has liked before."
-    )
-    print(
-        "\nCost Note: Embedding models are significantly cheaper than chat models (e.g., $0.02 per 1M tokens)."
-    )
-
-
 async def main():
     await basic_embeddings_example()
     await batch_usage_example()
     await similarity_and_distance_example()
     await normalizer_example()
-    await use_cases_explanation()
 
 
 if __name__ == "__main__":
