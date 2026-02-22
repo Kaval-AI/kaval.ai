@@ -1,11 +1,12 @@
 import asyncio
 import os
-import pytest
-from pydantic import BaseModel
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from kavalai.llm_clients.openai_client import OpenAIClient
+import pytest
+from pydantic import BaseModel
+
 from kavalai.llm_clients.common import Streamer, StreamContent
+from kavalai.llm_clients.openai_client import OpenAIClient
 
 
 class SimpleResponse(BaseModel):
@@ -16,9 +17,6 @@ class SimpleResponse(BaseModel):
 @pytest.fixture
 def openai_client():
     return OpenAIClient()
-
-
-# Integration Tests
 
 
 @pytest.mark.asyncio
