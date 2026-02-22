@@ -44,7 +44,7 @@ from kavalai.agents.workflow_validation import (
     validate_rest_server_env_vars,
     validate_workflow,
 )
-from kavalai.llm_clients.llm_client import chat_completions
+from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
 from kavalai.agents.run_context import RunContext
 import asyncio
@@ -150,8 +150,8 @@ class Workflow:
         if task.stream and queue is not None:
             streamer = Streamer(task.output, queue)
 
-        response, stats = await chat_completions(
-            model=llm_model,
+        client = LLMClient(model=llm_model)
+        response, stats = await client.chat_completions(
             response_model=self.get_data_type(task.output),
             messages=messages,
             streamer=streamer,
