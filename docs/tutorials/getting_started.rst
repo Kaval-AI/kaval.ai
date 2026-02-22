@@ -6,11 +6,46 @@ This tutorial will guide you through the process of creating your first AI agent
 Installation
 ------------
 
-To install Kaval.AI, run:
+Kaval.AI can be installed from PyPI, Conda, or by cloning the repository from GitHub.
+
+Installing from PyPI
+^^^^^^^^^^^^^^^^^^^^
+
+Once Kaval.AI is published to PyPI, you will be able to install it using pip:
+
+.. code-block:: bash
+
+   pip install kavalai
+
+Installing from Conda
+^^^^^^^^^^^^^^^^^^^^^
+
+Once Kaval.AI is published to Conda, you will be able to install it using conda or mamba:
+
+.. code-block:: bash
+
+   conda install kavalai
+
+Cloning the repository
+^^^^^^^^^^^^^^^^^^^^^^
+
+First, clone the repository to your local machine:
+
+.. code-block:: bash
+
+   git clone https://github.com/kaval-ai/kaval.ai.git
+   cd kaval.ai
+
+Installing the library
+^^^^^^^^^^^^^^^^^^^^^^
+
+It is recommended to use a virtual environment. Once you have activated your environment, you can install the library in editable mode:
 
 .. code-block:: bash
 
    pip install -e .
+
+This command uses the ``pyproject.toml`` file to manage dependencies and project metadata.
 
 Creating a simple Agent
 -----------------------
