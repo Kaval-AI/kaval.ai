@@ -127,6 +127,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `kavalai/backoffice/server.py`: API endpoint definitions (Projects, Users, Agents, Stats).
 - `kavalai/agents/workflow.py`: Core agent logic.
 - `kavalai/agents/db.py`: Agent-side data schema.
+- `docs/tutorials/workflow_tutorial.md`: Comprehensive guide for creating agents.
 - `kavalai/backoffice/db.py`: Backoffice-side data schema (User, Project, ProjectMembership).
 - `frontend/src/app/services/`: Angular services (UserService, ProjectService, etc.).
 - `frontend/src/app/components/`: Angular components (UsersPage, ProjectsPage, etc.).

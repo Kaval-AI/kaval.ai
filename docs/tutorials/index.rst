@@ -9,3 +9,4 @@ The tutorials in this section provide many great examples.
 
    getting_started
    llm_clients
+   workflow_tutorial
