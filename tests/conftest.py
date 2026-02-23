@@ -46,7 +46,9 @@ def migrated_agents_db(agents_db_config):
 
 @pytest.fixture(scope="session")
 def agents_session_maker(agents_db_config, migrated_agents_db):
-    return db_manager.get_sessionmaker(uri=agents_db_config["uri"])
+    return db_manager.get_sessionmaker(
+        uri=agents_db_config["uri"], pool_size=1, max_overflow=0
+    )
 
 
 @pytest_asyncio.fixture(scope="function")

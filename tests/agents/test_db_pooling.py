@@ -1,16 +1,18 @@
 from unittest.mock import patch, MagicMock
-from sqlalchemy.pool import NullPool
 from kavalai.agents.db import DatabaseManager
 
 
 def test_database_manager_pooling():
     db_manager = DatabaseManager()
 
-    # Test NullPool (default)
+    # Test default (pool_size=1)
     with patch("kavalai.agents.db.create_async_engine") as mock_create_engine:
         db_manager.get_sessionmaker(uri="postgresql://localhost/test")
         mock_create_engine.assert_called_with(
-            "postgresql+asyncpg://localhost/test", echo=False, poolclass=NullPool
+            "postgresql+asyncpg://localhost/test",
+            echo=False,
+            pool_size=1,
+            max_overflow=0,
         )
 
     # Reset engines for next test

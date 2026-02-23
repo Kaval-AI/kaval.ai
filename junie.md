@@ -123,7 +123,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - **Location**: `tests/`
 - **Command**: `pytest`
 - **Coverage Command**: `pytest --cov=kavalai tests/`
-- **Notes**: Backend tests use `pytest-asyncio` for async database operations. Some tests (like `test_migrate_db.py`) use `testcontainers` for integration testing with real PostgreSQL.
+- **Notes**: Backend tests use `pytest-asyncio` for async database operations with `session` level loop scope to allow connection pooling across tests. Some tests (like `test_migrate_db.py`) use `testcontainers` for integration testing with real PostgreSQL.
 
 ## Frontend Testing (Angular)
 - **Framework**: `Jasmine` + `Karma`
