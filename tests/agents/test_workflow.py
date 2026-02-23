@@ -1234,3 +1234,75 @@ tasks:
         assert complete.value == '{"agent_response":"Tool response"}'
 
         assert result.data.agent_response == "Tool response"
+
+    @pytest.mark.asyncio
+    async def test_workflow_concurrent_runs(self, agents_session_maker, monkeypatch):
+        # 1. Setup simple workflow
+        workflow_yaml = """
+name: ConcurrentTest
+data_types:
+  input:
+    type: object
+    properties:
+      user_message:
+        type: string
+  output:
+    type: object
+    properties:
+      agent_response:
+        type: string
+tasks:
+  - name: task1
+    prompt: "Say hello to user"
+    inputs:
+      user:
+        type: context
+        value: input.user_message
+    output: output
+"""
+        workflow = Workflow.from_yaml(workflow_yaml)
+
+        # 2. Mock chat_completions with a delay
+        async def mock_chat_completions(model, response_model, messages, **kwargs):
+            await asyncio.sleep(0.1)  # Simulate some processing time
+            # The system message is messages[0], its content is the prompt
+            prompt_content = messages[0]["content"]
+
+            # Since the prompt is constructed as prompt + "\nINPUT DATA:" + ...
+            # we check for our values in the prompt_content
+            user_msg = "Unknown"
+            if "Alice" in prompt_content:
+                user_msg = "Alice"
+            elif "Bob" in prompt_content:
+                user_msg = "Bob"
+
+            response = response_model(agent_response=f"Hello {user_msg}")
+            from kavalai.agents.db import ModelCallStat
+
+            stats = ModelCallStat(call_type="llm", model=model)
+            return response, stats
+
+        monkeypatch.setattr(
+            "kavalai.agents.workflow.chat_completions", mock_chat_completions
+        )
+
+        # 3. Define a runner function that creates its own session and service
+        async def run_one(user_message):
+            async with agents_session_maker() as session:
+                agent_service = AgentService(session)
+                return await workflow.run(
+                    input_data={"user_message": user_message},
+                    agent_service=agent_service,
+                )
+
+        # 4. Run two instances concurrently
+        results = await asyncio.gather(run_one("Alice"), run_one("Bob"))
+
+        # 5. Verify results
+        assert results[0].data.agent_response.startswith("Hello")
+        assert "Alice" in results[0].data.agent_response
+        assert results[1].data.agent_response.startswith("Hello")
+        assert "Bob" in results[1].data.agent_response
+
+        # Check that sessions are different (they should be as we created them separately)
+        assert results[0].session_id != results[1].session_id
