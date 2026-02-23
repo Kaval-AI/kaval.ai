@@ -107,8 +107,13 @@ class Workflow:
         return self.models[name]
 
     async def run_prompt(
-        self, task: LLMTask, run_context: RunContext, queue: asyncio.Queue | None
+        self,
+        task: LLMTask,
+        run_context: RunContext,
+        queue: asyncio.Queue | None,
+        agent_service: Optional[AgentService] = None,
     ):
+        agent_service = agent_service or self.agent_service
         input_data = {}
         for name, info in task.inputs.items():
             if info.value is None and info.name is None:
@@ -117,7 +122,7 @@ class Workflow:
 
         input_text = make_prompt(task.prompt, input_data)
 
-        session = self.agent_service.db if self.agent_service else None
+        session = agent_service.db if agent_service else None
 
         system_message = dict(role="system", content=input_text)
         if task.images:
@@ -131,8 +136,8 @@ class Workflow:
 
         messages = [system_message]
 
-        if task.use_history and self.agent_service and run_context.session_id:
-            history = await self.agent_service.get_chat_history(run_context.session_id)
+        if task.use_history and agent_service and run_context.session_id:
+            history = await agent_service.get_chat_history(run_context.session_id)
             for msg in history:
                 messages.append(dict(role=msg.role, content=msg.content))
 
@@ -164,8 +169,8 @@ class Workflow:
         run_context.data[task.output] = response
 
         # DB LOGGING: Record this prompt as a Task
-        if self.agent_service and run_context.run_id:
-            await self.agent_service.add_task(
+        if agent_service and run_context.run_id:
+            await agent_service.add_task(
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
@@ -176,8 +181,13 @@ class Workflow:
             )
 
     async def run_rest_tool(
-        self, task: RestTask, run_context: RunContext, queue: asyncio.Queue | None
+        self,
+        task: RestTask,
+        run_context: RunContext,
+        queue: asyncio.Queue | None,
+        agent_service: Optional[AgentService] = None,
     ):
+        agent_service = agent_service or self.agent_service
         inputs = await run_context.prepare_tool_inputs(task)
 
         rest_server = self.rest_servers[task.rest_server]
@@ -234,8 +244,8 @@ class Workflow:
             await streamer.stream_complete(stream_value)
 
         # Store the tool run info.
-        if self.agent_service and run_context.run_id:
-            await self.agent_service.add_task(
+        if agent_service and run_context.run_id:
+            await agent_service.add_task(
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
@@ -480,16 +490,18 @@ class Workflow:
         session_id: Optional[UUID] = None,
         external_id: Optional[str] = None,
         queue: asyncio.Queue | None = None,
+        agent_service: Optional[AgentService] = None,
     ) -> WorkflowRunResult:
+        agent_service = agent_service or self.agent_service
         # 1. Parse Input
         parsed_input = self.get_data_type("input")(**input_data)
-        run_context = RunContext(agent_service=self.agent_service)
+        run_context = RunContext(agent_service=agent_service)
         run_context.data["input"] = parsed_input
 
         # 2. Initialize DB Context (Agent -> Session -> Run)
-        if self.agent_service:
+        if agent_service:
             # Get or create the agent definition
-            agent = await self.agent_service.get_or_create_agent(
+            agent = await agent_service.get_or_create_agent(
                 name=self.workflow_model.name,
                 description=self.workflow_model.description,
                 input_schema=self.workflow_model.data_types.get("input"),
@@ -502,20 +514,20 @@ class Workflow:
             if session_id:
                 run_context.session_id = session_id
             else:
-                session = await self.agent_service.get_or_create_session(
+                session = await agent_service.get_or_create_session(
                     agent_id=agent.id, session_id=session_id, external_id=external_id
                 )
                 run_context.session_id = session.id
 
             # Create the specific Run record for this execution
-            run = await self.agent_service.create_run(
+            run = await agent_service.create_run(
                 session_id=run_context.session_id, input_data=input_data
             )
             run_context.run_id = run.id
 
             # Log the initial user message
             user_msg = getattr(parsed_input, "user_message", str(input_data))
-            await self.agent_service.add_chat_message(
+            await agent_service.add_chat_message(
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
@@ -535,13 +547,13 @@ class Workflow:
                 if isinstance(task, AgentTask):
                     await self.run_special_agent(task, run_context, queue)
                 elif isinstance(task, LLMTask):
-                    await self.run_prompt(task, run_context, queue)
+                    await self.run_prompt(task, run_context, queue, agent_service)
                 elif isinstance(task, McpTask):
                     await self.run_mcp_tool(task, run_context, queue)
                 elif isinstance(task, PythonTask):
                     await self.run_python_tool(task, run_context, queue)
                 elif isinstance(task, RestTask):
-                    await self.run_rest_tool(task, run_context, queue)
+                    await self.run_rest_tool(task, run_context, queue, agent_service)
                 elif isinstance(task, CombineTask):
                     await self.run_combine(task, run_context, queue)
                 else:
@@ -564,14 +576,14 @@ class Workflow:
 
         # 4. Finalize and Log Response
         output_model = run_context.data.get("output")
-        if self.agent_service:
+        if agent_service:
             # Persist final output_data and full execution context into the Run
             serialized_context = to_plain(run_context.data)
             serialized_output = (
                 to_plain(output_model) if output_model is not None else None
             )
 
-            await self.agent_service.update_run(
+            await agent_service.update_run(
                 run_id=run_context.run_id,
                 output_data=serialized_output,
                 context=serialized_context,
@@ -580,7 +592,7 @@ class Workflow:
             # Also log assistant message if we have a final output with a textual response
             if output_model is not None:
                 agent_resp = getattr(output_model, "agent_response", str(output_model))
-                await self.agent_service.add_chat_message(
+                await agent_service.add_chat_message(
                     agent_id=run_context.agent_id,
                     session_id=run_context.session_id,
                     run_id=run_context.run_id,

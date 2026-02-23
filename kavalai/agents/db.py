@@ -31,7 +31,6 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.pool import NullPool
 
 
 def parse_db_uri(uri: str) -> dict:
@@ -114,7 +113,7 @@ class DatabaseManager:
         db_name=None,
         uri=None,
         echo=False,
-        pool_size=0,
+        pool_size=1,
         max_overflow=0,
     ):
         if uri:
@@ -124,18 +123,12 @@ class DatabaseManager:
 
         # Check cache first
         if url not in self._engines:
-            if pool_size > 0:
-                self._engines[url] = create_async_engine(
-                    url,
-                    echo=echo,
-                    pool_size=pool_size,
-                    max_overflow=max_overflow,
-                )
-            else:
-                self._engines[url] = create_async_engine(
-                    url, echo=echo, poolclass=NullPool
-                )
-
+            self._engines[url] = create_async_engine(
+                url,
+                echo=echo,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+            )
         engine = self._engines[url]
         return async_sessionmaker(
             bind=engine, class_=AsyncSession, expire_on_commit=False

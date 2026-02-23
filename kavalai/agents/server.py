@@ -164,11 +164,12 @@ def create_agent_app(
         """
         validate_auth(credentials)
         async with session_scope(session_provider) as session:
-            workflow.agent_service = AgentService(session)
+            agent_service = AgentService(session)
             result = await workflow.run(
                 input_data=input_data.data.model_dump(),
                 session_id=input_data.session_id,
                 external_id=input_data.external_id,
+                agent_service=agent_service,
             )
             return OutputType(session_id=result.session_id, data=result.data)
 
@@ -189,7 +190,7 @@ def create_agent_app(
 
         async def generate():
             async with session_scope(session_provider) as session:
-                workflow.agent_service = AgentService(session)
+                agent_service = AgentService(session)
                 queue = asyncio.Queue()
                 # Start workflow in a background task
                 task = asyncio.create_task(
@@ -198,6 +199,7 @@ def create_agent_app(
                         session_id=input_data.session_id,
                         external_id=input_data.external_id,
                         queue=queue,
+                        agent_service=agent_service,
                     )
                 )
                 while not task.done() or not queue.empty():
