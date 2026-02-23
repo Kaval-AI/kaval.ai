@@ -123,13 +123,12 @@ class DatabaseManager:
 
         # Check cache first
         if url not in self._engines:
-            if pool_size > 0:
-                self._engines[url] = create_async_engine(
-                    url,
-                    echo=echo,
-                    pool_size=pool_size,
-                    max_overflow=max_overflow,
-                )
+            self._engines[url] = create_async_engine(
+                url,
+                echo=echo,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+            )
         engine = self._engines[url]
         return async_sessionmaker(
             bind=engine, class_=AsyncSession, expire_on_commit=False
