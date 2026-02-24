@@ -54,6 +54,7 @@ html_theme_options = {
 }
 
 html_logo = "_static/logo.svg"
+html_favicon = "_static/favicon.svg"
 
 # -- Options for todo extension ----------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/todo.html#configuration
