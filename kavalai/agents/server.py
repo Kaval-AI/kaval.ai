@@ -157,21 +157,19 @@ def create_agent_app(
 
         This endpoint:
         1. Validates authentication.
-        2. Creates a database session.
-        3. Initializes the AgentService.
-        4. Runs the workflow with the provided data and session parameters.
-        5. Returns the execution result and session ID.
+        2. Initializes the AgentService with the session provider.
+        3. Runs the workflow with the provided data and session parameters.
+        4. Returns the execution result and session ID.
         """
         validate_auth(credentials)
-        async with session_scope(session_provider) as session:
-            agent_service = AgentService(session)
-            result = await workflow.run(
-                input_data=input_data.data.model_dump(),
-                session_id=input_data.session_id,
-                external_id=input_data.external_id,
-                agent_service=agent_service,
-            )
-            return OutputType(session_id=result.session_id, data=result.data)
+        agent_service = AgentService(session_provider)
+        result = await workflow.run(
+            input_data=input_data.data.model_dump(),
+            session_id=input_data.session_id,
+            external_id=input_data.external_id,
+            agent_service=agent_service,
+        )
+        return OutputType(session_id=result.session_id, data=result.data)
 
     @app.post("/stream_agent")
     async def stream_agent(
@@ -182,45 +180,43 @@ def create_agent_app(
 
         This endpoint:
         1. Validates authentication.
-        2. Creates a database session.
-        3. Initializes the AgentService.
-        4. Runs the workflow in the background while streaming results in Server-Sent Events (SSE) format (text/event-stream).
+        2. Initializes the AgentService with the session provider.
+        3. Runs the workflow in the background while streaming results in Server-Sent Events (SSE) format (text/event-stream).
         """
         validate_auth(credentials)
 
         async def generate():
-            async with session_scope(session_provider) as session:
-                agent_service = AgentService(session)
-                queue = asyncio.Queue()
-                # Start workflow in a background task
-                task = asyncio.create_task(
-                    workflow.run(
-                        input_data=input_data.data.model_dump(),
-                        session_id=input_data.session_id,
-                        external_id=input_data.external_id,
-                        queue=queue,
-                        agent_service=agent_service,
-                    )
+            agent_service = AgentService(session_provider)
+            queue = asyncio.Queue()
+            # Start workflow in a background task
+            task = asyncio.create_task(
+                workflow.run(
+                    input_data=input_data.data.model_dump(),
+                    session_id=input_data.session_id,
+                    external_id=input_data.external_id,
+                    queue=queue,
+                    agent_service=agent_service,
                 )
-                while not task.done() or not queue.empty():
-                    try:
-                        line = await asyncio.wait_for(queue.get(), timeout=0.01)
-                        yield f"data: {line}\n\n"
-                    except asyncio.TimeoutError:
-                        continue
-
-                # Check if the task raised an exception and get the result
-                result = await task
-
-                # Stream final output
-                output = OutputType(session_id=result.session_id, data=result.data)
-                streamer = Streamer("output", queue)
-                await streamer.stream_complete(output.model_dump_json())
-
-                # Yield any remaining items in the queue (including our final output)
-                while not queue.empty():
-                    line = await queue.get()
+            )
+            while not task.done() or not queue.empty():
+                try:
+                    line = await asyncio.wait_for(queue.get(), timeout=0.01)
                     yield f"data: {line}\n\n"
+                except asyncio.TimeoutError:
+                    continue
+
+            # Check if the task raised an exception and get the result
+            result = await task
+
+            # Stream final output
+            output = OutputType(session_id=result.session_id, data=result.data)
+            streamer = Streamer("output", queue)
+            await streamer.stream_complete(output.model_dump_json())
+
+            # Yield any remaining items in the queue (including our final output)
+            while not queue.empty():
+                line = await queue.get()
+                yield f"data: {line}\n\n"
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 

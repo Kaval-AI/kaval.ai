@@ -486,11 +486,10 @@ async def projects_get_llm_call_stats(
         db_name=project.db_name,
     )
 
-    async with project_session_maker() as project_session:
-        service = AgentService(project_session)
-        return await service.get_model_call_stats(
-            call_type=call_type, limit=limit, offset=offset
-        )
+    service = AgentService(project_session_maker)
+    return await service.get_model_call_stats(
+        call_type=call_type, limit=limit, offset=offset
+    )
 
 
 @app.post("/projects/{project_id}/rag/query")

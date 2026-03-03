@@ -6,8 +6,8 @@ from kavalai.agents.db import ModelCallStat
 
 @pytest.mark.asyncio
 class TestAgentService:
-    async def test_get_or_create_agent(self, agents_db):
-        service = AgentService(agents_db)
+    async def test_get_or_create_agent(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
 
         # Test Creation
         agent = await service.get_or_create_agent(
@@ -22,8 +22,8 @@ class TestAgentService:
         existing_agent = await service.get_or_create_agent(name="ResearchAgent")
         assert existing_agent.id == agent.id
 
-    async def test_get_or_create_session_logic(self, agents_db):
-        service = AgentService(agents_db)
+    async def test_get_or_create_session_logic(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
         agent = await service.get_or_create_agent(name="SessionTest")
 
         # 1. Test creation when no session_id is provided
@@ -42,8 +42,8 @@ class TestAgentService:
         )
         assert not_found is None
 
-    async def test_run_and_task_tracking(self, agents_db):
-        service = AgentService(agents_db)
+    async def test_run_and_task_tracking(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
         agent = await service.get_or_create_agent(name="TaskTest")
         session = await service.get_or_create_session(agent_id=agent.id)
 
@@ -64,8 +64,8 @@ class TestAgentService:
         assert task.run_id == run.id
         assert task.output["results"] == ["result1"]
 
-    async def test_chat_history_retrieval(self, agents_db):
-        service = AgentService(agents_db)
+    async def test_chat_history_retrieval(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
         agent = await service.get_or_create_agent(name="ChatTest")
         session = await service.get_or_create_session(agent_id=agent.id)
 
@@ -81,25 +81,26 @@ class TestAgentService:
         assert history[1].role == "assistant"
         assert history[1].content == "Response 1"
 
-    async def test_get_model_call_stats(self, agents_db):
-        service = AgentService(agents_db)
+    async def test_get_model_call_stats(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
 
         # Create some call stats
-        for i in range(10):
-            stat = ModelCallStat(
-                call_type="llm",
-                model="gpt-4o",
-                response_code=200,
-                prompt_tokens=10,
-                completion_tokens=5,
-                total_tokens=15,
-                duration_seconds=0.1,
-                request_data={"query": f"test {i}"},
-                response_data={"answer": f"result {i}"},
-                cost=0.001,
-            )
-            agents_db.add(stat)
-        await agents_db.commit()
+        async with agents_session_maker() as agents_db:
+            for i in range(10):
+                stat = ModelCallStat(
+                    call_type="llm",
+                    model="gpt-4o",
+                    response_code=200,
+                    prompt_tokens=10,
+                    completion_tokens=5,
+                    total_tokens=15,
+                    duration_seconds=0.1,
+                    request_data={"query": f"test {i}"},
+                    response_data={"answer": f"result {i}"},
+                    cost=0.001,
+                )
+                agents_db.add(stat)
+            await agents_db.commit()
 
         # Test retrieval all
         stats = await service.get_model_call_stats()
@@ -120,8 +121,8 @@ class TestAgentService:
         stats = await service.get_model_call_stats(limit=5, offset=5)
         assert len(stats) == 5
 
-    async def test_get_history_value(self, agents_db):
-        service = AgentService(agents_db)
+    async def test_get_history_value(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
         agent = await service.get_or_create_agent(name="HistoryTest")
         session = await service.get_or_create_session(agent_id=agent.id)
 
