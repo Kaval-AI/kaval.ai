@@ -125,8 +125,17 @@ class CombineTask(BaseTask):
     stream: bool = False
 
 
+class RagQueryTask(BaseTask):
+    type: Literal["rag_query"] = "rag_query"
+    text: str
+    top_k: int = 5
+    collection_name: Optional[str] = None
+    source_ids: Optional[list[str]] = None
+    keep_best: bool = False
+
+
 Task = Annotated[
-    Union[LLMTask, RestTask, McpTask, PythonTask, AgentTask, CombineTask],
+    Union[LLMTask, RestTask, McpTask, PythonTask, AgentTask, CombineTask, RagQueryTask],
     Field(discriminator="type"),
 ]
 
