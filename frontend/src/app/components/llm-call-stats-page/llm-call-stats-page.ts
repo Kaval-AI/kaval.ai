@@ -15,7 +15,7 @@ limitations under the License.
 */
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { LLMCallStat } from '../../models/llm-call-stat';
@@ -24,7 +24,7 @@ import { JsonTreeComponent } from '../json-tree/json-tree';
 @Component({
   selector: 'app-llm-call-stats-page',
   standalone: true,
-  imports: [CommonModule, RouterLink, JsonTreeComponent],
+  imports: [CommonModule, JsonTreeComponent],
   templateUrl: './llm-call-stats-page.html',
   styleUrl: './llm-call-stats-page.css'
 })
