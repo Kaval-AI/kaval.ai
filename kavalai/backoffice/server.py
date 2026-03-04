@@ -454,7 +454,7 @@ async def projects_get_llm_call_stats(
     project = await get_project_and_assert_access(request, project_id)
 
     def sessionmaker_factory():
-        db_manager.get_sessionmaker(
+        return db_manager.get_sessionmaker(
             user=project.db_user,
             password=project.db_password,
             host=project.db_host,
