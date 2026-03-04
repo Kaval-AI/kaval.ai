@@ -32,6 +32,7 @@ from kavalai.agents.workflow_model import (
     PythonTask,
     AgentTask,
     CombineTask,
+    RagQueryTask,
     to_plain,
     WorkflowRunResult,
     McpServer,
@@ -44,6 +45,7 @@ from kavalai.agents.workflow_validation import (
     validate_rest_server_env_vars,
     validate_workflow,
 )
+from kavalai.agents.rag_service import RagService
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
 from kavalai.agents.run_context import RunContext
@@ -484,6 +486,67 @@ class Workflow:
         planning_agent = PlanningAgent(self)
         await planning_agent.run(task, run_context, queue)
 
+    async def run_rag_task(
+        self,
+        task: RagQueryTask,
+        run_context: RunContext,
+        queue: asyncio.Queue | None,
+        agent_service: Optional[AgentService] = None,
+    ):
+        """Perform a RAG search and store the results in the run context."""
+        agent_service = agent_service or self.agent_service
+        if not agent_service:
+            logger.warning("AgentService not provided, skipping RAG task.")
+            return
+
+        # Resolve input text (it can be a literal or a context reference)
+        text = task.text
+        if "." in text:
+            resolved = run_context.resolve_context_value(text)
+            if resolved is not None:
+                text = str(resolved)
+        elif text in run_context.data:
+            resolved = run_context.data[text]
+            if resolved is not None:
+                text = str(resolved)
+
+        # 1. Get embedding model from workflow or task (if added later)
+        # For now, we'll use the workflow's llm_model or a default if not specified
+        model = self.workflow_model.llm_model or "openai/text-embedding-3-small"
+
+        # 2. Initialize RagService
+        # We use the agent_service's session_maker to get a session
+        async with agent_service.session_maker() as session:
+            rag_service = RagService(session, model)
+            results = await rag_service.query(
+                text=text,
+                top_k=task.top_k,
+                collection_name=task.collection_name,
+                source_ids=task.source_ids,
+                keep_best=task.keep_best,
+            )
+
+        # 3. Store results in run_context.data
+        run_context.data[task.name] = [r.model_dump() for r in results]
+
+        # 4. Handle output mapping if defined
+        if task.output:
+            run_context.data[task.output] = run_context.data[task.name]
+
+        # 5. Handle streaming (optional for RAG, usually just one completion event)
+        if task.stream and queue:
+            from kavalai.llm_clients.common import StreamContent
+
+            await queue.put(
+                StreamContent(
+                    role="assistant",
+                    content="",
+                    name=task.name,
+                    task_type="rag_query",
+                    complete=True,
+                )
+            )
+
     async def run(
         self,
         input_data: dict,
@@ -556,6 +619,8 @@ class Workflow:
                     await self.run_rest_tool(task, run_context, queue, agent_service)
                 elif isinstance(task, CombineTask):
                     await self.run_combine(task, run_context, queue)
+                elif isinstance(task, RagQueryTask):
+                    await self.run_rag_task(task, run_context, queue, agent_service)
                 else:
                     logger.warning("Unknown task type: %s", type(task))
 

@@ -132,6 +132,7 @@ class RagQueryTask(BaseTask):
     collection_name: Optional[str] = None
     source_ids: Optional[list[str]] = None
     keep_best: bool = False
+    stream: bool = False
 
 
 Task = Annotated[
