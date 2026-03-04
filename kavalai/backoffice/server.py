@@ -464,7 +464,7 @@ async def projects_get_llm_call_stats(
 
     # Since AgentService manages its own sessions, we wrap the whole call to catch connection errors
     try:
-        service = AgentService(sessionmaker_factory)
+        service = AgentService(sessionmaker_factory())
         return await service.get_model_call_stats(
             call_type=call_type, limit=limit, offset=offset
         )

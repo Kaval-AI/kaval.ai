@@ -303,6 +303,42 @@ async def test_agents_get_summary_stats(client, backoffice_db):
 
 
 @pytest.mark.asyncio
+async def test_projects_get_llm_call_stats(client, backoffice_db):
+    project_id = uuid.uuid4()
+    project = db.Project(
+        id=project_id,
+        name="P1",
+        db_user="u",
+        db_password="p",
+        db_host="h",
+        db_port=5432,
+        db_name="d",
+    )
+    backoffice_db.add(project)
+    await backoffice_db.commit()
+
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
+        "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
+    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm:
+        mock_session = AsyncMock()
+        # mock_sm returns an async_sessionmaker object
+        # which when called returns a context manager (mock_session)
+        mock_sessionmaker = MagicMock(return_value=mock_session)
+        mock_sm.return_value = mock_sessionmaker
+        mock_session.__aenter__.return_value = mock_session
+
+        with patch(
+            "kavalai.agents.agent_service.AgentService.get_model_call_stats",
+            return_value=[],
+        ) as mock_get_stats:
+            response = await client.get(f"/projects/{project_id}/llm-call-stats")
+
+            assert response.status_code == 200
+            assert response.json() == []
+            mock_get_stats.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_users_all(client, backoffice_db):
     user_id = str(uuid.uuid4())
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(
