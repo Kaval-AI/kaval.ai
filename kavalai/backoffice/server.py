@@ -497,18 +497,18 @@ async def projects_rag_query(
         raise HTTPException(status_code=400, detail="model and text are required")
 
     # Connect to the project database
+    normalizer = None
+    if normalizer_yaml:
+        from kavalai.normalizer import Normalizer
+
+        try:
+            normalizer = Normalizer.from_yaml(normalizer_yaml)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid normalizer YAML: {str(e)}"
+            )
+
     async with get_project_session(project) as session:
-        normalizer = None
-        if normalizer_yaml:
-            from kavalai.normalizer import Normalizer
-
-            try:
-                normalizer = Normalizer.from_yaml(normalizer_yaml)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=400, detail=f"Invalid normalizer YAML: {str(e)}"
-                )
-
         from contextlib import asynccontextmanager
 
         @asynccontextmanager

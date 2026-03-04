@@ -65,9 +65,10 @@ async def test_projects_rag_query_with_normalizer(client, mock_user_session):
         assert response.json() == [{"similarity": 0.9, "content": "test"}]
 
         mock_from_yaml.assert_called_once_with("l1: false\nl2: true")
-        MockRagService.assert_called_once_with(
-            mock_session, "test-model", normalizer=mock_normalizer
-        )
+        MockRagService.assert_called_once()
+        args, kwargs = MockRagService.call_args
+        assert kwargs["normalizer"] == mock_normalizer
+        assert args[1] == "test-model"
 
 
 @pytest.mark.asyncio

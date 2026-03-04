@@ -189,13 +189,13 @@ async def test_openai_compute_embeddings_normalize_unit(openai_client):
     texts = ["test"]
     model = "text-embedding-3-small"
 
-    mock_data = [MagicMock(embedding=[3.0, 4.0])]
+    mock_data = [MagicMock(embedding=[1.0] * 1536)]
     mock_response = MagicMock(
         data=mock_data,
         usage=MagicMock(total_tokens=5),
         model_dump=MagicMock(
             return_value={
-                "data": [{"embedding": [3.0, 4.0]}],
+                "data": [{"embedding": [1.0] * 1536}],
                 "usage": {"total_tokens": 5},
             }
         ),
@@ -209,7 +209,7 @@ async def test_openai_compute_embeddings_normalize_unit(openai_client):
             model=model, texts=texts, normalize=True
         )
 
-        assert len(embeddings[0]) == 2  # Assert embedding dimension
+        assert len(embeddings[0]) == 1536  # Assert embedding dimension
 
 
 @pytest.mark.asyncio
