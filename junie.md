@@ -70,7 +70,6 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `conversations-page/`, `session-detail-page/`: Agent session monitoring and debugging.
         - `configs-page/`: LLM profile and provider configuration.
         - `llm-call-stats-page/`: Detailed list of LLM calls with request/response data (paginated).
-        - `metrics-page/`: Token usage and cost analytics.
         - `rag-page/`: RAG-related configuration and testing.
         - `sidebar-menu/`, `header/`, `dropdown-menu/`: Layout and navigation components.
         - `json-tree/`: Tree-like component for displaying nested JSON data (IDE-style).
