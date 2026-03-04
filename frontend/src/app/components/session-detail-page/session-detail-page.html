@@ -16,7 +16,7 @@
   <div class="chat-area">
     @if (loading) {
       <div class="loading-state">
-        Loading messages...
+        Loading session details...
       </div>
     }
 
@@ -26,15 +26,15 @@
       </div>
     }
 
-    @if (!loading && !error && messages.length === 0) {
+    @if (!loading && !error && runBlocks.length === 0 && unassignedMessages.length === 0) {
       <div class="empty-state">
-        No messages in this session.
+        No messages or runs in this session.
       </div>
     }
 
-    @if (messages.length > 0) {
-      <div class="message-list">
-        @for (msg of messages; track msg.id) {
+    <div class="message-list">
+      @if (unassignedMessages.length > 0) {
+        @for (msg of unassignedMessages; track msg.id) {
           <div class="message-wrapper" [ngClass]="msg.role">
             <div class="message-bubble">
               <div class="message-header">
@@ -47,7 +47,88 @@
             </div>
           </div>
         }
-      </div>
-    }
+      }
+
+      @for (block of runBlocks; track block.run.id) {
+        <div class="run-block">
+          <div class="run-header">
+            <div class="run-info">
+              <span class="run-tag">Run</span>
+              <span class="run-id">{{ block.run.id.substring(0, 8) }}</span>
+              <span class="run-stats">
+                <strong>{{ block.run.tasks_count }}</strong> tasks executed
+              </span>
+            </div>
+            <div class="run-actions">
+              <button class="small-button" (click)="openJsonModal('Run Input', block.run.input_data)" [disabled]="!block.run.input_data">Input</button>
+              <button class="small-button" (click)="openJsonModal('Run Output', block.run.output_data)" [disabled]="!block.run.output_data">Output</button>
+              <button class="small-button" (click)="openJsonModal('Run Context', block.run.context)" [disabled]="!block.run.context">Context</button>
+              <button class="small-button primary" (click)="openTasksModal(block.run, block.tasks)">Tasks</button>
+            </div>
+          </div>
+
+          <div class="run-messages">
+            @for (msg of block.messages; track msg.id) {
+              <div class="message-wrapper" [ngClass]="msg.role">
+                <div class="message-bubble">
+                  <div class="message-header">
+                    <span class="role">{{ msg.role === 'user' ? 'User' : 'Agent' }}</span>
+                    <span class="time">{{ formatDate(msg.created_at) }}</span>
+                  </div>
+                  <div class="message-content">
+                    {{ msg.content }}
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
   </div>
 </div>
+
+@if (showModal) {
+  <div class="modal-overlay" (click)="closeModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ modalTitle }}</h3>
+        <button class="close-button" (click)="closeModal()">×</button>
+      </div>
+      <div class="modal-body">
+        @if (modalType === 'json') {
+          @if (modalData) {
+            <app-json-tree [data]="modalData" [isExpanded]="true"></app-json-tree>
+          } @else {
+            <div class="empty-state">No data available.</div>
+          }
+        } @else if (modalType === 'tasks') {
+          @if (modalData && modalData.length > 0) {
+            <table class="tasks-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Inputs</th>
+                  <th>Output</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (task of modalData; track task.id) {
+                  <tr>
+                    <td>{{ task.id.substring(0, 8) }}</td>
+                    <td><app-json-tree [data]="task.inputs" [isExpanded]="false"></app-json-tree></td>
+                    <td><app-json-tree [data]="task.output" [isExpanded]="false"></app-json-tree></td>
+                    <td>{{ formatDate(task.created_at) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <div class="empty-state">No tasks in this run.</div>
+          }
+        }
+      </div>
+    </div>
+  </div>
+}

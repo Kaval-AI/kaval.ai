@@ -18,7 +18,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Agent } from '../models/agent';
-import { SessionSummary } from '../models/session';
+import { SessionSummary, SessionDetails } from '../models/session';
 import { ChatMessage } from '../models/chat-message';
 import { LLMCallStat } from '../models/llm-call-stat';
 
@@ -77,8 +77,8 @@ export class AgentService {
     return this.http.get<any>(url);
   }
 
-  getSessionMessages(projectId: string, sessionId: string): Observable<ChatMessage[]> {
-    return this.http.get<ChatMessage[]>(`/api/agents/sessions/${projectId}/${sessionId}/messages`);
+  getSessionDetails(projectId: string, sessionId: string): Observable<SessionDetails> {
+    return this.http.get<SessionDetails>(`/api/agents/sessions/${projectId}/${sessionId}/details`);
   }
 
   getLLMCallStats(projectId: string, callType?: string, limit: number = 50, offset: number = 0): Observable<LLMCallStat[]> {

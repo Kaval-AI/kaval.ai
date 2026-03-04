@@ -16,7 +16,7 @@ limitations under the License.
 
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from kavalai.agents.db import Session, Run, Task, ChatMessage, Agent
@@ -34,6 +34,49 @@ class SessionSummary(BaseModel):
     last_message: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class TaskSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    agent_id: UUID | None
+    session_id: UUID
+    run_id: UUID
+    inputs: dict | None
+    output: dict | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RunSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    session_id: UUID
+    input_data: dict | None
+    output_data: dict | None
+    context: dict | None
+    tasks_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatMessageSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    agent_id: UUID
+    session_id: UUID
+    run_id: UUID | None
+    role: str
+    content: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SessionDetails(BaseModel):
+    session_id: UUID
+    messages: list[ChatMessageSummary]
+    runs: list[RunSummary]
+    tasks: list[TaskSummary]
 
 
 class SessionsResponse(TypedDict):
@@ -178,14 +221,55 @@ async def get_sessions_summary(
     return {"sessions": summaries, "total_count": total_count}
 
 
-async def get_session_messages(
+async def get_session_details(
     session: AsyncSession,
     session_id: UUID,
-) -> list[ChatMessage]:
-    stmt = (
+) -> SessionDetails:
+    # Fetch messages
+    msg_stmt = (
         select(ChatMessage)
         .where(ChatMessage.session_id == session_id)
         .order_by(asc(ChatMessage.created_at))
     )
-    result = await session.execute(stmt)
-    return list(result.scalars().all())
+    msg_result = await session.execute(msg_stmt)
+    messages = [
+        ChatMessageSummary.model_validate(m) for m in msg_result.scalars().all()
+    ]
+
+    # Fetch tasks count per run
+    tasks_count_sub = (
+        select(Task.run_id, func.count(Task.id).label("count"))
+        .where(Task.session_id == session_id)
+        .group_by(Task.run_id)
+        .subquery()
+    )
+
+    # Fetch runs
+    run_stmt = (
+        select(
+            Run.id,
+            Run.session_id,
+            Run.input_data,
+            Run.output_data,
+            Run.context,
+            func.coalesce(tasks_count_sub.c.count, 0).label("tasks_count"),
+            Run.created_at,
+            Run.updated_at,
+        )
+        .outerjoin(tasks_count_sub, Run.id == tasks_count_sub.c.run_id)
+        .where(Run.session_id == session_id)
+        .order_by(asc(Run.created_at))
+    )
+    run_result = await session.execute(run_stmt)
+    runs = [RunSummary.model_validate(r) for r in run_result.all()]
+
+    # Fetch tasks
+    task_stmt = (
+        select(Task).where(Task.session_id == session_id).order_by(asc(Task.created_at))
+    )
+    task_result = await session.execute(task_stmt)
+    tasks = [TaskSummary.model_validate(t) for t in task_result.scalars().all()]
+
+    return SessionDetails(
+        session_id=session_id, messages=messages, runs=runs, tasks=tasks
+    )

@@ -2,11 +2,11 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage
-from kavalai.agents.sessions import get_sessions_summary, get_session_messages
+from kavalai.agents.sessions import get_sessions_summary, get_session_details
 
 
 @pytest.mark.asyncio
-async def test_get_session_messages(agents_db):
+async def test_get_session_details(agents_db):
     agent = Agent(id=uuid4(), name="Test Agent")
     agents_db.add(agent)
     await agents_db.commit()
@@ -14,32 +14,45 @@ async def test_get_session_messages(agents_db):
     now = datetime.now(timezone.utc)
     s1 = Session(id=uuid4(), agent_id=agent.id, created_at=now, updated_at=now)
 
+    r1 = Run(
+        id=uuid4(),
+        session_id=s1.id,
+        input_data={"q": "test"},
+        output_data={"ans": "res"},
+        created_at=now - timedelta(minutes=5),
+    )
     m1 = ChatMessage(
         id=uuid4(),
         agent_id=agent.id,
         session_id=s1.id,
+        run_id=r1.id,
         role="user",
         content="Hello",
-        created_at=now - timedelta(minutes=2),
+        created_at=now - timedelta(minutes=4),
     )
-    m2 = ChatMessage(
+    t1 = Task(
         id=uuid4(),
         agent_id=agent.id,
         session_id=s1.id,
-        role="assistant",
-        content="Hi there!",
-        created_at=now - timedelta(minutes=1),
+        run_id=r1.id,
+        inputs={"cmd": "ls"},
+        output={"out": "file1"},
+        created_at=now - timedelta(minutes=3),
     )
 
-    agents_db.add_all([s1, m1, m2])
+    agents_db.add_all([s1, r1, m1, t1])
     await agents_db.commit()
 
-    messages = await get_session_messages(agents_db, s1.id)
+    details = await get_session_details(agents_db, s1.id)
 
-    assert len(messages) == 2
-    assert messages[0].content == "Hello"
-    assert messages[1].content == "Hi there!"
-    assert messages[0].created_at < messages[1].created_at
+    assert details.session_id == s1.id
+    assert len(details.messages) == 1
+    assert details.messages[0].content == "Hello"
+    assert len(details.runs) == 1
+    assert details.runs[0].id == r1.id
+    assert details.runs[0].tasks_count == 1
+    assert len(details.tasks) == 1
+    assert details.tasks[0].id == t1.id
 
 
 @pytest.mark.asyncio

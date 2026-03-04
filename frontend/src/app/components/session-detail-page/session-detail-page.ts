@@ -19,20 +19,36 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { ChatMessage } from '../../models/chat-message';
+import { Run } from '../../models/run';
+import { Task } from '../../models/task';
+import { JsonTreeComponent } from '../json-tree/json-tree';
+
+interface RunBlock {
+  run: Run;
+  messages: ChatMessage[];
+  tasks: Task[];
+}
 
 @Component({
   selector: 'app-session-detail-page',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, JsonTreeComponent],
   templateUrl: './session-detail-page.html',
   styleUrl: './session-detail-page.css',
 })
 export class SessionDetailPage implements OnInit {
   sessionId: string | null = null;
   projectId: string | null = null;
-  messages: ChatMessage[] = [];
+  runBlocks: RunBlock[] = [];
+  unassignedMessages: ChatMessage[] = [];
   loading: boolean = false;
   error: string | null = null;
+
+  // Modal state
+  showModal: boolean = false;
+  modalTitle: string = '';
+  modalData: any = null;
+  modalType: 'json' | 'tasks' = 'json';
 
   constructor(
     private route: ActivatedRoute,
@@ -46,13 +62,14 @@ export class SessionDetailPage implements OnInit {
       this.sessionId = params.get('sessionId');
     });
 
-    this.userService.userDetails.subscribe(user => {
+    this.userService.userDetails.subscribe((user) => {
       if (user && user.active_project_id) {
-        const newProjectId = user.active_project_id !== 'None' ? user.active_project_id : null;
+        const newProjectId =
+          user.active_project_id !== 'None' ? user.active_project_id : null;
         if (newProjectId !== this.projectId) {
           this.projectId = newProjectId;
           if (this.sessionId && this.projectId) {
-            this.loadMessages();
+            this.loadSessionDetails();
           }
         }
       } else if (this.sessionId) {
@@ -61,23 +78,62 @@ export class SessionDetailPage implements OnInit {
     });
   }
 
-  loadMessages(): void {
+  loadSessionDetails(): void {
     if (!this.projectId || !this.sessionId) return;
 
     this.loading = true;
     this.error = null;
 
-    this.agentService.getSessionMessages(this.projectId, this.sessionId).subscribe({
-      next: (messages) => {
-        this.messages = messages;
+    this.agentService.getSessionDetails(this.projectId, this.sessionId).subscribe({
+      next: (details) => {
+        const runMap = new Map<string, RunBlock>();
+        details.runs.forEach((run) => {
+          runMap.set(run.id, { run, messages: [], tasks: [] });
+        });
+
+        this.unassignedMessages = [];
+        details.messages.forEach((msg) => {
+          if (msg.run_id && runMap.has(msg.run_id)) {
+            runMap.get(msg.run_id)!.messages.push(msg);
+          } else {
+            this.unassignedMessages.push(msg);
+          }
+        });
+
+        details.tasks.forEach((task) => {
+          if (runMap.has(task.run_id)) {
+            runMap.get(task.run_id)!.tasks.push(task);
+          }
+        });
+
+        this.runBlocks = Array.from(runMap.values());
         this.loading = false;
       },
       error: (err) => {
-        this.error = 'Failed to load messages';
+        this.error = 'Failed to load session details';
         console.error(err);
         this.loading = false;
       },
     });
+  }
+
+  openJsonModal(title: string, data: any): void {
+    this.modalTitle = title;
+    this.modalData = data;
+    this.modalType = 'json';
+    this.showModal = true;
+  }
+
+  openTasksModal(run: Run, tasks: Task[]): void {
+    this.modalTitle = `Tasks for Run ${run.id.substring(0, 8)}`;
+    this.modalData = tasks;
+    this.modalType = 'tasks';
+    this.showModal = true;
+  }
+
+  closeModal(): void {
+    this.showModal = false;
+    this.modalData = null;
   }
 
   formatDate(dateStr: string): string {

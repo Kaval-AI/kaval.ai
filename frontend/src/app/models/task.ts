@@ -14,26 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import { ChatMessage } from './chat-message';
-import { Run } from './run';
-import { Task } from './task';
-
-export interface SessionSummary {
+export interface Task {
+  id: string;
+  agent_id: string | null;
   session_id: string;
-  agent_id: string;
-  agent_name: string;
-  runs_count: number;
-  tasks_count: number;
-  messages_count: number;
-  first_message: string | null;
-  last_message: string | null;
+  run_id: string;
+  inputs: any | null;
+  output: any | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface SessionDetails {
-  session_id: string;
-  messages: ChatMessage[];
-  runs: Run[];
-  tasks: Task[];
 }

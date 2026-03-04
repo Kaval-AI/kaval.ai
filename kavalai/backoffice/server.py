@@ -418,18 +418,18 @@ async def agents_get_sessions(
         )
 
 
-@app.get("/agents/sessions/{project_id}/{session_id}/messages")
-async def agents_get_session_messages(
+@app.get("/agents/sessions/{project_id}/{session_id}/details")
+async def agents_get_session_details(
     project_id: UUID,
     session_id: UUID,
     request: Request,
 ):
-    """Fetch all messages for a specific session."""
+    """Fetch all details (messages, runs, tasks) for a specific session."""
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
     async with get_project_session(project) as session:
-        return await agent_sessions.get_session_messages(session, session_id)
+        return await agent_sessions.get_session_details(session, session_id)
 
 
 @app.get("/agents/svg/{project_id}/{agent_id}")
