@@ -406,6 +406,10 @@ class Workflow:
             try:
                 if isinstance(result, dict):
                     validated_result = output_type(**result)
+                elif isinstance(result, BaseModel):
+                    # If it's already a Pydantic model, try to convert it to the output_type
+                    # (they might be different classes but with the same structure)
+                    validated_result = output_type(**result.model_dump())
                 elif isinstance(result, output_type):
                     validated_result = result
                 else:
