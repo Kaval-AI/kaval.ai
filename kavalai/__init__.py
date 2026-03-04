@@ -20,6 +20,7 @@ from kavalai.normalizer import Normalizer
 from kavalai.agents.db import db_manager
 from kavalai.agents.workflow import Workflow
 from kavalai.agents.workflow_model import WorkflowModel
+from kavalai.agents.rag_service import RagService
 
 # Db tables
 from kavalai.agents.db import (
@@ -51,4 +52,5 @@ __all__ = [
     # Workflow
     Workflow,
     WorkflowModel,
+    RagService,
 ]
