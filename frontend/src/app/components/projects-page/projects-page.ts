@@ -37,6 +37,7 @@ export class ProjectsPage implements OnInit {
   projects: Project[] = [];
   selectedProject: Project | null = null;
   summaryStats: any = null;
+  dbConnectionError: string | null = null;
 
   ngOnInit() {
     this.userService.userDetails.subscribe(details => {
@@ -47,16 +48,27 @@ export class ProjectsPage implements OnInit {
   }
 
   loadProjects() {
-    this.projectService.getAll().subscribe((data: Project[]) => {
-      this.projects = data;
-      // If we already have a selected project, keep it selected (and updated)
-      // otherwise, grab the active one from user service, or the first one.
-      const activeProjectId = this.userService.getActiveProjectId();
-      const toSelect = this.projects.find(p => p.id === this.selectedProject?.id) ||
-                       (activeProjectId ? this.projects.find(p => p.id === activeProjectId) : null) ||
-                       (this.projects.length > 0 ? this.projects[0] : null);
+    this.projectService.getAll().subscribe({
+      next: (data: Project[]) => {
+        this.projects = data;
+        this.dbConnectionError = null;
+        // If we already have a selected project, keep it selected (and updated)
+        // otherwise, grab the active one from user service, or the first one.
+        const activeProjectId = this.userService.getActiveProjectId();
+        const toSelect = this.projects.find(p => p.id === this.selectedProject?.id) ||
+                         (activeProjectId ? this.projects.find(p => p.id === activeProjectId) : null) ||
+                         (this.projects.length > 0 ? this.projects[0] : null);
 
-      this.selectProject(toSelect);
+        this.selectProject(toSelect);
+      },
+      error: (err) => {
+        if (err.status === 503) {
+          this.dbConnectionError = err.error?.detail || 'Backoffice database is not connected.';
+          this.projects = [];
+        } else {
+          console.error('Failed to load projects:', err);
+        }
+      }
     });
   }
 
@@ -67,14 +79,25 @@ export class ProjectsPage implements OnInit {
   selectProject(project: Project | null) {
     this.selectedProject = project;
     this.summaryStats = null;
+    this.dbConnectionError = null;
     if (project) {
       this.loadSummaryStats(project.id);
     }
   }
 
   loadSummaryStats(projectId: string) {
-    this.agentService.getSummaryStats(projectId).subscribe(stats => {
-      this.summaryStats = stats;
+    this.agentService.getSummaryStats(projectId).subscribe({
+      next: (stats) => {
+        this.summaryStats = stats;
+        this.dbConnectionError = null;
+      },
+      error: (err) => {
+        if (err.status === 503) {
+          this.dbConnectionError = err.error?.detail || 'Database is not connected.';
+        } else {
+          console.error('Failed to load summary stats:', err);
+        }
+      }
     });
   }
 

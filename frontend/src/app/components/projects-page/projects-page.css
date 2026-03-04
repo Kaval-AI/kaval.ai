@@ -159,3 +159,20 @@ input:disabled, textarea:disabled {
   display: flex;
   gap: 0.5rem;
 }
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background-color: #fff5f5;
+  border-left: 4px solid #dc3545;
+  color: #c53030;
+  border-radius: 4px;
+  margin: 1rem 0;
+  font-weight: 500;
+}
+
+.error-message i {
+  font-size: 1.25rem;
+}

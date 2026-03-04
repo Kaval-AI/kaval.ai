@@ -1,4 +1,11 @@
-@if (projects.length > 0) {
+@if (dbConnectionError && projects.length === 0) {
+  <div class="centered">
+    <div class="error-message">
+      <i class="fas fa-exclamation-triangle"></i>
+      {{ dbConnectionError }}
+    </div>
+  </div>
+} @else if (projects.length > 0) {
 <div class="centered">
   <main>
     @if (selectedProject) {
@@ -29,7 +36,12 @@
         </div>
 
         <div class="project-info">
-          @if (summaryStats) {
+          @if (dbConnectionError) {
+            <div class="error-message">
+              <i class="fas fa-exclamation-triangle"></i>
+              {{ dbConnectionError }}
+            </div>
+          } @else if (summaryStats) {
             <div class="stats-grid">
               <div class="stat-card">
                 <span class="stat-label">Total Sessions (30d)</span>

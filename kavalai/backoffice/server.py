@@ -35,12 +35,55 @@ from kavalai.agents.workflow_model import WorkflowModel
 from kavalai.backoffice.svg import generate_workflow_svg
 from fastapi.responses import Response
 from kavalai.agents.rag_service import RagService
+from contextlib import asynccontextmanager
 
 # Set up the app logger
 logger = logging.getLogger(__name__)
 logger.propagate = True
 
 app = FastAPI()
+
+
+@asynccontextmanager
+async def get_backoffice_session():
+    """
+    Context manager to provide a session for the backoffice database.
+    Handles connection errors gracefully.
+    """
+    try:
+        async with db.AsyncBackofficeSession() as session:
+            yield session
+    except Exception as e:
+        logger.error(f"Failed to connect to backoffice database: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Backoffice database is not connected. Please check your database settings.",
+        )
+
+
+@asynccontextmanager
+async def get_project_session(project: db.Project):
+    """
+    Context manager to provide a session for a specific project's agent database.
+    Handles connection errors gracefully.
+    """
+    sessionmaker = db_manager.get_sessionmaker(
+        user=project.db_user,
+        password=project.db_password,
+        host=project.db_host,
+        port=project.db_port,
+        db_name=project.db_name,
+    )
+    try:
+        async with sessionmaker() as session:
+            yield session
+    except Exception as e:
+        logger.error(f"Failed to connect to project database for {project.name}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database is not connected for project '{project.name}'. Please check your database settings.",
+        )
+
 
 # OAuth setup
 oauth = OAuth()
@@ -70,7 +113,7 @@ app.add_middleware(
 
 
 async def authenticate_and_sync_user(user_info: dict):
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         # Check if user exists in the database.
         email = user_info.get("email")
         stmt = select(db.User).where(db.User.email == email)
@@ -133,7 +176,7 @@ async def get_project_and_assert_access(
     request: Request, project_id: UUID
 ) -> db.Project:
     """Fetch project and assert user is a member."""
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         await assert_is_member(session, request, project_id)
         project = await get_one(session, db.Project, project_id)
         if not project:
@@ -196,7 +239,7 @@ async def google_auth_callback(request: Request):
 async def set_active_project(project_id: UUID, request: Request):
     assert_logged_in(request)
     user_id = UUID(request.session.get("user_info")["id"])
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         if not await db.is_member(session, user_id, project_id):
             raise HTTPException(
                 status_code=403, detail="Must be a member of the project."
@@ -216,7 +259,7 @@ async def projects_create(request: Request, data: dict = Body(...)):
     assert_logged_in(request)
     assert_is_admin(request)
     user_session = request.session.get("user_info")
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         service = ProjectService(session)
         return await service.create_project(data, UUID(user_session["id"]))
 
@@ -231,7 +274,7 @@ async def projects_get_by_id(project_id: UUID, request: Request):
 async def projects_get_all(request: Request):
     assert_logged_in(request)
     user_id = UUID(request.session.get("user_info")["id"])
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         service = ProjectService(session)
         return await service.get_user_projects(user_id)
 
@@ -239,7 +282,7 @@ async def projects_get_all(request: Request):
 @app.put("/projects/update/{project_id}")
 async def projects_update(project_id: UUID, request: Request, data: dict = Body(...)):
     assert_logged_in(request)
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         await assert_is_owner(session, request, project_id)
         service = ProjectService(session)
         updated = await service.update_project(project_id, data)
@@ -251,7 +294,7 @@ async def projects_update(project_id: UUID, request: Request, data: dict = Body(
 @app.delete("/projects/delete/{project_id}")
 async def projects_delete(project_id: UUID, request: Request):
     assert_logged_in(request)
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         await assert_is_owner(session, request, project_id)
         service = ProjectService(session)
         success = await service.delete_project(project_id)
@@ -264,7 +307,7 @@ async def projects_delete(project_id: UUID, request: Request):
 async def users_get_all(request: Request):
     assert_logged_in(request)
     assert_is_admin(request)
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         return await get_all(session, db.User)
 
 
@@ -272,7 +315,7 @@ async def users_get_all(request: Request):
 async def users_create(request: Request, data: dict = Body(...)):
     assert_logged_in(request)
     assert_is_admin(request)
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         return await insert(session, db.User, data)
 
 
@@ -280,7 +323,7 @@ async def users_create(request: Request, data: dict = Body(...)):
 async def users_update(user_id: UUID, request: Request, data: dict = Body(...)):
     assert_logged_in(request)
     assert_is_admin(request)
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         updated = await update(session, db.User, user_id, data)
         if not updated:
             raise HTTPException(status_code=404, detail="User not found.")
@@ -293,7 +336,7 @@ async def users_delete(user_id: UUID, request: Request):
     assert_is_admin(request)
     if str(user_id) == request.session.get("user_info")["id"]:
         raise HTTPException(status_code=400, detail="You cannot delete yourself.")
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         success = await delete(session, db.User, user_id)
         if not success:
             raise HTTPException(status_code=404, detail="User not found")
@@ -305,17 +348,8 @@ async def agents_get_by_id(project_id: UUID, agent_id: UUID, request: Request):
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
-        agent = await get_one(project_session, Agent, agent_id)
+    async with get_project_session(project) as session:
+        agent = await get_one(session, Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
         return agent
@@ -327,18 +361,9 @@ async def agents_get_all(project_id: UUID, request: Request):
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
+    async with get_project_session(project) as session:
         stmt = select(Agent)
-        result = await project_session.execute(stmt)
+        result = await session.execute(stmt)
         agents = result.scalars().all()
         return agents
 
@@ -351,19 +376,8 @@ async def agents_get_stats(
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
-        return await agent_stats.get_daily_stats(
-            project_session, days=days, agent_id=agent_id
-        )
+    async with get_project_session(project) as session:
+        return await agent_stats.get_daily_stats(session, days=days, agent_id=agent_id)
 
 
 @app.get("/agents/summary-stats/{project_id}")
@@ -374,17 +388,8 @@ async def agents_get_summary_stats(
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
-        return await agent_stats.get_summary_stats(project_session, agent_id=agent_id)
+    async with get_project_session(project) as session:
+        return await agent_stats.get_summary_stats(session, agent_id=agent_id)
 
 
 @app.get("/agents/sessions/{project_id}")
@@ -399,18 +404,9 @@ async def agents_get_sessions(
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
+    async with get_project_session(project) as session:
         return await agent_sessions.get_sessions_summary(
-            project_session, agent_id=agent_id, limit=limit, offset=offset
+            session, agent_id=agent_id, limit=limit, offset=offset
         )
 
 
@@ -424,17 +420,8 @@ async def agents_get_session_messages(
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
-        return await agent_sessions.get_session_messages(project_session, session_id)
+    async with get_project_session(project) as session:
+        return await agent_sessions.get_session_messages(session, session_id)
 
 
 @app.get("/agents/svg/{project_id}/{agent_id}")
@@ -443,17 +430,8 @@ async def agents_get_svg(project_id: UUID, agent_id: UUID, request: Request):
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
-        agent = await get_one(project_session, Agent, agent_id)
+    async with get_project_session(project) as session:
+        agent = await get_one(session, Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
 
@@ -477,19 +455,27 @@ async def projects_get_llm_call_stats(
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
+    def sessionmaker_factory():
+        return db_manager.get_sessionmaker(
+            user=project.db_user,
+            password=project.db_password,
+            host=project.db_host,
+            port=project.db_port,
+            db_name=project.db_name,
+        )
 
-    service = AgentService(project_session_maker)
-    return await service.get_model_call_stats(
-        call_type=call_type, limit=limit, offset=offset
-    )
+    # Since AgentService manages its own sessions, we wrap the whole call to catch connection errors
+    try:
+        service = AgentService(sessionmaker_factory)
+        return await service.get_model_call_stats(
+            call_type=call_type, limit=limit, offset=offset
+        )
+    except Exception as e:
+        logger.error(f"Failed to connect to project database for {project.name}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database is not connected for project '{project.name}'. Please check your database settings.",
+        )
 
 
 @app.post("/projects/{project_id}/rag/query")
@@ -513,27 +499,19 @@ async def projects_rag_query(
         raise HTTPException(status_code=400, detail="model and text are required")
 
     # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
+    async with get_project_session(project) as session:
+        normalizer = None
+        if normalizer_yaml:
+            from kavalai.normalizer import Normalizer
 
-    normalizer = None
-    if normalizer_yaml:
-        from kavalai.normalizer import Normalizer
+            try:
+                normalizer = Normalizer.from_yaml(normalizer_yaml)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid normalizer YAML: {str(e)}"
+                )
 
-        try:
-            normalizer = Normalizer.from_yaml(normalizer_yaml)
-        except Exception as e:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid normalizer YAML: {str(e)}"
-            )
-
-    async with project_session_maker() as project_session:
-        rag_service = RagService(project_session, model, normalizer=normalizer)
+        rag_service = RagService(session, model, normalizer=normalizer)
         results = await rag_service.query(
             text=text,
             top_k=top_k,
@@ -550,33 +528,25 @@ async def projects_rag_stats(project_id: UUID, request: Request):
     project = await get_project_and_assert_access(request, project_id)
 
     # Connect to the project database
-    project_session_maker = db_manager.get_sessionmaker(
-        user=project.db_user,
-        password=project.db_password,
-        host=project.db_host,
-        port=project.db_port,
-        db_name=project.db_name,
-    )
-
-    async with project_session_maker() as project_session:
+    async with get_project_session(project) as session:
         from sqlalchemy import func
         from kavalai.agents.db import RagIndex
 
         # Total entries
         stmt_entries = select(func.count(RagIndex.id))
-        result_entries = await project_session.execute(stmt_entries)
+        result_entries = await session.execute(stmt_entries)
         total_entries = result_entries.scalar()
 
         # Collections count
         stmt_collections_count = select(
             func.count(func.distinct(RagIndex.collection_name))
         )
-        result_collections_count = await project_session.execute(stmt_collections_count)
+        result_collections_count = await session.execute(stmt_collections_count)
         total_collections = result_collections_count.scalar()
 
         # Collection names
         stmt_names = select(func.distinct(RagIndex.collection_name))
-        result_names = await project_session.execute(stmt_names)
+        result_names = await session.execute(stmt_names)
         collections = result_names.scalars().all()
 
         return {
@@ -598,7 +568,7 @@ async def projects_test_connection(
     else:
         project = await get_project_and_assert_access(request, UUID(project_id))
 
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         service = ProjectService(session)
         return await service.test_connection(project)
 
@@ -606,7 +576,7 @@ async def projects_test_connection(
 @app.get("/projects/{project_id}/members")
 async def projects_get_members(project_id: UUID, request: Request):
     assert_logged_in(request)
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         await assert_is_member(session, request, project_id)
         service = ProjectService(session)
         return await service.get_members(project_id)
@@ -620,7 +590,7 @@ async def projects_add_member(
     user_id = UUID(data["user_id"])
     role = db.ProjectRole(data["role"])
 
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         # Only owner or admin can add members
         is_admin = request.session.get("user_info").get("is_admin")
         if not is_admin:
@@ -639,7 +609,7 @@ async def projects_update_member(
     user_id = UUID(data["user_id"])
     new_role = db.ProjectRole(data["role"])
 
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         is_admin = request.session.get("user_info").get("is_admin")
         if not is_admin:
             await assert_is_owner(session, request, project_id)
@@ -652,7 +622,7 @@ async def projects_update_member(
 @app.delete("/projects/{project_id}/members/remove/{user_id}")
 async def projects_remove_member(project_id: UUID, user_id: UUID, request: Request):
     assert_logged_in(request)
-    async with db.AsyncBackofficeSession() as session:
+    async with get_backoffice_session() as session:
         is_admin = request.session.get("user_info").get("is_admin")
         if not is_admin:
             await assert_is_owner(session, request, project_id)
