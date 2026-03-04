@@ -29,8 +29,6 @@ dependencies = [
     "psycopg2-binary",
     "rich",
     "sqlalchemy",
-    "selenium",
-    "webdriver-manager"
 ]
 
 [project.optional-dependencies]

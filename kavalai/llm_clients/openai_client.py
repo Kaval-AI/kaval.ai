@@ -35,10 +35,6 @@ from kavalai.llm_clients.common import (
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
-from kavalai.prices.openai import (
-    get_openai_chat_cost,
-    get_openai_embedding_cost,
-)
 
 
 class OpenAIClient:
@@ -129,7 +125,8 @@ class OpenAIClient:
                     usage = event.response.usage
                     input_tokens = usage.input_tokens
                     output_tokens = usage.output_tokens
-                    cached_tokens = (
+                    # cached tokens
+                    _ = (
                         usage.input_tokens_details.cached_tokens
                         if hasattr(usage, "input_tokens_details")
                         and usage.input_tokens_details
@@ -147,25 +144,18 @@ class OpenAIClient:
 
         duration = time.perf_counter() - start_time
 
-        cost = get_openai_chat_cost(
-            model,
-            prompt_tokens=input_tokens,
-            completion_tokens=output_tokens,
-            cached_tokens=cached_tokens,
-        )
-
         stats = create_model_call_stat(
             call_type="llm",
             model=f"openai/{model}",
             duration_sections=duration,
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
-            cost=cost,
+            cost=None,
             response_data=result.model_dump()
             if hasattr(result, "model_dump")
             else result,
         )
-        stats.currency = "USD"
+        stats.currency = None
         return result, stats
 
     async def compute_embeddings(
@@ -199,20 +189,18 @@ class OpenAIClient:
 
         total_tokens = response.usage.total_tokens if response.usage else 0
 
-        cost = get_openai_embedding_cost(model, total_tokens)
-
         stats = create_model_call_stat(
             call_type="embedding",
             model=f"openai/{model}",
             duration_sections=duration,
             batch_size=len(texts),
             total_tokens=total_tokens,
-            cost=cost,
+            cost=None,
             response_data=response.model_dump()
             if hasattr(response, "model_dump")
             else response,
         )
-        stats.currency = "USD"
+        stats.currency = None
         return embeddings, stats
 
     async def list_models(self) -> List[str]:

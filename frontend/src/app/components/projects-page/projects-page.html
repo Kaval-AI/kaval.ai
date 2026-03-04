@@ -32,18 +32,6 @@
           @if (summaryStats) {
             <div class="stats-grid">
               <div class="stat-card">
-                <span class="stat-label">Total Cost (30d)</span>
-                <span class="stat-value">{{ summaryStats.total_cost | currency }}</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-label">LLM Cost (30d)</span>
-                <span class="stat-value">{{ summaryStats.llm_cost | currency }}</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-label">Embedding Cost (30d)</span>
-                <span class="stat-value">{{ summaryStats.embedding_cost | currency }}</span>
-              </div>
-              <div class="stat-card">
                 <span class="stat-label">Total Sessions (30d)</span>
                 <span class="stat-value">{{ summaryStats.total_sessions }}</span>
               </div>

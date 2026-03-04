@@ -32,10 +32,6 @@ from kavalai.llm_clients.common import (
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
-from kavalai.prices.gemini import (
-    get_gemini_chat_cost,
-    get_gemini_embedding_cost,
-)
 
 
 class GeminiClient:
@@ -194,10 +190,10 @@ class GeminiClient:
             duration_sections=duration,
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
-            cost=get_gemini_chat_cost(model_name, input_tokens, output_tokens),
+            cost=None,
             response_data=response_data,
         )
-        stats.currency = "USD"
+        stats.currency = None
         return result, stats
 
     async def compute_embeddings(
@@ -233,10 +229,10 @@ class GeminiClient:
             duration_sections=duration,
             batch_size=len(texts),
             total_tokens=total_tokens,
-            cost=get_gemini_embedding_cost(model_name, total_tokens),
+            cost=None,
             response_data=None,
         )
-        stats.currency = "USD"
+        stats.currency = None
         return embeddings, stats
 
     async def list_models(self) -> List[str]:
