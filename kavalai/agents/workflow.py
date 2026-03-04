@@ -515,16 +515,14 @@ class Workflow:
         model = self.workflow_model.llm_model or "openai/text-embedding-3-small"
 
         # 2. Initialize RagService
-        # We use the agent_service's session_maker to get a session
-        async with agent_service.session_maker() as session:
-            rag_service = RagService(session, model)
-            results = await rag_service.query(
-                text=text,
-                top_k=task.top_k,
-                collection_name=task.collection_name,
-                source_ids=task.source_ids,
-                keep_best=task.keep_best,
-            )
+        rag_service = RagService.from_session_maker(agent_service.session_maker, model)
+        results = await rag_service.query(
+            text=text,
+            top_k=task.top_k,
+            collection_name=task.collection_name,
+            source_ids=task.source_ids,
+            keep_best=task.keep_best,
+        )
 
         # 3. Store results in run_context.data
         run_context.data[task.name] = [r.model_dump() for r in results]

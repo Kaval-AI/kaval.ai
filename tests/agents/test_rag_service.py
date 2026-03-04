@@ -15,7 +15,7 @@ def embedding_model():
 async def test_rag_service_indexing(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService(agents_db_config["uri"], embedding_model)
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
 
     texts = ["hello", "world"]
     source_metadata = [{"id": 1}, {"id": 2}]
@@ -42,7 +42,7 @@ async def test_rag_service_indexing(
 async def test_rag_service_deletion(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService(agents_db_config["uri"], embedding_model)
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
 
     texts = ["item 1", "item 2", "item 3"]
     source_ids = ["sid1", "sid2", "sid3"]
@@ -75,7 +75,7 @@ async def test_rag_service_deletion(
 async def test_rag_service_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService(agents_db_config["uri"], embedding_model)
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # We index multiple items with the same source_id
     texts = ["apple", "apple pie", "banana"]
@@ -134,8 +134,14 @@ async def test_rag_service_with_normalizer():
 
         # Initialize RagService with normalizer
         # Pass a session instead of URI to avoid real DB engine creation
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def session_factory():
+            yield mock_session
+
         service = RagService(
-            uri_or_session=mock_session, model=model, normalizer=normalizer
+            session_maker=session_factory, model=model, normalizer=normalizer
         )
 
         assert service.normalizer == normalizer
@@ -182,7 +188,13 @@ async def test_rag_service_without_normalizer():
         )
 
         # Initialize RagService without normalizer
-        service = RagService(uri_or_session=mock_session, model=model)
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def session_factory():
+            yield mock_session
+
+        service = RagService(session_maker=session_factory, model=model)
 
         assert service.normalizer is None
 
@@ -198,7 +210,7 @@ async def test_rag_service_keep_best_duplicates(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test that keep_best handles duplicate content/distances correctly."""
-    service = RagService(agents_db_config["uri"], embedding_model)
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
 
     collection = "duplicate_test"
     # Index exactly the same content for the same source_id multiple times
@@ -227,7 +239,7 @@ async def test_rag_service_keep_best_duplicates(
 async def test_rag_service_top_k_with_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService(agents_db_config["uri"], embedding_model)
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Index items for 5 different source IDs, each with 2 items
     texts = []
@@ -270,7 +282,7 @@ async def test_rag_service_top_k_with_keep_best(
 async def test_rag_service_query_source_ids(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService(agents_db_config["uri"], embedding_model)
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
 
     texts = ["apple", "banana", "cherry"]
     source_ids = ["sid_apple", "sid_banana", "sid_cherry"]
@@ -302,7 +314,7 @@ async def test_rag_service_query_source_ids(
 async def test_rag_service_query_source_ids_with_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService(agents_db_config["uri"], embedding_model)
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Index multiple items for some source_ids
     texts = ["apple 1", "apple 2", "banana 1", "banana 2", "cherry"]
@@ -337,7 +349,7 @@ async def test_rag_service_query_source_ids_with_keep_best(
 async def test_compute_similarity_matrix(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService(agents_db_config["uri"], embedding_model)
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Index some documents
     texts = ["apple", "apple pie", "banana", "banana bread", "cherry"]

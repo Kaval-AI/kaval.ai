@@ -16,12 +16,12 @@ limitations under the License.
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union, Callable, AsyncContextManager
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import delete, select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
 from kavalai.agents.db import RagIndex, Agent, db_manager
@@ -70,7 +70,10 @@ class RagService:
 
     def __init__(
         self,
-        uri_or_session: str | AsyncSession,
+        session_maker: Union[
+            async_sessionmaker[AsyncSession],
+            Callable[[], AsyncContextManager[AsyncSession]],
+        ],
         model: str,
         agent: Optional[Agent] = None,
         normalizer: Optional[Normalizer] = None,
@@ -79,26 +82,62 @@ class RagService:
         Initialize the RagService.
 
         Args:
-            uri_or_session (str | AsyncSession): Database URI or an active AsyncSession.
+            session_maker (Union[async_sessionmaker[AsyncSession], Callable[[], AsyncContextManager[AsyncSession]]]):
+                Async session maker or a factory that returns an async context manager for the session.
             model (str): The name of the embedding model to use (e.g., "openai/text-embedding-3-small").
             agent (Optional[Agent]): Optional Agent object to associate with this service.
             normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
         """
-        if isinstance(uri_or_session, str):
-            self.session_maker = db_manager.get_sessionmaker(uri=uri_or_session)
-        else:
-            # Create a context manager factory that returns this session
-            from contextlib import asynccontextmanager
-
-            @asynccontextmanager
-            async def session_factory():
-                yield uri_or_session
-
-            self.session_maker = session_factory
+        self.session_maker = session_maker
         self.model = model
         self.agent = agent
         self.normalizer = normalizer
         self.llm_client = LLMClient(model)
+
+    @classmethod
+    def from_uri(
+        cls,
+        uri: str,
+        model: str,
+        agent: Optional[Agent] = None,
+        normalizer: Optional[Normalizer] = None,
+    ) -> "RagService":
+        """
+        Create a RagService from a database URI.
+
+        Args:
+            uri (str): Database URI.
+            model (str): The name of the embedding model to use.
+            agent (Optional[Agent]): Optional Agent object to associate with this service.
+            normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
+
+        Returns:
+            RagService: A new instance of RagService.
+        """
+        session_maker = db_manager.get_sessionmaker(uri=uri)
+        return cls(session_maker, model, agent, normalizer)
+
+    @classmethod
+    def from_session_maker(
+        cls,
+        session_maker: async_sessionmaker[AsyncSession],
+        model: str,
+        agent: Optional[Agent] = None,
+        normalizer: Optional[Normalizer] = None,
+    ) -> "RagService":
+        """
+        Create a RagService from a session maker.
+
+        Args:
+            session_maker (async_sessionmaker[AsyncSession]): Async session maker for the database.
+            model (str): The name of the embedding model to use.
+            agent (Optional[Agent]): Optional Agent object to associate with this service.
+            normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
+
+        Returns:
+            RagService: A new instance of RagService.
+        """
+        return cls(session_maker, model, agent, normalizer)
 
     async def batch_index(
         self,

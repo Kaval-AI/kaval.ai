@@ -511,7 +511,13 @@ async def projects_rag_query(
                     status_code=400, detail=f"Invalid normalizer YAML: {str(e)}"
                 )
 
-        rag_service = RagService(session, model, normalizer=normalizer)
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def session_factory():
+            yield session
+
+        rag_service = RagService(session_factory, model, normalizer=normalizer)
         results = await rag_service.query(
             text=text,
             top_k=top_k,

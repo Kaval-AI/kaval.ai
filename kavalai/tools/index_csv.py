@@ -41,7 +41,6 @@ import os
 import sys
 from typing import List, Optional, Generator, Dict
 
-from kavalai.agents.db import db_manager
 from kavalai.agents.rag_service import RagService
 
 logger = logging.getLogger(__name__)
@@ -104,56 +103,53 @@ async def index_csv(
     batch_size: int = 10,
 ):
     model = model if model else os.environ["KAVALAI_DEFAULT_EMBEDDING_MODEL"]
-    async_session = db_manager.get_sessionmaker(uri=os.environ["KAVALAI_DB_URI"])
-    async with async_session() as session:
-        # Upsert profile to DB to get ID
-        rag_service = RagService(session, model)
+    rag_service = RagService.from_uri(uri=os.environ["KAVALAI_DB_URI"], model=model)
 
-        rows_processed = 0
-        total_chunks = 0
+    rows_processed = 0
+    total_chunks = 0
 
-        rows_gen = csv_row_generator(csv_path, limit)
+    rows_gen = csv_row_generator(csv_path, limit)
 
-        while True:
-            batch_rows = []
-            try:
-                for _ in range(batch_size):
-                    batch_rows.append(next(rows_gen))
-            except StopIteration:
-                pass
+    while True:
+        batch_rows = []
+        try:
+            for _ in range(batch_size):
+                batch_rows.append(next(rows_gen))
+        except StopIteration:
+            pass
 
-            if not batch_rows:
-                break
+        if not batch_rows:
+            break
 
-            texts = []
-            metas = []
-            source_ids = []
+        texts = []
+        metas = []
+        source_ids = []
 
-            for entry in content_splitter_generator(
-                iter(batch_rows), index_fields, metadata_fields, source_field, mode
-            ):
-                texts.append(entry["text"])
-                metas.append(entry["meta"])
-                source_ids.append(entry["source_id"])
+        for entry in content_splitter_generator(
+            iter(batch_rows), index_fields, metadata_fields, source_field, mode
+        ):
+            texts.append(entry["text"])
+            metas.append(entry["meta"])
+            source_ids.append(entry["source_id"])
 
-            if texts:
-                if replace:
-                    # Collect unique source_ids in this batch to delete them
-                    unique_source_ids = list(set(source_ids))
-                    await rag_service.delete_by_source_ids(
-                        collection_name, unique_source_ids
-                    )
-
-                rows_processed += len(batch_rows)
-                total_chunks += len(texts)
-                logger.info(
-                    f"Indexing batch of {len(batch_rows)} rows generating {len(texts)} chunks (Total rows: {rows_processed}, total chunks: {total_chunks})..."
+        if texts:
+            if replace:
+                # Collect unique source_ids in this batch to delete them
+                unique_source_ids = list(set(source_ids))
+                await rag_service.delete_by_source_ids(
+                    collection_name, unique_source_ids
                 )
-                await rag_service.batch_index(
-                    texts, metas, collection_name=collection_name, source_ids=source_ids
-                )
-            else:
-                rows_processed += len(batch_rows)
+
+            rows_processed += len(batch_rows)
+            total_chunks += len(texts)
+            logger.info(
+                f"Indexing batch of {len(batch_rows)} rows generating {len(texts)} chunks (Total rows: {rows_processed}, total chunks: {total_chunks})..."
+            )
+            await rag_service.batch_index(
+                texts, metas, collection_name=collection_name, source_ids=source_ids
+            )
+        else:
+            rows_processed += len(batch_rows)
 
     logger.info(
         f"Finished indexing {rows_processed} rows ({total_chunks} chunks) into collection '{collection_name}'."

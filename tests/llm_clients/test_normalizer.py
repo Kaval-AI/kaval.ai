@@ -166,7 +166,13 @@ async def test_rag_service_learn_normalizer(agents_db):
         agents_db.add(idx)
     await agents_db.commit()
 
-    rag_service = RagService(uri_or_session=agents_db, model=model)
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def session_factory():
+        yield agents_db
+
+    rag_service = RagService(session_maker=session_factory, model=model)
     normalizer = await rag_service.learn_normalizer(collection_name="test")
 
     assert np.allclose(normalizer.center_vector, [2.0, 2.0])
