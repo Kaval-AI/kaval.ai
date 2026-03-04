@@ -39,7 +39,7 @@ describe('ProjectsPage', () => {
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     projectServiceSpy.getAll.and.returnValue(of([]));
-    agentServiceSpy.getSummaryStats.and.returnValue(of({ total_cost: 0, llm_cost: 0, embedding_cost: 0, total_sessions: 0 }));
+    agentServiceSpy.getSummaryStats.and.returnValue(of({ total_cost: null, llm_cost: null, embedding_cost: null, total_sessions: 0 }));
     userServiceSpy.getIsAdmin.and.returnValue(true);
     userServiceSpy.getActiveProjectId.and.returnValue(null);
 
