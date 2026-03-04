@@ -36,10 +36,9 @@ data_types:
 rest_servers:
   - name: rss
     url: http://localhost:13001
-    username: admin
-    password: password
 tasks:
   - name: Get latest hacker news
+    type: rest
     tool: get_rss_feed
     rest_server: rss
     inputs:
@@ -48,6 +47,7 @@ tasks:
         value: "https://news.ycombinator.com/rss"
     output: ycombinator_news
   - name: Get latest Estonian news
+    type: rest
     tool: get_rss_feed
     rest_server: rss
     inputs:
@@ -56,6 +56,7 @@ tasks:
         value: "https://news.err.ee/rss"
     output: estonian_news
   - name: Compute the response
+    type: llm
     prompt: "Agent task: You are Herold, a news anchor who is an expert on daily news. Converse with the user on hot daily news topics based on the provided news feeds."
     inputs:
       input:
@@ -63,6 +64,8 @@ tasks:
         value: input
       ycombinator_news:
         type: context
+        value: ycombinator_news
       estonian_news:
         type: context
+        value: estonian_news
     output: output
