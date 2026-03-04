@@ -1,163 +1,182 @@
-LLM Clients Tutorial
-====================
+LLM Clients and SDK Usage
+========================
 
-Welcome, class! Today we are going to explore the wonderful world of Large Language Models (LLMs) and how to interact with them using the Kaval.AI SDK. Our clients are designed to be lightweight, elegant wrappers around official libraries (like OpenAI and Google GenAI), providing you with a unified and serene interface for all your Generative AI operations.
+The Kaval.AI SDK provides a high-level, unified interface for interacting with various Large Language Models (LLMs) and embedding providers. Our goal is to provide developers with a robust, production-ready client that abstracts away the complexities of individual provider APIs while ensuring full observability and resilience.
 
-Why use Kaval.AI clients?
--------------------------
+Key Features
+------------
 
-If you are new to Python or AI development, you might wonder why we don't just use the official libraries directly. Think of Kaval.AI as a helpful teaching assistant that handles the complex details for you:
+1. **Unified Interface:** Execute calls across different providers (OpenAI, Google Gemini, Anthropic, etc.) using a consistent API.
+2. **Automatic Resilience:** Built-in retry logic with exponential backoff handles transient API errors and rate limits.
+3. **Comprehensive Observability:** Every interaction is tracked via the :class:`ModelCallStat` class, capturing token usage, costs, duration, and full request/response payloads.
+4. **Structured Outputs:** Native integration with Pydantic ensures that LLM responses adhere to your defined data models.
+5. **Multimodal Support:** Easily incorporate images and other data types into your LLM prompts.
 
-1. **Unified Interface:** Whether you use OpenAI or Gemini, the code remains almost identical. Consistency is the key to mastery!
-2. **Built-in Resilience:** We include automatic retry logic with exponential backoff for common API errors. Even the best models sometimes have a "bad day."
-3. **Integrated Metrics:** Every call automatically tracks token usage, costs, and execution time using the :class:`ModelCallStat` class.
-4. **Structured Output:** Easy integration with Pydantic for getting guaranteed data formats.
+Core Interaction: Chat Completions
+----------------------------------
 
-Basic Chat Completion
----------------------
+The :class:`LLMClient` is the primary entry point for generating text and structured data. It manages model selection, authentication, and execution metrics.
 
-The most common way to interact with an LLM is through chat completions. In Kaval.AI, we use a list of "messages" to represent the conversation.
+Basic Usage
+~~~~~~~~~~~
 
-Each message has a **role** (system, user, or assistant) and **content**.
-
-*   **system**: Sets the behavior of the AI (e.g., "You are a chess Grandmaster").
-*   **user**: Your prompt or question.
-*   **assistant**: The AI's previous responses (used for conversation history).
-
-Let's look at an example: analyzing a chess position.
+Messages are structured as a list of dictionaries, each with a **role** (system, user, or assistant) and **content**.
 
 .. code-block:: python
 
    import asyncio
    from kavalai import LLMClient
 
-   async def analyze_chess():
-       # Initialize the client for OpenAI's GPT-4o
-       client = LLMClient(model="openai/gpt-4o")
+   async def basic_example():
+       # Initialize client with a specific model (provider/model-name)
+       client = LLMClient(model="openai/gpt-4o-mini")
 
        messages = [
-           {"role": "system", "content": "You are a chess expert. Use algebraic notation."},
-           {"role": "user", "content": "What is the best move for white in the Ruy Lopez opening after 3... a6?"}
+           {"role": "system", "content": "You are a helpful assistant."},
+           {"role": "user", "content": "What are three interesting facts about Estonia?"}
        ]
 
-       # chat_completions returns (result, stats)
        result, stats = await client.chat_completions(messages=messages)
 
-       print(f"AI Analysis: {result}")
-       print(f"Tokens Used: {stats.total_tokens}")
-       print(f"Cost: ${stats.cost:.4f}")
+       print(f"Result:\n{result}\n")
+       print(f"Stats: {stats.total_tokens} tokens, duration: {stats.duration_seconds:.2f}s")
 
    if __name__ == "__main__":
-       asyncio.run(analyze_chess())
+       asyncio.run(basic_example())
 
-**Expected Output:**
+**Output:**
 
 .. code-block:: text
 
-   AI Analysis: The most common and strongest move for White is 4. Ba4, maintaining the pressure on the knight on c6. Another option is 4. Bxc6, the Exchange Variation...
-   Tokens Used: 85
-   Cost: $0.0004
+   Result:
+   Sure! Here are three interesting facts about Estonia:
 
-Fine-Tuning the Response
-~~~~~~~~~~~~~~~~~~~~~~~~
+   1. **Digital Innovation**: Estonia is known for being one of the most digitally advanced countries in the world. It was the first country to offer e-residency, allowing global citizens to start and manage businesses online. The country also has a fully digital ID system that enables citizens to access a wide range of government services online.
 
-When calling `chat_completions`, you can pass additional parameters to guide the AI's "creativity" and behavior. These are passed as keyword arguments:
+   2. **Nature and Clean Air**: Approximately 50% of Estonia is covered by forest, making it one of the greenest countries in Europe. It is home to many national parks, nature reserves, and diverse wildlife. Estonia also boasts some of the cleanest air in the world, a testament to its commitment to environmental conservation.
 
-*   **temperature**: Controls the "randomness" or "creativity" of the output. A low temperature (e.g., 0.1) makes the model more deterministic and focused, while a high temperature (e.g., 0.8) makes it more diverse and creative.
-*   **max_tokens**: Limits the length of the response.
-*   **stop**: A list of strings that, if encountered, will cause the model to stop generating further tokens.
+   3. **Rich Cultural Heritage**: Estonia has a vibrant cultural scene, influenced by its history and various ethnic groups, including the Finno-Ugric roots from Finland. The country celebrates numerous traditional festivals, such as the Song and Dance Festival, which features thousands of singers and dancers coming together to perform. Estonia's capital, Tallinn, has a well-preserved medieval old town that is a UNESCO World Heritage site.
+
+   Stats: 255 tokens, duration: 5.28s
+
+Advanced Parameters
+~~~~~~~~~~~~~~~~~~~
+
+You can fine-tune the model's behavior using standard LLM parameters:
+
+*   **temperature**: Controls deterministic vs. creative output (range: 0.0 to 2.0).
+*   **max_tokens**: Sets a hard limit on the generated response length.
+*   **stop**: Defines sequences that trigger the end of generation.
+*   **timeout**: Overrides the default timeout for a specific call.
 
 .. code-block:: python
 
-   # A focused, deterministic response
    result, stats = await client.chat_completions(
        messages=messages,
-       temperature=0.1
+       temperature=0.2,
+       max_tokens=500
    )
 
-Embeddings: Turning Words into Wisdom
--------------------------------------
+Structured Output with Pydantic
+-------------------------------
 
-Now, let's talk about **Embeddings**. Imagine if every sentence could be represented as a point in a vast, multi-dimensional space. Sentences with similar meanings would be close together, while unrelated ones would be far apart. This "vector" representation is what we call an embedding.
-
-In Kaval.AI, we use the :class:`LLMClient` to compute these embeddings. They are fundamental for building Knowledge Bases and the :class:`RagIndex` (Retrieval-Augmented Generation).
+For production applications, getting structured data is crucial. Kaval.AI allows you to pass a Pydantic model as the ``response_model``, ensuring the LLM returns a validated object.
 
 .. code-block:: python
 
+   from pydantic import BaseModel, Field
    from kavalai import LLMClient
 
-   async def learn_embeddings():
-       client = LLMClient(model="openai/text-embedding-3-small")
-       texts = ["Kaval.AI makes agent development easy.", "I love learning about AI."]
+   class Fact(BaseModel):
+       topic: str
+       fact: str
+       relevance_score: float
 
-       # compute_embeddings returns (list of vectors, stats)
-       embeddings, stats = await client.compute_embeddings(texts=texts)
+   class FactsList(BaseModel):
+       facts: list[Fact]
 
-       print(f"Generated {len(embeddings)} embeddings.")
-       print(f"First 5 dimensions of first embedding: {embeddings[0][:5]}")
-
-Embeddings allow your agents to search through thousands of documents to find exactly the right information to answer a user's question. We call this "Retrieval," and it's what makes RAG so powerful!
-
-Multimodal Execution (Using Images)
------------------------------------
-
-Modern AI models can "see". This is called "multimodal" execution. You can send images along with your text. This is useful for identifying computer parts or analyzing diagrams.
-
-.. code-block:: python
-
-   import asyncio
-   from kavalai import LLMClient
-
-   async def identify_hardware(image_base64: str):
-       client = LLMClient(model="openai/gpt-4o")
-
+   async def structured_example():
+       client = LLMClient(model="gemini/gemini-2.0-flash")
        messages = [
-           {
-               "role": "user",
-               "content": [
-                   {"type": "input_text", "text": "What computer component is this?"},
-                   {
-                       "type": "input_image",
-                       "image_url": f"data:image/jpeg;base64,{image_base64}"
-                   }
-               ]
-           }
+           {"role": "user", "content": "Provide 3 interesting facts about chess."}
        ]
 
-       result, _ = await client.chat_completions(messages=messages)
-       print(f"Identification: {result}")
+       # Passing response_model returns an instance of that model
+       result, stats = await client.chat_completions(
+           messages=messages,
+           response_model=FactsList
+       )
 
-Streaming and Delta Mode
-------------------------
+       for fact in result.facts:
+           print(f"[{fact.topic}] ({fact.relevance_score}): {fact.fact}")
 
-When you use ChatGPT, the text appears word-by-word. This is called **streaming**.
+**Output:**
 
-Kaval.AI supports streaming via the :class:`Streamer` class. You can also enable `stream_delta`, which only sends the *new* characters (the "delta") rather than the whole message every time.
+.. code-block:: text
 
-**Trade-offs:**
-*   **On (Streaming):** Feels much faster for users because they see progress immediately.
-*   **Off (Non-streaming):** Simpler to write code for, but the user has to wait for the entire response to finish before seeing anything.
+   [Chess History] (0.8): The longest chess game theoretically possible is 5,949 moves.
+   [Chess Strategies] (0.7): The most common opening move in chess is advancing the king's pawn two squares (e4).
+   [Chess Records] (0.9): Garry Kasparov was the world's highest-rated chess player for a record 255 months overall.
+
+Embeddings and Vector Representations
+-------------------------------------
+
+Embeddings transform text into numerical vectors, enabling semantic search and Retrieval-Augmented Generation (RAG).
+
+.. code-block:: python
+
+   from kavalai import LLMClient
+
+   async def embeddings_example():
+       client = LLMClient(model="openai/text-embedding-3-small")
+       texts = ["Kaval.AI is an open source AI agent toolkit.",
+                "D minor and F major are parallel keys."]
+
+       embeddings, stats = await client.compute_embeddings(texts=texts, normalize=True)
+
+       print(f"Number of embeddings: {len(embeddings)}")
+       print(f"Embedding dimension: {len(embeddings[0])}\n")
+       print(f"Tokens: {stats.total_tokens}")
+
+**Output:**
+
+.. code-block:: text
+
+   Number of embeddings: 2
+   Embedding dimension: 1536
+
+   Tokens: 20
+
+Real-time Streaming
+-------------------
+
+For interactive applications, Kaval.AI supports real-time streaming of responses.
 
 .. code-block:: python
 
    import asyncio
    from kavalai import LLMClient, Streamer, StreamContent
 
-   async def stream_poem():
-       client = LLMClient(model="openai/gpt-4o")
-       messages = [{"role": "user", "content": "Write a 4-line poem about artificial intelligence."}]
+   PROMPT = """
+   Count from 1 to 10, say
 
+   a. "FizzBuzz" if i is divisible by 3 and 5.
+   b. "Fizz" if i is divisible by 3.
+   c. "Buzz" if i is divisible by 5.
+   """
+
+   async def streaming_example():
+       client = LLMClient(model="openai/gpt-4o-mini")
+       messages = [{"role": "user", "content": PROMPT}]
        queue = asyncio.Queue()
-       streamer = Streamer("poem_stream", queue)
+       streamer = Streamer("response", queue)
 
-       # Start the request in the background
+       # Run the client call as a task to consume chunks from the queue
        task = asyncio.create_task(
            client.chat_completions(messages=messages, streamer=streamer, stream_delta=True)
        )
 
-       print("AI is writing: ", end="", flush=True)
        while True:
-           # Get a chunk of data from the queue
            raw_chunk = await queue.get()
            chunk = StreamContent.model_validate_json(raw_chunk)
 
@@ -166,48 +185,41 @@ Kaval.AI supports streaming via the :class:`Streamer` class. You can also enable
            elif chunk.type == "complete":
                break
 
-       await task
+       _, stats = await task
+       print(f"\n\nTokens: {stats.total_tokens}")
 
-Structured Output with Pydantic
--------------------------------
+**Output:**
 
-If you need the AI to return data in a specific format (like a JSON object or a Python class), use Pydantic. This is extremely powerful for building apps.
+.. code-block:: text
 
-.. code-block:: python
+   Here's the count from 1 to 10 following your rules:
 
-   from pydantic import BaseModel
-   from kavalai import LLMClient
+   1. 1
+   2. 2
+   3. Fizz
+   4. 4
+   5. Buzz
+   6. Fizz
+   7. 7
+   8. 8
+   9. Fizz
+   10. Buzz
 
-   class ComputerSpec(BaseModel):
-       cpu: str
-       ram_gb: int
-       is_gaming_pc: bool
+   Let me know if you need anything else!
 
-   async def get_specs():
-       client = LLMClient(model="openai/gpt-4o")
-       messages = [{"role": "user", "content": "Extract specs from: 'I have a Ryzen 9 with 32GB RAM for gaming.'"}]
+   Tokens: 132
 
-       result, _ = await client.chat_completions(
-           messages=messages,
-           response_model=ComputerSpec
-       )
+Observability and Metrics
+-------------------------
 
-       print(f"CPU: {result.cpu}")
-       print(f"RAM: {result.ram_gb}GB")
+Every call to an LLM or embedding provider returns a :class:`ModelCallStat` object. This object is a goldmine for debugging and optimization:
 
-Monitoring and Statistics (ModelCallStat)
------------------------------------------
+*   **token_usage**: Breakdown of prompt and completion tokens.
+*   **cost**: Precise cost in USD based on provider pricing (not implemented yet).
+*   **duration_seconds**: Total round-trip time.
+*   **request/response_data**: The exact raw payloads for full auditability.
 
-Every time you call an LLM, Kaval.AI tracks the details of that interaction in a :class:`ModelCallStat` object. This is essential for monitoring your application's performance and costs.
-
-The `stats` object returned by `chat_completions` or `compute_embeddings` contains:
-
-*   **total_tokens**: The total number of tokens used (prompt + completion).
-*   **cost**: The calculated cost of the call in USD.
-*   **duration_seconds**: How long the API call took.
-*   **model**: The full name of the model used.
-*   **request_data**: The exact payload sent to the provider.
-*   **response_data**: The raw response received from the provider.
+By leveraging these metrics, you can identify slow models, monitor your budget, and refine your prompts based on actual usage data.
 
 .. code-block:: python
 
@@ -219,7 +231,4 @@ In a production environment, these stats are automatically saved to your databas
 Further Examples
 ----------------
 
-You can find more advanced examples in the `examples/llm_clients/` directory:
-
-*   `01_chat_completions.py`: Detailed usage of chat, streaming, multimodal, and reasoning models.
-*   `02_embeddings.py`: How to turn text into numbers (vectors) for search and AI memory.
+You can find more advanced examples in the `notebooks/` directory.

@@ -962,7 +962,9 @@ tasks:
         assert res2.data.current_msg == "bye"
 
     @pytest.mark.asyncio
-    async def test_workflow_condition_with_history(self, agents_session_maker, monkeypatch):
+    async def test_workflow_condition_with_history(
+        self, agents_session_maker, monkeypatch
+    ):
         service = AgentService(agents_session_maker)
 
         # 1. Populate history
@@ -1140,7 +1142,11 @@ data_types:
 tasks:
   - name: generate
     type: llm
-    prompt: "Hello {{input.user_message}}"
+    prompt: "Hello"
+    inputs:
+      user_message:
+        type: context
+        value: input.user_message
     output: output
     stream: true
 """

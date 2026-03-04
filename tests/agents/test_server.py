@@ -72,7 +72,11 @@ data_types:
 tasks:
   - name: generate
     type: llm
-    prompt: "Hello {{input.user_message}}"
+    prompt: "Hello"
+    inputs:
+      user_message:
+        type: context
+        value: input.user_message
     output: output
     stream: true
 """
