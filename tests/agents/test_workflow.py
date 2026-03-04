@@ -896,8 +896,8 @@ tasks:
 
 class TestWorkflowHistory:
     @pytest.mark.asyncio
-    async def test_workflow_load_from_history(self, agents_db, monkeypatch):
-        service = AgentService(agents_db)
+    async def test_workflow_load_from_history(self, agents_session_maker, monkeypatch):
+        service = AgentService(agents_session_maker)
 
         # 1. Setup first run to populate history
         yaml_1 = """
@@ -962,8 +962,8 @@ tasks:
         assert res2.data.current_msg == "bye"
 
     @pytest.mark.asyncio
-    async def test_workflow_condition_with_history(self, agents_db, monkeypatch):
-        service = AgentService(agents_db)
+    async def test_workflow_condition_with_history(self, agents_session_maker, monkeypatch):
+        service = AgentService(agents_session_maker)
 
         # 1. Populate history
         yaml_1 = """
@@ -1330,12 +1330,11 @@ tasks:
 
         # 3. Define a runner function that creates its own session and service
         async def run_one(user_message):
-            async with agents_session_maker() as session:
-                agent_service = AgentService(session)
-                return await workflow.run(
-                    input_data={"user_message": user_message},
-                    agent_service=agent_service,
-                )
+            agent_service = AgentService(agents_session_maker)
+            return await workflow.run(
+                input_data={"user_message": user_message},
+                agent_service=agent_service,
+            )
 
         # 4. Run two instances concurrently
         results = await asyncio.gather(run_one("Alice"), run_one("Bob"))

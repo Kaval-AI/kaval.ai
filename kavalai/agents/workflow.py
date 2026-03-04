@@ -122,8 +122,6 @@ class Workflow:
 
         input_text = make_prompt(task.prompt, input_data)
 
-        session = agent_service.db if agent_service else None
-
         system_message = dict(role="system", content=input_text)
         if task.images:
             images = []
@@ -162,8 +160,10 @@ class Workflow:
             streamer=streamer,
             temperature=temperature,
         )
-        if session:
-            session.add(stats)
+        if agent_service:
+            async with agent_service.session_maker() as session:
+                session.add(stats)
+                await session.commit()
 
         logger.info(f"Setting {task.output} = {response}")
         run_context.data[task.output] = response
