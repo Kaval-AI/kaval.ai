@@ -259,9 +259,8 @@ async def projects_create(request: Request, data: dict = Body(...)):
     assert_logged_in(request)
     assert_is_admin(request)
     user_session = request.session.get("user_info")
-    async with get_backoffice_session() as session:
-        service = ProjectService(session)
-        return await service.create_project(data, UUID(user_session["id"]))
+    service = ProjectService(db.AsyncBackofficeSession)
+    return await service.create_project(data, UUID(user_session["id"]))
 
 
 @app.get("/projects/get/{project_id}")
@@ -274,9 +273,8 @@ async def projects_get_by_id(project_id: UUID, request: Request):
 async def projects_get_all(request: Request):
     assert_logged_in(request)
     user_id = UUID(request.session.get("user_info")["id"])
-    async with get_backoffice_session() as session:
-        service = ProjectService(session)
-        return await service.get_user_projects(user_id)
+    service = ProjectService(db.AsyncBackofficeSession)
+    return await service.get_user_projects(user_id)
 
 
 @app.put("/projects/update/{project_id}")
@@ -284,11 +282,11 @@ async def projects_update(project_id: UUID, request: Request, data: dict = Body(
     assert_logged_in(request)
     async with get_backoffice_session() as session:
         await assert_is_owner(session, request, project_id)
-        service = ProjectService(session)
-        updated = await service.update_project(project_id, data)
-        if not updated:
-            raise HTTPException(status_code=404, detail="Project not found.")
-        return updated
+    service = ProjectService(db.AsyncBackofficeSession)
+    updated = await service.update_project(project_id, data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return updated
 
 
 @app.delete("/projects/delete/{project_id}")
@@ -296,11 +294,11 @@ async def projects_delete(project_id: UUID, request: Request):
     assert_logged_in(request)
     async with get_backoffice_session() as session:
         await assert_is_owner(session, request, project_id)
-        service = ProjectService(session)
-        success = await service.delete_project(project_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Project not found")
-        return {"status": "deleted"}
+    service = ProjectService(db.AsyncBackofficeSession)
+    success = await service.delete_project(project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "deleted"}
 
 
 @app.get("/users/all")
@@ -574,7 +572,7 @@ async def projects_test_connection(
     else:
         project = await get_project_and_assert_access(request, UUID(project_id))
 
-    service = ProjectService(None)
+    service = ProjectService(db.AsyncBackofficeSession)
     return await service.test_connection(project)
 
 
@@ -583,8 +581,8 @@ async def projects_get_members(project_id: UUID, request: Request):
     assert_logged_in(request)
     async with get_backoffice_session() as session:
         await assert_is_member(session, request, project_id)
-        service = ProjectService(session)
-        return await service.get_members(project_id)
+    service = ProjectService(db.AsyncBackofficeSession)
+    return await service.get_members(project_id)
 
 
 @app.post("/projects/{project_id}/members/add")
@@ -601,9 +599,9 @@ async def projects_add_member(
         if not is_admin:
             await assert_is_owner(session, request, project_id)
 
-        service = ProjectService(session)
-        await service.add_member(project_id, user_id, role)
-        return {"status": "added"}
+    service = ProjectService(db.AsyncBackofficeSession)
+    await service.add_member(project_id, user_id, role)
+    return {"status": "added"}
 
 
 @app.put("/projects/{project_id}/members/update")
@@ -619,9 +617,9 @@ async def projects_update_member(
         if not is_admin:
             await assert_is_owner(session, request, project_id)
 
-        service = ProjectService(session)
-        await service.update_member_role(project_id, user_id, new_role)
-        return {"status": "updated"}
+    service = ProjectService(db.AsyncBackofficeSession)
+    await service.update_member_role(project_id, user_id, new_role)
+    return {"status": "updated"}
 
 
 @app.delete("/projects/{project_id}/members/remove/{user_id}")
@@ -632,9 +630,9 @@ async def projects_remove_member(project_id: UUID, user_id: UUID, request: Reque
         if not is_admin:
             await assert_is_owner(session, request, project_id)
 
-        service = ProjectService(session)
-        await service.remove_member(project_id, user_id)
-        return {"status": "removed"}
+    service = ProjectService(db.AsyncBackofficeSession)
+    await service.remove_member(project_id, user_id)
+    return {"status": "removed"}
 
 
 if __name__ == "__main__":

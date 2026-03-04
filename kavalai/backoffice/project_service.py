@@ -17,7 +17,7 @@ limitations under the License.
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 from sqlalchemy import select, update as sa_update, delete as sa_delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from fastapi import HTTPException, status
 
 from kavalai.backoffice import db
@@ -25,33 +25,38 @@ from kavalai.crud import insert, get_one, update, delete
 
 
 class ProjectService:
-    def __init__(self, db_session: AsyncSession):
-        self.db = db_session
+    def __init__(self, session_maker: async_sessionmaker[AsyncSession]):
+        self.session_maker = session_maker
 
     async def get_project(self, project_id: UUID) -> Optional[db.Project]:
-        return await get_one(self.db, db.Project, project_id)
+        async with self.session_maker() as session:
+            return await get_one(session, db.Project, project_id)
 
     async def get_user_projects(self, user_id: UUID) -> List[Dict[str, Any]]:
-        return await db.get_user_projects(self.db, user_id)
+        async with self.session_maker() as session:
+            return await db.get_user_projects(session, user_id)
 
     async def create_project(self, data: Dict[str, Any], owner_id: UUID) -> db.Project:
-        new_project = await insert(self.db, db.Project, data)
-        # Automatically make the creator the owner in ProjectMembership.
-        membership_data = {
-            "user_id": owner_id,
-            "project_id": new_project.id,
-            "role": db.ProjectRole.owner,
-        }
-        await insert(self.db, db.ProjectMembership, membership_data)
-        return new_project
+        async with self.session_maker() as session:
+            new_project = await insert(session, db.Project, data)
+            # Automatically make the creator the owner in ProjectMembership.
+            membership_data = {
+                "user_id": owner_id,
+                "project_id": new_project.id,
+                "role": db.ProjectRole.owner,
+            }
+            await insert(session, db.ProjectMembership, membership_data)
+            return new_project
 
     async def update_project(
         self, project_id: UUID, data: Dict[str, Any]
     ) -> Optional[db.Project]:
-        return await update(self.db, db.Project, project_id, data)
+        async with self.session_maker() as session:
+            return await update(session, db.Project, project_id, data)
 
     async def delete_project(self, project_id: UUID) -> bool:
-        return await delete(self.db, db.Project, project_id)
+        async with self.session_maker() as session:
+            return await delete(session, db.Project, project_id)
 
     async def get_members(self, project_id: UUID) -> List[Dict[str, Any]]:
         stmt = (
@@ -59,106 +64,110 @@ class ProjectService:
             .join(db.ProjectMembership, db.User.id == db.ProjectMembership.user_id)
             .where(db.ProjectMembership.project_id == project_id)
         )
-        result = await self.db.execute(stmt)
-        members = []
-        for user_obj, role in result.all():
-            members.append(
-                {
-                    "id": str(user_obj.id),
-                    "name": user_obj.name,
-                    "email": user_obj.email,
-                    "picture": user_obj.picture,
-                    "role": role.value,
-                }
-            )
-        return members
+        async with self.session_maker() as session:
+            result = await session.execute(stmt)
+            members = []
+            for user_obj, role in result.all():
+                members.append(
+                    {
+                        "id": str(user_obj.id),
+                        "name": user_obj.name,
+                        "email": user_obj.email,
+                        "picture": user_obj.picture,
+                        "role": role.value,
+                    }
+                )
+            return members
 
     async def add_member(
         self, project_id: UUID, user_id: UUID, role: db.ProjectRole
     ) -> None:
-        # Check if already a member
-        if await db.is_member(self.db, user_id, project_id):
-            raise HTTPException(status_code=400, detail="User is already a member.")
+        async with self.session_maker() as session:
+            # Check if already a member
+            if await db.is_member(session, user_id, project_id):
+                raise HTTPException(status_code=400, detail="User is already a member.")
 
-        membership_data = {
-            "user_id": user_id,
-            "project_id": project_id,
-            "role": role,
-        }
-        await insert(self.db, db.ProjectMembership, membership_data)
+            membership_data = {
+                "user_id": user_id,
+                "project_id": project_id,
+                "role": role,
+            }
+            await insert(session, db.ProjectMembership, membership_data)
 
     async def update_member_role(
         self, project_id: UUID, user_id: UUID, new_role: db.ProjectRole
     ) -> None:
-        # Check if membership exists
-        stmt = select(db.ProjectMembership).where(
-            db.ProjectMembership.project_id == project_id,
-            db.ProjectMembership.user_id == user_id,
-        )
-        result = await self.db.execute(stmt)
-        current_membership = result.scalars().first()
-        if not current_membership:
-            raise HTTPException(status_code=404, detail="Membership not found.")
-
-        if (
-            current_membership.role == db.ProjectRole.owner
-            and new_role != db.ProjectRole.owner
-        ):
-            # Check if this is the last owner
-            owner_stmt = select(db.ProjectMembership).where(
-                db.ProjectMembership.project_id == project_id,
-                db.ProjectMembership.role == db.ProjectRole.owner,
-            )
-            owners_result = await self.db.execute(owner_stmt)
-            owners = owners_result.scalars().all()
-            if len(owners) <= 1:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot demote the last owner of the project.",
-                )
-
-        stmt = (
-            sa_update(db.ProjectMembership)
-            .where(
+        async with self.session_maker() as session:
+            # Check if membership exists
+            stmt = select(db.ProjectMembership).where(
                 db.ProjectMembership.project_id == project_id,
                 db.ProjectMembership.user_id == user_id,
             )
-            .values(role=new_role)
-        )
-        await self.db.execute(stmt)
-        await self.db.commit()
+            result = await session.execute(stmt)
+            current_membership = result.scalars().first()
+            if not current_membership:
+                raise HTTPException(status_code=404, detail="Membership not found.")
+
+            if (
+                current_membership.role == db.ProjectRole.owner
+                and new_role != db.ProjectRole.owner
+            ):
+                # Check if this is the last owner
+                owner_stmt = select(db.ProjectMembership).where(
+                    db.ProjectMembership.project_id == project_id,
+                    db.ProjectMembership.role == db.ProjectRole.owner,
+                )
+                owners_result = await session.execute(owner_stmt)
+                owners = owners_result.scalars().all()
+                if len(owners) <= 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Cannot demote the last owner of the project.",
+                    )
+
+            stmt = (
+                sa_update(db.ProjectMembership)
+                .where(
+                    db.ProjectMembership.project_id == project_id,
+                    db.ProjectMembership.user_id == user_id,
+                )
+                .values(role=new_role)
+            )
+            await session.execute(stmt)
+            await session.commit()
 
     async def remove_member(self, project_id: UUID, user_id: UUID) -> None:
-        # Check if membership exists
-        stmt = select(db.ProjectMembership).where(
-            db.ProjectMembership.project_id == project_id,
-            db.ProjectMembership.user_id == user_id,
-        )
-        result = await self.db.execute(stmt)
-        current_membership = result.scalars().first()
-        if not current_membership:
-            raise HTTPException(status_code=404, detail="Membership not found.")
-
-        if current_membership.role == db.ProjectRole.owner:
-            # Check if this is the last owner
-            owner_stmt = select(db.ProjectMembership).where(
+        async with self.session_maker() as session:
+            # Check if membership exists
+            stmt = select(db.ProjectMembership).where(
                 db.ProjectMembership.project_id == project_id,
-                db.ProjectMembership.role == db.ProjectRole.owner,
+                db.ProjectMembership.user_id == user_id,
             )
-            owners_result = await self.db.execute(owner_stmt)
-            owners = owners_result.scalars().all()
-            if len(owners) <= 1:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot remove the last owner of the project.",
-                )
+            result = await session.execute(stmt)
+            current_membership = result.scalars().first()
+            if not current_membership:
+                raise HTTPException(status_code=404, detail="Membership not found.")
 
-        stmt = sa_delete(db.ProjectMembership).where(
-            db.ProjectMembership.project_id == project_id,
-            db.ProjectMembership.user_id == user_id,
-        )
-        await self.db.execute(stmt)
-        await self.db.commit()
+            if current_membership.role == db.ProjectRole.owner:
+                # Check if this is the last owner
+                owner_stmt = select(db.ProjectMembership).where(
+                    db.ProjectMembership.project_id == project_id,
+                    db.ProjectMembership.role == db.ProjectRole.owner,
+                )
+                owners_result = await session.execute(owner_stmt)
+                owners = owners_result.scalars().all()
+                if len(owners) <= 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Cannot remove the last owner of the project.",
+                    )
+
+            stmt = sa_delete(db.ProjectMembership).where(
+                db.ProjectMembership.project_id == project_id,
+                db.ProjectMembership.user_id == user_id,
+            )
+            await session.execute(stmt)
+            await session.commit()
 
     async def test_connection(self, project: db.Project) -> Dict[str, str]:
         from kavalai.agents.db import db_manager
