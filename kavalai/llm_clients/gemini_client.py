@@ -100,7 +100,7 @@ class GeminiClient:
 
         system_instruction, contents = self._convert_messages(messages)
 
-        config_kwargs = {**kwargs}
+        config_kwargs = {k: v for k, v in kwargs.items() if v is not None}
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
 

@@ -32,15 +32,14 @@ async def main():
         "--url",
         type=str,
         required=True,
-        help="Agent server URL (e.g. http://localhost)",
+        help="Agent server URL with port (e.g. http://localhost:8000)",
     )
-    parser.add_argument("--port", type=int, required=True, help="Agent server port")
     parser.add_argument("--user", type=str, help="Basic auth username")
     parser.add_argument("--password", type=str, help="Basic auth password")
 
     args = parser.parse_args()
 
-    base_url = f"{args.url.rstrip('/')}:{args.port}"
+    base_url = args.url.rstrip("/")
     client = AgentClient(base_url, args.user, args.password)
 
     console.print(f"[bold green]Connecting to agent at {base_url}...[/bold green]")

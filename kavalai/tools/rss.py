@@ -63,17 +63,36 @@ class Feed(BaseModel):
 
 
 @app.get("/get_rss_feed", response_model=Feed)
-def get_rss_feed(
+def get_rss_feed_endpoint(
     url: str,
     max_results: int = 5,
     username: str = Depends(validate_auth),
+) -> Feed:
+    """Fetches and parses an RSS or Atom feed from a given URL via FastAPI.
+
+    Args:
+        url: The valid URL of the RSS feed.
+        max_results: Number of recent articles to return (default 5).
+        username: Authenticated username.
+    """
+    try:
+        return get_rss_feed(url=url, max_results=max_results)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+def get_rss_feed(
+    url: str,
+    max_results: int = 5,
 ) -> Feed:
     """Fetches and parses an RSS or Atom feed from a given URL.
 
     Args:
         url: The valid URL of the RSS feed.
         max_results: Number of recent articles to return (default 5).
-        username: Authenticated username.
     """
     try:
         feed = feedparser.parse(url)
@@ -88,10 +107,7 @@ def get_rss_feed(
             result.items.append(RssFeedItem(title=title, link=link, summary=summary))
         return result
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error parsing feed: {str(e)}",
-        )
+        raise Exception(f"Error parsing feed: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -33,23 +33,18 @@ data_types:
     properties:
       agent_response:
         type: string
-rest_servers:
-  - name: rss
-    url: http://localhost:13001
 tasks:
   - name: Get latest hacker news
-    type: rest
-    tool: get_rss_feed
-    rest_server: rss
+    type: python
+    python_tool: kavalai.tools.rss.get_rss_feed
     inputs:
       url:
         type: literal
         value: "https://news.ycombinator.com/rss"
     output: ycombinator_news
   - name: Get latest Estonian news
-    type: rest
-    tool: get_rss_feed
-    rest_server: rss
+    type: python
+    python_tool: kavalai.tools.rss.get_rss_feed
     inputs:
       url:
         type: literal
