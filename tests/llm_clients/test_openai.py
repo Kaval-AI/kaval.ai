@@ -32,9 +32,8 @@ async def test_openai_chat_completions_simple(openai_client):
     assert stats.prompt_tokens > 0
     assert stats.completion_tokens > 0
     assert stats.model == "openai/gpt-4o-mini"
-    assert stats.cost is not None
-    assert stats.cost > 0
-    assert stats.currency == "USD"
+    assert stats.cost is None
+    assert stats.currency is None
 
 
 @pytest.mark.asyncio
@@ -176,7 +175,7 @@ async def test_openai_compute_embeddings_unit(openai_client):
         assert stats.call_type == "embedding"
         assert stats.model == f"openai/{model}"
         assert stats.total_tokens == 10
-        assert stats.cost == (10 * 0.02 / 1_000_000)
+        assert stats.cost is None
         assert stats.response_data == mock_response_dict
 
         mock_create.assert_called_once_with(

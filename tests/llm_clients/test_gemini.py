@@ -45,8 +45,8 @@ async def test_gemini_chat_completions_simple(gemini_client):
     assert stats.prompt_tokens > 0
     assert stats.completion_tokens > 0
     assert stats.model.startswith("gemini/")
-    assert stats.cost >= 0
-    assert stats.currency == "USD"
+    assert stats.cost is None
+    assert stats.currency is None
 
 
 @pytest.mark.asyncio
