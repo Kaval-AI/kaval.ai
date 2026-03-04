@@ -568,9 +568,8 @@ async def projects_test_connection(
     else:
         project = await get_project_and_assert_access(request, UUID(project_id))
 
-    async with get_backoffice_session() as session:
-        service = ProjectService(session)
-        return await service.test_connection(project)
+    service = ProjectService(None)
+    return await service.test_connection(project)
 
 
 @app.get("/projects/{project_id}/members")
