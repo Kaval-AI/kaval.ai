@@ -52,10 +52,27 @@ export class AgentService {
     return this.http.get<any>(url);
   }
 
-  getSessions(projectId: string, agentId?: string, limit: number = 50, offset: number = 0): Observable<any> {
+  getSessions(
+    projectId: string,
+    agentId?: string,
+    search?: string,
+    startDate?: string,
+    endDate?: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Observable<any> {
     let url = `/api/agents/sessions/${projectId}?limit=${limit}&offset=${offset}`;
     if (agentId) {
       url += `&agent_id=${agentId}`;
+    }
+    if (search) {
+      url += `&search=${encodeURIComponent(search)}`;
+    }
+    if (startDate) {
+      url += `&start_date=${startDate}`;
+    }
+    if (endDate) {
+      url += `&end_date=${endDate}`;
     }
     return this.http.get<any>(url);
   }

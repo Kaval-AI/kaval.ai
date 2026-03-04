@@ -39,6 +39,9 @@ export class ConversationsPage implements OnInit {
 
   // Pagination & Filtering
   selectedAgentId: string = '';
+  searchText: string = '';
+  startDate: string = '';
+  endDate: string = '';
   limit: number = 20;
   offset: number = 0;
   hasMore: boolean = true;
@@ -48,7 +51,24 @@ export class ConversationsPage implements OnInit {
     private userService: UserService,
     private route: ActivatedRoute,
     private router: Router
-  ) {}
+  ) {
+    // Default to last 7 days
+    const now = new Date();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+
+    // Set to start of day for 7 days ago, end of day for today
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    now.setHours(23, 59, 59, 999);
+
+    this.startDate = this.toLocalISOString(sevenDaysAgo);
+    this.endDate = this.toLocalISOString(now);
+  }
+
+  private toLocalISOString(date: Date): string {
+    const tzoffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - tzoffset).toISOString().slice(0, 16);
+  }
 
   ngOnInit(): void {
     this.route.queryParams.subscribe(params => {
@@ -95,8 +115,11 @@ export class ConversationsPage implements OnInit {
     this.error = null;
 
     const agentId = this.selectedAgentId || undefined;
+    const search = this.searchText || undefined;
+    const startDate = this.startDate ? new Date(this.startDate).toISOString() : undefined;
+    const endDate = this.endDate ? new Date(this.endDate).toISOString() : undefined;
 
-    this.agentService.getSessions(this.activeProjectId, agentId, this.limit, this.offset).subscribe({
+    this.agentService.getSessions(this.activeProjectId, agentId, search, startDate, endDate, this.limit, this.offset).subscribe({
       next: (data) => {
         const sessions = data.sessions;
         this.totalSessions = data.total_count;
@@ -124,7 +147,7 @@ export class ConversationsPage implements OnInit {
     this.loadSessions(false);
   }
 
-  onAgentChange(): void {
+  onFilterChange(): void {
     this.loadSessions(true);
   }
 

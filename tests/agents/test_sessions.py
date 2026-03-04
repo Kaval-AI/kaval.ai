@@ -128,3 +128,90 @@ async def test_get_sessions_summary(agents_db):
     assert len(summaries_filtered) == 1
     assert result_filtered["total_count"] == 1
     assert summaries_filtered[0].session_id == s3.id
+
+
+@pytest.mark.asyncio
+async def test_get_sessions_summary_with_search(agents_db):
+    agent = Agent(id=uuid4(), name="Test Agent")
+    agents_db.add(agent)
+    await agents_db.commit()
+
+    now = datetime.now(timezone.utc)
+    s1 = Session(id=uuid4(), agent_id=agent.id, created_at=now, updated_at=now)
+    m1 = ChatMessage(
+        id=uuid4(),
+        agent_id=agent.id,
+        session_id=s1.id,
+        role="user",
+        content="Looking for a specific needle in the haystack",
+        created_at=now,
+    )
+
+    s2 = Session(id=uuid4(), agent_id=agent.id, created_at=now, updated_at=now)
+    m2 = ChatMessage(
+        id=uuid4(),
+        agent_id=agent.id,
+        session_id=s2.id,
+        role="user",
+        content="Just a normal message",
+        created_at=now,
+    )
+
+    agents_db.add_all([s1, m1, s2, m2])
+    await agents_db.commit()
+
+    # Search for "needle"
+    result = await get_sessions_summary(agents_db, search="needle")
+    assert result["total_count"] == 1
+    assert result["sessions"][0].session_id == s1.id
+
+    # Search for "MESSAGE" (case insensitive)
+    result = await get_sessions_summary(agents_db, search="MESSAGE")
+    assert result["total_count"] == 1
+    assert result["sessions"][0].session_id == s2.id
+
+    # Search for something non-existent
+    result = await get_sessions_summary(agents_db, search="nonexistent")
+    assert result["total_count"] == 0
+    assert len(result["sessions"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_get_sessions_summary_with_date_range(agents_db):
+    agent = Agent(id=uuid4(), name="Test Agent")
+    agents_db.add(agent)
+    await agents_db.commit()
+
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+
+    # Session 1: Today
+    s1 = Session(id=uuid4(), agent_id=agent.id, created_at=now, updated_at=now)
+
+    # Session 2: 10 days ago
+    s2 = Session(
+        id=uuid4(),
+        agent_id=agent.id,
+        created_at=now - timedelta(days=10),
+        updated_at=now - timedelta(days=10),
+    )
+
+    agents_db.add_all([s1, s2])
+    await agents_db.commit()
+
+    # Filter for last 7 days
+    start_date = now - timedelta(days=7)
+    result = await get_sessions_summary(agents_db, start_date=start_date)
+    assert result["total_count"] == 1
+    assert result["sessions"][0].session_id == s1.id
+
+    # Filter for range that includes only s2
+    end_date = now - timedelta(days=5)
+    result = await get_sessions_summary(agents_db, end_date=end_date)
+    assert result["total_count"] == 1
+    assert result["sessions"][0].session_id == s2.id
+
+    # Filter for both
+    result = await get_sessions_summary(
+        agents_db, start_date=now - timedelta(days=15), end_date=now + timedelta(days=1)
+    )
+    assert result["total_count"] == 2

@@ -8,7 +8,20 @@
       }
     </div>
     <div class="controls">
-      <select [(ngModel)]="selectedAgentId" (change)="onAgentChange()">
+      <input
+        type="text"
+        [(ngModel)]="searchText"
+        (keyup.enter)="onFilterChange()"
+        placeholder="Search in messages..."
+        class="search-input"
+      >
+      <div class="date-range">
+        <label>From:</label>
+        <input type="datetime-local" [(ngModel)]="startDate" (change)="onFilterChange()">
+        <label>To:</label>
+        <input type="datetime-local" [(ngModel)]="endDate" (change)="onFilterChange()">
+      </div>
+      <select [(ngModel)]="selectedAgentId" (change)="onFilterChange()">
         <option value="">All Agents</option>
         @for (agent of agents; track agent.id) {
           <option [value]="agent.id">{{ agent.name }}</option>

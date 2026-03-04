@@ -16,6 +16,7 @@ limitations under the License.
 
 import logging
 import os
+from datetime import datetime
 from uuid import UUID
 
 import uvicorn
@@ -395,6 +396,9 @@ async def agents_get_sessions(
     project_id: UUID,
     request: Request,
     agent_id: UUID | None = None,
+    search: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     limit: int = 50,
     offset: int = 0,
 ):
@@ -404,7 +408,13 @@ async def agents_get_sessions(
 
     async with get_project_session(project) as session:
         return await agent_sessions.get_sessions_summary(
-            session, agent_id=agent_id, limit=limit, offset=offset
+            session,
+            agent_id=agent_id,
+            search=search,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
         )
 
 

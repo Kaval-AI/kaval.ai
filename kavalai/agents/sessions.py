@@ -44,13 +44,39 @@ class SessionsResponse(TypedDict):
 async def get_sessions_summary(
     session: AsyncSession,
     agent_id: UUID | None = None,
+    search: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> SessionsResponse:
     # Get total count first
-    count_stmt = select(func.count(Session.id))
+    # We need to apply filters to count as well
+
+    # Subquery to identify sessions that match the search criteria in messages
+    session_filter_stmt = select(Session.id)
     if agent_id:
-        count_stmt = count_stmt.where(Session.agent_id == agent_id)
+        session_filter_stmt = session_filter_stmt.where(Session.agent_id == agent_id)
+    if start_date:
+        session_filter_stmt = session_filter_stmt.where(
+            Session.created_at >= start_date
+        )
+    if end_date:
+        session_filter_stmt = session_filter_stmt.where(Session.created_at <= end_date)
+
+    if search:
+        # Search in ChatMessage content
+        search_subq = (
+            select(ChatMessage.session_id)
+            .where(ChatMessage.content.ilike(f"%{search}%"))
+            .distinct()
+            .subquery()
+        )
+        session_filter_stmt = session_filter_stmt.where(
+            Session.id.in_(select(search_subq.c.session_id))
+        )
+
+    count_stmt = select(func.count()).select_from(session_filter_stmt.subquery())
 
     total_count_res = await session.execute(count_stmt)
     total_count = total_count_res.scalar() or 0
@@ -99,6 +125,13 @@ async def get_sessions_summary(
 
     if agent_id:
         stmt = stmt.where(Session.agent_id == agent_id)
+    if start_date:
+        stmt = stmt.where(Session.created_at >= start_date)
+    if end_date:
+        stmt = stmt.where(Session.created_at <= end_date)
+    if search:
+        # We already have search_subq defined earlier
+        stmt = stmt.where(Session.id.in_(select(search_subq.c.session_id)))
 
     stmt = stmt.order_by(desc(Session.updated_at)).limit(limit).offset(offset)
 
