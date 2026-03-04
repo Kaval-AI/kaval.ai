@@ -163,8 +163,14 @@ class ProjectService:
     async def test_connection(self, project: db.Project) -> Dict[str, str]:
         from kavalai.agents.db import db_manager
         from sqlalchemy import text
+        import logging
+
+        logger = logging.getLogger(__name__)
 
         try:
+            logger.info(
+                f"Testing connection to project database: host={project.db_host}, port={project.db_port}, db={project.db_name}, user={project.db_user}"
+            )
             project_session_maker = db_manager.get_sessionmaker(
                 user=project.db_user,
                 password=project.db_password,
@@ -176,7 +182,8 @@ class ProjectService:
                 await project_session.execute(text("SELECT 1"))
             return {"status": "success", "message": "Connection successful"}
         except Exception as e:
+            logger.error(f"Failed to connect to project database: {e}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
+                detail=f"Failed to connect: {str(e)}",
             )

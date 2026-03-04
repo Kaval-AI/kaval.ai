@@ -51,14 +51,22 @@ export class ConversationsPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.activeProjectId = this.userService.getActiveProjectId();
     this.route.queryParams.subscribe(params => {
       if (params['agentId']) {
         this.selectedAgentId = params['agentId'];
       }
     });
-    this.loadAgents();
-    this.loadSessions();
+
+    this.userService.userDetails.subscribe(user => {
+      if (user && user.active_project_id) {
+        const newProjectId = user.active_project_id !== 'None' ? user.active_project_id : null;
+        if (newProjectId !== this.activeProjectId) {
+          this.activeProjectId = newProjectId;
+          this.loadAgents();
+          this.loadSessions();
+        }
+      }
+    });
   }
 
   loadAgents(): void {

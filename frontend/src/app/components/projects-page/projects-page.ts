@@ -41,7 +41,20 @@ export class ProjectsPage implements OnInit {
 
   ngOnInit() {
     this.userService.userDetails.subscribe(details => {
-      if (details) {
+      if (details && details.active_project_id) {
+        const newActiveProjectId = details.active_project_id !== 'None' ? details.active_project_id : null;
+
+        // If active project changed and we already have projects loaded, update selection
+        if (this.projects.length > 0 && newActiveProjectId) {
+          const projectToSelect = this.projects.find(p => p.id === newActiveProjectId);
+          if (projectToSelect && projectToSelect.id !== this.selectedProject?.id) {
+            this.selectProject(projectToSelect);
+          }
+        } else {
+          // Initial load or no projects yet
+          this.loadProjects();
+        }
+      } else if (details) {
         this.loadProjects();
       }
     });

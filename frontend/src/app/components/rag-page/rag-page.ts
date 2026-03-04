@@ -48,10 +48,16 @@ export class RagPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.projectId = this.userService.getActiveProjectId();
-    if (this.projectId) {
-      this.loadRagStats();
-    }
+    this.userService.userDetails.subscribe(user => {
+      if (user && user.active_project_id) {
+        const newProjectId = user.active_project_id !== 'None' ? user.active_project_id : null;
+        if (newProjectId !== this.projectId) {
+          this.projectId = newProjectId;
+          this.results = [];
+          this.loadRagStats();
+        }
+      }
+    });
   }
 
   loadRagStats(): void {

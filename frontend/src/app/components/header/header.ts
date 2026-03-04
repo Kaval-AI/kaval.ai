@@ -74,11 +74,6 @@ export class Header implements OnInit {
     const projectId = target.value;
     if (projectId) {
       this.userService.setActiveProject(projectId);
-      // Refresh current component by reloading the route
-      const currentUrl = this.router.url;
-      this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
-        this.router.navigate([currentUrl]);
-      });
     }
   }
 

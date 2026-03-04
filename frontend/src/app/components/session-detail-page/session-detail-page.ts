@@ -42,12 +42,20 @@ export class SessionDetailPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.projectId = this.userService.getActiveProjectId();
     this.route.paramMap.subscribe((params) => {
       this.sessionId = params.get('sessionId');
-      if (this.sessionId && this.projectId) {
-        this.loadMessages();
-      } else {
+    });
+
+    this.userService.userDetails.subscribe(user => {
+      if (user && user.active_project_id) {
+        const newProjectId = user.active_project_id !== 'None' ? user.active_project_id : null;
+        if (newProjectId !== this.projectId) {
+          this.projectId = newProjectId;
+          if (this.sessionId && this.projectId) {
+            this.loadMessages();
+          }
+        }
+      } else if (this.sessionId) {
         this.error = 'Invalid session or project';
       }
     });

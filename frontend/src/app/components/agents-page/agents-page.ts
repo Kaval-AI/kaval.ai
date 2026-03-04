@@ -70,8 +70,17 @@ export class AgentsPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.activeProjectId = this.userService.getActiveProjectId();
-    this.loadAgents();
+    this.userService.userDetails.subscribe(user => {
+      if (user && user.active_project_id) {
+        const newProjectId = user.active_project_id !== 'None' ? user.active_project_id : null;
+        if (newProjectId !== this.activeProjectId) {
+          this.activeProjectId = newProjectId;
+          this.selectedAgent = null;
+          this.stats = null;
+          this.loadAgents();
+        }
+      }
+    });
   }
 
   private loadStats(agentId?: string): void {
