@@ -205,8 +205,12 @@ async def test_openai_compute_embeddings_normalize_unit(openai_client):
         openai_client.client.embeddings, "create", new_callable=AsyncMock
     ) as mock_create:
         mock_create.return_value = mock_response
+        # We pass an explicit normalizer to avoid global state from get_default_normalizer()
+        from kavalai.normalizer import Normalizer
+
+        explicit_normalizer = Normalizer(l2=True)
         embeddings, _ = await openai_client.compute_embeddings(
-            model=model, texts=texts, normalize=True
+            model=model, texts=texts, normalize=True, normalizer=explicit_normalizer
         )
 
         assert len(embeddings[0]) == 1536  # Assert embedding dimension

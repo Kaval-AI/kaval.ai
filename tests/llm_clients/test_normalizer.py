@@ -178,12 +178,21 @@ async def test_rag_service_learn_normalizer(agents_db):
     assert np.allclose(normalizer.center_vector, [2.0, 2.0])
 
 
-def test_get_default_normalizer(tmp_path, monkeypatch):
-    from kavalai.normalizer import get_default_normalizer
+@pytest.fixture
+def clean_default_normalizer():
     import kavalai.normalizer
 
-    # Clear cache for testing
+    # Save original
+    original = kavalai.normalizer._default_normalizer
     kavalai.normalizer._default_normalizer = None
+    yield
+    # Restore original
+    kavalai.normalizer._default_normalizer = original
+
+
+def test_get_default_normalizer(tmp_path, monkeypatch, clean_default_normalizer):
+    from kavalai.normalizer import get_default_normalizer
+    import kavalai.normalizer
 
     # 1. Default (no env var)
     normalizer = get_default_normalizer()

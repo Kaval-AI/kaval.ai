@@ -52,10 +52,6 @@ include = ["kavalai*"]
 [tool.setuptools.package-data]
 "kavalai" = [
     "sql_migrations/**/*.sql",
-    "demo_tasks/**/*.yaml",
-    "demo_tasks/**/*.yml",
-    "demo_personas/**/*.yaml",
-    "demo_personas/**/*.yml",
     "demo_agents/**/*.yaml",
     "demo_agents/**/*.yml",
 ]
