@@ -157,6 +157,7 @@ class LLMClient:
             messages=messages,
             response_model=response_model,
             streamer=streamer,
+            stream_delta=stream_delta,
             **kwargs,
         )
 
