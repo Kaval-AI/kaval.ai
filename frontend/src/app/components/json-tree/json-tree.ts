@@ -24,7 +24,14 @@ import { CommonModule } from '@angular/common';
   styleUrl: './json-tree.css'
 })
 export class JsonTreeComponent implements OnInit {
-  @Input() data: any;
+  private _data: any;
+  @Input() set data(value: any) {
+    this._data = value;
+    this.processData();
+  }
+  get data(): any {
+    return this._data;
+  }
   @Input() key: string | number | null = null;
   @Input() isExpanded: boolean = false;
   @Input() depth: number = 0;
@@ -40,6 +47,10 @@ export class JsonTreeComponent implements OnInit {
   children: { key: string | number, value: any }[] = [];
 
   ngOnInit() {
+    this.processData();
+  }
+
+  private processData() {
     this.isObject = false;
     this.isArray = false;
     this.isExpandable = false;
@@ -54,7 +65,7 @@ export class JsonTreeComponent implements OnInit {
       this.isObject = true;
       this.isExpandable = this.data.length > 0;
       this.formattedValue = `Array[${this.data.length}]`;
-      this.children = this.data.map((value, index) => ({ key: index, value }));
+      this.children = this.data.map((value: any, index: number) => ({ key: index, value }));
     } else if (this.type === 'object') {
       this.isObject = true;
       const keys = Object.keys(this.data);

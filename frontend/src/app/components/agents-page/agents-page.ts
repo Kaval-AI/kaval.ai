@@ -39,6 +39,10 @@ export class AgentsPage implements OnInit {
   selectedAgent: Agent | null = null;
   activeProjectId: string | null = null;
 
+  showModal: boolean = false;
+  modalTitle: string = '';
+  modalData: any = null;
+
   stats: any = null;
   public lineChartData: ChartConfiguration<'line'>['data'] = {
     datasets: [],
@@ -71,12 +75,14 @@ export class AgentsPage implements OnInit {
 
   ngOnInit(): void {
     this.userService.userDetails.subscribe(user => {
-      if (user && user.active_project_id) {
-        const newProjectId = user.active_project_id !== 'None' ? user.active_project_id : null;
+      if (user) {
+        const newProjectId = (user.active_project_id && user.active_project_id !== 'None') ? user.active_project_id : null;
         if (newProjectId !== this.activeProjectId) {
           this.activeProjectId = newProjectId;
           this.selectedAgent = null;
           this.stats = null;
+          this.loadAgents();
+        } else if (newProjectId === null) {
           this.loadAgents();
         }
       }
@@ -187,5 +193,26 @@ export class AgentsPage implements OnInit {
     if (this.selectedAgent) {
       this.router.navigate(['/conversations'], { queryParams: { agentId: this.selectedAgent.id } });
     }
+  }
+
+  openModal(type: 'workflow' | 'input' | 'output'): void {
+    if (!this.selectedAgent) return;
+
+    this.showModal = true;
+    if (type === 'workflow') {
+      this.modalTitle = 'Workflow JSON';
+      this.modalData = this.selectedAgent.workflow;
+    } else if (type === 'input') {
+      this.modalTitle = 'Input Schema';
+      this.modalData = this.selectedAgent.input_schema;
+    } else if (type === 'output') {
+      this.modalTitle = 'Output Schema';
+      this.modalData = this.selectedAgent.output_schema;
+    }
+  }
+
+  closeModal(): void {
+    this.showModal = false;
+    this.modalData = null;
   }
 }

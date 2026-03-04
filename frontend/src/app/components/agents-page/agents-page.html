@@ -42,32 +42,31 @@
         @if (selectedAgent) {
           <div class="agent-details">
             <h3>Agent Workflow: {{ selectedAgent.name }}</h3>
+            <div class="agent-actions">
+              <button class="btn-action" (click)="openModal('workflow')">Workflow</button>
+              <button class="btn-action" (click)="openModal('input')">Input Schema</button>
+              <button class="btn-action" (click)="openModal('output')">Output Schema</button>
+            </div>
+
             <div class="workflow-chart">
               <img [src]="getSvgUrl(selectedAgent.id)" [alt]="selectedAgent.name + ' workflow'" />
             </div>
-
-            <div class="schemas">
-              @if (selectedAgent.workflow) {
-                <div>
-                  <h5>Workflow JSON</h5>
-                  <app-json-tree [data]="selectedAgent.workflow" [isExpanded]="false"></app-json-tree>
-                </div>
-              }
-              @if (selectedAgent.input_schema) {
-                <div>
-                  <h5>Input Schema</h5>
-                  <app-json-tree [data]="selectedAgent.input_schema" [isExpanded]="false"></app-json-tree>
-                </div>
-              }
-              @if (selectedAgent.output_schema) {
-                <div>
-                  <h5>Output Schema</h5>
-                  <app-json-tree [data]="selectedAgent.output_schema" [isExpanded]="false"></app-json-tree>
-                </div>
-              }
-            </div>
           </div>
         }
+      </div>
+    }
+
+    @if (showModal) {
+      <div class="modal-backdrop" (click)="closeModal()">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>{{ modalTitle }}</h3>
+            <button class="close-btn" (click)="closeModal()">&times;</button>
+          </div>
+          <div class="modal-body">
+            <app-json-tree [data]="modalData" [isExpanded]="true"></app-json-tree>
+          </div>
+        </div>
       </div>
     }
 

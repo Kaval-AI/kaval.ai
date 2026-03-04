@@ -103,4 +103,15 @@ describe('JsonTreeComponent', () => {
     expect(childElements[0].componentInstance.data).toBe('value');
     expect(childElements[0].componentInstance.key).toBe('key');
   });
+  it('should react to data changes', () => {
+    component.data = { a: 1 };
+    fixture.detectChanges();
+    expect(component.formattedValue).toBe('Object');
+    expect(component.children.length).toBe(1);
+
+    component.data = [1, 2, 3];
+    fixture.detectChanges();
+    expect(component.formattedValue).toBe('Array[3]');
+    expect(component.children.length).toBe(3);
+  });
 });
