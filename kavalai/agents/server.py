@@ -19,14 +19,14 @@ import asyncio
 import logging
 import secrets
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Callable
 from typing import Optional, Union
 from uuid import UUID
 
 import uvicorn
 from environs import Env
 from fastapi import Depends
-from fastapi import HTTPException, status, FastAPI, Response
+from fastapi import HTTPException, status, FastAPI, Response, APIRouter
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
@@ -107,139 +107,219 @@ async def session_scope(session_or_factory):
         yield session_or_factory
 
 
-def create_agent_app(
+async def handle_agent_run(
+    workflow: Workflow,
+    session_provider: Union[async_sessionmaker, None],
+    input_data: dict,
+    session_id: Optional[UUID] = None,
+    external_id: Optional[str] = None,
+):
+    """Execute the agent workflow with the provided input.
+
+    This is a standalone handler that can be used directly or wrapped in a FastAPI route.
+
+    Args:
+        workflow: The Workflow instance to execute.
+        session_provider: An optional SQLAlchemy async_sessionmaker for database sessions.
+        input_data: The input data for the workflow (already extracted from request).
+        session_id: Optional session ID for continuing a previous session.
+        external_id: Optional external identifier for tracking.
+
+    Returns:
+        A tuple of (session_id, output_data).
+    """
+    agent_service = AgentService(session_provider)
+    result = await workflow.run(
+        input_data=input_data,
+        session_id=session_id,
+        external_id=external_id,
+        agent_service=agent_service,
+    )
+    return result.session_id, result.data
+
+
+async def handle_agent_stream(
+    workflow: Workflow,
+    session_provider: Union[async_sessionmaker, None],
+    input_data: dict,
+    session_id: Optional[UUID] = None,
+    external_id: Optional[str] = None,
+):
+    """Execute the agent workflow and yield streaming output.
+
+    This is a standalone async generator that can be used directly or wrapped in a FastAPI route.
+
+    Args:
+        workflow: The Workflow instance to execute.
+        session_provider: An optional SQLAlchemy async_sessionmaker for database sessions.
+        input_data: The input data for the workflow (already extracted from request).
+        session_id: Optional session ID for continuing a previous session.
+        external_id: Optional external identifier for tracking.
+
+    Yields:
+        Server-Sent Events formatted strings (data: ...\n\n).
+    """
+    agent_service = AgentService(session_provider)
+    queue = asyncio.Queue()
+
+    # Get the dynamic output type from workflow
+    OutputDataType = workflow.get_data_type("output")
+
+    class OutputType(BaseModel):
+        session_id: Optional[UUID]
+        data: OutputDataType
+
+    # Start workflow in a background task
+    task = asyncio.create_task(
+        workflow.run(
+            input_data=input_data,
+            session_id=session_id,
+            external_id=external_id,
+            queue=queue,
+            agent_service=agent_service,
+        )
+    )
+
+    while not task.done() or not queue.empty():
+        try:
+            line = await asyncio.wait_for(queue.get(), timeout=0.01)
+            yield f"data: {line}\n\n"
+        except asyncio.TimeoutError:
+            continue
+
+    # Check if the task raised an exception and get the result
+    result = await task
+
+    # Stream final output
+    output = OutputType(session_id=result.session_id, data=result.data)
+    streamer = Streamer("output", queue)
+    await streamer.stream_complete(output.model_dump_json())
+
+    # Yield any remaining items in the queue (including our final output)
+    while not queue.empty():
+        line = await queue.get()
+        yield f"data: {line}\n\n"
+
+
+def create_default_auth_dependency() -> Callable:
+    """Create the default HTTP Basic Auth dependency using environment variables.
+
+    Returns:
+        A FastAPI dependency function that validates HTTP Basic Authentication.
+    """
+
+    def auth_dependency(
+        credentials: Annotated[Optional[HTTPBasicCredentials], Depends(security)],
+    ):
+        return validate_auth(credentials)
+
+    return auth_dependency
+
+
+def create_agent_router(
     workflow: Workflow,
     session_provider: Union[async_sessionmaker, None] = None,
-) -> FastAPI:
-    """Create a FastAPI application for a given workflow.
+    auth_dependency: Optional[Callable] = None,
+) -> APIRouter:
+    """Create a FastAPI router for a given workflow.
 
-    The application dynamically generates input and output models based on the
-    workflow's schema and provides endpoints to run the agent and retrieve
-    its configuration.
+    This function creates a reusable router that can be mounted on existing FastAPI applications,
+    allowing for flexible composition and custom routing configurations.
 
     Args:
         workflow: The Workflow instance to serve.
         session_provider: An optional SQLAlchemy async_sessionmaker to provide
             database sessions for agent execution.
+        auth_dependency: An optional FastAPI dependency for authentication.
+            If None, the default HTTP Basic Auth will be used.
+            Pass a custom dependency function to use your own auth, or pass
+            lambda: None to disable authentication.
 
     Returns:
-        A FastAPI application instance.
+        An APIRouter instance with configured endpoints.
+
+    Example:
+        ```python
+        # Use with custom auth
+        def my_auth():
+            # Custom auth logic
+            pass
+
+        router = create_agent_router(workflow, session_provider, auth_dependency=my_auth)
+        app.include_router(router, prefix="/agents/my-workflow")
+
+        # Or disable auth entirely
+        router = create_agent_router(workflow, session_provider, auth_dependency=lambda: None)
+        ```
     """
-    app = FastAPI(
-        title=workflow.workflow_model.name,
-        description=workflow.workflow_model.description,
-        version=workflow.workflow_model.version,
-    )
-    app.state.workflow = workflow
+    router = APIRouter()
+
+    # Use default auth if none provided
+    if auth_dependency is None:
+        auth_dependency = create_default_auth_dependency()
 
     InputDataType = workflow.get_data_type("input")
     OutputDataType = workflow.get_data_type("output")
 
     # Define the request body schema.
-    # It wraps the workflow's input data and adds session management fields.
     class InputType(BaseModel):
         session_id: Optional[UUID] = None
         external_id: Optional[str] = None
         data: InputDataType
 
     # Define the response body schema.
-    # It wraps the workflow's output data and includes the session ID.
     class OutputType(BaseModel):
         session_id: Optional[UUID]
         data: OutputDataType
 
-    @app.post("/run_agent", response_model=OutputType)
+    @router.post("/run_agent", response_model=OutputType)
     async def run_agent(
         input_data: InputType,
-        credentials: Annotated[Optional[HTTPBasicCredentials], Depends(security)],
+        _auth: Annotated[None, Depends(auth_dependency)],
     ) -> OutputType:
-        """Execute the agent workflow with the provided input.
-
-        This endpoint:
-        1. Validates authentication.
-        2. Initializes the AgentService with the session provider.
-        3. Runs the workflow with the provided data and session parameters.
-        4. Returns the execution result and session ID.
-        """
-        validate_auth(credentials)
-        agent_service = AgentService(session_provider)
-        result = await workflow.run(
+        """Execute the agent workflow with the provided input."""
+        session_id, data = await handle_agent_run(
+            workflow=workflow,
+            session_provider=session_provider,
             input_data=input_data.data.model_dump(),
             session_id=input_data.session_id,
             external_id=input_data.external_id,
-            agent_service=agent_service,
         )
-        return OutputType(session_id=result.session_id, data=result.data)
+        return OutputType(session_id=session_id, data=data)
 
-    @app.post("/stream_agent")
+    @router.post("/stream_agent")
     async def stream_agent(
         input_data: InputType,
-        credentials: Annotated[Optional[HTTPBasicCredentials], Depends(security)],
+        _auth: Annotated[None, Depends(auth_dependency)],
     ) -> StreamingResponse:
-        """Execute the agent workflow and stream the output.
+        """Execute the agent workflow and stream the output."""
+        return StreamingResponse(
+            handle_agent_stream(
+                workflow=workflow,
+                session_provider=session_provider,
+                input_data=input_data.data.model_dump(),
+                session_id=input_data.session_id,
+                external_id=input_data.external_id,
+            ),
+            media_type="text/event-stream",
+        )
 
-        This endpoint:
-        1. Validates authentication.
-        2. Initializes the AgentService with the session provider.
-        3. Runs the workflow in the background while streaming results in Server-Sent Events (SSE) format (text/event-stream).
-        """
-        validate_auth(credentials)
-
-        async def generate():
-            agent_service = AgentService(session_provider)
-            queue = asyncio.Queue()
-            # Start workflow in a background task
-            task = asyncio.create_task(
-                workflow.run(
-                    input_data=input_data.data.model_dump(),
-                    session_id=input_data.session_id,
-                    external_id=input_data.external_id,
-                    queue=queue,
-                    agent_service=agent_service,
-                )
-            )
-            while not task.done() or not queue.empty():
-                try:
-                    line = await asyncio.wait_for(queue.get(), timeout=0.01)
-                    yield f"data: {line}\n\n"
-                except asyncio.TimeoutError:
-                    continue
-
-            # Check if the task raised an exception and get the result
-            result = await task
-
-            # Stream final output
-            output = OutputType(session_id=result.session_id, data=result.data)
-            streamer = Streamer("output", queue)
-            await streamer.stream_complete(output.model_dump_json())
-
-            # Yield any remaining items in the queue (including our final output)
-            while not queue.empty():
-                line = await queue.get()
-                yield f"data: {line}\n\n"
-
-        return StreamingResponse(generate(), media_type="text/event-stream")
-
-    @app.get("/workflow", response_model=OutputType)
+    @router.get("/workflow")
     async def get_workflow(
-        credentials: Annotated[Optional[HTTPBasicCredentials], Depends(security)],
+        _auth: Annotated[None, Depends(auth_dependency)],
     ):
-        """Retrieve the workflow configuration.
-
-        Returns the full YAML-derived workflow model in JSON format.
-        """
-        validate_auth(credentials)
+        """Retrieve the workflow configuration."""
         return Response(
             content=workflow.workflow_model.model_dump_json(),
             media_type="application/json",
         )
 
-    @app.get("/liveness")
+    @router.get("/liveness")
     async def liveness():
         """Liveness probe for K8s."""
         return {"status": "ok"}
 
-    @app.get("/health")
+    @router.get("/health")
     async def health():
         """Health probe for K8s. Checks DB connectivity."""
         try:
@@ -252,6 +332,47 @@ def create_agent_app(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Database connection failed",
             )
+
+    return router
+
+
+def create_agent_app(
+    workflow: Workflow,
+    session_provider: Union[async_sessionmaker, None] = None,
+    auth_dependency: Optional[Callable] = None,
+) -> FastAPI:
+    """Create a FastAPI application for a given workflow.
+
+    The application dynamically generates input and output models based on the
+    workflow's schema and provides endpoints to run the agent and retrieve
+    its configuration.
+
+    This function now uses create_agent_router() internally for better composability.
+
+    Args:
+        workflow: The Workflow instance to serve.
+        session_provider: An optional SQLAlchemy async_sessionmaker to provide
+            database sessions for agent execution.
+        auth_dependency: An optional FastAPI dependency for authentication.
+            If None, the default HTTP Basic Auth will be used.
+
+    Returns:
+        A FastAPI application instance.
+    """
+    app = FastAPI(
+        title=workflow.workflow_model.name,
+        description=workflow.workflow_model.description,
+        version=workflow.workflow_model.version,
+    )
+    app.state.workflow = workflow
+
+    # Use the router factory to create all endpoints
+    router = create_agent_router(
+        workflow=workflow,
+        session_provider=session_provider,
+        auth_dependency=auth_dependency,
+    )
+    app.include_router(router)
 
     return app
 
