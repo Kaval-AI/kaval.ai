@@ -560,6 +560,20 @@ class Workflow:
                 )
             )
 
+        # Store the tool run info.
+        if agent_service and run_context.run_id:
+            await agent_service.add_task(
+                agent_id=run_context.agent_id,
+                session_id=run_context.session_id,
+                run_id=run_context.run_id,
+                inputs={
+                    "text": text,
+                    "top_k": task.top_k,
+                    "collection_name": task.collection_name,
+                },
+                output=run_context.data[task.name],
+            )
+
     async def run(
         self,
         input_data: dict,
