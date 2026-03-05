@@ -514,22 +514,33 @@ class Workflow:
             if resolved is not None:
                 text = str(resolved)
 
-        # 1. Get embedding model from workflow or task (if added later)
-        # For now, we'll use the workflow's llm_model or a default if not specified
-        model = self.workflow_model.llm_model or "openai/text-embedding-3-small"
+        if not text:
+            run_context.data[task.name] = []
+        else:
+            # 1. Get embedding model from workflow
+            model = self.workflow_model.embedding_model
 
-        # 2. Initialize RagService
-        rag_service = RagService.from_session_maker(agent_service.session_maker, model)
-        results = await rag_service.query(
-            text=text,
-            top_k=task.top_k,
-            collection_name=task.collection_name,
-            source_ids=task.source_ids,
-            keep_best=task.keep_best,
-        )
+            # 2. Initialize RagService
+            rag_service = RagService.from_session_maker(
+                agent_service.session_maker, model
+            )
+            results = await rag_service.query(
+                text=text,
+                top_k=task.top_k,
+                collection_name=task.collection_name,
+                source_ids=task.source_ids,
+                keep_best=task.keep_best,
+            )
 
-        # 3. Store results in run_context.data
-        run_context.data[task.name] = [r.model_dump() for r in results]
+            # 3. Store results in run_context.data (only similarity, content, and source_id)
+            run_context.data[task.name] = [
+                {
+                    "similarity": r.similarity,
+                    "content": r.content,
+                    "source_id": r.source_id,
+                }
+                for r in results
+            ]
 
         # 4. Handle output mapping if defined
         if task.output:

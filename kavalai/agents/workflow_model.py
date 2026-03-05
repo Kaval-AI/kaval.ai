@@ -201,6 +201,7 @@ class WorkflowModel(BaseModel):
     version: str = "1.0"
     temperature: float = 0.0
     llm_model: Optional[str] = None
+    embedding_model: str = "openai/text-embedding-3-small"
     data_types: dict[str, dict]
     rest_servers: list[RestServer] = []
     mcp_servers: list[McpServer] = []

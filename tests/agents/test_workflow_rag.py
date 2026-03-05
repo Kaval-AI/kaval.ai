@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from kavalai.agents.workflow import Workflow
 from kavalai.agents.workflow_model import WorkflowModel, RagQueryTask
 from kavalai.agents.run_context import RunContext
@@ -25,6 +25,11 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
 
     mock_query = AsyncMock(return_value=mock_results)
     monkeypatch.setattr("kavalai.agents.workflow.RagService.query", mock_query)
+    mock_rag_service = AsyncMock(query=mock_query)
+    mock_from_session_maker = MagicMock(return_value=mock_rag_service)
+    monkeypatch.setattr(
+        "kavalai.agents.workflow.RagService.from_session_maker", mock_from_session_maker
+    )
 
     # 2. Define Workflow and Task
     task = RagQueryTask(
@@ -33,7 +38,8 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
 
     workflow_model = WorkflowModel(
         name="test_workflow",
-        llm_model="openai/test-embedding-model",
+        llm_model="openai/gpt-4o",
+        embedding_model="openai/test-embedding-model",
         data_types={
             "input": {"type": "object", "properties": {}},
             "output": {"type": "object", "properties": {}},
@@ -55,6 +61,15 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
     assert len(run_context.data["rag_task"]) == 1
     assert run_context.data["rag_task"][0]["content"] == "test content"
     assert run_context.data["rag_task"][0]["similarity"] == 0.9
+    assert run_context.data["rag_task"][0]["source_id"] == "source-1"
+    # Ensure other fields are NOT present
+    assert "id" not in run_context.data["rag_task"][0]
+    assert "model" not in run_context.data["rag_task"][0]
+
+    # Verify RagService was initialized with the correct model
+    mock_from_session_maker.assert_called_once_with(
+        agent_service.session_maker, "openai/test-embedding-model"
+    )
 
     mock_query.assert_called_once_with(
         text="search query",
@@ -93,6 +108,56 @@ async def test_run_rag_task_with_context_resolution(agents_session_maker, monkey
     mock_query.assert_called_once()
     args, kwargs = mock_query.call_args
     assert kwargs["text"] == "resolved query"
+
+
+@pytest.mark.asyncio
+async def test_run_rag_task_empty_input(agents_session_maker, monkeypatch):
+    task = RagQueryTask(name="rag_task", text="")
+
+    workflow_model = WorkflowModel(
+        name="test_workflow",
+        data_types={
+            "input": {"type": "object", "properties": {}},
+            "output": {"type": "object", "properties": {}},
+        },
+        tasks=[task],
+    )
+
+    agent_service = AgentService(agents_session_maker)
+    workflow = Workflow(workflow_model, agent_service=agent_service)
+
+    run_context = RunContext(agent_service=agent_service)
+    run_context.data = {"input": {}}
+
+    await workflow.run_rag_task(task, run_context, None, agent_service)
+
+    assert "rag_task" in run_context.data
+    assert run_context.data["rag_task"] == []
+
+
+@pytest.mark.asyncio
+async def test_run_rag_task_resolved_empty_input(agents_session_maker, monkeypatch):
+    task = RagQueryTask(name="rag_task", text="input.query")
+
+    workflow_model = WorkflowModel(
+        name="test_workflow",
+        data_types={
+            "input": {"type": "object", "properties": {}},
+            "output": {"type": "object", "properties": {}},
+        },
+        tasks=[task],
+    )
+
+    agent_service = AgentService(agents_session_maker)
+    workflow = Workflow(workflow_model, agent_service=agent_service)
+
+    run_context = RunContext(agent_service=agent_service)
+    run_context.data = {"input": {"query": ""}}
+
+    await workflow.run_rag_task(task, run_context, None, agent_service)
+
+    assert "rag_task" in run_context.data
+    assert run_context.data["rag_task"] == []
 
 
 @pytest.mark.asyncio
