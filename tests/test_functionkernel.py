@@ -176,14 +176,129 @@ async def test_mcp_tool_sse():
             mock_sse.assert_called_with("http://mcp.example.com/sse")
 
 
-def test_tool_descriptions():
+@pytest.mark.asyncio
+async def test_tool_descriptions():
     kernel = FunctionKernel()
-    kernel.register_python_tool("add", sync_add)
+    kernel.register_python_tool("math.add", sync_add)
     kernel.register_rest_server(RestServer(name="my_rest", url="http://api.com"))
     kernel.register_mcp_server(McpServer(name="my_mcp", command="ls"))
 
-    desc = kernel.get_tool_descriptions()
-    assert "Python Tool: add(a: int, b: int)" in desc
-    assert "Description: Adds two integers." in desc
-    assert "REST Server: my_rest" in desc
-    assert "MCP Server: my_mcp" in desc
+    with patch("kavalai.functionkernel.stdio_client") as mock_stdio:
+        mock_stdio.return_value.__aenter__.return_value = (AsyncMock(), AsyncMock())
+        with patch("kavalai.functionkernel.ClientSession") as mock_session_cls:
+            mock_session = mock_session_cls.return_value
+            mock_session.initialize = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+
+            mock_tool = MagicMock()
+            mock_tool.name = "list_files"
+            mock_tool.description = "Lists files in directory"
+            mock_tool.inputSchema = {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+            }
+
+            mock_tools_result = MagicMock()
+            mock_tools_result.tools = [mock_tool]
+            mock_session.list_tools = AsyncMock(return_value=mock_tools_result)
+
+            desc = await kernel.get_tool_descriptions()
+
+            assert "python://math.add" in desc
+            assert "rest://my_rest.<function_name>" in desc
+            assert "mcp://my_mcp.list_files" in desc
+
+            # Verify no extra info
+            assert "Description:" not in desc
+            assert "Arguments:" not in desc
+            assert "(" not in desc  # No signatures
+            assert "REST Server:" not in desc
+            assert "MCP Server:" not in desc
+
+
+@pytest.mark.asyncio
+async def test_call_tool_unified():
+    kernel = FunctionKernel()
+
+    # Test Python tool via unified call
+    kernel.register_python_tool("math.add", sync_add)
+    result = await kernel.call_tool("python://math.add", {"a": 10, "b": 20})
+    assert result == 30
+
+    # Test REST tool via unified call
+    server = RestServer(name="test_api", url="http://api.example.com")
+    kernel.register_rest_server(server)
+
+    with patch("httpx.AsyncClient.request") as mock_request:
+        mock_response = MagicMock()
+        mock_response.json = MagicMock(return_value={"status": "ok"})
+        mock_response.raise_for_status = MagicMock()
+        mock_request.return_value = mock_response
+
+        result = await kernel.call_tool("rest://test_api.status", {})
+        assert result == {"status": "ok"}
+        mock_request.assert_called_with(
+            "GET", "http://api.example.com/status", params={}, timeout=60.0
+        )
+
+    # Test MCP tool via unified call
+    mcp_server = McpServer(name="test_mcp", command="true")
+    kernel.register_mcp_server(mcp_server)
+
+    with patch("kavalai.functionkernel.stdio_client") as mock_stdio:
+        mock_stdio.return_value.__aenter__.return_value = (AsyncMock(), AsyncMock())
+        with patch("kavalai.functionkernel.ClientSession") as mock_session_cls:
+            mock_session = mock_session_cls.return_value
+            mock_session.initialize = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+
+            mock_response = MagicMock()
+            mock_response.isError = False
+            mock_content = MagicMock()
+            mock_content.text = json.dumps({"mcp": "works"})
+            mock_response.content = [mock_content]
+            mock_session.call_tool = AsyncMock(return_value=mock_response)
+
+            result = await kernel.call_tool("mcp://test_mcp.test_tool", {"arg": 1})
+            assert result == {"mcp": "works"}
+            mock_session.call_tool.assert_called_with("test_tool", arguments={"arg": 1})
+
+
+@pytest.mark.asyncio
+async def test_call_tool_errors():
+    kernel = FunctionKernel()
+
+    with pytest.raises(WorkflowException, match="Invalid tool URI format"):
+        await kernel.call_tool("invalid_format", {})
+
+    with pytest.raises(WorkflowException, match="Invalid tool path format"):
+        await kernel.call_tool("python://nodot", {})
+
+    with pytest.raises(WorkflowException, match="Unsupported protocol"):
+        await kernel.call_tool("ftp://some.file", {})
+
+
+@pytest.mark.asyncio
+async def test_registration_conflicts():
+    kernel = FunctionKernel()
+
+    # Test REST server conflict
+    kernel.register_rest_server(RestServer(name="test", url="http://api.com"))
+    with pytest.raises(
+        WorkflowException, match="REST server 'test' is already registered"
+    ):
+        kernel.register_rest_server(RestServer(name="test", url="http://other.com"))
+
+    # Test MCP server conflict
+    kernel.register_mcp_server(McpServer(name="mcp", command="ls"))
+    with pytest.raises(
+        WorkflowException, match="MCP server 'mcp' is already registered"
+    ):
+        kernel.register_mcp_server(McpServer(name="mcp", command="dir"))
+
+    # Test Python tool conflict
+    kernel.register_python_tool("add", sync_add)
+    with pytest.raises(
+        WorkflowException, match="Python tool 'add' is already registered"
+    ):
+        kernel.register_python_tool("add", async_multiply)

@@ -52,13 +52,64 @@ class FunctionKernel:
         self.mcp_cleanups: List[Any] = []
 
     def register_rest_server(self, server: RestServer):
+        if server.name in self.rest_servers:
+            raise WorkflowException(
+                f"REST server '{server.name}' is already registered."
+            )
         self.rest_servers[server.name] = server
 
     def register_mcp_server(self, server: McpServer):
+        if server.name in self.mcp_servers:
+            raise WorkflowException(
+                f"MCP server '{server.name}' is already registered."
+            )
         self.mcp_servers[server.name] = server
 
     def register_python_tool(self, name: str, func: Callable):
+        if name in self.python_tools:
+            raise WorkflowException(f"Python tool '{name}' is already registered.")
         self.python_tools[name] = func
+
+    async def call_tool(
+        self,
+        tool_uri: str,
+        arguments: Dict[str, Any],
+        output_type: Optional[type] = None,
+        **kwargs,
+    ) -> Any:
+        """
+        Unified tool call interface.
+        Format: protocol://[name|module].function_name
+        Example: python://kavalai.mytool.myfunc or rest://myrestserver.restfunction
+        """
+        if "://" not in tool_uri:
+            raise WorkflowException(
+                f"Invalid tool URI format: '{tool_uri}'. Expected protocol://[name|module].function_name"
+            )
+
+        protocol, path = tool_uri.split("://", 1)
+        if "." not in path:
+            raise WorkflowException(
+                f"Invalid tool path format: '{path}'. Expected [name|module].function_name"
+            )
+
+        name_or_module, function_name = path.rsplit(".", 1)
+
+        if protocol == "python":
+            return await self.call_python_tool(
+                f"{name_or_module}.{function_name}", arguments, output_type
+            )
+        elif protocol == "rest":
+            method = kwargs.get("method", "get")
+            return await self.call_rest_tool(
+                name_or_module, function_name, arguments, method, output_type
+            )
+        elif protocol == "mcp":
+            return await self.call_mcp_tool(
+                name_or_module, function_name, arguments, output_type
+            )
+        else:
+            raise WorkflowException(f"Unsupported protocol: '{protocol}'")
 
     async def close(self):
         """Cleanup all MCP sessions."""
@@ -261,24 +312,28 @@ class FunctionKernel:
                 )
         return result
 
-    def get_tool_descriptions(self) -> str:
+    async def get_tool_descriptions(self) -> str:
         """Returns a string description of all registered tools for prompts."""
         descriptions = []
 
         # Python tools
-        for name, func in self.python_tools.items():
-            doc = inspect.getdoc(func) or "No description available."
-            sig = inspect.signature(func)
-            descriptions.append(f"Python Tool: {name}{sig}\nDescription: {doc}")
+        for name in self.python_tools.keys():
+            descriptions.append(f"python://{name}")
 
-        # REST tools
-        for name, server in self.rest_servers.items():
-            descriptions.append(
-                f"REST Server: {name} (URL: {server.url or server.url_env})"
-            )
+        # REST tools - handled dynamically, but we could list registration prefix
+        for name in self.rest_servers.keys():
+            # For REST we don't have a fixed list of functions yet, but we use the name
+            descriptions.append(f"rest://{name}.<function_name>")
 
         # MCP tools
-        for name, server in self.mcp_servers.items():
-            descriptions.append(f"MCP Server: {name}")
+        for name in self.mcp_servers.keys():
+            try:
+                session = await self._get_mcp_session(name)
+                tools_result = await session.list_tools()
+                for tool in tools_result.tools:
+                    # Format: mcp://server_name.tool_name
+                    descriptions.append(f"mcp://{name}.{tool.name}")
+            except Exception as e:
+                logger.warning(f"Could not list tools for MCP server {name}: {e}")
 
-        return "\n\n".join(descriptions)
+        return "\n".join(descriptions)
