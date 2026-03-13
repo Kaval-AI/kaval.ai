@@ -22,6 +22,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `examples/`: Runnable example scripts for users.
 - `backoffice/`: API and logic for the management UI.
 - `frontend/`: Angular-based project for the backoffice UI.
+- `kavalai/functionkernel.py`: Manages tool registration and execution (REST, MCP, Python), providing a unified interface for agent components.
 - `tests/`: Comprehensive backend test suite.
 - `kavalai/agents/`: SDK and agent runtime logic.
 - `kavalai/llm_clients/`: Native LLM client implementations.
