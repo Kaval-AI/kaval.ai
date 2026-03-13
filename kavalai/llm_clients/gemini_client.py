@@ -44,35 +44,6 @@ class GeminiClient:
         self.timeout = timeout
         self.client = genai.Client(api_key=api_key)
 
-    def _convert_messages(
-        self, messages: List[Dict[str, Any]]
-    ) -> Tuple[Optional[str], List[types.Content]]:
-        system_instruction = None
-        contents = []
-
-        for msg in messages:
-            role = msg.get("role")
-            content = msg.get("content")
-
-            if role == "system":
-                system_instruction = content
-                continue
-
-            # Convert role to Gemini format (user or model)
-            gemini_role = "user" if role == "user" else "model"
-
-            parts = []
-            if isinstance(content, str):
-                parts.append(types.Part.from_text(text=content))
-            elif isinstance(content, list):
-                for item in content:
-                    if item.get("type") == "text":
-                        parts.append(types.Part.from_text(text=item.get("text")))
-
-            contents.append(types.Content(role=gemini_role, parts=parts))
-
-        return system_instruction, contents
-
     async def chat_completions(
         self,
         model: str,
@@ -86,7 +57,7 @@ class GeminiClient:
         start_time = time.perf_counter()
         model_name = get_model_name(model)
 
-        system_instruction, contents = self._convert_messages(messages)
+        system_instruction, contents = convert_messages(messages)
 
         config_kwargs = {k: v for k, v in kwargs.items() if v is not None}
         if system_instruction:
@@ -231,6 +202,36 @@ class GeminiClient:
         for m in await self.client.aio.models.list():
             models.append(m.name)
         return models
+
+
+def convert_messages(
+    messages: List[Dict[str, Any]],
+) -> Tuple[Optional[str], List[types.Content]]:
+    system_instruction = None
+    contents = []
+
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content")
+
+        if role == "system":
+            system_instruction = content
+            continue
+
+        # Convert role to Gemini format (user or model)
+        gemini_role = "user" if role == "user" else "model"
+
+        parts = []
+        if isinstance(content, str):
+            parts.append(types.Part.from_text(text=content))
+        elif isinstance(content, list):
+            for item in content:
+                if item.get("type") == "text":
+                    parts.append(types.Part.from_text(text=item.get("text")))
+
+        contents.append(types.Content(role=gemini_role, parts=parts))
+
+    return system_instruction, contents
 
 
 def remove_additional_properties(schema: Dict[str, Any]) -> None:
