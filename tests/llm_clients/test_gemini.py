@@ -3,13 +3,24 @@ import os
 import pytest
 from pydantic import BaseModel
 
-from kavalai.llm_clients.gemini_client import GeminiClient
+from kavalai.llm_clients.gemini_client import GeminiClient, remove_additional_properties
 from kavalai.llm_clients.common import Streamer, StreamContent
 
 
 class SimpleResponse(BaseModel):
     answer: str
     confidence: float
+
+
+class NestedModel(BaseModel):
+    id: int
+    name: str
+
+
+class ComplexResponse(BaseModel):
+    items: list[NestedModel]
+    count: int
+    metadata: dict[str, str]
 
 
 @pytest.fixture
@@ -212,3 +223,68 @@ async def test_gemini_thinking_streaming(gemini_client):
 
     assert len(thoughts) > 0
     assert len(content) > 0
+
+
+# Unit Tests
+
+
+def test_remove_additional_properties_simple():
+    """Test that additionalProperties is removed from simple schema."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "additionalProperties": False,
+    }
+    remove_additional_properties(schema)
+    assert "additionalProperties" not in schema
+    assert "properties" in schema
+
+
+def test_remove_additional_properties_nested():
+    """Test that additionalProperties is removed from nested schemas."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "user": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "additionalProperties": False,
+            }
+        },
+        "additionalProperties": True,
+    }
+    remove_additional_properties(schema)
+    assert "additionalProperties" not in schema
+    assert "additionalProperties" not in schema["properties"]["user"]
+
+
+def test_remove_additional_properties_with_defs():
+    """Test that additionalProperties is removed from $defs."""
+    schema = {
+        "type": "object",
+        "properties": {"item": {"$ref": "#/$defs/Item"}},
+        "additionalProperties": False,
+        "$defs": {
+            "Item": {
+                "type": "object",
+                "properties": {"id": {"type": "integer"}},
+                "additionalProperties": False,
+            }
+        },
+    }
+    remove_additional_properties(schema)
+    assert "additionalProperties" not in schema
+    assert "additionalProperties" not in schema["$defs"]["Item"]
+
+
+def test_remove_additional_properties_pydantic_schema():
+    """Test with actual Pydantic model schema."""
+    schema = ComplexResponse.model_json_schema()
+
+    # Verify the schema has additionalProperties before removal
+    assert "additionalProperties" in str(schema)
+
+    remove_additional_properties(schema)
+
+    # Check that no additionalProperties exists anywhere in the schema
+    assert "additionalProperties" not in str(schema)

@@ -106,7 +106,10 @@ class GeminiClient:
 
         if response_model:
             config_kwargs["response_mime_type"] = "application/json"
-            config_kwargs["response_schema"] = response_model
+            # Gemini doesn't support additional_properties in schema
+            schema = response_model.model_json_schema()
+            remove_additional_properties(schema)
+            config_kwargs["response_schema"] = schema
 
         # Support for reasoning/thinking (e.g. for Gemini 2.0 Flash Thinking)
         if thinking_budget is not None:
@@ -240,3 +243,36 @@ class GeminiClient:
         for m in await self.client.aio.models.list():
             models.append(m.name)
         return models
+
+
+def remove_additional_properties(schema: Dict[str, Any]) -> None:
+    """
+    Recursively remove 'additionalProperties' from a JSON schema.
+    Gemini's API doesn't support this field.
+    """
+    if not isinstance(schema, dict):
+        return
+
+    # Remove additionalProperties if present
+    schema.pop("additionalProperties", None)
+
+    # Recursively process nested objects
+    if "properties" in schema:
+        for prop_schema in schema["properties"].values():
+            remove_additional_properties(prop_schema)
+
+    # Handle arrays
+    if "items" in schema:
+        remove_additional_properties(schema["items"])
+
+    # Handle allOf, anyOf, oneOf
+    for key in ["allOf", "anyOf", "oneOf"]:
+        if key in schema:
+            for sub_schema in schema[key]:
+                remove_additional_properties(sub_schema)
+
+    # Handle $defs or definitions (where nested models are stored)
+    for key in ["$defs", "definitions"]:
+        if key in schema:
+            for def_schema in schema[key].values():
+                remove_additional_properties(def_schema)
