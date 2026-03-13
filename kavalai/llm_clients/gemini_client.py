@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import base64
 import io
 import os
 import time
@@ -69,17 +68,6 @@ class GeminiClient:
                 for item in content:
                     if item.get("type") == "text":
                         parts.append(types.Part.from_text(text=item.get("text")))
-                    elif item.get("type") == "image_url":
-                        image_url = item.get("image_url", {}).get("url", "")
-                        if image_url.startswith("data:image/"):
-                            header, encoded = image_url.split(",", 1)
-                            mime_type = header.split(";")[0].split(":")[1]
-                            image_bytes = base64.b64decode(encoded)
-                            parts.append(
-                                types.Part.from_bytes(
-                                    data=image_bytes, mime_type=mime_type
-                                )
-                            )
 
             contents.append(types.Content(role=gemini_role, parts=parts))
 
