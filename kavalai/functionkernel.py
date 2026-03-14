@@ -146,16 +146,16 @@ class FunctionKernel:
         name_or_module, function_name = path.rsplit(".", 1)
 
         if protocol == "python":
-            return await self.call_python_tool(
+            return await self._call_python_tool(
                 f"{name_or_module}.{function_name}", arguments, output_type
             )
         elif protocol == "rest":
             method = kwargs.get("method", "get")
-            return await self.call_rest_tool(
+            return await self._call_rest_tool(
                 name_or_module, function_name, arguments, method, output_type
             )
         elif protocol == "mcp":
-            return await self.call_mcp_tool(
+            return await self._call_mcp_tool(
                 name_or_module, function_name, arguments, output_type
             )
         else:
@@ -173,7 +173,7 @@ class FunctionKernel:
         self.mcp_sessions.clear()
         self.mcp_cleanups.clear()
 
-    async def call_rest_tool(
+    async def _call_rest_tool(
         self,
         server_name: str,
         tool: str,
@@ -329,7 +329,7 @@ class FunctionKernel:
 
         return create_model(name, **fields)
 
-    async def call_mcp_tool(
+    async def _call_mcp_tool(
         self,
         server_name: str,
         tool: str,
@@ -389,7 +389,7 @@ class FunctionKernel:
 
         return result_data
 
-    async def call_python_tool(
+    async def _call_python_tool(
         self,
         python_tool: str,
         arguments: Dict[str, Any],

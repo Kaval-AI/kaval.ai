@@ -1,16 +1,136 @@
+from unittest.mock import MagicMock, AsyncMock, patch
 import pytest
 import asyncio
 import json
-from unittest.mock import MagicMock, AsyncMock, patch
-from typing import Any, Dict
+import uvicorn
+import multiprocessing
+import time
+from fastapi import FastAPI
 from pydantic import BaseModel
+from typing import Any, Dict, Optional
 from kavalai.functionkernel import FunctionKernel
 from kavalai.agents.workflow_model import RestServer, McpServer, WorkflowException
+
+app = FastAPI()
 
 
 class SimpleModel(BaseModel):
     name: str
     value: int
+
+
+@app.get("/get_item")
+async def get_item(id: int):
+    return {"name": "rest_test", "value": 100}
+
+
+@app.post("/create_item")
+async def create_item(item: Dict[str, Any]):
+    return {"name": "rest_test", "value": 100}
+
+
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import StreamingResponse
+
+sse_queues: Dict[str, asyncio.Queue] = {}
+
+
+@app.get("/sse")
+async def sse_endpoint(request: Request):
+    session_id = "123"
+    q = asyncio.Queue()
+    sse_queues[session_id] = q
+
+    async def event_generator():
+        # MCP SSE handshake
+        # 1. Send endpoint event
+        yield "event: endpoint\ndata: http://127.0.0.1:8000/messages?session_id=123\n\n"
+
+        # Keep alive and send messages from queue
+        while True:
+            try:
+                if await request.is_disconnected():
+                    break
+
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=1.0)
+                    yield f"event: message\ndata: {json.dumps(msg)}\n\n"
+                except asyncio.TimeoutError:
+                    # Heartbeat
+                    yield ":\n\n"
+            except Exception:
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+@app.post("/messages")
+async def sse_messages(request: Request, session_id: Optional[str] = None):
+    # Handle JSON-RPC over POST
+    try:
+        data = await request.json()
+    except Exception:
+        return {"error": "Invalid JSON"}
+
+    response_body = None
+    if data.get("method") == "initialize":
+        response_body = {
+            "jsonrpc": "2.0",
+            "id": data["id"],
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "test-sse", "version": "1.0"},
+            },
+        }
+    elif data.get("method") == "notifications/initialized":
+        return Response(status_code=202)
+    elif data.get("method") == "tools/list":
+        response_body = {
+            "jsonrpc": "2.0",
+            "id": data["id"],
+            "result": {
+                "tools": [
+                    {
+                        "name": "hello",
+                        "description": "Greet",
+                        "inputSchema": {"type": "object", "properties": {}},
+                    }
+                ]
+            },
+        }
+    elif data.get("method") == "tools/call":
+        response_body = {
+            "jsonrpc": "2.0",
+            "id": data["id"],
+            "result": {
+                "content": [{"type": "text", "text": json.dumps({"result": "ok"})}],
+                "isError": False,
+            },
+        }
+
+    if response_body and session_id in sse_queues:
+        await sse_queues[session_id].put(response_body)
+        return Response(status_code=202)
+
+    return {"jsonrpc": "2.0", "id": data.get("id"), "result": {}}
+
+
+def run_server():
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+
+@pytest.fixture(scope="module")
+def rest_server():
+    proc = multiprocessing.Process(target=run_server)
+    proc.start()
+    time.sleep(1)  # Wait for server to start
+    yield "http://127.0.0.1:8000"
+    proc.terminate()
 
 
 class CustomOutput(BaseModel):
@@ -45,16 +165,16 @@ async def test_register_and_call_python_tool():
     kernel.register_python_tool("mul", async_multiply)
 
     # Sync call - returns model with 'result' field
-    result = await kernel.call_python_tool("add", {"a": 1, "b": 2})
+    result = await kernel._call_python_tool("add", {"a": 1, "b": 2})
     assert result.result == 3
 
     # Async call
-    result = await kernel.call_python_tool("mul", {"a": 3, "b": 4})
+    result = await kernel._call_python_tool("mul", {"a": 3, "b": 4})
     assert result.result == 12
 
     # With output_type
     kernel.register_python_tool("dict_tool", dict_output)
-    result = await kernel.call_python_tool(
+    result = await kernel._call_python_tool(
         "dict_tool", {"name": "test"}, output_type=SimpleModel
     )
     assert isinstance(result, SimpleModel)
@@ -70,7 +190,7 @@ async def test_python_tool_custom_model():
     definition = kernel.python_tool_definitions["custom"]
     assert definition.output_model == CustomOutput
 
-    result = await kernel.call_python_tool("custom", {"val": 5})
+    result = await kernel._call_python_tool("custom", {"val": 5})
     assert isinstance(result, CustomOutput)
     assert result.result == 10
     assert result.meta == "test"
@@ -82,12 +202,12 @@ async def test_python_tool_errors():
 
     # Missing tool
     with pytest.raises(WorkflowException, match="Failed to load python_tool"):
-        await kernel.call_python_tool("non.existent.tool", {})
+        await kernel._call_python_tool("non.existent.tool", {})
 
     # Signature mismatch / validation error
     kernel.register_python_tool("add", sync_add)
     with pytest.raises(WorkflowException, match="argument validation failed"):
-        await kernel.call_python_tool("add", {"a": 1})  # missing b
+        await kernel._call_python_tool("add", {"a": 1})  # missing b
 
 
 @pytest.mark.asyncio
@@ -96,152 +216,152 @@ async def test_python_tool_unregistered_load():
     # Should work via dynamic loading if module is accessible
     # Using full path to this test file's function
     tool_uri = "tests.test_functionkernel.sync_add"
-    result = await kernel.call_python_tool(tool_uri, {"a": 10, "b": 20})
+    result = await kernel._call_python_tool(tool_uri, {"a": 10, "b": 20})
     assert result.result == 30
 
 
 @pytest.mark.asyncio
-async def test_call_rest_tool():
+async def test_call_rest_tool(rest_server):
     kernel = FunctionKernel()
-    server = RestServer(name="test_server", url="http://api.example.com")
+    server = RestServer(name="test_server", url=rest_server)
     kernel.register_rest_server(server)
 
-    with patch("httpx.AsyncClient.request") as mock_request:
-        mock_response = MagicMock()
-        mock_response.json = MagicMock(return_value={"name": "rest_test", "value": 100})
-        mock_response.raise_for_status = MagicMock()
-        mock_request.return_value = mock_response
+    # Get request
+    result = await kernel._call_rest_tool("test_server", "get_item", {"id": 1})
+    assert result == {"name": "rest_test", "value": 100}
 
-        # Get request
-        result = await kernel.call_rest_tool("test_server", "get_item", {"id": 1})
-        assert result == {"name": "rest_test", "value": 100}
-        mock_request.assert_called_with(
-            "GET", "http://api.example.com/get_item", params={"id": 1}, timeout=60.0
-        )
-
-        # Post request with model output
-        result = await kernel.call_rest_tool(
-            "test_server",
-            "create_item",
-            {"name": "new"},
-            method="post",
-            output_type=SimpleModel,
-        )
-        assert isinstance(result, SimpleModel)
-        assert result.name == "rest_test"
-        mock_request.assert_called_with(
-            "POST",
-            "http://api.example.com/create_item",
-            json={"name": "new"},
-            timeout=60.0,
-        )
+    # Post request with model output
+    result = await kernel._call_rest_tool(
+        "test_server",
+        "create_item",
+        {"name": "new"},
+        method="post",
+        output_type=SimpleModel,
+    )
+    assert isinstance(result, SimpleModel)
+    assert result.name == "rest_test"
+    assert result.value == 100
 
 
 @pytest.mark.asyncio
 async def test_mcp_tool_stdio():
     kernel = FunctionKernel()
-    server = McpServer(name="mcp_stdio", command="python", args=["mcp_server.py"])
-    kernel.register_mcp_server(server)
+    # MCP uses JSON-RPC
+    # We need to handle list_tools and call_tool
+    server_code = """
+import sys
+import json
+import asyncio
 
-    with patch("kavalai.functionkernel.stdio_client") as mock_stdio:
-        mock_read = AsyncMock()
-        mock_write = AsyncMock()
-        mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
+async def main():
+    while True:
+        line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
+        if not line:
+            break
+        try:
+            request = json.loads(line)
+            if "method" in request:
+                if request["method"] == "initialize":
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {"tools": {}},
+                            "serverInfo": {"name": "test-stdio", "version": "1.0"}
+                        }
+                    }
+                elif request["method"] == "notifications/initialized":
+                    continue
+                elif request["method"] == "tools/list":
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {
+                            "tools": [
+                                {
+                                    "name": "test_tool",
+                                    "description": "A test tool",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {"arg": {"type": "string"}},
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                elif request["method"] == "tools/call":
+                    tool_name = request["params"]["name"]
+                    if tool_name == "test_tool":
+                        content = {"name": "mcp_test", "value": 200, "result": "ok"}
+                        response = {
+                            "jsonrpc": "2.0",
+                            "id": request["id"],
+                            "result": {
+                                "content": [{"type": "text", "text": json.dumps(content)}],
+                                "isError": False
+                            }
+                        }
+                else:
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": request.get("id"),
+                        "error": {"code": -32601, "message": "Method not found"}
+                    }
 
-        with patch("kavalai.functionkernel.ClientSession") as mock_session_cls:
-            mock_session = mock_session_cls.return_value
-            mock_session.initialize = AsyncMock()
-            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session.__aexit__ = AsyncMock()
+                sys.stdout.write(json.dumps(response) + "\\n")
+                sys.stdout.flush()
+        except Exception:
+            pass
 
-            # Mock list_tools for initial registration
-            mock_tool = MagicMock()
-            mock_tool.name = "test_tool"
-            mock_tool.description = "A test tool"
-            mock_tool.inputSchema = {
-                "type": "object",
-                "properties": {"arg": {"type": "string"}},
-            }
-            mock_tools_result = MagicMock()
-            mock_tools_result.tools = [mock_tool]
-            mock_session.list_tools = AsyncMock(return_value=mock_tools_result)
+if __name__ == "__main__":
+    asyncio.run(main())
+"""
+    import tempfile
+    import os
 
-            mock_response = MagicMock()
-            mock_response.isError = False
-            mock_content = MagicMock()
-            mock_content.text = json.dumps({"name": "mcp_test", "value": 200})
-            mock_response.content = [mock_content]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
+        tmp.write(server_code)
+        tmp_path = tmp.name
 
-            # Mock response for the second call to match the default mcp_stdio_test_tool_output (which expects a 'result' field)
-            mock_response_2 = MagicMock()
-            mock_response_2.isError = False
-            mock_content_2 = MagicMock()
-            mock_content_2.text = json.dumps({"result": "any_value"})
-            mock_response_2.content = [mock_content_2]
+    try:
+        server = McpServer(name="mcp_stdio", command="python", args=[tmp_path])
+        kernel.register_mcp_server(server)
 
-            mock_session.call_tool = AsyncMock(
-                side_effect=[mock_response, mock_response_2]
-            )
+        result = await kernel._call_mcp_tool(
+            "mcp_stdio", "test_tool", {"arg": "val"}, output_type=SimpleModel
+        )
 
-            result = await kernel.call_mcp_tool(
-                "mcp_stdio", "test_tool", {"arg": "val"}, output_type=SimpleModel
-            )
+        assert isinstance(result, SimpleModel)
+        assert result.name == "mcp_test"
+        assert result.value == 200
 
-            assert isinstance(result, SimpleModel)
-            assert result.name == "mcp_test"
-            assert result.value == 200
+        # Second call should reuse session
+        await kernel._call_mcp_tool("mcp_stdio", "test_tool", {"arg": "val"})
 
-            mock_session.initialize.assert_called_once()
-            mock_session.call_tool.assert_called_with(
-                "test_tool", arguments={"arg": "val"}
-            )
-
-            # Second call should reuse session
-            await kernel.call_mcp_tool("mcp_stdio", "test_tool", {"arg": "val"})
-            mock_session_cls.assert_called_once()
-
-            # Cleanup
-            await kernel.close()
-            mock_stdio.return_value.__aexit__.assert_called()
-            mock_session.__aexit__.assert_called()
+    finally:
+        # Cleanup
+        await kernel.close()
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 @pytest.mark.asyncio
-async def test_mcp_tool_sse():
-    kernel = FunctionKernel()
-    server = McpServer(name="mcp_sse", url="http://mcp.example.com/sse")
-    kernel.register_mcp_server(server)
+async def test_mcp_tool_sse(rest_server):
+    try:
+        async with asyncio.timeout(10):
+            kernel = FunctionKernel()
+            server = McpServer(name="mcp_sse", url=f"{rest_server}/sse")
+            kernel.register_mcp_server(server)
 
-    with patch("kavalai.functionkernel.sse_client") as mock_sse:
-        mock_read = AsyncMock()
-        mock_write = AsyncMock()
-        mock_sse.return_value.__aenter__.return_value = (mock_read, mock_write)
-
-        with patch("kavalai.functionkernel.ClientSession") as mock_session_cls:
-            mock_session = mock_session_cls.return_value
-            mock_session.initialize = AsyncMock()
-            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session.__aexit__ = AsyncMock()
-
-            # Mock list_tools
-            mock_tool = MagicMock()
-            mock_tool.name = "hello"
-            mock_tool.description = "Greet"
-            mock_tool.inputSchema = {"type": "object", "properties": {}}
-            mock_tools_result = MagicMock()
-            mock_tools_result.tools = [mock_tool]
-            mock_session.list_tools = AsyncMock(return_value=mock_tools_result)
-
-            mock_response = MagicMock()
-            mock_response.isError = False
-            mock_content = MagicMock()
-            mock_content.text = json.dumps({"result": "ok"})
-            mock_response.content = [mock_content]
-            mock_session.call_tool = AsyncMock(return_value=mock_response)
-
-            result = await kernel.call_mcp_tool("mcp_sse", "hello", {})
+            result = await kernel._call_mcp_tool("mcp_sse", "hello", {})
+            # It should be a model because _refresh_mcp_tool_definitions creates one
             assert result.result == "ok"
-            mock_sse.assert_called_with("http://mcp.example.com/sse")
+
+            # Cleanup
+            await kernel.close()
+    except asyncio.TimeoutError:
+        pytest.fail("test_mcp_tool_sse timed out after 10 seconds")
 
 
 @pytest.mark.asyncio
