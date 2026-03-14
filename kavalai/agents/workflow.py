@@ -36,7 +36,7 @@ from kavalai.agents.workflow_model import (
     WorkflowException,
 )
 
-# from kavalai.agents.planning_agent import PlanningAgent
+from kavalai.agents.planning_agent import PlanningAgent
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.schema_parser import SchemaParser
 from kavalai.agents.workflow_validation import (
@@ -364,9 +364,50 @@ class Workflow:
         self, task: AgentTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         """Invoke the PlanningAgent for complex multi-step tasks."""
-        # planning_agent = PlanningAgent(self)
-        # await planning_agent.run(task, run_context, queue)
-        raise NotImplementedError("PlanningAgent is not available")
+        # 1. Prepare tool inputs
+        input_data = await run_context.prepare_tool_inputs(task)
+
+        # 2. Get response model
+        response_model = self.get_data_type(task.output)
+
+        # 3. Setup streamer
+        streamer = None
+        if task.stream and queue is not None:
+            streamer = Streamer(task.output, queue)
+
+        # 4. LLM client
+        llm_model = self.workflow_model.llm_model or self.env.str(
+            "KAVALAI_DEFAULT_LLM_MODEL"
+        )
+        llm_client = LLMClient(model=llm_model)
+
+        # 5. Initialize PlanningAgent
+        planning_agent = PlanningAgent(
+            kernel=self.kernel,
+            run_context=run_context,
+            llm_client=llm_client,
+            input_data=input_data,
+            response_model=response_model,
+            streamer=streamer,
+        )
+
+        # 6. Fetch chat history
+        chat_history = []
+        if task.use_history and self.agent_service and run_context.session_id:
+            history = await self.agent_service.get_chat_history(run_context.session_id)
+            for msg in history:
+                chat_history.append({"role": msg.role, "content": msg.content})
+
+        # 7. Run PlanningAgent
+        result = await planning_agent.run(
+            task=task.prompt,
+            chat_history=chat_history,
+            max_iterations=task.max_steps,
+        )
+
+        # 8. Store results
+        run_context.data[task.name] = result
+        run_context.data[task.output] = result
 
     async def run_rag_task(
         self,

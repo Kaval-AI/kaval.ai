@@ -1,6 +1,6 @@
 """Tests for workflow.py REST server environment variable handling."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock, patch
 import asyncio
 
 import pytest
@@ -1371,3 +1371,154 @@ tasks:
 
         # Check that sessions are different (they should be as we created them separately)
         assert results[0].session_id != results[1].session_id
+
+
+from kavalai.agents.planning_agent import get_step_output_type
+
+
+class TestWorkflowPlanningAgent:
+    class MockOutput(BaseModel):
+        answer: str
+
+    @pytest.mark.asyncio
+    async def test_run_planning_agent_success(self):
+        # 1. Setup Workflow Model with an AgentTask
+        workflow_data = {
+            "name": "test_workflow",
+            "llm_model": "openai/test-model",
+            "data_types": {
+                "input": {
+                    "type": "object",
+                    "properties": {"user_message": {"type": "string"}},
+                },
+                "output": {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                },
+            },
+            "tasks": [
+                {
+                    "name": "planner_task",
+                    "type": "agent",
+                    "prompt": "Plan and solve this: {{input.user_message}}",
+                    "output": "output",
+                    "max_steps": 3,
+                    "inputs": {
+                        "user_msg": {"type": "context", "value": "input.user_message"}
+                    },
+                }
+            ],
+        }
+        workflow_model = WorkflowModel(**workflow_data)
+        workflow = Workflow(workflow_model)
+
+        # 2. Setup RunContext and Task
+        run_context = RunContext()
+        run_context.data["input"] = workflow.get_data_type("input")(
+            user_message="hello"
+        )
+        task = workflow_model.tasks[0]
+
+        # 3. Mock LLMClient and its response
+        StepOutput = get_step_output_type(self.MockOutput)
+        final_output = self.MockOutput(answer="Final result")
+        step_output = StepOutput(
+            short_explanation="Done",
+            long_explanation="Finished task",
+            step_number=0,
+            max_steps=3,
+            tool_calls=[],
+            output=final_output,
+        )
+
+        with patch("kavalai.agents.workflow.LLMClient") as MockLLMClient:
+            mock_client_instance = MockLLMClient.return_value
+            mock_client_instance.chat_completions = AsyncMock(
+                return_value=(step_output, {})
+            )
+
+            # 4. Run the planning agent task
+            await workflow.run_planning_agent(task, run_context, None)
+
+            # 5. Assertions
+            assert run_context.data["planner_task"] == final_output
+            assert run_context.data["output"] == final_output
+
+            # Verify LLMClient was initialized with the correct model
+            MockLLMClient.assert_called_once_with(model="openai/test-model")
+
+            # Verify chat_completions was called
+            assert mock_client_instance.chat_completions.called
+            args, kwargs = mock_client_instance.chat_completions.call_args
+            # We can't easily compare classes created by get_step_output_type because they are different at each call
+            # but we can check if it's a StepOutput by its name
+            assert kwargs["response_model"].__name__ == "StepOutput"
+
+    @pytest.mark.asyncio
+    async def test_run_planning_agent_with_history(self):
+        # 1. Setup Workflow Model
+        workflow_data = {
+            "name": "test_workflow_history",
+            "llm_model": "openai/test-model",
+            "data_types": {
+                "input": {
+                    "type": "object",
+                    "properties": {"user_message": {"type": "string"}},
+                },
+                "output": {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                },
+            },
+            "tasks": [
+                {
+                    "name": "planner_task",
+                    "type": "agent",
+                    "prompt": "Solve",
+                    "output": "output",
+                    "use_history": True,
+                    "inputs": {},
+                }
+            ],
+        }
+        workflow_model = WorkflowModel(**workflow_data)
+
+        # Mock AgentService
+        mock_agent_service = MagicMock()
+        mock_history_msg = MagicMock()
+        mock_history_msg.role = "user"
+        mock_history_msg.content = "previous message"
+        mock_agent_service.get_chat_history = AsyncMock(return_value=[mock_history_msg])
+
+        workflow = Workflow(workflow_model, agent_service=mock_agent_service)
+
+        # 2. Setup RunContext with session_id
+        import uuid
+
+        session_id = uuid.uuid4()
+        run_context = RunContext(session_id=session_id)
+        run_context.data["input"] = workflow.get_data_type("input")(
+            user_message="hello"
+        )
+        task = workflow_model.tasks[0]
+
+        # 3. Mock PlanningAgent to avoid deep nesting of mocks
+        with patch("kavalai.agents.workflow.PlanningAgent") as MockPlanningAgent:
+            mock_planner_instance = MockPlanningAgent.return_value
+            mock_planner_instance.run = AsyncMock(
+                return_value=self.MockOutput(answer="History result")
+            )
+
+            # 4. Run
+            await workflow.run_planning_agent(task, run_context, None)
+
+            # 5. Verify history was fetched and passed
+            mock_agent_service.get_chat_history.assert_awaited_once_with(session_id)
+
+            # Verify PlanningAgent was initialized and run with history
+            MockPlanningAgent.assert_called_once()
+            mock_planner_instance.run.assert_awaited_once()
+            run_args, run_kwargs = mock_planner_instance.run.call_args
+            assert run_kwargs["chat_history"] == [
+                {"role": "user", "content": "previous message"}
+            ]
