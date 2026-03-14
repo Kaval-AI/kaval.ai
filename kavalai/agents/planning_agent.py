@@ -91,6 +91,7 @@ class PlanningAgent:
                 f"{await self._kernel.get_tool_descriptions()}\n\n"
                 f"Inputs:\n{self._input_data}\n\n"
                 f"Planner Context (tool results):\n{self._planner_context}\n\n"
+                f"max_steps={max_iterations}\n\n"
                 f"Step Outputs (previous steps):\n{[so.model_dump() for so in self._step_outputs]}\n"
             )
 

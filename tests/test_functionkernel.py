@@ -749,16 +749,17 @@ async def test_tool_descriptions():
 
             desc = await kernel.get_tool_descriptions()
 
-            assert "python://math.add" in desc
-            assert "rest://my_rest.<function_name>" in desc
-            assert "mcp://my_mcp.list_files" in desc
+            assert "### python://math.add" in desc
+            assert "### rest://my_rest.<function_name>" in desc
+            assert "### mcp://my_mcp.list_files" in desc
 
             # Verify concise format
             assert "  - Description:" not in desc
             # math.add has docstring "Adds two integers."
-            assert "python://math.add - Adds two integers." in desc
-            assert "Input Model:" in desc
-            assert "Output Model:" in desc
+            assert "### python://math.add" in desc
+            assert "Description: Adds two integers." in desc
+            assert "Input Model (Pydantic):" in desc
+            assert "Output Model (Pydantic):" in desc
             assert "class math.add_input(BaseModel):" in desc
             assert "class math.add_output(BaseModel):" in desc
             assert "Input JSON Schema" not in desc
@@ -777,7 +778,8 @@ async def test_tool_descriptions():
                 )
             }
             desc = await kernel.get_tool_descriptions()
-            assert "rest://bad_desc.tool [GET] - not-json" in desc
+            assert "### rest://bad_desc.tool [GET]" in desc
+            assert "Description: not-json" in desc
 
 
 @pytest.mark.asyncio
@@ -977,5 +979,6 @@ async def test_register_rest_tool(rest_server):
 
     # Verify descriptions
     descriptions = await kernel.get_tool_descriptions()
-    assert "rest://test_server.get_item [GET] - Get item by id" in descriptions
+    assert "### rest://test_server.get_item [GET]" in descriptions
+    assert "Description: Get item by id" in descriptions
     assert "rest://test_server.create_item [POST]" in descriptions

@@ -524,18 +524,25 @@ class FunctionKernel:
     async def get_tool_descriptions(self) -> str:
         """Returns a string description of all registered tools for prompts."""
         descriptions = [
-            "Example ToolCall (make sure to fill required arguments in 'args'):",
+            "AVAILABLE TOOLS:",
+            "Each tool call MUST be a valid JSON object matching the ToolCall structure.",
+            "Example ToolCall (ensure all required 'args' are provided):",
+            "```json",
             '{"name": "python://mypackage.myfunc", "call_id": "step1", "args": {"param1": "value1", "param2": 10}}',
+            "```",
             "",
-            "Available tools: ",
+            "---",
+            "",
         ]
 
-        def _get_model_definition(model: Type[BaseModel]) -> str:
+        def _get_model_definition(model: Type[BaseModel], indent: int = 4) -> str:
             import inspect
 
+            prefix = " " * indent
             try:
-                source = inspect.getsource(model)
-                return source.strip()
+                source = inspect.getsource(model).strip()
+                # Indent each line of the source
+                return "\n".join(f"{prefix}{line}" for line in source.splitlines())
             except Exception:
                 # Fallback if source cannot be retrieved (e.g., dynamically created models)
                 fields = []
@@ -545,55 +552,77 @@ class FunctionKernel:
                         type_name = annotation.__name__
                     else:
                         type_name = str(annotation)
-                    fields.append(f"    {field_name}: {type_name}")
-                return f"class {model.__name__}(BaseModel):\n" + "\n".join(fields)
+                    fields.append(f"{prefix}    {field_name}: {type_name}")
+                return f"{prefix}class {model.__name__}(BaseModel):\n" + "\n".join(
+                    fields
+                )
+
+        def _format_tool(
+            uri: str,
+            description: str,
+            input_model: Type[BaseModel],
+            output_model: Type[BaseModel],
+        ) -> str:
+            tool_desc = f"### {uri}\n\n"
+            tool_desc += f"Description: {description}\n\n"
+            tool_desc += "Input Model (Pydantic):\n"
+            tool_desc += f"{_get_model_definition(input_model)}\n\n"
+            tool_desc += "Output Model (Pydantic):\n"
+            tool_desc += f"{_get_model_definition(output_model)}\n"
+            return tool_desc
 
         # Python tools
         for name, definition in self.python_tool_definitions.items():
-            input_def = _get_model_definition(definition.input_model)
-            output_def = _get_model_definition(definition.output_model)
-            desc = f"python://{name} - {definition.description}\n"
-            desc += f"  - Input Model:\n{input_def}\n"
-            desc += f"  - Output Model:\n{output_def}"
-            descriptions.append(desc)
+            descriptions.append(
+                _format_tool(
+                    f"python://{name}",
+                    definition.description,
+                    definition.input_model,
+                    definition.output_model,
+                )
+            )
 
         # REST tools
         for server_name, tools in self.rest_tool_definitions.items():
             for tool_name, definition in tools.items():
-                input_def = _get_model_definition(definition.input_model)
-                output_def = _get_model_definition(definition.output_model)
-                method = "get"
+                method = "GET"
                 description_text = definition.description or ""
                 try:
                     desc_data = json.loads(definition.description)
-                    method = desc_data.get("method", "get")
+                    method = desc_data.get("method", "GET").upper()
                     description_text = desc_data.get("description", "")
                 except Exception:
                     pass
 
-                desc = f"rest://{server_name}.{tool_name} [{method.upper()}] - {description_text}\n"
-                desc += f"  - Input Model:\n{input_def}\n"
-                desc += f"  - Output Model:\n{output_def}"
-                descriptions.append(desc)
+                descriptions.append(
+                    _format_tool(
+                        f"rest://{server_name}.{tool_name} [{method}]",
+                        description_text,
+                        definition.input_model,
+                        definition.output_model,
+                    )
+                )
 
         # REST servers - list those without specific tools registered
         for name in self.rest_servers.keys():
             if name not in self.rest_tool_definitions:
-                descriptions.append(f"rest://{name}.<function_name>")
+                descriptions.append(f"### rest://{name}.<function_name>\n")
 
         # MCP tools
         for server_name, tools in self.mcp_tool_definitions.items():
             for tool_name, definition in tools.items():
-                input_def = _get_model_definition(definition.input_model)
-                output_def = _get_model_definition(definition.output_model)
-                desc = f"mcp://{server_name}.{tool_name} - {definition.description or ''}\n"
-                desc += f"  - Input Model:\n{input_def}\n"
-                desc += f"  - Output Model:\n{output_def}"
-                descriptions.append(desc)
+                descriptions.append(
+                    _format_tool(
+                        f"mcp://{server_name}.{tool_name}",
+                        definition.description or "",
+                        definition.input_model,
+                        definition.output_model,
+                    )
+                )
 
         # Also list servers that might not have tools fetched yet
         for name in self.mcp_servers.keys():
             if name not in self.mcp_tool_definitions:
-                descriptions.append(f"mcp://{name}.<tools_not_yet_loaded>")
+                descriptions.append(f"### mcp://{name}.<tools_not_yet_loaded>\n")
 
-        return "\n\n".join(descriptions)
+        return "\n".join(descriptions).strip()

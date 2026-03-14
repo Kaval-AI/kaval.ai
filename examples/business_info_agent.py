@@ -28,6 +28,7 @@ class BusinessInfo(BaseModel):
     address: Optional[str] = Field(description="The physical address of the business.")
     website: Optional[str] = Field(description="The official website URL.")
     phone: Optional[str] = Field(description="Contact phone number.")
+    owners: Optional[str] = Field(description="The owners of the business.")
     description: str = Field(
         description="A brief description of what the business does."
     )
