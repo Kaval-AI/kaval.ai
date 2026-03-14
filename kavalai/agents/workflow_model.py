@@ -116,6 +116,7 @@ class AgentTask(BaseTask):
     allowed_mcp_servers: list[str] = []
     timeout: Optional[int] = None
     prompt: Optional[str] = None
+    temperature: Optional[float] = None
     use_history: bool = False
     stream: bool = False
 

@@ -124,11 +124,14 @@ def validate_workflow(workflow_model: "WorkflowModel"):
 
     available_data = {"input"}
     for task in workflow_model.tasks:
-        if isinstance(task, LLMTask) and task.temperature is not None:
-            if not (0.0 <= task.temperature <= 2.0):
-                raise WorkflowException(
-                    f"Task '{task.name}' temperature must be between 0.0 and 2.0, got {task.temperature}"
-                )
+        if (
+            isinstance(task, (LLMTask, AgentTask))
+            and task.temperature is not None
+            and not (0.0 <= task.temperature <= 2.0)
+        ):
+            raise WorkflowException(
+                f"Task '{task.name}' temperature must be between 0.0 and 2.0, got {task.temperature}"
+            )
 
         # Check outputs
         if isinstance(task.output, str) and task.output:

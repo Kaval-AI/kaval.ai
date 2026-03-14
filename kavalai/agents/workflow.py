@@ -382,6 +382,11 @@ class Workflow:
         llm_client = LLMClient(model=llm_model)
 
         # 5. Initialize PlanningAgent
+        temperature = (
+            task.temperature
+            if task.temperature is not None
+            else self.workflow_model.temperature
+        )
         planning_agent = PlanningAgent(
             kernel=self.kernel,
             run_context=run_context,
@@ -389,6 +394,7 @@ class Workflow:
             input_data=input_data,
             response_model=response_model,
             streamer=streamer,
+            temperature=temperature,
         )
 
         # 6. Fetch chat history

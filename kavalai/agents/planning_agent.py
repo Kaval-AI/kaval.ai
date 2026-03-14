@@ -66,6 +66,7 @@ class PlanningAgent:
         input_data: dict[str, dict],
         response_model: Type[BaseModel] = BaseModel,
         streamer: Optional[Streamer] = None,
+        temperature: Optional[float] = None,
     ):
         self._kernel = kernel
         self._run_context = run_context
@@ -73,6 +74,7 @@ class PlanningAgent:
         self._input_data = input_data
         self._response_model = response_model
         self._streamer = streamer
+        self._temperature = temperature
         self._planner_context = {}
         self._step_outputs = []
 
@@ -111,6 +113,7 @@ class PlanningAgent:
                 messages=messages,
                 response_model=StepOutput,
                 streamer=self._streamer,
+                temperature=self._temperature,
             )
 
             step_output: StepOutput = result

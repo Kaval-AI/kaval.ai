@@ -174,6 +174,30 @@ class TestWorkflowTemperatureValidation:
         ):
             Workflow(model)
 
+    def test_agent_task_invalid_temperature(self):
+        """AgentTask should raise exception if temperature is invalid."""
+        data = {
+            "name": "test",
+            "data_types": {
+                "input": {"type": "object", "properties": {}},
+                "output": {"type": "object", "properties": {}},
+            },
+            "tasks": [
+                {
+                    "name": "task1",
+                    "type": "agent",
+                    "prompt": "test prompt",
+                    "temperature": -0.1,
+                    "output": "output",
+                }
+            ],
+        }
+        model = WorkflowModel(**data)
+        with pytest.raises(
+            WorkflowException, match="task1' temperature must be between 0.0 and 2.0"
+        ):
+            Workflow(model)
+
     @pytest.mark.asyncio
     async def test_run_rest_tool_serializes_pydantic_models(self):
         """run_rest_tool should serialize Pydantic models to dicts in JSON body."""
@@ -1453,6 +1477,135 @@ class TestWorkflowPlanningAgent:
             # We can't easily compare classes created by get_step_output_type because they are different at each call
             # but we can check if it's a StepOutput by its name
             assert kwargs["response_model"].__name__ == "StepOutput"
+            # Verify default temperature from workflow_model (0.0)
+            assert kwargs["temperature"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_run_planning_agent_with_custom_temperature(self):
+        # 1. Setup Workflow Model with an AgentTask and custom temperature
+        workflow_data = {
+            "name": "test_workflow",
+            "llm_model": "openai/test-model",
+            "temperature": 0.7,
+            "data_types": {
+                "input": {
+                    "type": "object",
+                    "properties": {"user_message": {"type": "string"}},
+                },
+                "output": {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                },
+            },
+            "tasks": [
+                {
+                    "name": "planner_task",
+                    "type": "agent",
+                    "prompt": "Plan and solve this: {{input.user_message}}",
+                    "output": "output",
+                    "max_steps": 3,
+                    "temperature": 1.2,
+                    "inputs": {
+                        "user_msg": {"type": "context", "value": "input.user_message"}
+                    },
+                }
+            ],
+        }
+        workflow_model = WorkflowModel(**workflow_data)
+        workflow = Workflow(workflow_model)
+
+        # 2. Setup RunContext and Task
+        run_context = RunContext()
+        run_context.data["input"] = workflow.get_data_type("input")(
+            user_message="hello"
+        )
+        task = workflow_model.tasks[0]
+
+        # 3. Mock LLMClient and its response
+        StepOutput = get_step_output_type(self.MockOutput)
+        final_output = self.MockOutput(answer="Final result")
+        step_output = StepOutput(
+            short_explanation="Done",
+            long_explanation="Finished task",
+            step_number=0,
+            max_steps=3,
+            tool_calls=[],
+            output=final_output,
+        )
+
+        with patch("kavalai.agents.workflow.LLMClient") as MockLLMClient:
+            mock_client_instance = MockLLMClient.return_value
+            mock_client_instance.chat_completions = AsyncMock(
+                return_value=(step_output, {})
+            )
+
+            # 4. Run the planning agent task
+            await workflow.run_planning_agent(task, run_context, None)
+
+            # 5. Assertions
+            args, kwargs = mock_client_instance.chat_completions.call_args
+            # Verify task-level temperature (1.2)
+            assert kwargs["temperature"] == 1.2
+
+    @pytest.mark.asyncio
+    async def test_run_planning_agent_with_workflow_temperature(self):
+        # 1. Setup Workflow Model with workflow-level temperature only
+        workflow_data = {
+            "name": "test_workflow",
+            "llm_model": "openai/test-model",
+            "temperature": 0.7,
+            "data_types": {
+                "input": {
+                    "type": "object",
+                    "properties": {"user_message": {"type": "string"}},
+                },
+                "output": {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                },
+            },
+            "tasks": [
+                {
+                    "name": "planner_task",
+                    "type": "agent",
+                    "prompt": "Solve",
+                    "output": "output",
+                    "inputs": {},
+                }
+            ],
+        }
+        workflow_model = WorkflowModel(**workflow_data)
+        workflow = Workflow(workflow_model)
+
+        # 2. Setup RunContext and Task
+        run_context = RunContext()
+        task = workflow_model.tasks[0]
+
+        # 3. Mock LLMClient and its response
+        StepOutput = get_step_output_type(self.MockOutput)
+        final_output = self.MockOutput(answer="Final result")
+        step_output = StepOutput(
+            short_explanation="Done",
+            long_explanation="Finished task",
+            step_number=0,
+            max_steps=3,
+            tool_calls=[],
+            output=final_output,
+        )
+
+        with patch("kavalai.agents.workflow.LLMClient") as MockLLMClient:
+            mock_client_instance = MockLLMClient.return_value
+            mock_client_instance.chat_completions = AsyncMock(
+                return_value=(step_output, {})
+            )
+
+            # 4. Run the planning agent task
+            await workflow.run_planning_agent(task, run_context, None)
+
+            # 5. Assertions
+            args, kwargs = mock_client_instance.chat_completions.call_args
+            # Verify workflow-level temperature (0.7)
+            assert kwargs["temperature"] == 0.7
 
     @pytest.mark.asyncio
     async def test_run_planning_agent_with_history(self):
