@@ -520,7 +520,11 @@ class Workflow:
 
         # 3. Execute Workflow Steps
         try:
+            streamer = Streamer(name="workflow", queue=queue) if queue else None
             for task in self.workflow_model.tasks:
+                if streamer:
+                    await streamer.stream_complete(task.name, name="running_task")
+
                 if task.when:
                     if not await run_context.evaluate_condition(task.when):
                         logger.info("Skipping task <%s> due to condition", task.name)

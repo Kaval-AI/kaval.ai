@@ -118,6 +118,11 @@ class PlanningAgent:
 
             logger.info(f"Step {iter_no}: {step_output.short_explanation}")
 
+            if self._streamer:
+                await self._streamer.stream_complete(
+                    step_output.short_explanation, name="running_task"
+                )
+
             if step_output.tool_calls:
 
                 async def _call_tool(tool_call):

@@ -1139,19 +1139,24 @@ tasks:
 
         result = await task
 
-        assert len(lines) == 3
+        assert len(lines) == 4
 
-        partial1 = StreamContent.model_validate_json(lines[0])
+        running_task = StreamContent.model_validate_json(lines[0])
+        assert running_task.type == "complete"
+        assert running_task.name == "running_task"
+        assert running_task.value == "generate"
+
+        partial1 = StreamContent.model_validate_json(lines[1])
         assert partial1.type == "partial"
         assert partial1.name == "output"
         assert partial1.value == '{"agent_response": "He'
 
-        partial2 = StreamContent.model_validate_json(lines[1])
+        partial2 = StreamContent.model_validate_json(lines[2])
         assert partial2.type == "partial"
         assert partial2.name == "output"
         assert partial2.value == '{"agent_response": "Hello world"}'
 
-        complete = StreamContent.model_validate_json(lines[2])
+        complete = StreamContent.model_validate_json(lines[3])
         assert complete.type == "complete"
         assert complete.name == "output"
         assert complete.value == '{"agent_response": "Hello world"}'
