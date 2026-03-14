@@ -171,6 +171,7 @@ class Workflow:
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
+                name=task.name,
                 inputs={"prompt": input_text},
                 output=response.model_dump()
                 if isinstance(response, BaseModel)
@@ -218,6 +219,7 @@ class Workflow:
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
+                name=task.name,
                 inputs={"tool": task.tool, "arguments": inputs},
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
             )
@@ -257,6 +259,7 @@ class Workflow:
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
+                name=task.name,
                 inputs={
                     "mcp_server": task.mcp_server,
                     "tool": task.tool,
@@ -302,6 +305,7 @@ class Workflow:
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
+                name=task.name,
                 inputs={
                     "python_tool": task.python_tool,
                     "arguments": inputs,
@@ -426,6 +430,7 @@ class Workflow:
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
+                name=task.name,
                 inputs={
                     "text": text,
                     "top_k": task.top_k,

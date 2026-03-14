@@ -21,6 +21,7 @@ export interface Task {
   run_id: string;
   inputs: any | null;
   output: any | null;
+  name: string | null;
   created_at: string;
   updated_at: string;
 }

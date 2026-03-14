@@ -136,6 +136,7 @@ class AgentService:
         self,
         session_id: UUID,
         run_id: UUID,
+        name: Optional[str] = None,
         agent_id: Optional[UUID] = None,
         inputs: Optional[Dict] = None,
         output: Optional[Dict] = None,
@@ -146,6 +147,7 @@ class AgentService:
                 agent_id=agent_id,
                 session_id=session_id,
                 run_id=run_id,
+                name=name,
                 inputs=inputs,
                 output=output,
             )
