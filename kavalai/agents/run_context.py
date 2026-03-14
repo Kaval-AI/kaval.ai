@@ -16,10 +16,10 @@ limitations under the License.
 
 import logging
 import operator
-from typing import Optional, Any, Dict
+from typing import Optional, Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from kavalai.agents.resolvers import resolve_path
 from kavalai.agents.workflow_model import Task, TypeInputInfo
@@ -37,8 +37,6 @@ class RunContext(BaseModel):
     run_id: Optional[UUID] = None
     data: dict = {}
     agent_service: Optional[Any] = None
-    mcp_sessions: Dict[str, Any] = Field(default_factory=dict)
-    mcp_cleanups: list = Field(default_factory=list)
 
     def resolve_context_value(self, path: str):
         """Resolve a dotted path like 'input.user_message' from context data."""
