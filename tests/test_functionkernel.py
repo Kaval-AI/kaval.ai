@@ -8,7 +8,7 @@ import time
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
-from kavalai.functionkernel import FunctionKernel
+from kavalai.functionkernel import FunctionKernel, pythontool
 from kavalai.agents.workflow_model import RestServer, McpServer, WorkflowException
 
 app = FastAPI()
@@ -139,21 +139,25 @@ class CustomOutput(BaseModel):
 
 
 # Simple functions for testing
+@pythontool
 def sync_add(a: int, b: int) -> int:
     """Adds two integers."""
     return a + b
 
 
+@pythontool
 async def async_multiply(a: int, b: int) -> int:
     """Multiplies two integers asynchronously."""
     await asyncio.sleep(0.01)
     return a * b
 
 
+@pythontool
 def dict_output(name: str) -> Dict[str, Any]:
     return {"name": name, "value": 42}
 
 
+@pythontool
 def custom_model_output(val: int) -> CustomOutput:
     return CustomOutput(result=val * 2, meta="test")
 
@@ -208,6 +212,20 @@ async def test_python_tool_errors():
     kernel.register_python_tool("add", sync_add)
     with pytest.raises(WorkflowException, match="argument validation failed"):
         await kernel._call_python_tool("add", {"a": 1})  # missing b
+
+    # Missing decorator
+    def undecorated(x: int) -> int:
+        return x
+
+    with pytest.raises(
+        WorkflowException, match="must be decorated with @kavalai.pythontool"
+    ):
+        kernel.register_python_tool("undecorated", undecorated)
+
+    with pytest.raises(WorkflowException, match="is not marked as a tool"):
+        # We need to use a function from a module to test dynamic loading rejection
+        # os.getcwd is definitely not decorated
+        await kernel._call_python_tool("os.getcwd", {})
 
 
 @pytest.mark.asyncio

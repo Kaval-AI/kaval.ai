@@ -36,6 +36,12 @@ from kavalai.agents.workflow_model import (
 logger = logging.getLogger(__name__)
 
 
+def pythontool(func: Callable) -> Callable:
+    """Decorator to mark a function as a kavalai tool."""
+    func._is_kavalai_tool = True
+    return func
+
+
 class ToolDefinition(BaseModel):
     name: str
     description: Optional[str] = None
@@ -106,6 +112,10 @@ class FunctionKernel:
         self.mcp_servers[server.name] = server
 
     def register_python_tool(self, name: str, func: Callable):
+        if not getattr(func, "_is_kavalai_tool", False):
+            raise WorkflowException(
+                f"Function '{func.__name__}' must be decorated with @kavalai.pythontool"
+            )
         if name in self.python_tools:
             raise WorkflowException(f"Python tool '{name}' is already registered.")
         self.python_tools[name] = func
@@ -456,6 +466,13 @@ class FunctionKernel:
                 module_name, func_name = python_tool.rsplit(".", 1)
                 module = importlib.import_module(module_name)
                 func = getattr(module, func_name)
+
+                if not getattr(func, "_is_kavalai_tool", False):
+                    raise WorkflowException(
+                        f"Python function '{python_tool}' is not marked as a tool. "
+                        "Add @kavalai.pythontool decorator."
+                    )
+
                 # Generate definition on the fly if not registered
                 definition = self._generate_python_tool_definition(python_tool, func)
             except (ValueError, ImportError, AttributeError) as e:
