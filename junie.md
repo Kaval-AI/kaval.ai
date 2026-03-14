@@ -55,7 +55,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `examples/`: Runnable example scripts for users.
     - `business_info_agent.py`: Demonstrates `PlanningAgent` with Serper web search and scrape tools to find business information. Supports real-time streaming of agent progress to the console using the `rich` library for formatted JSON output.
     - `llm_clients/`: Examples for using the LLM client framework.
-        - `01_chat_completions.py`: Streaming, multimodal (images), structured output, and reasoning examples.
+        - `01_chat_completions.py`: Streaming, structured output, and reasoning examples.
         - `02_embeddings.py`: Batch embeddings, similarity search, and normalization.
         - `03_image_generation.py`: Image generation with DALL-E 3 and Imagen.
 - `backoffice/`: API and logic for the management UI.

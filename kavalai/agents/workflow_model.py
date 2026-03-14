@@ -86,7 +86,6 @@ class LLMTask(BaseTask):
     prompt: str
     temperature: Optional[float] = None
     use_history: bool = True
-    images: list[TypeInputInfo] = []
     stream: bool = False
 
 

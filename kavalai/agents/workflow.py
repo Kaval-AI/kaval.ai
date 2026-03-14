@@ -146,15 +146,6 @@ class Workflow:
         input_text = make_prompt(task.prompt, input_data)
 
         system_message = dict(role="system", content=input_text)
-        if task.images:
-            images = []
-            for img_info in task.images:
-                img_val = await run_context.resolve_input_info(img_info)
-                if img_val:
-                    images.append(img_val)
-            if images:
-                system_message["images"] = images
-
         messages = [system_message]
 
         if task.use_history and self.agent_service and run_context.session_id:

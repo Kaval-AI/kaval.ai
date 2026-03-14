@@ -8,9 +8,9 @@ Key Features
 
 1. **Unified Interface:** Execute calls across different providers (OpenAI, Google Gemini, Anthropic, etc.) using a consistent API.
 2. **Automatic Resilience:** Built-in retry logic with exponential backoff handles transient API errors and rate limits.
-3. **Comprehensive Observability:** Every interaction is tracked via the :class:`ModelCallStat` class, capturing token usage, costs, duration, and full request/response payloads.
+3. **Comprehensive Observability:** Metric collection (tokens, costs, duration) is built-in.
 4. **Structured Outputs:** Native integration with Pydantic ensures that LLM responses adhere to your defined data models.
-5. **Multimodal Support:** Easily incorporate images and other data types into your LLM prompts.
+5. **Detailed Metrics:** Every interaction captures token usage, costs, duration, and full request/response payloads.
 
 Core Interaction: Chat Completions
 ----------------------------------
