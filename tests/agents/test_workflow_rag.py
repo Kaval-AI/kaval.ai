@@ -54,7 +54,7 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
     run_context.data = {"input": {}}
 
     # 3. Run the task
-    await workflow.run_rag_task(task, run_context, None, agent_service)
+    await workflow.run_rag_task(task, run_context, None)
 
     # 4. Assertions
     assert "rag_task" in run_context.data
@@ -88,7 +88,7 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
     run_context.run_id = "test-run-id"
     run_context.agent_id = "test-agent-id"
     run_context.session_id = "test-session-id"
-    await workflow.run_rag_task(task, run_context, None, agent_service)
+    await workflow.run_rag_task(task, run_context, None)
 
     mock_add_task.assert_called_once()
 
@@ -116,7 +116,7 @@ async def test_run_rag_task_with_context_resolution(agents_session_maker, monkey
     run_context = RunContext(agent_service=agent_service)
     run_context.data = {"input": {"query": "resolved query"}}
 
-    await workflow.run_rag_task(task, run_context, None, agent_service)
+    await workflow.run_rag_task(task, run_context, None)
 
     mock_query.assert_called_once()
     args, kwargs = mock_query.call_args
@@ -142,7 +142,7 @@ async def test_run_rag_task_empty_input(agents_session_maker, monkeypatch):
     run_context = RunContext(agent_service=agent_service)
     run_context.data = {"input": {}}
 
-    await workflow.run_rag_task(task, run_context, None, agent_service)
+    await workflow.run_rag_task(task, run_context, None)
 
     assert "rag_task" in run_context.data
     assert run_context.data["rag_task"] == []
@@ -167,7 +167,7 @@ async def test_run_rag_task_resolved_empty_input(agents_session_maker, monkeypat
     run_context = RunContext(agent_service=agent_service)
     run_context.data = {"input": {"query": ""}}
 
-    await workflow.run_rag_task(task, run_context, None, agent_service)
+    await workflow.run_rag_task(task, run_context, None)
 
     assert "rag_task" in run_context.data
     assert run_context.data["rag_task"] == []

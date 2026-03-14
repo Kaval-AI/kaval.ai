@@ -43,20 +43,20 @@ def test_serper_web_search_success():
         "credits": 1,
     }
 
-    with patch("httpx.Client.post") as mock_post:
-        mock_post.return_value = MagicMock(spec=httpx.Response)
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = mock_response
-        mock_post.return_value.raise_for_status = MagicMock()
+    with patch.dict(os.environ, {"SERPER_API_KEY": "test_key"}):
+        with patch("httpx.Client.post") as mock_post:
+            mock_post.return_value = MagicMock(spec=httpx.Response)
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = mock_response
+            mock_post.return_value.raise_for_status = MagicMock()
 
-        result = serper_web_search(
-            query="kaval ai",
-            api_key="test_key",
-            country="us",
-            language="en",
-            date_range="qdr:d",
-            page=1,
-        )
+            result = serper_web_search(
+                query="kaval ai",
+                country="us",
+                language="en",
+                date_range="qdr:d",
+                page=1,
+            )
 
         assert isinstance(result, SerperSearchResponse)
         assert result.searchParameters.q == "kaval ai"
@@ -83,15 +83,16 @@ def test_serper_web_search_missing_api_key():
 
 
 def test_serper_web_search_api_error():
-    with patch("httpx.Client.post") as mock_post:
-        mock_post.return_value = MagicMock(spec=httpx.Response)
-        mock_post.return_value.status_code = 401
-        mock_post.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Unauthorized", request=MagicMock(), response=mock_post.return_value
-        )
+    with patch.dict(os.environ, {"SERPER_API_KEY": "test_key"}):
+        with patch("httpx.Client.post") as mock_post:
+            mock_post.return_value = MagicMock(spec=httpx.Response)
+            mock_post.return_value.status_code = 401
+            mock_post.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "Unauthorized", request=MagicMock(), response=mock_post.return_value
+            )
 
-        with pytest.raises(httpx.HTTPStatusError):
-            serper_web_search(query="test", api_key="invalid_key")
+            with pytest.raises(httpx.HTTPStatusError):
+                serper_web_search(query="test")
 
 
 def test_serper_web_search_env_api_key():

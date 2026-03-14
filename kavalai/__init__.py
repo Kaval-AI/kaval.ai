@@ -18,9 +18,10 @@ from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer, StreamContent
 from kavalai.normalizer import Normalizer
 from kavalai.agents.db import db_manager
-from kavalai.agents.workflow import Workflow
+from kavalai.agents.workflow import Workflow, WorkflowException
 from kavalai.agents.workflow_model import WorkflowModel
 from kavalai.agents.rag_service import RagService
+from kavalai.functionkernel import FunctionKernel, FunctionKernelException
 
 # Db tables
 from kavalai.agents.db import (
@@ -53,4 +54,9 @@ __all__ = [
     Workflow,
     WorkflowModel,
     RagService,
+    Workflow,
+    WorkflowException,
+    # Function kernel
+    FunctionKernel,
+    FunctionKernelException,
 ]

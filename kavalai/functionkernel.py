@@ -35,6 +35,10 @@ from kavalai.agents.workflow_model import (
 logger = logging.getLogger(__name__)
 
 
+class FunctionKernelException(WorkflowException):
+    pass
+
+
 def pythontool(func: Callable) -> Callable:
     """Decorator to mark a function as a kavalai tool."""
     func._is_kavalai_tool = True
@@ -68,7 +72,7 @@ class FunctionKernel:
 
     def register_rest_server(self, server: RestServer):
         if server.name in self.rest_servers:
-            raise WorkflowException(
+            raise FunctionKernelException(
                 f"REST server '{server.name}' is already registered."
             )
         self.rest_servers[server.name] = server
@@ -105,14 +109,14 @@ class FunctionKernel:
 
     def register_mcp_server(self, server: McpServer):
         if server.name in self.mcp_servers:
-            raise WorkflowException(
+            raise FunctionKernelException(
                 f"MCP server '{server.name}' is already registered."
             )
         self.mcp_servers[server.name] = server
 
     def register_python_tool(self, name: str, func: Callable):
         if not getattr(func, "_is_kavalai_tool", False):
-            raise WorkflowException(
+            raise FunctionKernelException(
                 f"Function '{func.__name__}' must be decorated with @kavalai.pythontool"
             )
 
@@ -121,7 +125,9 @@ class FunctionKernel:
             _, name = name.split("://", 1)
 
         if name in self.python_tools:
-            raise WorkflowException(f"Python tool '{name}' is already registered.")
+            raise FunctionKernelException(
+                f"Python tool '{name}' is already registered."
+            )
         self.python_tools[name] = func
         self.python_tool_definitions[name] = self._generate_python_tool_definition(
             name, func
@@ -178,7 +184,7 @@ class FunctionKernel:
         Example: python://kavalai.mytool.myfunc or rest://myrestserver.restfunction
         """
         if "://" not in tool_uri:
-            raise WorkflowException(
+            raise FunctionKernelException(
                 f"Invalid tool URI format: '{tool_uri}'. Expected protocol://[name|module].function_name"
             )
 
@@ -187,12 +193,12 @@ class FunctionKernel:
         if protocol == "python":
             return await self._call_python_tool(path, arguments, output_type)
 
-        if "." not in path:
-            raise WorkflowException(
-                f"Invalid tool path format: '{path}'. Expected [name|module].function_name"
-            )
-
-        name_or_module, function_name = path.rsplit(".", 1)
+        if protocol == "rest" or protocol == "mcp":
+            if "." not in path:
+                raise FunctionKernelException(
+                    f"Invalid tool path format: '{path}'. Expected [name|module].function_name"
+                )
+            name_or_module, function_name = path.rsplit(".", 1)
 
         if protocol == "rest":
             method = kwargs.get("method", "get")
@@ -226,7 +232,7 @@ class FunctionKernel:
                 name_or_module, function_name, arguments, output_type
             )
         else:
-            raise WorkflowException(f"Unsupported protocol: '{protocol}'")
+            raise FunctionKernelException(f"Unsupported protocol: '{protocol}'")
 
     async def close(self):
         """Cleanup all MCP sessions."""
@@ -249,7 +255,9 @@ class FunctionKernel:
         output_type: Optional[type] = None,
     ) -> Any:
         if server_name not in self.rest_servers:
-            raise WorkflowException(f"REST server '{server_name}' not registered.")
+            raise FunctionKernelException(
+                f"REST server '{server_name}' not registered."
+            )
 
         server = self.rest_servers[server_name]
         url = server.url
@@ -257,7 +265,9 @@ class FunctionKernel:
             url = os.environ.get(server.url_env)
 
         if not url:
-            raise WorkflowException(f"URL for REST server '{server_name}' not found.")
+            raise FunctionKernelException(
+                f"URL for REST server '{server_name}' not found."
+            )
 
         auth = None
         if server.username_env and server.password_env:
@@ -294,7 +304,7 @@ class FunctionKernel:
             return self.mcp_sessions[server_name]
 
         if server_name not in self.mcp_servers:
-            raise WorkflowException(f"MCP server '{server_name}' not registered.")
+            raise FunctionKernelException(f"MCP server '{server_name}' not registered.")
 
         config = self.mcp_servers[server_name]
 
@@ -304,7 +314,7 @@ class FunctionKernel:
                 url = os.environ.get(config.url_env)
 
             if not url:
-                raise WorkflowException(
+                raise FunctionKernelException(
                     f"URL for MCP server '{server_name}' not found."
                 )
 
@@ -318,7 +328,7 @@ class FunctionKernel:
                 command = os.environ.get(config.command_env)
 
             if not command:
-                raise WorkflowException(
+                raise FunctionKernelException(
                     f"Command for MCP server '{server_name}' not found."
                 )
 
@@ -415,7 +425,7 @@ class FunctionKernel:
                 validated_args = definition.input_model(**arguments).model_dump()
                 arguments = validated_args
             except Exception as e:
-                raise WorkflowException(
+                raise FunctionKernelException(
                     f"MCP tool '{tool}' on server '{server_name}' argument validation failed: {e}"
                 )
 
@@ -423,7 +433,7 @@ class FunctionKernel:
         response = await session.call_tool(tool, arguments=arguments)
 
         if response.isError:
-            raise WorkflowException(
+            raise FunctionKernelException(
                 f"MCP tool '{tool}' on server '{server_name}' failed: {response.content}"
             )
 
@@ -466,14 +476,16 @@ class FunctionKernel:
             func = self.python_tools[python_tool]
             definition = self.python_tool_definitions.get(python_tool)
         else:
-            raise WorkflowException(f"Python tool '{python_tool}' not registered.")
+            raise FunctionKernelException(
+                f"Python tool '{python_tool}' not registered."
+            )
 
         # Validate arguments using input model
         try:
             validated_input = definition.input_model(**arguments)
             call_args = validated_input.model_dump()
         except Exception as e:
-            raise WorkflowException(
+            raise FunctionKernelException(
                 f"Python tool '{python_tool}' argument validation failed: {e}"
             )
 
@@ -481,7 +493,7 @@ class FunctionKernel:
         try:
             bound_args = sig.bind(**call_args)
         except TypeError as e:
-            raise WorkflowException(
+            raise FunctionKernelException(
                 f"Python tool '{python_tool}' signature mismatch: {e}"
             )
 
@@ -492,7 +504,9 @@ class FunctionKernel:
                 result = func(*bound_args.args, **bound_args.kwargs)
         except Exception as e:
             logger.exception(f"Error executing python_tool '{python_tool}'")
-            raise WorkflowException(f"Error executing python_tool '{python_tool}': {e}")
+            raise FunctionKernelException(
+                f"Error executing python_tool '{python_tool}': {e}"
+            )
 
         target_output_type = output_type or definition.output_model
 

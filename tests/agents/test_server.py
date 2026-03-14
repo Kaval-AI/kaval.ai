@@ -233,22 +233,28 @@ async def test_stream_agent_endpoint(
         lines = [
             line[6:] for line in response.text.split("\n") if line.startswith("data: ")
         ]
-        assert len(lines) == 4
+        assert len(lines) == 5
 
-        partial1 = json.loads(lines[0])
+        # Task start event
+        task_start = json.loads(lines[0])
+        assert task_start["type"] == "complete"
+        assert task_start["name"] == "running_task"
+        assert task_start["value"] == "generate"
+
+        partial1 = json.loads(lines[1])
         assert partial1["type"] == "partial"
         assert partial1["value"] == '{"agent_response": "He'
 
-        partial2 = json.loads(lines[1])
+        partial2 = json.loads(lines[2])
         assert partial2["type"] == "partial"
         assert partial2["value"] == '{"agent_response": "Hello world"}'
 
-        complete = json.loads(lines[2])
+        complete = json.loads(lines[3])
         assert complete["type"] == "complete"
         assert complete["name"] == "output"
 
         # Final output
-        final_output = json.loads(lines[3])
+        final_output = json.loads(lines[4])
         assert final_output["type"] == "complete"
         assert final_output["name"] == "output"
         final_value = json.loads(final_output["value"])

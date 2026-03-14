@@ -67,4 +67,8 @@ async def test_planning_agent_streaming():
     assert kwargs.get("streamer") == streamer
 
     # 3. Check if stream_complete was called with the final output
-    streamer.stream_complete.assert_awaited_once_with(final_output.model_dump_json())
+    streamer.stream_complete.assert_awaited()
+    # It might be called multiple times (once for running_task, once for final output)
+    # So we check if the last call was with final_output
+    last_call = streamer.stream_complete.call_args_list[-1]
+    assert last_call.args[0] == final_output.model_dump_json()

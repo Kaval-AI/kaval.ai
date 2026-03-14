@@ -10,8 +10,13 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, create_model
 from typing import Any, Dict, Optional
-from kavalai.functionkernel import FunctionKernel, pythontool, ToolDefinition
-from kavalai.agents.workflow_model import RestServer, McpServer, WorkflowException
+from kavalai.functionkernel import (
+    FunctionKernel,
+    pythontool,
+    ToolDefinition,
+    FunctionKernelException,
+)
+from kavalai.agents.workflow_model import RestServer, McpServer
 
 app = FastAPI()
 
@@ -317,16 +322,16 @@ async def test_python_tool_errors():
     kernel = FunctionKernel()
 
     # Missing tool
-    with pytest.raises(WorkflowException, match="not registered"):
+    with pytest.raises(FunctionKernelException, match="not registered"):
         await kernel._call_python_tool("non.existent.tool", {})
 
     # Signature mismatch / validation error
     kernel.register_python_tool("add", sync_add)
-    with pytest.raises(WorkflowException, match="argument validation failed"):
+    with pytest.raises(FunctionKernelException, match="argument validation failed"):
         await kernel._call_python_tool("add", {"a": 1})  # missing b
 
     # Signature mismatch at bind
-    with pytest.raises(WorkflowException, match="signature mismatch"):
+    with pytest.raises(FunctionKernelException, match="signature mismatch"):
         # This is tricky because Pydantic usually catches it first if annotations are right
         # But we can try passing extra args if it's not in the input model
         # Actually, input model is generated from signature, so it should be consistent.
@@ -341,11 +346,11 @@ async def test_python_tool_errors():
         return x
 
     with pytest.raises(
-        WorkflowException, match="must be decorated with @kavalai.pythontool"
+        FunctionKernelException, match="must be decorated with @kavalai.pythontool"
     ):
         kernel.register_python_tool("undecorated", undecorated)
 
-    with pytest.raises(WorkflowException, match="not registered"):
+    with pytest.raises(FunctionKernelException, match="not registered"):
         # Dynamic loading is now disabled
         await kernel._call_python_tool("os.getcwd", {})
 
@@ -405,7 +410,7 @@ async def test_python_tool_unregistered_load():
     kernel = FunctionKernel()
     # Should no longer work via dynamic loading
     tool_uri = "tests.test_functionkernel.sync_add"
-    with pytest.raises(WorkflowException, match="not registered"):
+    with pytest.raises(FunctionKernelException, match="not registered"):
         await kernel._call_python_tool(tool_uri, {"a": 10, "b": 20})
 
     # But works if registered
@@ -511,7 +516,9 @@ async def test_call_rest_tool(rest_server):
         await kernel._call_rest_tool("auth_server", "auth_check", {})
 
     # Error: Missing server
-    with pytest.raises(WorkflowException, match="REST server 'missing' not registered"):
+    with pytest.raises(
+        FunctionKernelException, match="REST server 'missing' not registered"
+    ):
         await kernel._call_rest_tool("missing", "any", {})
 
     # Error: Missing URL
@@ -521,7 +528,7 @@ async def test_call_rest_tool(rest_server):
     server_env_missing = RestServer(name="no_env_url", url_env="NON_EXISTENT_URL")
     kernel.register_rest_server(server_env_missing)
     with pytest.raises(
-        WorkflowException, match="URL for REST server 'no_env_url' not found"
+        FunctionKernelException, match="URL for REST server 'no_env_url' not found"
     ):
         await kernel._call_rest_tool("no_env_url", "any", {})
 
@@ -547,7 +554,9 @@ async def test_mcp_tool_errors():
     kernel = FunctionKernel()
 
     # Missing server
-    with pytest.raises(WorkflowException, match="MCP server 'missing' not registered"):
+    with pytest.raises(
+        FunctionKernelException, match="MCP server 'missing' not registered"
+    ):
         await kernel._call_mcp_tool("missing", "any", {})
 
     # Use a simpler approach with patches to reach the exact lines
@@ -574,7 +583,7 @@ async def test_mcp_tool_errors():
             mcp_server = McpServer(name="mcp_err", command="true")
             kernel.register_mcp_server(mcp_server)
 
-            with pytest.raises(WorkflowException, match="failed: .*MagicMock"):
+            with pytest.raises(FunctionKernelException, match="failed: .*MagicMock"):
                 await kernel._call_mcp_tool("mcp_err", "any", {})
 
             # 2. Test JSON parsing error (line 431)
@@ -615,7 +624,9 @@ async def test_mcp_tool_errors():
         server = McpServer(name="mcp_fail", command="python", args=[helper_path])
         kernel.register_mcp_server(server)
 
-        with pytest.raises(WorkflowException, match="failed: .*Something went wrong"):
+        with pytest.raises(
+            FunctionKernelException, match="failed: .*Something went wrong"
+        ):
             await kernel._call_mcp_tool("mcp_fail", "fail_tool", {})
     finally:
         await kernel.close()
@@ -858,13 +869,13 @@ async def test_call_tool_errors():
     """
     kernel = FunctionKernel()
 
-    with pytest.raises(WorkflowException, match="Invalid tool URI format"):
+    with pytest.raises(FunctionKernelException, match="Invalid tool URI format"):
         await kernel.call_tool("invalid_format", {})
 
-    with pytest.raises(WorkflowException, match="Invalid tool path format"):
-        await kernel.call_tool("python://nodot", {})
+    with pytest.raises(FunctionKernelException, match="Invalid tool path format"):
+        await kernel.call_tool("rest://nodot", {})
 
-    with pytest.raises(WorkflowException, match="Unsupported protocol"):
+    with pytest.raises(FunctionKernelException, match="Unsupported protocol"):
         await kernel.call_tool("ftp://some.file", {})
 
 
@@ -901,21 +912,21 @@ async def test_registration_conflicts():
     # Test REST server conflict
     kernel.register_rest_server(RestServer(name="test", url="http://api.com"))
     with pytest.raises(
-        WorkflowException, match="REST server 'test' is already registered"
+        FunctionKernelException, match="REST server 'test' is already registered"
     ):
         kernel.register_rest_server(RestServer(name="test", url="http://other.com"))
 
     # Test MCP server conflict
     kernel.register_mcp_server(McpServer(name="mcp", command="ls"))
     with pytest.raises(
-        WorkflowException, match="MCP server 'mcp' is already registered"
+        FunctionKernelException, match="MCP server 'mcp' is already registered"
     ):
         kernel.register_mcp_server(McpServer(name="mcp", command="dir"))
 
     # Test Python tool conflict
     kernel.register_python_tool("add", sync_add)
     with pytest.raises(
-        WorkflowException, match="Python tool 'add' is already registered"
+        FunctionKernelException, match="Python tool 'add' is already registered"
     ):
         kernel.register_python_tool("add", async_multiply)
 
