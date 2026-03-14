@@ -59,21 +59,15 @@ services:
     networks:
       - kavalai
 
-  socrates-agent:
-    build:
-      context: .
-      dockerfile: dockerfiles/agent.Dockerfile
-    command: agent-server
+
+  torproxy:
+    image: dperson/torproxy
+    restart: always
     ports:
-      - "8001:8001"
-    env_file: .env
+      - "8118:8118"
+      - "9050:9050"
     environment:
-      - KAVALAI_DB_URI=postgresql://kavalai_dev:kavalai_dev@postgres_db:5432/kavalai_dev
-      - KAVALAI_DB_SCHEMA=agents
-      - WORKFLOW_YAML_PATH=kavalai/demo_agents/socrates.yaml
-      - AGENT_PORT=8001
-    depends_on:
-      - agent-migrations
+      - TZ=UTC
     networks:
       - kavalai
 

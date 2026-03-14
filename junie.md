@@ -8,7 +8,7 @@ Kaval.AI can be run using Docker. The provided `Dockerfile` and `entrypoint.sh` 
 - `agent-migrations`: Run database migrations for the agents.
 - `backoffice-server`: Start the backoffice Nginx and FastAPI server (requires `KAVALAI_BO_DB_URI` / `KAVALAI_BO_DB_SCHEMA`).
 - `agent-server`: Start an agent REST server (requires `WORKFLOW_YAML_PATH` and `KAVALAI_DB_URI` / `KAVALAI_DB_SCHEMA`).
-
+- `torproxy`: A Tor and Privoxy proxy service (using `dperson/torproxy`).
 
 ## Project Overview
 Kaval.AI is an AI agent writing framework where agent steps are defined using YAML. It consists of two main parts:
@@ -70,6 +70,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `websearch/langsearch.py`: LangSearch API client for web searches. Optimized for AI applications, returns summaries and snippets in a format compatible with Bing Search API.
         - `websearch/serper.py`: Serper API client for Google Search. Supports country, language, date range and pagination.
         - `websearch/google_custom_search.py`: Google Custom Search JSON API client. Requires API key and Search Engine ID (cx).
+        - `webtools/http_client.py`: Basic HTTP client for GET, POST, etc. requests with support for basic auth and proxy.
         - `openapi_spec_parser.py`: Tool for parsing OpenAPI specifications.
         - `index_csv.py`: Tool for indexing large CSV files into RAG.
     - `crud.py`: Shared database utility functions.
