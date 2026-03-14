@@ -1,9 +1,11 @@
-from kavalai.functionkernel import FunctionKernel, pythontool
-from kavalai.agents.run_context import RunContext
-from kavalai.llm_clients.llm_client import LLMClient
-from typing import Type, Optional
-from pydantic import BaseModel, Field
 import logging
+from typing import Type, Optional
+
+from pydantic import BaseModel, Field
+
+from kavalai.agents.run_context import RunContext
+from kavalai.functionkernel import FunctionKernel
+from kavalai.llm_clients.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -51,22 +53,53 @@ class PlanningAgent:
         run_context: RunContext,
         llm_client: LLMClient,
         input_data: dict[str, dict],
-        response_model=Type[BaseModel],
+        response_model: Type[BaseModel] = BaseModel,
     ):
         self._kernel = kernel
         self._run_context = run_context
         self._llm_client = llm_client
-        self._should_stop = False
+        self._input_data = input_data
+        self._response_model = response_model
+        self._planner_context = {}
+        self._step_outputs = []
 
     async def run(
-        self, task: str, message_history: list[dict] = None, max_iterations: int = 10
+        self, task: str, chat_history: list[dict] = None, max_iterations: int = 10
     ):
-        for iter_no in range(max_iterations):
-            if self._should_stop:
-                break
+        if chat_history is None:
+            chat_history = []
 
-    @pythontool
-    async def stop(self):
-        """Stops the planning agent. Agent must call this when the task is fulfilled."""
-        logger.info("Stopping planning agent...")
-        self._should_stop = True
+        StepOutput = get_step_output_type(self._response_model)
+
+        for iter_no in range(max_iterations):
+            system_prompt = (
+                task + "\n\n"
+                f"Available tools:\n{await self._kernel.get_tool_descriptions()}\n\n"
+                f"Inputs:\n{self._input_data}\n\n"
+                f"Planner Context (tool results):\n{self._planner_context}\n\n"
+                f"Step Outputs (previous steps):\n{[so.model_dump() for so in self._step_outputs]}\n"
+            )
+
+            messages = [{"role": "system", "content": system_prompt}] + chat_history
+
+            result, stats = await self._llm_client.chat_completions(
+                messages=messages,
+                response_model=StepOutput,
+            )
+
+            step_output: StepOutput = result
+            self._step_outputs.append(step_output)
+
+            if step_output.tool_calls:
+                for tool_call in step_output.tool_calls:
+                    tool_result = await self._kernel.call_tool(
+                        tool_uri=tool_call.name,
+                        arguments=tool_call.args,
+                    )
+                    if tool_call.call_id:
+                        self._planner_context[tool_call.call_id] = tool_result
+
+            if step_output.output is not None:
+                return step_output.output
+
+        return None
