@@ -136,9 +136,7 @@ class Workflow:
         task: LLMTask,
         run_context: RunContext,
         queue: asyncio.Queue | None,
-        agent_service: Optional[AgentService] = None,
     ):
-        agent_service = agent_service or self.agent_service
         input_data = {}
         for name, info in task.inputs.items():
             if info.value is None and info.name is None:
@@ -159,8 +157,8 @@ class Workflow:
 
         messages = [system_message]
 
-        if task.use_history and agent_service and run_context.session_id:
-            history = await agent_service.get_chat_history(run_context.session_id)
+        if task.use_history and self.agent_service and run_context.session_id:
+            history = await self.agent_service.get_chat_history(run_context.session_id)
             for msg in history:
                 messages.append(dict(role=msg.role, content=msg.content))
 
@@ -185,17 +183,16 @@ class Workflow:
             streamer=streamer,
             temperature=temperature,
         )
-        if agent_service:
-            async with agent_service.session_maker() as session:
+        if self.agent_service:
+            async with self.agent_service.session_maker() as session:
                 session.add(stats)
                 await session.commit()
 
         logger.info(f"Setting {task.output} = {response}")
         run_context.data[task.output] = response
 
-        # DB LOGGING: Record this prompt as a Task
-        if agent_service and run_context.run_id:
-            await agent_service.add_task(
+        if self.agent_service and run_context.run_id:
+            await self.agent_service.add_task(
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
@@ -211,9 +208,7 @@ class Workflow:
         task: RestTask,
         run_context: RunContext,
         queue: asyncio.Queue | None,
-        agent_service: Optional[AgentService] = None,
     ):
-        agent_service = agent_service or self.agent_service
         inputs = await run_context.prepare_tool_inputs(task)
 
         # Use FunctionKernel to call REST tool
@@ -242,8 +237,8 @@ class Workflow:
             await streamer.stream_complete(stream_value)
 
         # Store the tool run info.
-        if agent_service and run_context.run_id:
-            await agent_service.add_task(
+        if self.agent_service and run_context.run_id:
+            await self.agent_service.add_task(
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
@@ -387,11 +382,9 @@ class Workflow:
         task: RagQueryTask,
         run_context: RunContext,
         queue: asyncio.Queue | None,
-        agent_service: Optional[AgentService] = None,
     ):
         """Perform a RAG search and store the results in the run context."""
-        agent_service = agent_service or self.agent_service
-        if not agent_service:
+        if not self.agent_service:
             logger.warning("AgentService not provided, skipping RAG task.")
             return
 
@@ -414,7 +407,7 @@ class Workflow:
 
             # 2. Initialize RagService
             rag_service = RagService.from_session_maker(
-                agent_service.session_maker, model
+                self.agent_service.session_maker, model
             )
             results = await rag_service.query(
                 text=text,
@@ -453,8 +446,8 @@ class Workflow:
             )
 
         # Store the tool run info.
-        if agent_service and run_context.run_id:
-            await agent_service.add_task(
+        if self.agent_service and run_context.run_id:
+            await self.agent_service.add_task(
                 agent_id=run_context.agent_id,
                 session_id=run_context.session_id,
                 run_id=run_context.run_id,
@@ -534,17 +527,17 @@ class Workflow:
                 if isinstance(task, AgentTask):
                     await self.run_planning_agent(task, run_context, queue)
                 elif isinstance(task, LLMTask):
-                    await self.run_prompt(task, run_context, queue, agent_service)
+                    await self.run_prompt(task, run_context, queue)
                 elif isinstance(task, McpTask):
                     await self.run_mcp_tool(task, run_context, queue)
                 elif isinstance(task, PythonTask):
                     await self.run_python_tool(task, run_context, queue)
                 elif isinstance(task, RestTask):
-                    await self.run_rest_tool(task, run_context, queue, agent_service)
+                    await self.run_rest_tool(task, run_context, queue)
                 elif isinstance(task, CombineTask):
                     await self.run_combine(task, run_context, queue)
                 elif isinstance(task, RagQueryTask):
-                    await self.run_rag_task(task, run_context, queue, agent_service)
+                    await self.run_rag_task(task, run_context, queue)
                 else:
                     logger.warning("Unknown task type: %s", type(task))
 
