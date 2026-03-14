@@ -105,7 +105,7 @@ def test_langsearch_web_search_env_api_key():
 
             langsearch_web_search(query="test")
 
-            args, kwargs = mock_post.call_args
+            args, kwargs = mock_post.call_args1
             assert kwargs["headers"]["Authorization"] == "Bearer env_key"
 
 
