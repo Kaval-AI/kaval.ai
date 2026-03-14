@@ -528,7 +528,7 @@ class FunctionKernel:
             "Each tool call MUST be a valid JSON object matching the ToolCall structure.",
             "Example ToolCall (ensure all required 'args' are provided):",
             "```json",
-            '{"name": "python://mypackage.myfunc", "call_id": "step1", "args": {"param1": "value1", "param2": 10}}',
+            '{"name": "python://mypackage.myfunc", "call_id": "step1", "args": "{"param1": "value1", "param2": 10}"}',
             "```",
             "",
             "---",
