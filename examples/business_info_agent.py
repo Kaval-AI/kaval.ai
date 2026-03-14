@@ -88,7 +88,7 @@ async def main():
 
     # 2. Initialize the LLM Client
     # Using a capable model for planning and extraction
-    llm_client = LLMClient(model="openai/gpt-5.4")
+    llm_client = LLMClient(model="gemini/gemini-3.1-pro-preview")
 
     # 3. Initialize RunContext, Streamer and PlanningAgent
     run_context = RunContext()
