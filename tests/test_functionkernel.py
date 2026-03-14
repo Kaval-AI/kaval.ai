@@ -317,7 +317,7 @@ async def test_python_tool_errors():
     kernel = FunctionKernel()
 
     # Missing tool
-    with pytest.raises(WorkflowException, match="Failed to load python_tool"):
+    with pytest.raises(WorkflowException, match="not registered"):
         await kernel._call_python_tool("non.existent.tool", {})
 
     # Signature mismatch / validation error
@@ -345,9 +345,8 @@ async def test_python_tool_errors():
     ):
         kernel.register_python_tool("undecorated", undecorated)
 
-    with pytest.raises(WorkflowException, match="is not marked as a tool"):
-        # We need to use a function from a module to test dynamic loading rejection
-        # os.getcwd is definitely not decorated
+    with pytest.raises(WorkflowException, match="not registered"):
+        # Dynamic loading is now disabled
         await kernel._call_python_tool("os.getcwd", {})
 
 
@@ -401,15 +400,43 @@ async def test_python_tool_output_mapping_details():
 @pytest.mark.asyncio
 async def test_python_tool_unregistered_load():
     """
-    Tests the dynamic loading of decorated Python functions that haven't
-    been explicitly registered with the kernel.
+    Tests that dynamic loading is disabled and fails as expected.
     """
     kernel = FunctionKernel()
-    # Should work via dynamic loading if module is accessible
-    # Using full path to this test file's function
+    # Should no longer work via dynamic loading
     tool_uri = "tests.test_functionkernel.sync_add"
-    result = await kernel._call_python_tool(tool_uri, {"a": 10, "b": 20})
+    with pytest.raises(WorkflowException, match="not registered"):
+        await kernel._call_python_tool(tool_uri, {"a": 10, "b": 20})
+
+    # But works if registered
+    kernel.register_python_tool("sync_add", sync_add)
+    result = await kernel._call_python_tool("sync_add", {"a": 10, "b": 20})
     assert result.result == 30
+
+
+@pytest.mark.asyncio
+async def test_python_tool_docstring_parsing():
+    """
+    Tests that docstrings are correctly parsed for tool descriptions.
+    """
+    kernel = FunctionKernel()
+
+    @pythontool
+    def documented_func():
+        """
+        Summary line.
+
+        Detailed description that should be included
+        by inspect.getdoc().
+        """
+        pass
+
+    kernel.register_python_tool("documented", documented_func)
+    definition = kernel.python_tool_definitions["documented"]
+
+    # inspect.getdoc() cleans up indentation and should return the whole docstring
+    expected_doc = "Summary line.\n\nDetailed description that should be included\nby inspect.getdoc()."
+    assert definition.description == expected_doc
 
 
 @pytest.mark.asyncio
@@ -725,6 +752,17 @@ async def test_tool_descriptions():
             assert "python://math.add" in desc
             assert "rest://my_rest.<function_name>" in desc
             assert "mcp://my_mcp.list_files" in desc
+
+            # Verify concise format
+            assert "  - Description:" not in desc
+            # math.add has docstring "Adds two integers."
+            assert "python://math.add - Adds two integers." in desc
+            assert "Input Model:" in desc
+            assert "Output Model:" in desc
+            assert "class math.add_input(BaseModel):" in desc
+            assert "class math.add_output(BaseModel):" in desc
+            assert "Input JSON Schema" not in desc
+            assert "Output JSON Schema" not in desc
 
             # REST server descriptions mapping error
             kernel.register_rest_server(

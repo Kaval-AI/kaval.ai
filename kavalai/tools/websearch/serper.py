@@ -69,7 +69,6 @@ def serper_web_search(
     language: Optional[str] = None,
     date_range: Optional[str] = None,
     page: int = 1,
-    api_key: Optional[str] = None,
 ) -> SerperSearchResponse:
     """
     Perform a web search using Serper.dev API (Google Search).
@@ -80,9 +79,8 @@ def serper_web_search(
         language: Two-letter language code (e.g., 'en', 'et').
         date_range: Date range for search results (e.g., 'qdr:h' for hour, 'qdr:d' for day, 'qdr:w' for week, 'qdr:m' for month, 'qdr:y' for year).
         page: Page number of results (default 1).
-        api_key: Optional API key. If not provided, will use SERPER_API_KEY environment variable.
     """
-    key = api_key or os.environ.get("SERPER_API_KEY")
+    key = os.environ.get("SERPER_API_KEY")
     if not key:
         raise ValueError(
             "Serper API key not provided. Set SERPER_API_KEY environment variable."

@@ -40,7 +40,7 @@ async def test_planning_agent_run_success():
         long_explanation="Planning to call a tool",
         step_number=0,
         max_steps=2,
-        tool_calls=[ToolCall(name="python://tool", call_id="call1", args={})],
+        tool_calls=[ToolCall(name="python://tool", call_id="call1", args="{}")],
         output=None,
     )
 

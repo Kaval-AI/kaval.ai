@@ -1,11 +1,13 @@
 import logging
+import json
 from typing import Type, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from kavalai.agents.run_context import RunContext
 from kavalai.functionkernel import FunctionKernel
 from kavalai.llm_clients.llm_client import LLMClient
+from kavalai.llm_clients.common import Streamer
 
 logger = logging.getLogger(__name__)
 
@@ -13,19 +15,27 @@ logger = logging.getLogger(__name__)
 class ToolCall(BaseModel):
     """This data structure represents tool call requests."""
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(description="Tool call name i.e python://mypackage.myfunc")
     call_id: Optional[str] = Field(
         description="Generate an ID, which represents this result in downstream agent runs."
     )
-    args: dict = Field(description="Function arguments")
+    args: str = Field(
+        default="{}",
+        description="Arguments for the tool call in JSON format.",
+    )
 
 
 def get_step_output_type(ResponseModel=Type[BaseModel]):
     class StepOutput(BaseModel):
         """Data structure that helps passing around information between consecutive agent runs."""
 
+        model_config = ConfigDict(extra="forbid")
+
         short_explanation: str = Field(
-            description="Human friendly summary of planned steps.", max_length=50
+            description="Human friendly summary of planned steps. Be very concise, maximum 50 characters.",
+            max_length=50,
         )
         long_explanation: str = Field(
             description="Add exaplanations or instructions for downstream LLM-calls.",
@@ -54,12 +64,14 @@ class PlanningAgent:
         llm_client: LLMClient,
         input_data: dict[str, dict],
         response_model: Type[BaseModel] = BaseModel,
+        streamer: Optional[Streamer] = None,
     ):
         self._kernel = kernel
         self._run_context = run_context
         self._llm_client = llm_client
         self._input_data = input_data
         self._response_model = response_model
+        self._streamer = streamer
         self._planner_context = {}
         self._step_outputs = []
 
@@ -73,33 +85,67 @@ class PlanningAgent:
 
         for iter_no in range(max_iterations):
             system_prompt = (
-                task + "\n\n"
-                f"Available tools:\n{await self._kernel.get_tool_descriptions()}\n\n"
+                "You are a planning agent. Your goal is to achieve the following task:\n"
+                f"{task}\n\n"
+                "Available Tools:\n"
+                f"{await self._kernel.get_tool_descriptions()}\n\n"
                 f"Inputs:\n{self._input_data}\n\n"
                 f"Planner Context (tool results):\n{self._planner_context}\n\n"
                 f"Step Outputs (previous steps):\n{[so.model_dump() for so in self._step_outputs]}\n"
             )
 
-            messages = [{"role": "system", "content": system_prompt}] + chat_history
+            logger.info(f"Running iteration {iter_no} for task: {task}")
+            logger.info(f"System prompt: {system_prompt}")
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": "Analyze the situation and provide the next step output.",
+                },
+            ] + chat_history
 
             result, stats = await self._llm_client.chat_completions(
                 messages=messages,
                 response_model=StepOutput,
+                streamer=self._streamer,
             )
 
             step_output: StepOutput = result
             self._step_outputs.append(step_output)
 
+            logger.info(f"Step {iter_no}: {step_output.short_explanation}")
+
             if step_output.tool_calls:
                 for tool_call in step_output.tool_calls:
-                    tool_result = await self._kernel.call_tool(
-                        tool_uri=tool_call.name,
-                        arguments=tool_call.args,
-                    )
+                    try:
+                        args = (
+                            json.loads(tool_call.args)
+                            if isinstance(tool_call.args, str)
+                            else tool_call.args
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to parse tool args: {e}")
+                        args = {}
+
+                    logger.info(f"Calling tool {tool_call.name} with {args}")
+                    try:
+                        tool_result = await self._kernel.call_tool(
+                            tool_uri=tool_call.name,
+                            arguments=args,
+                        )
+                    except Exception as e:
+                        logger.warning(f"Tool {tool_call.name} failed: {e}")
+                        tool_result = f"Error: {e}"
+
                     if tool_call.call_id:
                         self._planner_context[tool_call.call_id] = tool_result
 
             if step_output.output is not None:
+                if self._streamer:
+                    await self._streamer.stream_complete(
+                        step_output.output.model_dump_json()
+                    )
                 return step_output.output
 
         return None

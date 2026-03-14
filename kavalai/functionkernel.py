@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import importlib
 import inspect
 import json
 import logging
@@ -116,6 +115,11 @@ class FunctionKernel:
             raise WorkflowException(
                 f"Function '{func.__name__}' must be decorated with @kavalai.pythontool"
             )
+
+        # Normalize name by removing protocol prefix if present
+        if "://" in name:
+            _, name = name.split("://", 1)
+
         if name in self.python_tools:
             raise WorkflowException(f"Python tool '{name}' is already registered.")
         self.python_tools[name] = func
@@ -156,7 +160,7 @@ class FunctionKernel:
 
         return ToolDefinition(
             name=name,
-            description=func.__doc__,
+            description=inspect.getdoc(func) or "",
             input_model=InputModel,
             output_model=OutputModel,
         )
@@ -462,23 +466,7 @@ class FunctionKernel:
             func = self.python_tools[python_tool]
             definition = self.python_tool_definitions.get(python_tool)
         else:
-            try:
-                module_name, func_name = python_tool.rsplit(".", 1)
-                module = importlib.import_module(module_name)
-                func = getattr(module, func_name)
-
-                if not getattr(func, "_is_kavalai_tool", False):
-                    raise WorkflowException(
-                        f"Python function '{python_tool}' is not marked as a tool. "
-                        "Add @kavalai.pythontool decorator."
-                    )
-
-                # Generate definition on the fly if not registered
-                definition = self._generate_python_tool_definition(python_tool, func)
-            except (ValueError, ImportError, AttributeError) as e:
-                raise WorkflowException(
-                    f"Failed to load python_tool '{python_tool}': {e}"
-                )
+            raise WorkflowException(f"Python tool '{python_tool}' not registered.")
 
         # Validate arguments using input model
         try:
@@ -535,22 +523,45 @@ class FunctionKernel:
 
     async def get_tool_descriptions(self) -> str:
         """Returns a string description of all registered tools for prompts."""
-        descriptions = []
+        descriptions = [
+            "Example ToolCall (make sure to fill required arguments in 'args'):",
+            '{"name": "python://mypackage.myfunc", "call_id": "step1", "args": {"param1": "value1", "param2": 10}}',
+            "",
+            "Available tools: ",
+        ]
+
+        def _get_model_definition(model: Type[BaseModel]) -> str:
+            import inspect
+
+            try:
+                source = inspect.getsource(model)
+                return source.strip()
+            except Exception:
+                # Fallback if source cannot be retrieved (e.g., dynamically created models)
+                fields = []
+                for field_name, field in model.model_fields.items():
+                    annotation = field.annotation
+                    if hasattr(annotation, "__name__"):
+                        type_name = annotation.__name__
+                    else:
+                        type_name = str(annotation)
+                    fields.append(f"    {field_name}: {type_name}")
+                return f"class {model.__name__}(BaseModel):\n" + "\n".join(fields)
 
         # Python tools
         for name, definition in self.python_tool_definitions.items():
-            input_schema = definition.input_model.model_json_schema()
-            output_schema = definition.output_model.model_json_schema()
-            desc = f"python://{name} - {definition.description or ''}\n"
-            desc += f"  Input: {json.dumps(input_schema)}\n"
-            desc += f"  Output: {json.dumps(output_schema)}"
+            input_def = _get_model_definition(definition.input_model)
+            output_def = _get_model_definition(definition.output_model)
+            desc = f"python://{name} - {definition.description}\n"
+            desc += f"  - Input Model:\n{input_def}\n"
+            desc += f"  - Output Model:\n{output_def}"
             descriptions.append(desc)
 
         # REST tools
         for server_name, tools in self.rest_tool_definitions.items():
             for tool_name, definition in tools.items():
-                input_schema = definition.input_model.model_json_schema()
-                output_schema = definition.output_model.model_json_schema()
+                input_def = _get_model_definition(definition.input_model)
+                output_def = _get_model_definition(definition.output_model)
                 method = "get"
                 description_text = definition.description or ""
                 try:
@@ -561,8 +572,8 @@ class FunctionKernel:
                     pass
 
                 desc = f"rest://{server_name}.{tool_name} [{method.upper()}] - {description_text}\n"
-                desc += f"  Input: {json.dumps(input_schema)}\n"
-                desc += f"  Output: {json.dumps(output_schema)}"
+                desc += f"  - Input Model:\n{input_def}\n"
+                desc += f"  - Output Model:\n{output_def}"
                 descriptions.append(desc)
 
         # REST servers - list those without specific tools registered
@@ -573,11 +584,11 @@ class FunctionKernel:
         # MCP tools
         for server_name, tools in self.mcp_tool_definitions.items():
             for tool_name, definition in tools.items():
-                input_schema = definition.input_model.model_json_schema()
-                output_schema = definition.output_model.model_json_schema()
+                input_def = _get_model_definition(definition.input_model)
+                output_def = _get_model_definition(definition.output_model)
                 desc = f"mcp://{server_name}.{tool_name} - {definition.description or ''}\n"
-                desc += f"  Input: {json.dumps(input_schema)}\n"
-                desc += f"  Output: {json.dumps(output_schema)}"
+                desc += f"  - Input Model:\n{input_def}\n"
+                desc += f"  - Output Model:\n{output_def}"
                 descriptions.append(desc)
 
         # Also list servers that might not have tools fetched yet
