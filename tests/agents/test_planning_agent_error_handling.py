@@ -39,7 +39,7 @@ async def test_planning_agent_tool_failure_handling():
         long_explanation="Need to call a tool",
         step_number=0,
         max_steps=2,
-        tool_calls=[ToolCall(name="python://fail", call_id="c1", args={})],
+        tool_calls=[ToolCall(name="python://fail", call_id="c1", args="{}")],
         output=None,
     )
 

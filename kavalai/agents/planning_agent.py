@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 from typing import Type, Optional
@@ -118,7 +119,8 @@ class PlanningAgent:
             logger.info(f"Step {iter_no}: {step_output.short_explanation}")
 
             if step_output.tool_calls:
-                for tool_call in step_output.tool_calls:
+
+                async def _call_tool(tool_call):
                     try:
                         args = (
                             json.loads(tool_call.args)
@@ -139,8 +141,15 @@ class PlanningAgent:
                         logger.warning(f"Tool {tool_call.name} failed: {e}")
                         tool_result = f"Error: {e}"
 
-                    if tool_call.call_id:
-                        self._planner_context[tool_call.call_id] = tool_result
+                    return tool_call.call_id, tool_result
+
+                results = await asyncio.gather(
+                    *[_call_tool(tc) for tc in step_output.tool_calls]
+                )
+
+                for call_id, tool_result in results:
+                    if call_id:
+                        self._planner_context[call_id] = tool_result
 
             if step_output.output is not None:
                 if self._streamer:
