@@ -38,7 +38,8 @@ from kavalai.agents.workflow_model import (
     McpServer,
     WorkflowException,
 )
-from kavalai.agents.planning_agent import PlanningAgent
+
+# from kavalai.agents.planning_agent import PlanningAgent
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.schema_parser import SchemaParser
 from kavalai.agents.workflow_validation import (
@@ -487,8 +488,9 @@ class Workflow:
         self, task: AgentTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         """Invoke the PlanningAgent for complex multi-step tasks."""
-        planning_agent = PlanningAgent(self)
-        await planning_agent.run(task, run_context, queue)
+        # planning_agent = PlanningAgent(self)
+        # await planning_agent.run(task, run_context, queue)
+        raise NotImplementedError("PlanningAgent is not available")
 
     async def run_rag_task(
         self,

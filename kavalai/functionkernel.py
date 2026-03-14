@@ -19,13 +19,13 @@ import inspect
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional, Callable, Type
 
 import httpx
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
 
 from kavalai.agents.workflow_model import (
     McpServer,
@@ -34,6 +34,13 @@ from kavalai.agents.workflow_model import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class ToolDefinition(BaseModel):
+    name: str
+    description: Optional[str] = None
+    input_model: Type[BaseModel]
+    output_model: Type[BaseModel]
 
 
 class FunctionKernel:
@@ -46,6 +53,8 @@ class FunctionKernel:
         self.rest_servers: Dict[str, RestServer] = {}
         self.mcp_servers: Dict[str, McpServer] = {}
         self.python_tools: Dict[str, Callable] = {}
+        self.python_tool_definitions: Dict[str, ToolDefinition] = {}
+        self.mcp_tool_definitions: Dict[str, Dict[str, ToolDefinition]] = {}
 
         # MCP session management
         self.mcp_sessions: Dict[str, ClientSession] = {}
@@ -69,6 +78,47 @@ class FunctionKernel:
         if name in self.python_tools:
             raise WorkflowException(f"Python tool '{name}' is already registered.")
         self.python_tools[name] = func
+        self.python_tool_definitions[name] = self._generate_python_tool_definition(
+            name, func
+        )
+
+    def _generate_python_tool_definition(
+        self, name: str, func: Callable
+    ) -> ToolDefinition:
+        sig = inspect.signature(func)
+
+        # Input Model
+        input_fields = {}
+        for param_name, p in sig.parameters.items():
+            annotation = (
+                p.annotation if p.annotation != inspect.Parameter.empty else Any
+            )
+            default = p.default if p.default != inspect.Parameter.empty else ...
+            input_fields[param_name] = (annotation, default)
+
+        InputModel = create_model(f"{name}_input", **input_fields)
+
+        # Output Model
+        output_annotation = (
+            sig.return_annotation
+            if sig.return_annotation != inspect.Signature.empty
+            else Any
+        )
+        if isinstance(output_annotation, type) and issubclass(
+            output_annotation, BaseModel
+        ):
+            OutputModel = output_annotation
+        else:
+            OutputModel = create_model(
+                f"{name}_output", result=(output_annotation, ...)
+            )
+
+        return ToolDefinition(
+            name=name,
+            description=func.__doc__,
+            input_model=InputModel,
+            output_model=OutputModel,
+        )
 
     async def call_tool(
         self,
@@ -220,7 +270,64 @@ class FunctionKernel:
         self.mcp_cleanups.append(session)
         await session.initialize()
         self.mcp_sessions[server_name] = session
+
+        # Fetch and store tool definitions
+        await self._refresh_mcp_tool_definitions(server_name, session)
+
         return session
+
+    async def _refresh_mcp_tool_definitions(
+        self, server_name: str, session: ClientSession
+    ):
+        try:
+            tools_result = await session.list_tools()
+            definitions = {}
+            for tool in tools_result.tools:
+                # MCP tool input schema is usually a JSON Schema
+                # For now, we store the raw schema and we could dynamically create a Pydantic model
+                # But to stay consistent with the "Pydantic models for everything" requirement:
+                input_model = self._create_model_from_jsonschema(
+                    f"{server_name}_{tool.name}_input", tool.inputSchema
+                )
+                # MCP doesn't strictly define output schema in tool list, so we use a generic one
+                output_model = create_model(
+                    f"{server_name}_{tool.name}_output", result=(Any, ...)
+                )
+
+                definitions[tool.name] = ToolDefinition(
+                    name=tool.name,
+                    description=tool.description,
+                    input_model=input_model,
+                    output_model=output_model,
+                )
+            self.mcp_tool_definitions[server_name] = definitions
+        except Exception as e:
+            logger.warning(f"Could not refresh tools for MCP server {server_name}: {e}")
+
+    def _create_model_from_jsonschema(
+        self, name: str, schema: Dict[str, Any]
+    ) -> Type[BaseModel]:
+        """Very basic JSON Schema to Pydantic model conversion."""
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        fields = {}
+
+        type_map = {
+            "string": str,
+            "number": float,
+            "integer": int,
+            "boolean": bool,
+            "object": dict,
+            "array": list,
+        }
+
+        for prop_name, prop_schema in properties.items():
+            prop_type = prop_schema.get("type", "any")
+            python_type = type_map.get(prop_type, Any)
+            default = ... if prop_name in required else None
+            fields[prop_name] = (python_type, default)
+
+        return create_model(name, **fields)
 
     async def call_mcp_tool(
         self,
@@ -230,6 +337,20 @@ class FunctionKernel:
         output_type: Optional[type] = None,
     ) -> Any:
         session = await self._get_mcp_session(server_name)
+
+        # Validate arguments if definition exists
+        if (
+            server_name in self.mcp_tool_definitions
+            and tool in self.mcp_tool_definitions[server_name]
+        ):
+            definition = self.mcp_tool_definitions[server_name][tool]
+            try:
+                validated_args = definition.input_model(**arguments).model_dump()
+                arguments = validated_args
+            except Exception as e:
+                raise WorkflowException(
+                    f"MCP tool '{tool}' on server '{server_name}' argument validation failed: {e}"
+                )
 
         logger.info(f"Calling MCP tool {server_name}/{tool}")
         response = await session.call_tool(tool, arguments=arguments)
@@ -248,12 +369,24 @@ class FunctionKernel:
                     result_data = content.text
                 break
 
-        if (
-            output_type
-            and issubclass(output_type, BaseModel)
-            and isinstance(result_data, dict)
-        ):
-            return output_type(**result_data)
+        # Convert output using output_type or definition's output_model
+        target_output_type = output_type
+        if not target_output_type and server_name in self.mcp_tool_definitions:
+            if tool in self.mcp_tool_definitions[server_name]:
+                target_output_type = self.mcp_tool_definitions[server_name][
+                    tool
+                ].output_model
+
+        if target_output_type and issubclass(target_output_type, BaseModel):
+            if isinstance(result_data, dict):
+                return target_output_type(**result_data)
+            else:
+                # If it's a primitive, try to wrap it if the model has one field
+                fields = target_output_type.model_fields
+                if len(fields) == 1:
+                    field_name = list(fields.keys())[0]
+                    return target_output_type(**{field_name: result_data})
+
         return result_data
 
     async def call_python_tool(
@@ -264,19 +397,31 @@ class FunctionKernel:
     ) -> Any:
         if python_tool in self.python_tools:
             func = self.python_tools[python_tool]
+            definition = self.python_tool_definitions.get(python_tool)
         else:
             try:
                 module_name, func_name = python_tool.rsplit(".", 1)
                 module = importlib.import_module(module_name)
                 func = getattr(module, func_name)
+                # Generate definition on the fly if not registered
+                definition = self._generate_python_tool_definition(python_tool, func)
             except (ValueError, ImportError, AttributeError) as e:
                 raise WorkflowException(
                     f"Failed to load python_tool '{python_tool}': {e}"
                 )
 
+        # Validate arguments using input model
+        try:
+            validated_input = definition.input_model(**arguments)
+            call_args = validated_input.model_dump()
+        except Exception as e:
+            raise WorkflowException(
+                f"Python tool '{python_tool}' argument validation failed: {e}"
+            )
+
         sig = inspect.signature(func)
         try:
-            bound_args = sig.bind(**arguments)
+            bound_args = sig.bind(**call_args)
         except TypeError as e:
             raise WorkflowException(
                 f"Python tool '{python_tool}' signature mismatch: {e}"
@@ -291,25 +436,31 @@ class FunctionKernel:
             logger.exception(f"Error executing python_tool '{python_tool}'")
             raise WorkflowException(f"Error executing python_tool '{python_tool}': {e}")
 
-        if output_type and issubclass(output_type, BaseModel):
+        target_output_type = output_type or definition.output_model
+
+        if target_output_type and issubclass(target_output_type, BaseModel):
             try:
                 if isinstance(result, dict):
-                    return output_type(**result)
+                    return target_output_type(**result)
                 elif isinstance(result, BaseModel):
-                    return output_type(**result.model_dump())
-                elif isinstance(result, output_type):
-                    return result
+                    if isinstance(result, target_output_type):
+                        return result
+                    return target_output_type(**result.model_dump())
                 else:
-                    fields = output_type.model_fields
+                    fields = target_output_type.model_fields
                     if len(fields) == 1:
                         field_name = list(fields.keys())[0]
-                        return output_type(**{field_name: result})
+                        return target_output_type(**{field_name: result})
                     else:
-                        return output_type(result)
+                        try:
+                            return target_output_type(result)
+                        except Exception:
+                            return result
             except Exception as e:
-                raise WorkflowException(
-                    f"Python tool '{python_tool}' returned incompatible result: {e}"
+                logger.warning(
+                    f"Python tool '{python_tool}' returned incompatible result for {target_output_type}: {e}"
                 )
+                return result
         return result
 
     async def get_tool_descriptions(self) -> str:
@@ -317,8 +468,13 @@ class FunctionKernel:
         descriptions = []
 
         # Python tools
-        for name in self.python_tools.keys():
-            descriptions.append(f"python://{name}")
+        for name, definition in self.python_tool_definitions.items():
+            input_schema = definition.input_model.model_json_schema()
+            output_schema = definition.output_model.model_json_schema()
+            desc = f"python://{name} - {definition.description or ''}\n"
+            desc += f"  Input: {json.dumps(input_schema)}\n"
+            desc += f"  Output: {json.dumps(output_schema)}"
+            descriptions.append(desc)
 
         # REST tools - handled dynamically, but we could list registration prefix
         for name in self.rest_servers.keys():
@@ -326,14 +482,18 @@ class FunctionKernel:
             descriptions.append(f"rest://{name}.<function_name>")
 
         # MCP tools
-        for name in self.mcp_servers.keys():
-            try:
-                session = await self._get_mcp_session(name)
-                tools_result = await session.list_tools()
-                for tool in tools_result.tools:
-                    # Format: mcp://server_name.tool_name
-                    descriptions.append(f"mcp://{name}.{tool.name}")
-            except Exception as e:
-                logger.warning(f"Could not list tools for MCP server {name}: {e}")
+        for server_name, tools in self.mcp_tool_definitions.items():
+            for tool_name, definition in tools.items():
+                input_schema = definition.input_model.model_json_schema()
+                output_schema = definition.output_model.model_json_schema()
+                desc = f"mcp://{server_name}.{tool_name} - {definition.description or ''}\n"
+                desc += f"  Input: {json.dumps(input_schema)}\n"
+                desc += f"  Output: {json.dumps(output_schema)}"
+                descriptions.append(desc)
 
-        return "\n".join(descriptions)
+        # Also list servers that might not have tools fetched yet
+        for name in self.mcp_servers.keys():
+            if name not in self.mcp_tool_definitions:
+                descriptions.append(f"mcp://{name}.<tools_not_yet_loaded>")
+
+        return "\n\n".join(descriptions)

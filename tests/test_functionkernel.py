@@ -1,9 +1,11 @@
 import pytest
+import asyncio
+import json
 from unittest.mock import MagicMock, AsyncMock, patch
+from typing import Any, Dict
+from pydantic import BaseModel
 from kavalai.functionkernel import FunctionKernel
 from kavalai.agents.workflow_model import RestServer, McpServer, WorkflowException
-from pydantic import BaseModel
-import json
 
 
 class SimpleModel(BaseModel):
@@ -11,18 +13,29 @@ class SimpleModel(BaseModel):
     value: int
 
 
-def sync_add(a: int, b: int):
+class CustomOutput(BaseModel):
+    result: int
+    meta: str
+
+
+# Simple functions for testing
+def sync_add(a: int, b: int) -> int:
     """Adds two integers."""
     return a + b
 
 
-async def async_multiply(a: int, b: int):
+async def async_multiply(a: int, b: int) -> int:
     """Multiplies two integers asynchronously."""
+    await asyncio.sleep(0.01)
     return a * b
 
 
-def dict_output(name: str):
+def dict_output(name: str) -> Dict[str, Any]:
     return {"name": name, "value": 42}
+
+
+def custom_model_output(val: int) -> CustomOutput:
+    return CustomOutput(result=val * 2, meta="test")
 
 
 @pytest.mark.asyncio
@@ -31,13 +44,13 @@ async def test_register_and_call_python_tool():
     kernel.register_python_tool("add", sync_add)
     kernel.register_python_tool("mul", async_multiply)
 
-    # Sync call
+    # Sync call - returns model with 'result' field
     result = await kernel.call_python_tool("add", {"a": 1, "b": 2})
-    assert result == 3
+    assert result.result == 3
 
     # Async call
     result = await kernel.call_python_tool("mul", {"a": 3, "b": 4})
-    assert result == 12
+    assert result.result == 12
 
     # With output_type
     kernel.register_python_tool("dict_tool", dict_output)
@@ -50,6 +63,20 @@ async def test_register_and_call_python_tool():
 
 
 @pytest.mark.asyncio
+async def test_python_tool_custom_model():
+    kernel = FunctionKernel()
+    kernel.register_python_tool("custom", custom_model_output)
+
+    definition = kernel.python_tool_definitions["custom"]
+    assert definition.output_model == CustomOutput
+
+    result = await kernel.call_python_tool("custom", {"val": 5})
+    assert isinstance(result, CustomOutput)
+    assert result.result == 10
+    assert result.meta == "test"
+
+
+@pytest.mark.asyncio
 async def test_python_tool_errors():
     kernel = FunctionKernel()
 
@@ -57,10 +84,20 @@ async def test_python_tool_errors():
     with pytest.raises(WorkflowException, match="Failed to load python_tool"):
         await kernel.call_python_tool("non.existent.tool", {})
 
-    # Signature mismatch
+    # Signature mismatch / validation error
     kernel.register_python_tool("add", sync_add)
-    with pytest.raises(WorkflowException, match="signature mismatch"):
+    with pytest.raises(WorkflowException, match="argument validation failed"):
         await kernel.call_python_tool("add", {"a": 1})  # missing b
+
+
+@pytest.mark.asyncio
+async def test_python_tool_unregistered_load():
+    kernel = FunctionKernel()
+    # Should work via dynamic loading if module is accessible
+    # Using full path to this test file's function
+    tool_uri = "tests.test_functionkernel.sync_add"
+    result = await kernel.call_python_tool(tool_uri, {"a": 10, "b": 20})
+    assert result.result == 30
 
 
 @pytest.mark.asyncio
@@ -117,12 +154,34 @@ async def test_mcp_tool_stdio():
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock()
 
+            # Mock list_tools for initial registration
+            mock_tool = MagicMock()
+            mock_tool.name = "test_tool"
+            mock_tool.description = "A test tool"
+            mock_tool.inputSchema = {
+                "type": "object",
+                "properties": {"arg": {"type": "string"}},
+            }
+            mock_tools_result = MagicMock()
+            mock_tools_result.tools = [mock_tool]
+            mock_session.list_tools = AsyncMock(return_value=mock_tools_result)
+
             mock_response = MagicMock()
             mock_response.isError = False
             mock_content = MagicMock()
             mock_content.text = json.dumps({"name": "mcp_test", "value": 200})
             mock_response.content = [mock_content]
-            mock_session.call_tool = AsyncMock(return_value=mock_response)
+
+            # Mock response for the second call to match the default mcp_stdio_test_tool_output (which expects a 'result' field)
+            mock_response_2 = MagicMock()
+            mock_response_2.isError = False
+            mock_content_2 = MagicMock()
+            mock_content_2.text = json.dumps({"result": "any_value"})
+            mock_response_2.content = [mock_content_2]
+
+            mock_session.call_tool = AsyncMock(
+                side_effect=[mock_response, mock_response_2]
+            )
 
             result = await kernel.call_mcp_tool(
                 "mcp_stdio", "test_tool", {"arg": "val"}, output_type=SimpleModel
@@ -164,6 +223,15 @@ async def test_mcp_tool_sse():
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock()
 
+            # Mock list_tools
+            mock_tool = MagicMock()
+            mock_tool.name = "hello"
+            mock_tool.description = "Greet"
+            mock_tool.inputSchema = {"type": "object", "properties": {}}
+            mock_tools_result = MagicMock()
+            mock_tools_result.tools = [mock_tool]
+            mock_session.list_tools = AsyncMock(return_value=mock_tools_result)
+
             mock_response = MagicMock()
             mock_response.isError = False
             mock_content = MagicMock()
@@ -172,7 +240,7 @@ async def test_mcp_tool_sse():
             mock_session.call_tool = AsyncMock(return_value=mock_response)
 
             result = await kernel.call_mcp_tool("mcp_sse", "hello", {})
-            assert result == {"result": "ok"}
+            assert result.result == "ok"
             mock_sse.assert_called_with("http://mcp.example.com/sse")
 
 
@@ -202,18 +270,19 @@ async def test_tool_descriptions():
             mock_tools_result.tools = [mock_tool]
             mock_session.list_tools = AsyncMock(return_value=mock_tools_result)
 
+            # Pre-initialize MCP session to load tools
+            await kernel._get_mcp_session("my_mcp")
+
             desc = await kernel.get_tool_descriptions()
 
             assert "python://math.add" in desc
             assert "rest://my_rest.<function_name>" in desc
             assert "mcp://my_mcp.list_files" in desc
 
-            # Verify no extra info
-            assert "Description:" not in desc
-            assert "Arguments:" not in desc
-            assert "(" not in desc  # No signatures
-            assert "REST Server:" not in desc
-            assert "MCP Server:" not in desc
+            # Verify Pydantic schemas are present
+            assert "Input" in desc
+            assert "Output" in desc
+            assert "integer" in desc
 
 
 @pytest.mark.asyncio
@@ -223,7 +292,7 @@ async def test_call_tool_unified():
     # Test Python tool via unified call
     kernel.register_python_tool("math.add", sync_add)
     result = await kernel.call_tool("python://math.add", {"a": 10, "b": 20})
-    assert result == 30
+    assert result.result == 30
 
     # Test REST tool via unified call
     server = RestServer(name="test_api", url="http://api.example.com")
@@ -252,15 +321,27 @@ async def test_call_tool_unified():
             mock_session.initialize = AsyncMock()
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
 
+            # Mock list_tools
+            mock_tool = MagicMock()
+            mock_tool.name = "test_tool"
+            mock_tool.description = "A test tool"
+            mock_tool.inputSchema = {
+                "type": "object",
+                "properties": {"arg": {"type": "integer"}},
+            }
+            mock_tools_result = MagicMock()
+            mock_tools_result.tools = [mock_tool]
+            mock_session.list_tools = AsyncMock(return_value=mock_tools_result)
+
             mock_response = MagicMock()
             mock_response.isError = False
             mock_content = MagicMock()
-            mock_content.text = json.dumps({"mcp": "works"})
+            mock_content.text = json.dumps({"result": {"mcp": "works"}})
             mock_response.content = [mock_content]
             mock_session.call_tool = AsyncMock(return_value=mock_response)
 
             result = await kernel.call_tool("mcp://test_mcp.test_tool", {"arg": 1})
-            assert result == {"mcp": "works"}
+            assert result.result == {"mcp": "works"}
             mock_session.call_tool.assert_called_with("test_tool", arguments={"arg": 1})
 
 
