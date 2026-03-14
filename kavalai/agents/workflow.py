@@ -131,7 +131,7 @@ class Workflow:
             raise KeyError(f"Data type '{name}' was not defined in YAML datatypes.")
         return self.models[name]
 
-    async def run_prompt(
+    async def run_llm_task(
         self,
         task: LLMTask,
         run_context: RunContext,
@@ -527,7 +527,7 @@ class Workflow:
                 if isinstance(task, AgentTask):
                     await self.run_planning_agent(task, run_context, queue)
                 elif isinstance(task, LLMTask):
-                    await self.run_prompt(task, run_context, queue)
+                    await self.run_llm_task(task, run_context, queue)
                 elif isinstance(task, McpTask):
                     await self.run_mcp_tool(task, run_context, queue)
                 elif isinstance(task, PythonTask):
