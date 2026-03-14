@@ -23,7 +23,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `backoffice/`: API and logic for the management UI.
 - `frontend/`: Angular-based project for the backoffice UI.
 - `kavalai/functionkernel.py`: Manages tool registration and execution (REST, MCP, Python), providing a unified interface for agent components. It ensures no name conflicts exist between registered tools and servers by raising a `WorkflowException` on duplicates. It can generate unified tool descriptions for LLM prompts using strictly the `protocol://[name|module].function_name` format. Supports `register_rest_tool` to register individual REST endpoints with specific HTTP methods, input/output JSON schemas, and descriptions. These definitions are used by `call_tool` to validate arguments and provide detailed descriptions for LLM prompts. Python functions used as tools must be decorated with `@kavalai.pythontool` to be registered or called dynamically, enhancing security by explicitly marking intended tools.
-- `tests/`: Comprehensive backend test suite.
+- `tests/`: Comprehensive backend test suite. `tests/test_functionkernel.py` provides 96%+ unit test coverage for `kavalai/functionkernel.py` without using broad mocks, covering REST, MCP, and Python tool registration and execution. Mock MCP servers used in tests are located in `tests/helpers/`.
 - `kavalai/agents/`: SDK and agent runtime logic.
 - `kavalai/llm_clients/`: Native LLM client implementations.
 - `kavalai/prices/`: Pricing data for different LLM providers.

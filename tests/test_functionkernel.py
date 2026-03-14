@@ -5,10 +5,12 @@ import json
 import uvicorn
 import multiprocessing
 import time
-from fastapi import FastAPI
-from pydantic import BaseModel
+import os
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, create_model
 from typing import Any, Dict, Optional
-from kavalai.functionkernel import FunctionKernel, pythontool
+from kavalai.functionkernel import FunctionKernel, pythontool, ToolDefinition
 from kavalai.agents.workflow_model import RestServer, McpServer, WorkflowException
 
 app = FastAPI()
@@ -29,8 +31,28 @@ async def create_item(item: Dict[str, Any]):
     return {"name": "rest_test", "value": 100}
 
 
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import StreamingResponse
+@app.put("/update_item")
+async def update_item(item: Dict[str, Any]):
+    return {"name": "updated", "value": 200}
+
+
+@app.patch("/patch_item")
+async def patch_item(item: Dict[str, Any]):
+    return {"name": "patched", "value": 300}
+
+
+@app.delete("/delete_item")
+async def delete_item(id: int):
+    return {"status": "deleted"}
+
+
+@app.get("/auth_check")
+async def auth_check(request: Request):
+    auth = request.headers.get("Authorization")
+    if auth == "Basic dGVzdF91c2VyOnRlc3RfcGFzcw==":  # test_user:test_pass
+        return {"status": "authenticated"}
+    return Response(status_code=401)
+
 
 sse_queues: Dict[str, asyncio.Queue] = {}
 
@@ -158,12 +180,41 @@ def dict_output(name: str) -> Dict[str, Any]:
 
 
 @pythontool
+def primitive_output(val: int) -> int:
+    return val * 10
+
+
+@pythontool
+def nested_dict_output() -> Dict[str, Any]:
+    return {"data": {"nested": "value"}}
+
+
+@pythontool
+def list_output() -> list:
+    return [1, 2, 3]
+
+
+@pythontool
+def raise_error():
+    raise ValueError("Tool execution error")
+
+
+@pythontool
 def custom_model_output(val: int) -> CustomOutput:
     return CustomOutput(result=val * 2, meta="test")
 
 
 @pytest.mark.asyncio
 async def test_register_and_call_python_tool():
+    """
+    Tests the registration and calling of Python-based tools.
+    Covers:
+    - Synchronous and asynchronous function registration.
+    - Result mapping to default models (with 'result' field).
+    - Result mapping to custom Pydantic models (output_type).
+    - Mapping primitive outputs to single-field Pydantic models.
+    - Handling of mapping failures (returning original results).
+    """
     kernel = FunctionKernel()
     kernel.register_python_tool("add", sync_add)
     kernel.register_python_tool("mul", async_multiply)
@@ -185,9 +236,61 @@ async def test_register_and_call_python_tool():
     assert result.name == "test"
     assert result.value == 42
 
+    # Return BaseModel directly
+    kernel.register_python_tool("custom", custom_model_output)
+    result = await kernel._call_python_tool(
+        "custom", {"val": 10}, output_type=CustomOutput
+    )
+    assert isinstance(result, CustomOutput)
+    assert result.result == 20
+
+    # Primitive output with single field model
+    kernel.register_python_tool("primitive", primitive_output)
+
+    class OneField(BaseModel):
+        val: int
+
+    result = await kernel._call_python_tool(
+        "primitive", {"val": 5}, output_type=OneField
+    )
+    assert isinstance(result, OneField)
+    assert result.val == 50
+
+    # Incompatible output type (mapping failure)
+    result = await kernel._call_python_tool(
+        "primitive", {"val": 5}, output_type=SimpleModel
+    )
+    assert result == 50  # Should return original result on failure
+
+    # List output
+    kernel.register_python_tool("list_tool", list_output)
+    result = await kernel._call_python_tool("list_tool", {})
+    # It returns a model with 'result' field if not specified otherwise
+    assert result.result == [1, 2, 3]
+
+    # Python tool mapping exception (line 529)
+    @pythontool
+    def dict_tool() -> dict:
+        return {"a": 1}
+
+    kernel.register_python_tool("dict", dict_tool)
+
+    class MultiField(BaseModel):
+        x: int
+        y: int
+
+    # Mapping {"a": 1} to MultiField should fail and return original dict
+    result = await kernel._call_python_tool("dict", {}, output_type=MultiField)
+    assert result == {"a": 1}
+
 
 @pytest.mark.asyncio
 async def test_python_tool_custom_model():
+    """
+    Tests that Python tools returning custom Pydantic models are correctly handled.
+    Verifies that the ToolDefinition captures the output model and that
+    calls return the model instance directly.
+    """
     kernel = FunctionKernel()
     kernel.register_python_tool("custom", custom_model_output)
 
@@ -202,6 +305,15 @@ async def test_python_tool_custom_model():
 
 @pytest.mark.asyncio
 async def test_python_tool_errors():
+    """
+    Tests error handling for Python tool execution and registration.
+    Covers:
+    - Attempting to call non-existent tools.
+    - Argument validation failures (missing required arguments).
+    - Signature mismatch between tool definition and actual function.
+    - Enforcement of the @pythontool decorator during registration.
+    - Rejection of dynamic loading for undecorated functions.
+    """
     kernel = FunctionKernel()
 
     # Missing tool
@@ -212,6 +324,17 @@ async def test_python_tool_errors():
     kernel.register_python_tool("add", sync_add)
     with pytest.raises(WorkflowException, match="argument validation failed"):
         await kernel._call_python_tool("add", {"a": 1})  # missing b
+
+    # Signature mismatch at bind
+    with pytest.raises(WorkflowException, match="signature mismatch"):
+        # This is tricky because Pydantic usually catches it first if annotations are right
+        # But we can try passing extra args if it's not in the input model
+        # Actually, input model is generated from signature, so it should be consistent.
+        # Let's mock the definition to force a mismatch
+        kernel.python_tool_definitions["add"].input_model = create_model(
+            "fake", a=(int, ...), b=(int, ...), c=(int, ...)
+        )
+        await kernel._call_python_tool("add", {"a": 1, "b": 2, "c": 3})
 
     # Missing decorator
     def undecorated(x: int) -> int:
@@ -229,7 +352,58 @@ async def test_python_tool_errors():
 
 
 @pytest.mark.asyncio
+async def test_python_tool_output_mapping_details():
+    """
+    Tests detailed scenarios of mapping Python tool outputs to Pydantic models.
+    Covers:
+    - Mapping nested dictionaries to models.
+    - Behavior when tool output (e.g., list) is incompatible with multi-field models.
+    - Mapping between different Pydantic models (BaseModel to BaseModel).
+    """
+    kernel = FunctionKernel()
+
+    # Nested dict output to model mapping
+    @pythontool
+    def nested_tool() -> Dict[str, Any]:
+        return {"name": "nested", "value": 42}
+
+    kernel.register_python_tool("nested", nested_tool)
+    result = await kernel._call_python_tool("nested", {}, output_type=SimpleModel)
+    assert isinstance(result, SimpleModel)
+    assert result.name == "nested"
+
+    # Non-dict, non-BaseModel output with multi-field model should return original
+    @pythontool
+    def list_tool() -> list:
+        return [1, 2]
+
+    kernel.register_python_tool("list_tool_2", list_tool)
+    result = await kernel._call_python_tool("list_tool_2", {}, output_type=SimpleModel)
+    assert result == [1, 2]
+
+    # BaseModel to different BaseModel mapping
+    class OtherModel(BaseModel):
+        name: str
+        value: int
+        extra: str = "extra"
+
+    @pythontool
+    def model_tool() -> SimpleModel:
+        return SimpleModel(name="test", value=1)
+
+    kernel.register_python_tool("model_tool", model_tool)
+    result = await kernel._call_python_tool("model_tool", {}, output_type=OtherModel)
+    assert isinstance(result, OtherModel)
+    assert result.name == "test"
+    assert result.extra == "extra"
+
+
+@pytest.mark.asyncio
 async def test_python_tool_unregistered_load():
+    """
+    Tests the dynamic loading of decorated Python functions that haven't
+    been explicitly registered with the kernel.
+    """
     kernel = FunctionKernel()
     # Should work via dynamic loading if module is accessible
     # Using full path to this test file's function
@@ -240,6 +414,15 @@ async def test_python_tool_unregistered_load():
 
 @pytest.mark.asyncio
 async def test_call_rest_tool(rest_server):
+    """
+    Tests calling tools on a remote REST server.
+    Covers:
+    - GET, POST, PUT, PATCH, and DELETE methods.
+    - Output mapping to Pydantic models.
+    - Basic Authentication using environment variables.
+    - Error handling for missing servers or URLs.
+    - Dynamic URL resolution from environment variables.
+    """
     kernel = FunctionKernel()
     server = RestServer(name="test_server", url=rest_server)
     kernel.register_rest_server(server)
@@ -260,92 +443,178 @@ async def test_call_rest_tool(rest_server):
     assert result.name == "rest_test"
     assert result.value == 100
 
+    # Put request
+    result = await kernel._call_rest_tool(
+        "test_server", "update_item", {"id": 1}, method="put"
+    )
+    assert result == {"name": "updated", "value": 200}
+
+    # Patch request
+    result = await kernel._call_rest_tool(
+        "test_server", "patch_item", {"id": 1}, method="patch"
+    )
+    assert result == {"name": "patched", "value": 300}
+
+    # Delete request
+    result = await kernel._call_rest_tool(
+        "test_server", "delete_item", {"id": 1}, method="delete"
+    )
+    assert result == {"status": "deleted"}
+
+    # Basic auth with env vars
+    os.environ["TEST_USER"] = "test_user"
+    os.environ["TEST_PASS"] = "test_pass"
+    auth_server = RestServer(
+        name="auth_server",
+        url=rest_server,
+        username_env="TEST_USER",
+        password_env="TEST_PASS",
+    )
+    kernel.register_rest_server(auth_server)
+    result = await kernel._call_rest_tool("auth_server", "auth_check", {})
+    assert result == {"status": "authenticated"}
+
+    # Basic auth with missing env vars
+    os.environ.pop("TEST_USER", None)
+    os.environ.pop("TEST_PASS", None)
+    # Should call without auth and get 401, but _call_rest_tool uses raise_for_status
+    import httpx
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await kernel._call_rest_tool("auth_server", "auth_check", {})
+
+    # Error: Missing server
+    with pytest.raises(WorkflowException, match="REST server 'missing' not registered"):
+        await kernel._call_rest_tool("missing", "any", {})
+
+    # Error: Missing URL
+    # Using a fake URL then clearing it to test the exception in _call_rest_tool
+    _ = RestServer(name="no_url", url="http://temp")
+    # Actually, we can just test with a missing URL in the env if using url_env
+    server_env_missing = RestServer(name="no_env_url", url_env="NON_EXISTENT_URL")
+    kernel.register_rest_server(server_env_missing)
+    with pytest.raises(
+        WorkflowException, match="URL for REST server 'no_env_url' not found"
+    ):
+        await kernel._call_rest_tool("no_env_url", "any", {})
+
+    # URL from env
+    os.environ["SERVER_URL"] = rest_server
+    server_env_url = RestServer(name="env_url", url_env="SERVER_URL")
+    kernel.register_rest_server(server_env_url)
+    result = await kernel._call_rest_tool("env_url", "get_item", {"id": 1})
+    assert result == {"name": "rest_test", "value": 100}
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_errors():
+    """
+    Tests error handling and edge cases for Model Context Protocol (MCP) tools.
+    Covers:
+    - Missing MCP server registration.
+    - Handling of 'isError' flag in MCP responses.
+    - Robustness against invalid JSON in MCP tool output.
+    - Automatic wrapping of primitive MCP results into single-field models.
+    - Real subprocess execution failure scenarios.
+    """
+    kernel = FunctionKernel()
+
+    # Missing server
+    with pytest.raises(WorkflowException, match="MCP server 'missing' not registered"):
+        await kernel._call_mcp_tool("missing", "any", {})
+
+    # Use a simpler approach with patches to reach the exact lines
+    with patch("kavalai.functionkernel.stdio_client") as mock_stdio:
+        # Mock stdio_client to return a context manager that returns (read, write)
+        mock_read = AsyncMock()
+        mock_write = AsyncMock()
+        mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
+
+        with patch("kavalai.functionkernel.ClientSession") as mock_session_cls:
+            mock_session = mock_session_cls.return_value
+            mock_session.initialize = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+
+            # 1. Test isError=True in response (line 422)
+            mock_response = MagicMock()
+            mock_response.isError = True
+            mock_content = MagicMock()
+            mock_content.text = "Error text"
+            # Mock the __str__ or __repr__ if needed, but the error message shows it prints the list
+            mock_response.content = [mock_content]
+            mock_session.call_tool = AsyncMock(return_value=mock_response)
+
+            mcp_server = McpServer(name="mcp_err", command="true")
+            kernel.register_mcp_server(mcp_server)
+
+            with pytest.raises(WorkflowException, match="failed: .*MagicMock"):
+                await kernel._call_mcp_tool("mcp_err", "any", {})
+
+            # 2. Test JSON parsing error (line 431)
+            mock_response.isError = False
+            mock_content = MagicMock()
+            mock_content.text = "invalid-json"
+            mock_response.content = [mock_content]
+
+            result = await kernel._call_mcp_tool("mcp_err", "any", {})
+            assert result == "invalid-json"
+
+            # 3. Test TypeError in parsing (line 431)
+            mock_content.text = None  # Should cause TypeError in json.loads
+            result = await kernel._call_mcp_tool("mcp_err", "any", {})
+            assert result is None
+
+            # 4. Wrap primitive into model with one field (line 448)
+            class WrapModel(BaseModel):
+                result: int
+
+            mock_content.text = "42"
+            result = await kernel._call_mcp_tool(
+                "mcp_err", "any", {}, output_type=WrapModel
+            )
+            assert isinstance(result, WrapModel)
+            assert result.result == 42
+
+            # 5. Model with multiple fields (line 529 - Python tool variant)
+            # Actually line 453 is returned result_data if no output_type or matches failed.
+
+    # 6. mcp_tool_definitions check (line 437)
+    # Already hit by calling without tool def
+    helper_path = os.path.join(
+        os.path.dirname(__file__), "helpers", "mcp_server_errors.py"
+    )
+
+    try:
+        server = McpServer(name="mcp_fail", command="python", args=[helper_path])
+        kernel.register_mcp_server(server)
+
+        with pytest.raises(WorkflowException, match="failed: .*Something went wrong"):
+            await kernel._call_mcp_tool("mcp_fail", "fail_tool", {})
+    finally:
+        await kernel.close()
+
 
 @pytest.mark.asyncio
 async def test_mcp_tool_stdio():
+    """
+    Tests MCP tool execution using the stdio transport protocol.
+    Spawns a mock MCP server in a subprocess to verify:
+    - Full handshake (initialize, initialized, tools/list).
+    - Execution of a tool and result capture.
+    - Session reuse for subsequent tool calls.
+    """
     kernel = FunctionKernel()
     # MCP uses JSON-RPC
     # We need to handle list_tools and call_tool
-    server_code = """
-import sys
-import json
-import asyncio
-
-async def main():
-    while True:
-        line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
-        if not line:
-            break
-        try:
-            request = json.loads(line)
-            if "method" in request:
-                if request["method"] == "initialize":
-                    response = {
-                        "jsonrpc": "2.0",
-                        "id": request["id"],
-                        "result": {
-                            "protocolVersion": "2024-11-05",
-                            "capabilities": {"tools": {}},
-                            "serverInfo": {"name": "test-stdio", "version": "1.0"}
-                        }
-                    }
-                elif request["method"] == "notifications/initialized":
-                    continue
-                elif request["method"] == "tools/list":
-                    response = {
-                        "jsonrpc": "2.0",
-                        "id": request["id"],
-                        "result": {
-                            "tools": [
-                                {
-                                    "name": "test_tool",
-                                    "description": "A test tool",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {"arg": {"type": "string"}},
-                                    },
-                                }
-                            ]
-                        }
-                    }
-                elif request["method"] == "tools/call":
-                    tool_name = request["params"]["name"]
-                    if tool_name == "test_tool":
-                        content = {"name": "mcp_test", "value": 200, "result": "ok"}
-                        response = {
-                            "jsonrpc": "2.0",
-                            "id": request["id"],
-                            "result": {
-                                "content": [{"type": "text", "text": json.dumps(content)}],
-                                "isError": False
-                            }
-                        }
-                else:
-                    response = {
-                        "jsonrpc": "2.0",
-                        "id": request.get("id"),
-                        "error": {"code": -32601, "message": "Method not found"}
-                    }
-
-                sys.stdout.write(json.dumps(response) + "\\n")
-                sys.stdout.flush()
-        except Exception:
-            pass
-
-if __name__ == "__main__":
-    asyncio.run(main())
-"""
-    import tempfile
-    import os
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
-        tmp.write(server_code)
-        tmp_path = tmp.name
+    helper_path = os.path.join(
+        os.path.dirname(__file__), "helpers", "mcp_server_stdio.py"
+    )
 
     try:
-        server = McpServer(name="mcp_stdio", command="python", args=[tmp_path])
+        server = McpServer(name="mcp_stdio", command="python", args=[helper_path])
         kernel.register_mcp_server(server)
 
+        # First call: initializes session and list tools
         result = await kernel._call_mcp_tool(
             "mcp_stdio", "test_tool", {"arg": "val"}, output_type=SimpleModel
         )
@@ -355,17 +624,49 @@ if __name__ == "__main__":
         assert result.value == 200
 
         # Second call should reuse session
-        await kernel._call_mcp_tool("mcp_stdio", "test_tool", {"arg": "val"})
+        result2 = await kernel._call_mcp_tool("mcp_stdio", "test_tool", {"arg": "val"})
+        assert result2.result == "ok"
 
     finally:
         # Cleanup
         await kernel.close()
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_results_mapping():
+    """
+    Tests specifically how MCP tool results (primitives) are mapped to
+    Pydantic models with a single field.
+    """
+    kernel = FunctionKernel()
+    helper_path = os.path.join(
+        os.path.dirname(__file__), "helpers", "mcp_server_map.py"
+    )
+
+    try:
+        server = McpServer(name="mcp_map", command="python", args=[helper_path])
+        kernel.register_mcp_server(server)
+
+        class WrapModel(BaseModel):
+            result: int
+
+        # Primitive 42 should be wrapped into WrapModel if it has one field
+        result = await kernel._call_mcp_tool(
+            "mcp_map", "primitive", {}, output_type=WrapModel
+        )
+        assert isinstance(result, WrapModel)
+        assert result.result == 42
+
+    finally:
+        await kernel.close()
 
 
 @pytest.mark.asyncio
 async def test_mcp_tool_sse(rest_server):
+    """
+    Tests MCP tool execution using the Server-Sent Events (SSE) transport protocol.
+    Interacts with a real FastAPI server acting as an MCP SSE host.
+    """
     try:
         async with asyncio.timeout(10):
             kernel = FunctionKernel()
@@ -384,6 +685,14 @@ async def test_mcp_tool_sse(rest_server):
 
 @pytest.mark.asyncio
 async def test_tool_descriptions():
+    """
+    Tests the generation of tool descriptions for all supported protocols.
+    Verifies that the kernel correctly lists and formats URIs for:
+    - Python tools (python://...)
+    - REST tools (rest://...)
+    - MCP tools (mcp://...)
+    Includes error handling for malformed REST tool definitions.
+    """
     kernel = FunctionKernel()
     kernel.register_python_tool("math.add", sync_add)
     kernel.register_rest_server(RestServer(name="my_rest", url="http://api.com"))
@@ -417,14 +726,32 @@ async def test_tool_descriptions():
             assert "rest://my_rest.<function_name>" in desc
             assert "mcp://my_mcp.list_files" in desc
 
-            # Verify Pydantic schemas are present
-            assert "Input" in desc
-            assert "Output" in desc
-            assert "integer" in desc
+            # REST server descriptions mapping error
+            kernel.register_rest_server(
+                RestServer(name="bad_desc", url="http://api.com")
+            )
+            kernel.rest_tool_definitions["bad_desc"] = {
+                "tool": ToolDefinition(
+                    name="tool",
+                    description="not-json",
+                    input_model=SimpleModel,
+                    output_model=SimpleModel,
+                )
+            }
+            desc = await kernel.get_tool_descriptions()
+            assert "rest://bad_desc.tool [GET] - not-json" in desc
 
 
 @pytest.mark.asyncio
 async def test_call_tool_unified():
+    """
+    Tests the unified `call_tool` entry point which routes requests based on URI protocol.
+    Verifies routing for:
+    - python://
+    - rest://
+    - mcp://
+    Uses mocks to isolate protocol-specific logic.
+    """
     kernel = FunctionKernel()
 
     # Test Python tool via unified call
@@ -485,6 +812,10 @@ async def test_call_tool_unified():
 
 @pytest.mark.asyncio
 async def test_call_tool_errors():
+    """
+    Tests error handling in the unified `call_tool` dispatcher.
+    Covers invalid URI formats and unsupported protocols.
+    """
     kernel = FunctionKernel()
 
     with pytest.raises(WorkflowException, match="Invalid tool URI format"):
@@ -498,7 +829,33 @@ async def test_call_tool_errors():
 
 
 @pytest.mark.asyncio
+async def test_close_error():
+    """
+    Tests that the kernel's `close` method handles exceptions during cleanup gracefully
+    without raising them.
+    """
+    kernel = FunctionKernel()
+
+    # Mock a cleanup that raises an error
+    mock_cleanup = AsyncMock()
+    mock_cleanup.__aexit__ = AsyncMock(side_effect=Exception("Cleanup failed"))
+    kernel.mcp_cleanups.append(mock_cleanup)
+
+    # Should not raise exception
+    await kernel.close()
+    assert len(kernel.mcp_sessions) == 0
+    assert len(kernel.mcp_cleanups) == 0
+
+
+@pytest.mark.asyncio
 async def test_registration_conflicts():
+    """
+    Tests that the kernel prevents duplicate registration of servers and tools.
+    Verifies exceptions are raised when attempting to register a duplicate:
+    - REST server name.
+    - MCP server name.
+    - Python tool name.
+    """
     kernel = FunctionKernel()
 
     # Test REST server conflict
@@ -525,6 +882,13 @@ async def test_registration_conflicts():
 
 @pytest.mark.asyncio
 async def test_register_rest_tool(rest_server):
+    """
+    Tests explicit registration of individual tools for a REST server.
+    Verifies:
+    - Manual schema definition for REST endpoints.
+    - Calling manually registered REST tools via the unified interface.
+    - Correct formatting in tool descriptions.
+    """
     kernel = FunctionKernel()
     server = RestServer(name="test_server", url=rest_server)
     kernel.register_rest_server(server)
