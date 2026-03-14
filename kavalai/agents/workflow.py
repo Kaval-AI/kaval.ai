@@ -374,7 +374,7 @@ class Workflow:
                 )
             logger.info(f"Combined inputs into {task.output}")
 
-    async def run_special_agent(
+    async def run_planning_agent(
         self, task: AgentTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         """Invoke the PlanningAgent for complex multi-step tasks."""
@@ -532,7 +532,7 @@ class Workflow:
 
                 logger.info("Running task <%s>", task.name)
                 if isinstance(task, AgentTask):
-                    await self.run_special_agent(task, run_context, queue)
+                    await self.run_planning_agent(task, run_context, queue)
                 elif isinstance(task, LLMTask):
                     await self.run_prompt(task, run_context, queue, agent_service)
                 elif isinstance(task, McpTask):
