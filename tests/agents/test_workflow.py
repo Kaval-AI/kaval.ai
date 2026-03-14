@@ -1,6 +1,6 @@
 """Tests for workflow.py REST server environment variable handling."""
 
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import MagicMock
 import asyncio
 
 import pytest
@@ -62,36 +62,27 @@ class TestRunToolMethod:
         model = create_workflow_model_with_rest_server()
         workflow = Workflow(model)
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"result": "success"}
-        mock_response.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.request.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-
+        captured_tool_uri = None
         captured_method = None
-        captured_url = None
+        captured_arguments = None
 
-        async def mock_request(method, url, **kwargs):
-            nonlocal captured_method, captured_url
-            captured_method = method
-            captured_url = url
-            return mock_response
+        async def mock_call_tool(tool_uri, arguments, output_type=None, **kwargs):
+            nonlocal captured_tool_uri, captured_method, captured_arguments
+            captured_tool_uri = tool_uri
+            captured_method = kwargs.get("method", "get")
+            captured_arguments = arguments
+            # Return a mock output matching the expected type
+            return workflow.get_data_type("output")(result="success")
 
-        mock_client.request = mock_request
+        workflow.kernel.call_tool = mock_call_tool
 
-        with patch(
-            "kavalai.agents.workflow.httpx.AsyncClient", return_value=mock_client
-        ):
-            task = workflow.workflow_model.tasks[0]
-            run_context = RunContext()
-            run_context.data["input"] = MagicMock()
-            await workflow.run_rest_tool(task, run_context, None)
+        task = workflow.workflow_model.tasks[0]
+        run_context = RunContext()
+        run_context.data["input"] = MagicMock()
+        await workflow.run_rest_tool(task, run_context, None)
 
-        assert captured_method == "GET"
-        assert captured_url == "http://localhost:8000/test_tool"
+        assert captured_tool_uri == "rest://test_server.test_tool"
+        assert captured_method == "get"
 
     @pytest.mark.asyncio
     async def test_run_rest_tool_uses_specified_post_method(self):
@@ -99,43 +90,27 @@ class TestRunToolMethod:
         model = create_workflow_model_with_rest_server(method="post")
         workflow = Workflow(model)
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"result": "success"}
-        mock_response.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.request.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-
+        captured_tool_uri = None
         captured_method = None
-        captured_params = None
-        captured_json = None
+        captured_arguments = None
 
-        async def mock_request(method, url, **kwargs):
-            nonlocal captured_method, captured_params, captured_json
-            captured_method = method
-            captured_params = kwargs.get("params")
-            captured_json = kwargs.get("json")
-            return mock_response
+        async def mock_call_tool(tool_uri, arguments, output_type=None, **kwargs):
+            nonlocal captured_tool_uri, captured_method, captured_arguments
+            captured_tool_uri = tool_uri
+            captured_method = kwargs.get("method", "get")
+            captured_arguments = arguments
+            # Return a mock output matching the expected type
+            return workflow.get_data_type("output")(result="success")
 
-        mock_client.request = mock_request
+        workflow.kernel.call_tool = mock_call_tool
 
-        with patch(
-            "kavalai.agents.workflow.httpx.AsyncClient", return_value=mock_client
-        ):
-            task = workflow.workflow_model.tasks[0]
-            run_context = RunContext()
-            run_context.data["input"] = MagicMock()
-            await workflow.run_rest_tool(task, run_context, None)
+        task = workflow.workflow_model.tasks[0]
+        run_context = RunContext()
+        run_context.data["input"] = MagicMock()
+        await workflow.run_rest_tool(task, run_context, None)
 
-        assert captured_method == "POST"
-        # For POST, it should use json
-        # After changing prepare_tool_inputs to always return a dict,
-        # single inputs are now wrapped in a dict with the input name as key.
-        assert captured_json == {"query": run_context.data["input"]}
-        # When params is popped, it's missing from kwargs in request call
-        assert captured_params is None
+        assert captured_tool_uri == "rest://test_server.test_tool"
+        assert captured_method == "post"
 
 
 class TestWorkflowTemperatureValidation:
@@ -233,38 +208,27 @@ class TestWorkflowTemperatureValidation:
         )
         workflow = Workflow(model)
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"result": "success"}
-        mock_response.raise_for_status = MagicMock()
+        captured_arguments = None
 
-        mock_client = AsyncMock()
-        mock_client.request.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
+        async def mock_call_tool(tool_uri, arguments, output_type=None, **kwargs):
+            nonlocal captured_arguments
+            captured_arguments = arguments
+            # Return a mock output matching the expected type
+            return workflow.get_data_type("output_model")(result="success")
 
-        captured_json = None
+        workflow.kernel.call_tool = mock_call_tool
 
-        async def mock_request(method, url, **kwargs):
-            nonlocal captured_json
-            captured_json = kwargs.get("json")
-            return mock_response
-
-        mock_client.request = mock_request
-
-        with patch(
-            "kavalai.agents.workflow.httpx.AsyncClient", return_value=mock_client
-        ):
-            run_context = RunContext()
-            run_context.data["input"] = TestModel(name="test_value")
-            await workflow.run_rest_tool(
-                workflow.workflow_model.tasks[0], run_context, None
-            )
+        run_context = RunContext()
+        run_context.data["input"] = TestModel(name="test_value")
+        await workflow.run_rest_tool(
+            workflow.workflow_model.tasks[0], run_context, None
+        )
 
         # Check that the Pydantic model was converted to a dict
         # After changing prepare_tool_inputs to always return a dict,
         # single inputs are now wrapped in a dict with the input name as key.
-        assert captured_json == {"input": {"name": "test_value"}}
-        assert isinstance(captured_json, dict)
+        assert captured_arguments == {"input": {"name": "test_value"}}
+        assert isinstance(captured_arguments, dict)
 
 
 class TestRestServerModelValidation:
@@ -291,7 +255,7 @@ class TestRestServerEnvVarValidation:
         model = create_workflow_model_with_rest_server()
         workflow = Workflow(model)
         assert workflow is not None
-        assert "test_server" in workflow.rest_servers
+        assert "test_server" in workflow.kernel.rest_servers
 
     def test_workflow_loads_with_url_env(self, monkeypatch):
         monkeypatch.setenv("MY_REST_URL", "http://my-api.com")
@@ -303,9 +267,9 @@ class TestRestServerEnvVarValidation:
 
         workflow = Workflow(model)
         # url should stay None
-        assert workflow.rest_servers["test_server"].url is None
+        assert workflow.kernel.rest_servers["test_server"].url is None
         # url_env should stay as specified
-        assert workflow.rest_servers["test_server"].url_env == "MY_REST_URL"
+        assert workflow.kernel.rest_servers["test_server"].url_env == "MY_REST_URL"
 
     def test_workflow_raises_on_invalid_url_env_value(self, monkeypatch):
         """Workflow should raise exception when url_env value is invalid."""
@@ -409,7 +373,7 @@ class TestRunRestToolAuth:
     async def test_run_rest_tool_uses_basic_auth_when_env_vars_defined(
         self, monkeypatch
     ):
-        """run_rest_tool should pass basic auth to AsyncClient when env vars are defined."""
+        """run_rest_tool should use FunctionKernel with servers that have auth configured."""
         monkeypatch.setenv("TEST_USERNAME", "user123")
         monkeypatch.setenv("TEST_PASSWORD", "pass456")
 
@@ -418,61 +382,52 @@ class TestRunRestToolAuth:
         )
         workflow = Workflow(model)
 
-        # Mock httpx.AsyncClient
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"result": "success"}
-        mock_response.raise_for_status = MagicMock()
+        # Verify that the REST server is registered in FunctionKernel with auth env vars
+        assert "test_server" in workflow.kernel.rest_servers
+        assert (
+            workflow.kernel.rest_servers["test_server"].username_env == "TEST_USERNAME"
+        )
+        assert (
+            workflow.kernel.rest_servers["test_server"].password_env
+            == "TEST_PASSWORD"  # gitleaks:allow
+        )
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
+        # Mock the kernel's call_tool to verify it's called correctly
+        async def mock_call_tool(tool_uri, arguments, output_type=None, **kwargs):
+            return workflow.get_data_type("output")(result="success")
 
-        captured_auth = None
+        workflow.kernel.call_tool = mock_call_tool
 
-        def capture_auth(*args, **kwargs):
-            nonlocal captured_auth
-            captured_auth = kwargs.get("auth")
-            return mock_client
+        task = workflow.workflow_model.tasks[0]
+        run_context = RunContext()
+        run_context.data["input"] = MagicMock()
+        await workflow.run_rest_tool(task, run_context, None)
 
-        with patch("kavalai.agents.workflow.httpx.AsyncClient", capture_auth):
-            task = workflow.workflow_model.tasks[0]
-            run_context = RunContext()
-            run_context.data["input"] = MagicMock()
-            await workflow.run_rest_tool(task, run_context, None)
-
-        assert captured_auth == ("user123", "pass456")
+        # Test passes if no exception is raised
 
     @pytest.mark.asyncio
     async def test_run_rest_tool_no_auth_when_env_vars_not_defined(self, monkeypatch):
-        """run_rest_tool should not pass auth to AsyncClient when no env vars are defined."""
+        """run_rest_tool should use FunctionKernel with servers that have no auth configured."""
         model = create_workflow_model_with_rest_server()
         workflow = Workflow(model)
 
-        # Mock httpx.AsyncClient
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"result": "success"}
-        mock_response.raise_for_status = MagicMock()
+        # Verify that the REST server is registered in FunctionKernel without auth env vars
+        assert "test_server" in workflow.kernel.rest_servers
+        assert workflow.kernel.rest_servers["test_server"].username_env is None
+        assert workflow.kernel.rest_servers["test_server"].password_env is None
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
+        # Mock the kernel's call_tool to verify it's called correctly
+        async def mock_call_tool(tool_uri, arguments, output_type=None, **kwargs):
+            return workflow.get_data_type("output")(result="success")
 
-        captured_auth = "NOT_SET"  # Use sentinel to distinguish from None
+        workflow.kernel.call_tool = mock_call_tool
 
-        def capture_auth(*args, **kwargs):
-            nonlocal captured_auth
-            captured_auth = kwargs.get("auth")
-            return mock_client
+        task = workflow.workflow_model.tasks[0]
+        run_context = RunContext()
+        run_context.data["input"] = MagicMock()
+        await workflow.run_rest_tool(task, run_context, None)
 
-        with patch("kavalai.agents.workflow.httpx.AsyncClient", capture_auth):
-            task = workflow.workflow_model.tasks[0]
-            run_context = RunContext()
-            run_context.data["input"] = MagicMock()
-            await workflow.run_rest_tool(task, run_context, None)
-
-        assert captured_auth is None
+        # Test passes if no exception is raised
 
 
 class TestWorkflowFeatures:

@@ -53,7 +53,7 @@ class FakeStdioClient:
 @pytest.mark.asyncio
 async def test_workflow_mcp_tool_call(monkeypatch):
     # Monkeypatch mcp stdio_client and ClientSession to fakes
-    import kavalai.agents.workflow as wf
+    import kavalai.functionkernel as fk
 
     def fake_stdio_client(_params):
         return FakeStdioClient()
@@ -61,8 +61,8 @@ async def test_workflow_mcp_tool_call(monkeypatch):
     def fake_client_session(_read, _write):
         return FakeSession()
 
-    monkeypatch.setattr(wf, "stdio_client", fake_stdio_client)
-    monkeypatch.setattr(wf, "ClientSession", fake_client_session)
+    monkeypatch.setattr(fk, "stdio_client", fake_stdio_client)
+    monkeypatch.setattr(fk, "ClientSession", fake_client_session)
 
     workflow_model = WorkflowModel(
         name="mcp-demo",
@@ -105,7 +105,7 @@ async def test_workflow_mcp_tool_call_env(monkeypatch):
     monkeypatch.setenv("MCP_CMD", "dummy-env")
 
     # Monkeypatch mcp stdio_client and ClientSession to fakes
-    import kavalai.agents.workflow as wf
+    import kavalai.functionkernel as fk
 
     last_command = None
 
@@ -117,8 +117,8 @@ async def test_workflow_mcp_tool_call_env(monkeypatch):
     def fake_client_session(_read, _write):
         return FakeSession()
 
-    monkeypatch.setattr(wf, "stdio_client", fake_stdio_client)
-    monkeypatch.setattr(wf, "ClientSession", fake_client_session)
+    monkeypatch.setattr(fk, "stdio_client", fake_stdio_client)
+    monkeypatch.setattr(fk, "ClientSession", fake_client_session)
 
     workflow_model = WorkflowModel(
         name="mcp-demo-env",

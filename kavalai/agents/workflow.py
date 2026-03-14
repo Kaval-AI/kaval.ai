@@ -15,11 +15,9 @@ limitations under the License.
 """
 
 import logging
-import os
 from typing import Dict, Type, Optional
 from uuid import UUID
 
-import httpx
 import yaml
 from environs import Env
 from pydantic import BaseModel
@@ -35,7 +33,6 @@ from kavalai.agents.workflow_model import (
     RagQueryTask,
     to_plain,
     WorkflowRunResult,
-    McpServer,
     WorkflowException,
 )
 
@@ -50,12 +47,8 @@ from kavalai.agents.rag_service import RagService
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
 from kavalai.agents.run_context import RunContext
+from kavalai.functionkernel import FunctionKernel
 import asyncio
-import importlib
-import inspect
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from mcp.client.sse import sse_client
 
 logger = logging.getLogger(__name__)
 
@@ -81,17 +74,18 @@ class Workflow:
         self.agent_service = agent_service
         self.parser = SchemaParser(workflow_model.data_types)
         self.models: Dict[str, Type[BaseModel]] = self.parser.parse_all()
-        self.rest_servers = {
-            server.name: server for server in workflow_model.rest_servers
-        }
-        self.mcp_servers: Dict[str, McpServer] = {
-            server.name: server for server in workflow_model.mcp_servers
-        }
         self.tasks = {task.name: task for task in workflow_model.tasks}
         validate_workflow(self.workflow_model)
         self.env = Env()
         self.env.read_env()
         validate_rest_server_env_vars(self.workflow_model)
+
+        # Initialize FunctionKernel and register all servers
+        self.kernel = FunctionKernel()
+        for server in workflow_model.rest_servers:
+            self.kernel.register_rest_server(server)
+        for server in workflow_model.mcp_servers:
+            self.kernel.register_mcp_server(server)
 
     @classmethod
     def from_yaml_path(cls, yaml_path: str):
@@ -193,45 +187,17 @@ class Workflow:
         agent_service = agent_service or self.agent_service
         inputs = await run_context.prepare_tool_inputs(task)
 
-        rest_server = self.rest_servers[task.rest_server]
-        url = rest_server.url
-        if not url and rest_server.url_env:
-            url = os.environ[rest_server.url_env]
-
-        auth = None
-        if rest_server.username_env and rest_server.password_env:
-            username = os.environ[rest_server.username_env]
-            password = os.environ[rest_server.password_env]
-            auth = (username, password)
-
-        async with httpx.AsyncClient(auth=auth) as client:
-            kwargs = {
-                "params": inputs,
-                "timeout": 60.0,
-            }
-            if task.method.lower() in ("post", "put", "patch"):
-                kwargs["json"] = inputs
-                if "params" in kwargs:
-                    kwargs.pop("params")
-            logger.info(f"Calling {task.method.upper()} {url}/{task.tool}")
-            response = await client.request(
-                task.method.upper(),
-                f"{url}/{task.tool}",
-                **kwargs,
-            )
-            response.raise_for_status()
-            result_data = response.json()
-
-        # Convert result to output type
+        # Use FunctionKernel to call REST tool
+        tool_uri = f"rest://{task.rest_server}.{task.tool}"
         output_type = self.get_data_type(task.output)
-        if output_type:
-            result = (
-                output_type(**result_data)
-                if isinstance(result_data, dict)
-                else result_data
-            )
-        else:
-            result = result_data
+
+        result = await self.kernel.call_tool(
+            tool_uri=tool_uri,
+            arguments=inputs,
+            output_type=output_type,
+            method=task.method,
+        )
+
         debug_data = str(result)[:50]
         logger.info(f"Setting {task.output} = {debug_data}")
         run_context.data[task.output] = result
@@ -260,76 +226,16 @@ class Workflow:
         self, task: McpTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         inputs = await run_context.prepare_tool_inputs(task)
-        mcp_server_config = self.mcp_servers[task.mcp_server]
 
-        if task.mcp_server not in run_context.mcp_sessions:
-            if mcp_server_config.url or mcp_server_config.url_env:
-                url = mcp_server_config.url
-                if not url and mcp_server_config.url_env:
-                    url = os.environ[mcp_server_config.url_env]
-
-                logger.info(f"Connecting to HTTP MCP server {task.mcp_server} at {url}")
-                # sse_client returns an async context manager
-                aclient = sse_client(url)
-                read, write = await aclient.__aenter__()
-                run_context.mcp_cleanups.append(aclient)
-            else:
-                command = mcp_server_config.command
-                if not command and mcp_server_config.command_env:
-                    command = os.environ[mcp_server_config.command_env]
-
-                server_params = StdioServerParameters(
-                    command=command,
-                    args=mcp_server_config.args,
-                    env={**os.environ, **mcp_server_config.env},
-                )
-
-                logger.info(f"Connecting to stdio MCP server {task.mcp_server}")
-                aclient = stdio_client(server_params)
-                read, write = await aclient.__aenter__()
-                run_context.mcp_cleanups.append(aclient)
-
-            session = ClientSession(read, write)
-            await session.__aenter__()
-            run_context.mcp_cleanups.append(session)
-            await session.initialize()
-            run_context.mcp_sessions[task.mcp_server] = session
-        else:
-            session = run_context.mcp_sessions[task.mcp_server]
-
-        logger.info(f"Calling MCP tool {task.mcp_server}/{task.tool}")
-        # mcp library's call_tool might return a CallToolResult
-        response = await session.call_tool(task.tool, arguments=inputs)
-
-        if response.isError:
-            raise WorkflowException(
-                f"MCP tool '{task.tool}' on server '{task.mcp_server}' failed: {response.content}"
-            )
-
-        # MCP response content is a list of TextContent, ImageContent, or EmbeddedResource
-        # We assume the first TextContent is the result
-        result_data = None
-        for content in response.content:
-            # TextContent has a 'text' attribute
-            if hasattr(content, "text"):
-                try:
-                    import json
-
-                    result_data = json.loads(content.text)
-                except (json.JSONDecodeError, TypeError):
-                    result_data = content.text
-                break
-
-        # Convert result to output type
+        # Use FunctionKernel to call MCP tool
+        tool_uri = f"mcp://{task.mcp_server}.{task.tool}"
         output_type = self.get_data_type(task.output)
-        if output_type:
-            result = (
-                output_type(**result_data)
-                if isinstance(result_data, dict)
-                else result_data
-            )
-        else:
-            result = result_data
+
+        result = await self.kernel.call_tool(
+            tool_uri=tool_uri,
+            arguments=inputs,
+            output_type=output_type,
+        )
 
         debug_data = str(result)[:50]
         logger.info(f"Setting {task.output} = {debug_data}")
@@ -362,80 +268,32 @@ class Workflow:
     async def run_python_tool(
         self, task: PythonTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
-        """Run a Python function using inspect."""
+        """Run a Python function using FunctionKernel."""
         if not task.python_tool:
             raise WorkflowException(f"Task '{task.name}' has no python_tool defined.")
-
-        try:
-            module_name, func_name = task.python_tool.rsplit(".", 1)
-            module = importlib.import_module(module_name)
-            func = getattr(module, func_name)
-        except (ValueError, ImportError, AttributeError) as e:
-            raise WorkflowException(
-                f"Failed to load python_tool '{task.python_tool}' for task '{task.name}': {e}"
-            )
 
         # Resolve inputs
         inputs = await run_context.prepare_tool_inputs(task)
 
-        # Validate function signature
-        sig = inspect.signature(func)
-        bound_args = None
-        try:
-            # Check if inputs match function signature
-            bound_args = sig.bind(**inputs)
-        except TypeError as e:
-            raise WorkflowException(
-                f"Python tool '{task.python_tool}' signature mismatch for task '{task.name}': {e}"
-            )
+        # Use FunctionKernel to call Python tool
+        tool_uri = f"python://{task.python_tool}"
+        output_type = self.get_data_type(task.output) if task.output else None
 
-        # Run the function (handle both sync and async)
-        try:
-            if inspect.iscoroutinefunction(func):
-                result = await func(*bound_args.args, **bound_args.kwargs)
-            else:
-                result = func(*bound_args.args, **bound_args.kwargs)
-        except Exception as e:
-            logger.exception(f"Error executing python_tool '{task.python_tool}'")
-            raise WorkflowException(
-                f"Error executing python_tool '{task.python_tool}' for task '{task.name}': {e}"
-            )
+        result = await self.kernel.call_tool(
+            tool_uri=tool_uri,
+            arguments=inputs,
+            output_type=output_type,
+        )
 
-        # Validate output type
-        if isinstance(task.output, str) and task.output:
-            output_type = self.get_data_type(task.output)
-            try:
-                if isinstance(result, dict):
-                    validated_result = output_type(**result)
-                elif isinstance(result, BaseModel):
-                    # If it's already a Pydantic model, try to convert it to the output_type
-                    # (they might be different classes but with the same structure)
-                    validated_result = output_type(**result.model_dump())
-                elif isinstance(result, output_type):
-                    validated_result = result
-                else:
-                    # If the result is not a dict and not the output_type itself,
-                    # check if the output_type has exactly one field.
-                    fields = output_type.model_fields
-                    if len(fields) == 1:
-                        field_name = list(fields.keys())[0]
-                        validated_result = output_type(**{field_name: result})
-                    else:
-                        # Fallback to positional init if it's not a Pydantic model
-                        # (though in this project they usually are)
-                        validated_result = output_type(result)
-                run_context.data[task.output] = validated_result
-            except Exception as e:
-                raise WorkflowException(
-                    f"Python tool '{task.python_tool}' returned incompatible result for output '{task.output}': {e}"
-                )
+        if task.output:
+            run_context.data[task.output] = result
 
             if task.stream and queue is not None:
                 streamer = Streamer(task.output, queue)
                 await streamer.stream_complete(
-                    validated_result.model_dump_json()
-                    if hasattr(validated_result, "model_dump_json")
-                    else str(validated_result)
+                    result.model_dump_json()
+                    if hasattr(result, "model_dump_json")
+                    else str(result)
                 )
 
         # Record in DB
@@ -659,14 +517,8 @@ class Workflow:
                     )
                     break
         finally:
-            # Cleanup MCP sessions/clients in reverse order
-            for item in reversed(run_context.mcp_cleanups):
-                try:
-                    await item.__aexit__(None, None, None)
-                except Exception:
-                    logger.exception("Error during MCP cleanup")
-            run_context.mcp_cleanups.clear()
-            run_context.mcp_sessions.clear()
+            # Cleanup MCP sessions/clients using FunctionKernel
+            await self.kernel.close()
 
         # 4. Finalize and Log Response
         output_model = run_context.data.get("output")

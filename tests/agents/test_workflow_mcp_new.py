@@ -1,6 +1,6 @@
 import json
 import pytest
-import kavalai.agents.workflow as wf
+import kavalai.functionkernel as fk
 from kavalai.agents.workflow import Workflow
 from kavalai.agents.workflow_model import (
     WorkflowModel,
@@ -73,8 +73,8 @@ async def test_workflow_mcp_session_reuse(monkeypatch):
     def fake_client_session(_read, _write):
         return session
 
-    monkeypatch.setattr(wf, "stdio_client", fake_stdio_client)
-    monkeypatch.setattr(wf, "ClientSession", fake_client_session)
+    monkeypatch.setattr(fk, "stdio_client", fake_stdio_client)
+    monkeypatch.setattr(fk, "ClientSession", fake_client_session)
 
     workflow_model = WorkflowModel(
         name="mcp-reuse",
@@ -131,8 +131,8 @@ async def test_workflow_mcp_http_support(monkeypatch):
     def fake_client_session(_read, _write):
         return session
 
-    monkeypatch.setattr(wf, "sse_client", fake_sse_client)
-    monkeypatch.setattr(wf, "ClientSession", fake_client_session)
+    monkeypatch.setattr(fk, "sse_client", fake_sse_client)
+    monkeypatch.setattr(fk, "ClientSession", fake_client_session)
 
     workflow_model = WorkflowModel(
         name="mcp-http",
