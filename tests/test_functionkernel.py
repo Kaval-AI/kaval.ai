@@ -503,3 +503,59 @@ async def test_registration_conflicts():
         WorkflowException, match="Python tool 'add' is already registered"
     ):
         kernel.register_python_tool("add", async_multiply)
+
+
+@pytest.mark.asyncio
+async def test_register_rest_tool(rest_server):
+    kernel = FunctionKernel()
+    server = RestServer(name="test_server", url=rest_server)
+    kernel.register_rest_server(server)
+
+    input_schema = {
+        "type": "object",
+        "properties": {"id": {"type": "integer"}},
+        "required": ["id"],
+    }
+    output_schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "value": {"type": "integer"},
+        },
+    }
+
+    kernel.register_rest_tool(
+        server_name="test_server",
+        tool_name="get_item",
+        method="get",
+        input_schema=input_schema,
+        output_schema=output_schema,
+        description="Get item by id",
+    )
+
+    # Call via call_tool (unified)
+    result = await kernel.call_tool("rest://test_server.get_item", {"id": 1})
+    assert isinstance(result, BaseModel)
+    assert result.name == "rest_test"
+    assert result.value == 100
+
+    # Test POST registration
+    post_input_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+    }
+    kernel.register_rest_tool(
+        server_name="test_server",
+        tool_name="create_item",
+        method="post",
+        input_schema=post_input_schema,
+        output_schema=output_schema,
+    )
+
+    result = await kernel.call_tool("rest://test_server.create_item", {"name": "new"})
+    assert result.value == 100
+
+    # Verify descriptions
+    descriptions = await kernel.get_tool_descriptions()
+    assert "rest://test_server.get_item [GET] - Get item by id" in descriptions
+    assert "rest://test_server.create_item [POST]" in descriptions

@@ -51,6 +51,7 @@ class FunctionKernel:
 
     def __init__(self):
         self.rest_servers: Dict[str, RestServer] = {}
+        self.rest_tool_definitions: Dict[str, Dict[str, ToolDefinition]] = {}
         self.mcp_servers: Dict[str, McpServer] = {}
         self.python_tools: Dict[str, Callable] = {}
         self.python_tool_definitions: Dict[str, ToolDefinition] = {}
@@ -66,6 +67,36 @@ class FunctionKernel:
                 f"REST server '{server.name}' is already registered."
             )
         self.rest_servers[server.name] = server
+
+    def register_rest_tool(
+        self,
+        server_name: str,
+        tool_name: str,
+        method: str,
+        input_schema: Dict[str, Any],
+        output_schema: Dict[str, Any],
+        description: Optional[str] = None,
+    ):
+        if server_name not in self.rest_tool_definitions:
+            self.rest_tool_definitions[server_name] = {}
+
+        InputModel = self._create_model_from_jsonschema(
+            f"{server_name}_{tool_name}_input", input_schema
+        )
+        OutputModel = self._create_model_from_jsonschema(
+            f"{server_name}_{tool_name}_output", output_schema
+        )
+
+        self.rest_tool_definitions[server_name][tool_name] = ToolDefinition(
+            name=tool_name,
+            description=description,
+            input_model=InputModel,
+            output_model=OutputModel,
+        )
+        # Store method in a way it can be retrieved
+        self.rest_tool_definitions[server_name][tool_name].description = json.dumps(
+            {"method": method, "description": description}
+        )
 
     def register_mcp_server(self, server: McpServer):
         if server.name in self.mcp_servers:
@@ -151,6 +182,28 @@ class FunctionKernel:
             )
         elif protocol == "rest":
             method = kwargs.get("method", "get")
+            if (
+                name_or_module in self.rest_tool_definitions
+                and function_name in self.rest_tool_definitions[name_or_module]
+            ):
+                definition = self.rest_tool_definitions[name_or_module][function_name]
+                try:
+                    desc_data = json.loads(definition.description)
+                    method = desc_data.get("method", method)
+                except Exception:
+                    pass
+
+                # Validate input
+                validated_args = definition.input_model(**arguments).model_dump()
+                result = await self._call_rest_tool(
+                    name_or_module,
+                    function_name,
+                    validated_args,
+                    method,
+                    output_type or definition.output_model,
+                )
+                return result
+
             return await self._call_rest_tool(
                 name_or_module, function_name, arguments, method, output_type
             )
@@ -476,10 +529,29 @@ class FunctionKernel:
             desc += f"  Output: {json.dumps(output_schema)}"
             descriptions.append(desc)
 
-        # REST tools - handled dynamically, but we could list registration prefix
+        # REST tools
+        for server_name, tools in self.rest_tool_definitions.items():
+            for tool_name, definition in tools.items():
+                input_schema = definition.input_model.model_json_schema()
+                output_schema = definition.output_model.model_json_schema()
+                method = "get"
+                description_text = definition.description or ""
+                try:
+                    desc_data = json.loads(definition.description)
+                    method = desc_data.get("method", "get")
+                    description_text = desc_data.get("description", "")
+                except Exception:
+                    pass
+
+                desc = f"rest://{server_name}.{tool_name} [{method.upper()}] - {description_text}\n"
+                desc += f"  Input: {json.dumps(input_schema)}\n"
+                desc += f"  Output: {json.dumps(output_schema)}"
+                descriptions.append(desc)
+
+        # REST servers - list those without specific tools registered
         for name in self.rest_servers.keys():
-            # For REST we don't have a fixed list of functions yet, but we use the name
-            descriptions.append(f"rest://{name}.<function_name>")
+            if name not in self.rest_tool_definitions:
+                descriptions.append(f"rest://{name}.<function_name>")
 
         # MCP tools
         for server_name, tools in self.mcp_tool_definitions.items():
