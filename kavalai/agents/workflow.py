@@ -49,6 +49,7 @@ from kavalai.llm_clients.common import Streamer
 from kavalai.agents.run_context import RunContext
 from kavalai.functionkernel import FunctionKernel
 import asyncio
+import importlib
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,33 @@ class Workflow:
             self.kernel.register_rest_server(server)
         for server in workflow_model.mcp_servers:
             self.kernel.register_mcp_server(server)
+
+        # Register Python functions
+        for func_config in workflow_model.python_functions:
+            module_path, func_name = func_config.path.rsplit(".", 1)
+            module = importlib.import_module(module_path)
+            func = getattr(module, func_name)
+            # Ensure it's marked as a kavalai tool
+            if not getattr(func, "_is_kavalai_tool", False):
+                from kavalai.functionkernel import pythontool
+
+                func = pythontool(func)
+
+            self.kernel.register_python_tool(func_config.name, func)
+
+        # Register REST tools explicitly if specified in tasks
+        for task in workflow_model.tasks:
+            if isinstance(task, RestTask):
+                input_model = self.models.get(f"{task.name}_input")
+                output_model = self.models.get(task.output)
+                if input_model and output_model:
+                    self.kernel.register_rest_tool(
+                        server_name=task.rest_server,
+                        tool_name=task.tool,
+                        method=task.method,
+                        input_schema=input_model.model_json_schema(),
+                        output_schema=output_model.model_json_schema(),
+                    )
 
     @classmethod
     def from_yaml_path(cls, yaml_path: str):

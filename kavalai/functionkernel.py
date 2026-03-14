@@ -183,6 +183,10 @@ class FunctionKernel:
             )
 
         protocol, path = tool_uri.split("://", 1)
+
+        if protocol == "python":
+            return await self._call_python_tool(path, arguments, output_type)
+
         if "." not in path:
             raise WorkflowException(
                 f"Invalid tool path format: '{path}'. Expected [name|module].function_name"
@@ -190,11 +194,7 @@ class FunctionKernel:
 
         name_or_module, function_name = path.rsplit(".", 1)
 
-        if protocol == "python":
-            return await self._call_python_tool(
-                f"{name_or_module}.{function_name}", arguments, output_type
-            )
-        elif protocol == "rest":
+        if protocol == "rest":
             method = kwargs.get("method", "get")
             if (
                 name_or_module in self.rest_tool_definitions

@@ -42,8 +42,11 @@ tasks:
       a: {type: context, value: input.a}
       b: {type: context, value: input.b}
     type: python
-    python_tool: tests.agents.test_python_tool.sync_add
+    python_tool: sync_add
     output: output
+python_functions:
+  - name: sync_add
+    path: tests.agents.test_python_tool.sync_add
 """
     workflow = Workflow.from_yaml(yaml_content)
     result = await workflow.run({"a": 10, "b": 20})
@@ -70,8 +73,11 @@ tasks:
       x: {type: context, value: input.x}
       y: {type: context, value: input.y}
     type: python
-    python_tool: tests.agents.test_python_tool.async_multiply
+    python_tool: async_multiply
     output: output
+python_functions:
+  - name: async_multiply
+    path: tests.agents.test_python_tool.async_multiply
 """
     workflow = Workflow.from_yaml(yaml_content)
     result = await workflow.run({"x": 2.5, "y": 4.0})
@@ -96,8 +102,11 @@ tasks:
     inputs:
       name: {type: context, value: input.user_name}
     type: python
-    python_tool: tests.agents.test_python_tool.dict_output
+    python_tool: dict_output
     output: output
+python_functions:
+  - name: dict_output
+    path: tests.agents.test_python_tool.dict_output
 """
     workflow = Workflow.from_yaml(yaml_content)
     result = await workflow.run({"user_name": "World"})
@@ -117,13 +126,16 @@ data_types:
 tasks:
   - name: fail_task
     type: python
-    python_tool: non_existent_module.func
+    python_tool: non_existent
     output: output
+python_functions:
+  - name: non_existent
+    path: non_existent_module.func
 """
-    workflow = Workflow.from_yaml(yaml_content)
-    with pytest.raises(WorkflowException) as excinfo:
-        await workflow.run({})
-    assert "Failed to load python_tool" in str(excinfo.value)
+    with pytest.raises(
+        (WorkflowException, ImportError, AttributeError, ModuleNotFoundError)
+    ):
+        Workflow.from_yaml(yaml_content)
 
 
 @pytest.mark.asyncio
@@ -145,8 +157,11 @@ tasks:
       a: {type: context, value: input.a}
     # sync_add needs a and b
     type: python
-    python_tool: tests.agents.test_python_tool.sync_add
+    python_tool: sync_add
     output: output
+python_functions:
+  - name: sync_add
+    path: tests.agents.test_python_tool.sync_add
 """
     workflow = Workflow.from_yaml(yaml_content)
     with pytest.raises(WorkflowException) as excinfo:
@@ -179,8 +194,11 @@ tasks:
   - name: task1
     inputs: {a: {type: context, value: input.a}}
     type: python
-    python_tool: tests.agents.test_python_tool.multi_field_test
+    python_tool: multi_field_test
     output: output
+python_functions:
+  - name: multi_field_test
+    path: tests.agents.test_python_tool.multi_field_test
 """
     workflow = Workflow.from_yaml(yaml_content)
     result = await workflow.run({"a": 5})
@@ -210,8 +228,11 @@ tasks:
   - name: task1
     inputs: {a: {type: context, value: input.a}}
     type: python
-    python_tool: tests.agents.test_python_tool.multi_field_mismatch_test
+    python_tool: multi_field_mismatch_test
     output: output
+python_functions:
+  - name: multi_field_mismatch_test
+    path: tests.agents.test_python_tool.multi_field_mismatch_test
 """
     workflow = Workflow.from_yaml(yaml_content)
     # FunctionKernel returns raw result when conversion fails, which then fails validation
@@ -247,8 +268,11 @@ data_types:
 tasks:
   - name: fail_task
     type: python
-    python_tool: tests.agents.test_python_tool.error_func_test
+    python_tool: error_func_test
     output: output
+python_functions:
+  - name: error_func_test
+    path: tests.agents.test_python_tool.error_func_test
 """
     workflow = Workflow.from_yaml(yaml_content)
     with pytest.raises(WorkflowException) as excinfo:

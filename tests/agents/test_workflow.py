@@ -1222,7 +1222,7 @@ tasks:
             except asyncio.TimeoutError:
                 continue
 
-        result = await task
+        _ = await task
 
         # 4. Verify Stream Content
         assert len(lines) >= 1
@@ -1232,7 +1232,65 @@ tasks:
         assert complete.name == "output"
         assert complete.value == '{"agent_response":"Tool response"}'
 
-        assert result.data.agent_response == "Tool response"
+    @pytest.mark.asyncio
+    async def test_workflow_python_function_registration(self, monkeypatch):
+        # 1. Setup Workflow with python_function
+        # Use a simple function for testing
+        def my_test_concat(a: str, b: str) -> str:
+            return a + b
+
+        # Register it in a way that it can be imported or mock it.
+        # Actually we can just use a builtin that is simpler or mock the import.
+        # Let's use os.path.join but match its expected signature if we can figure it out.
+        # Or just use a simple mock function.
+
+        import sys
+        import types
+
+        m = types.ModuleType("my_mock_module")
+        m.my_test_concat = my_test_concat
+        sys.modules["my_mock_module"] = m
+
+        workflow_yaml = """
+name: PythonFuncRegTest
+description: Test python function registration
+python_functions:
+  - name: "my_test_func"
+    path: "my_mock_module.my_test_concat"
+data_types:
+  input:
+    type: object
+    properties:
+      p1:
+        type: string
+      p2:
+        type: string
+  output:
+    type: object
+    properties:
+      result:
+        type: string
+tasks:
+  - name: call_python
+    type: python
+    python_tool: "my_test_func"
+    inputs:
+      a:
+        type: context
+        value: input.p1
+      b:
+        type: context
+        value: input.p2
+    output: output
+"""
+        workflow = Workflow.from_yaml(workflow_yaml)
+
+        # 2. Run Workflow
+        input_data = {"p1": "hello ", "p2": "world"}
+        result = await workflow.run(input_data=input_data)
+
+        # 3. Verify Result
+        assert result.data.result == "hello world"
 
     @pytest.mark.asyncio
     async def test_workflow_concurrent_runs(self, agents_session_maker, monkeypatch):

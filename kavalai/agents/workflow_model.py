@@ -195,6 +195,11 @@ class McpServer(BaseModel):
         return self
 
 
+class PythonFunction(BaseModel):
+    name: str
+    path: str
+
+
 class WorkflowModel(BaseModel):
     name: str
     description: str = ""
@@ -205,6 +210,7 @@ class WorkflowModel(BaseModel):
     data_types: dict[str, dict]
     rest_servers: list[RestServer] = []
     mcp_servers: list[McpServer] = []
+    python_functions: list[PythonFunction] = []
     tasks: list[Task]
 
 
