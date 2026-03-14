@@ -71,6 +71,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `websearch/serper.py`: Serper API client for Google Search. Supports country, language, date range and pagination.
         - `websearch/google_custom_search.py`: Google Custom Search JSON API client. Requires API key and Search Engine ID (cx).
         - `webtools/http_client.py`: Basic HTTP client for GET, POST, etc. requests with support for basic auth and proxy.
+        - `webtools/serper_scraper.py`: Serper.dev Scrape API client for downloading text from websites.
         - `openapi_spec_parser.py`: Tool for parsing OpenAPI specifications.
         - `index_csv.py`: Tool for indexing large CSV files into RAG.
     - `crud.py`: Shared database utility functions.
