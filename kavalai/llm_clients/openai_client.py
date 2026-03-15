@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import io
+import json
 import os
 import time
 from typing import Any, Dict, List, Optional, Type, Tuple
@@ -26,12 +27,12 @@ from openai.types.responses import (
     ResponseErrorEvent,
     ResponseCompletedEvent,
 )
-from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
 from kavalai.llm_clients.common import (
     create_model_call_stat,
+    fix_json,
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
@@ -108,10 +109,12 @@ class OpenAIClient:
                             await streamer.stream_partial(event.delta)
                         else:
                             value = (
-                                ensure_json(buffer.getvalue())
+                                fix_json(buffer.getvalue())
                                 if response_model
                                 else buffer.getvalue()
                             )
+                            if isinstance(value, (dict, list)):
+                                value = json.dumps(value)
                             await streamer.stream_partial(value)
                 elif isinstance(event, ResponseRefusalDeltaEvent):
                     buffer.write(event.delta)
@@ -120,10 +123,12 @@ class OpenAIClient:
                             await streamer.stream_partial(event.delta)
                         else:
                             value = (
-                                ensure_json(buffer.getvalue())
+                                fix_json(buffer.getvalue())
                                 if response_model
                                 else buffer.getvalue()
                             )
+                            if isinstance(value, (dict, list)):
+                                value = json.dumps(value)
                             await streamer.stream_partial(value)
                 elif isinstance(event, ResponseErrorEvent):
                     raise RuntimeError(event.error)
@@ -140,13 +145,13 @@ class OpenAIClient:
                     )
         # Stream the final complete value.
         if streamer is not None:
-            value = (
-                ensure_json(buffer.getvalue()) if response_model else buffer.getvalue()
-            )
+            value = fix_json(buffer.getvalue()) if response_model else buffer.getvalue()
+            if isinstance(value, (dict, list)):
+                value = json.dumps(value)
             await streamer.stream_complete(value)
         result = buffer.getvalue()
         if response_model:
-            result = response_model.model_validate_json(result)
+            result = response_model.model_validate(fix_json(result))
 
         duration = time.perf_counter() - start_time
 

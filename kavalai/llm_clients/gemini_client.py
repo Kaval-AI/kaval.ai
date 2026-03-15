@@ -15,19 +15,20 @@ limitations under the License.
 """
 
 import io
+import json
 import os
 import time
 from typing import Any, Dict, List, Optional, Type, Tuple
 
 from google import genai
 from google.genai import types
-from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
 from kavalai.llm_clients.common import (
     create_model_call_stat,
     get_model_name,
+    fix_json,
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
@@ -101,8 +102,9 @@ class GeminiClient:
                                     # For structured output, we still want to stream the full partial JSON
                                     # to allow the UI to parse it.
                                     buffer.write(part.text)
-                                    value = ensure_json(buffer.getvalue())
-                                    await streamer.stream_partial(value)
+                                    # fix_json now returns a dict/list, so we convert back to JSON string for streaming
+                                    value = fix_json(buffer.getvalue())
+                                    await streamer.stream_partial(json.dumps(value))
                                 else:
                                     await streamer.stream_partial(part.text)
                                     buffer.write(part.text)
@@ -129,11 +131,13 @@ class GeminiClient:
         thought_text = thought_buffer.getvalue()
 
         if streamer is not None:
-            value = ensure_json(result_text) if response_model else result_text
+            value = fix_json(result_text) if response_model else result_text
+            if isinstance(value, (dict, list)):
+                value = json.dumps(value)
             await streamer.stream_complete(value)
 
         if response_model:
-            result = response_model.model_validate_json(result_text)
+            result = response_model.model_validate(fix_json(result_text))
         else:
             result = result_text
 

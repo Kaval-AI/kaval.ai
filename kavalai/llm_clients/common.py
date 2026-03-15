@@ -17,9 +17,69 @@ limitations under the License.
 import asyncio
 from typing import Any, Optional
 
+import json
+from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
+
+
+def fix_json(data: str) -> Any:
+    """Ensure string is valid JSON, handle leading/trailing characters and return dict/list."""
+    # Find the start of JSON (first { or [)
+    start_pos = -1
+    for i, char in enumerate(data):
+        if char in ("{", "["):
+            start_pos = i
+            break
+
+    if start_pos == -1:
+        # No JSON structure found, try to parse as is or return empty dict
+        try:
+            return json.loads(data)
+        except Exception:
+            return {}
+
+    data = data[start_pos:]
+
+    # Fast path: already valid JSON
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError as e:
+        # Handle extra trailing data
+        if e.msg == "Extra data":
+            try:
+                return json.loads(data[: e.pos].strip())
+            except Exception:
+                pass
+
+    # Try partial JSON parser
+    try:
+        fixed = ensure_json(data)
+        return json.loads(fixed)
+    except Exception:
+        # Some partial_json_parser versions might fail on trailing commas.
+        # Try a simple replacement for common case: ,} -> } and ,] -> ]
+        try:
+            fixed = ensure_json(data.replace(",}", "}").replace(",]", "]"))
+            return json.loads(fixed)
+        except Exception:
+            pass
+
+    # Fallback: find last valid closing brace/bracket
+    for char in ("}", "]"):
+        pos = data.rfind(char)
+        if pos == -1:
+            continue
+        try:
+            subset = data[: pos + 1]
+            return json.loads(subset)
+        except Exception:
+            continue
+
+    # Last resort: try to return whatever we have as dict/list if possible
+    # or just an empty dict if all else fails
+    return {}
 
 
 class StreamContent(BaseModel):

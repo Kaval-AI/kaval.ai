@@ -52,3 +52,62 @@ def test_stream_content_pydantic():
     assert sc.type == "text"
     assert sc.name == "chunk"
     assert sc.value == "hello"
+
+
+from kavalai.llm_clients.common import fix_json
+
+
+def test_fix_json_valid():
+    data = '{"a": "hello"}'
+    assert fix_json(data) == {"a": "hello"}
+
+
+def test_fix_json_trailing_chars():
+    data = '{"a": "hello"}...'
+    # ensure_json should truncate the trailing '...'
+    parsed = fix_json(data)
+    assert parsed == {"a": "hello"}
+
+
+def test_fix_json_incomplete():
+    data = '{"a": "hello'
+    # partial_json_parser's ensure_json should close it
+    parsed = fix_json(data)
+    assert parsed == {"a": "hello"}
+
+
+def test_fix_json_leading_garbage():
+    data = 'xx asdf{"a": "hello"}..'
+    parsed = fix_json(data)
+    assert parsed == {"a": "hello"}
+
+
+def test_fix_json_complex_trailing():
+    data = '{"a": "hello"} some garbage here'
+    parsed = fix_json(data)
+    assert parsed == {"a": "hello"}
+
+
+def test_fix_json_multiple_trailing_braces():
+    data = '{"a": "hello"}}'
+    parsed = fix_json(data)
+    assert parsed == {"a": "hello"}
+
+
+def test_fix_json_trailing_comma():
+    data = '{"a": "hello",}'
+    parsed = fix_json(data)
+    assert parsed == {"a": "hello"}
+
+
+def test_fix_json_trailing_comma_partial():
+    data = '{"a": "hello",'
+    parsed = fix_json(data)
+    assert parsed == {"a": "hello"}
+
+
+def test_fix_json_broken_middle():
+    data = '{"a": "hello", "b": }'
+    parsed = fix_json(data)
+    # It should at least return something that is a dict/list if possible
+    assert isinstance(parsed, (dict, list))
