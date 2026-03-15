@@ -6,6 +6,9 @@ import uvicorn
 import multiprocessing
 import time
 import os
+import socket
+
+
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, create_model
@@ -17,6 +20,15 @@ from kavalai.functionkernel import (
     FunctionKernelException,
 )
 from kavalai.agents.workflow_model import RestServer, McpServer
+
+
+def find_free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+FREE_PORT = find_free_port()
 
 app = FastAPI()
 
@@ -71,7 +83,7 @@ async def sse_endpoint(request: Request):
     async def event_generator():
         # MCP SSE handshake
         # 1. Send endpoint event
-        yield "event: endpoint\ndata: http://127.0.0.1:8000/messages?session_id=123\n\n"
+        yield f"event: endpoint\ndata: http://127.0.0.1:{FREE_PORT}/messages?session_id=123\n\n"
 
         # Keep alive and send messages from queue
         while True:
@@ -147,16 +159,16 @@ async def sse_messages(request: Request, session_id: Optional[str] = None):
     return {"jsonrpc": "2.0", "id": data.get("id"), "result": {}}
 
 
-def run_server():
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+def run_server(port):
+    uvicorn.run(app, host="127.0.0.1", port=port)
 
 
 @pytest.fixture(scope="module")
 def rest_server():
-    proc = multiprocessing.Process(target=run_server)
+    proc = multiprocessing.Process(target=run_server, args=(FREE_PORT,))
     proc.start()
     time.sleep(1)  # Wait for server to start
-    yield "http://127.0.0.1:8000"
+    yield f"http://127.0.0.1:{FREE_PORT}"
     proc.terminate()
 
 
