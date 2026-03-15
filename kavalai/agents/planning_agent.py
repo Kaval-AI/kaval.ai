@@ -149,15 +149,31 @@ class PlanningAgent:
                         logger.warning(f"Tool {tool_call.name} failed: {e}")
                         tool_result = f"Error: {e}"
 
-                    return tool_call.call_id, tool_result
+                    return tool_call, args, tool_result
 
                 results = await asyncio.gather(
                     *[_call_tool(tc) for tc in step_output.tool_calls]
                 )
 
-                for call_id, tool_result in results:
-                    if call_id:
-                        self._planner_context[call_id] = tool_result
+                for tool_call, args, tool_result in results:
+                    if tool_call.call_id:
+                        self._planner_context[tool_call.call_id] = tool_result
+
+                    agent_service = getattr(self._run_context, "agent_service", None)
+                    if agent_service and hasattr(agent_service, "add_task"):
+                        try:
+                            await agent_service.add_task(
+                                agent_id=self._run_context.agent_id,
+                                session_id=self._run_context.session_id,
+                                run_id=self._run_context.run_id,
+                                name=tool_call.name,
+                                inputs={"arguments": args},
+                                output=tool_result
+                                if not hasattr(tool_result, "model_dump")
+                                else tool_result.model_dump(),
+                            )
+                        except TypeError:
+                            pass
 
             if step_output.output is not None:
                 if self._streamer:
