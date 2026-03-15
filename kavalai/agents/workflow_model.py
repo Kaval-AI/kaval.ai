@@ -14,16 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import Optional, Literal, Union, Annotated
+from typing import Optional, Literal, Union, Annotated, Any
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, model_validator, Field
+from pydantic import BaseModel, model_validator, Field, PrivateAttr, ConfigDict
 
 
 def to_plain(obj):
     """Recursively convert Pydantic models, dicts, and lists into plain JSON-serializable types."""
     if isinstance(obj, BaseModel):
-        return obj.model_dump()
+        return to_plain(obj.model_dump())
     if isinstance(obj, (datetime, UUID)):
         return str(obj)
     if isinstance(obj, dict):
@@ -37,13 +37,39 @@ class WorkflowException(Exception):
     pass
 
 
-class TypeInputInfo(BaseModel):
+class YamlModel(BaseModel):
+    _line_number: Optional[int] = PrivateAttr(default=None)
+    _file_path: Optional[str] = PrivateAttr(default=None)
+
+    def __init__(self, **data: Any):
+        # We need to extract metadata before Pydantic validation kicks in if we were to use model_validator,
+        # but since we're using __init__, it's already past validation?
+        # No, super().__init__(**data) runs validation.
+        # So we pop them here.
+        line = data.pop("__line__", None)
+        file_path = data.pop("__file_path__", None)
+        super().__init__(**data)
+        self._line_number = line
+        self._file_path = file_path
+
+    model_config = ConfigDict(extra="ignore")
+
+    @property
+    def line_number(self) -> Optional[int]:
+        return self._line_number
+
+    @property
+    def file_path(self) -> Optional[str]:
+        return self._file_path
+
+
+class TypeInputInfo(YamlModel):
     type: Literal["literal", "context", "history"]
     value: Optional[BaseModel | str | int | float | bool] = None
     name: Optional[str] = None
 
 
-class BaseTask(BaseModel):
+class BaseTask(YamlModel):
     name: str
     inputs: dict[str, TypeInputInfo] = {}
     output: str | dict[str, TypeInputInfo] = ""
@@ -142,7 +168,7 @@ Task = Annotated[
 ]
 
 
-class RestServer(BaseModel):
+class RestServer(YamlModel):
     name: str
     url: Optional[str] = None
     url_env: Optional[str] = None
@@ -162,7 +188,7 @@ class RestServer(BaseModel):
         return self
 
 
-class McpServer(BaseModel):
+class McpServer(YamlModel):
     name: str
     command: Optional[str] = None
     command_env: Optional[str] = None
@@ -196,12 +222,12 @@ class McpServer(BaseModel):
         return self
 
 
-class PythonFunction(BaseModel):
+class PythonFunction(YamlModel):
     name: str
     path: str
 
 
-class WorkflowModel(BaseModel):
+class WorkflowModel(YamlModel):
     name: str
     description: str = ""
     version: str = "1.0"

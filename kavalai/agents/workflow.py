@@ -15,12 +15,12 @@ limitations under the License.
 """
 
 import logging
-from typing import Dict, Type, Optional
+from typing import Dict, Type, Optional, Any
 from uuid import UUID
 
 import yaml
 from environs import Env
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from kavalai.agents.workflow_model import (
     WorkflowModel,
@@ -54,6 +54,86 @@ import importlib
 logger = logging.getLogger(__name__)
 
 
+class LineLoader(yaml.SafeLoader):
+    def construct_mapping(self, node, deep=False):
+        mapping = super().construct_mapping(node, deep=deep)
+        mapping["__line__"] = node.start_mark.line + 1
+        return mapping
+
+
+def inject_metadata(data: Any, file_path: Optional[str] = None) -> Any:
+    """Recursively inject __file_path__ into dictionaries that have __line__."""
+    if isinstance(data, dict):
+        # We must NOT inject metadata into dictionaries that are validated
+        # by Pydantic as having a specific schema that doesn't include these fields.
+        # This includes the root dictionary's keys that are not models.
+        if "__line__" in data and file_path:
+            data["__file_path__"] = file_path
+
+        for k, v in list(data.items()):
+            # We only want to inject metadata into things that will become YamlModel.
+            # These are: WorkflowModel (root), Tasks, Servers, PythonFunctions.
+            # data_types is a dict[str, dict] where values are raw JSON schemas.
+            # inputs/output in tasks are also tricky.
+            if k in ("data_types", "env", "properties", "inputs", "output", "when"):
+                if isinstance(v, dict):
+                    # For these, we remove metadata recursively
+                    remove_metadata(v)
+                continue
+            data[k] = inject_metadata(v, file_path)
+    elif isinstance(data, list):
+        for i in range(len(data)):
+            data[i] = inject_metadata(data[i], file_path)
+    return data
+
+
+def remove_metadata(data: Any) -> Any:
+    if isinstance(data, dict):
+        data.pop("__line__", None)
+        data.pop("__file_path__", None)
+        for v in data.values():
+            remove_metadata(v)
+    elif isinstance(data, list):
+        for item in data:
+            remove_metadata(item)
+    return data
+
+
+def format_yaml_error(
+    message: str,
+    line_number: Optional[int],
+    file_path: Optional[str],
+    yaml_content: Optional[str] = None,
+) -> str:
+    parts = []
+    location = ""
+    if file_path:
+        location = f'File "{file_path}"'
+    if line_number:
+        if location:
+            location += f", line {line_number}"
+        else:
+            location = f"Line {line_number}"
+
+    if location:
+        parts.append(f"Error at {location}:")
+
+    parts.append(message)
+
+    if line_number and yaml_content:
+        lines = yaml_content.splitlines()
+        start = max(0, line_number - 3)
+        end = min(len(lines), line_number + 2)
+        snippet = []
+        for i in range(start, end):
+            l_num = i + 1
+            prefix = "--> " if l_num == line_number else "    "
+            snippet.append(f"{prefix}{l_num:4} | {lines[i]}")
+        parts.append("\n" + "\n".join(snippet))
+
+    return "\n".join(parts)
+
+
 def make_prompt(prompt: str, input_data: dict) -> str:
     pieces = [prompt]
     if len(input_data) > 0:
@@ -70,9 +150,11 @@ class Workflow:
         self,
         workflow_model: WorkflowModel,
         agent_service: Optional[AgentService] = None,
+        yaml_content: Optional[str] = None,
     ):
         self.workflow_model = workflow_model
         self.agent_service = agent_service
+        self.yaml_content = yaml_content
         self.parser = SchemaParser(workflow_model.data_types)
         self.models: Dict[str, Type[BaseModel]] = self.parser.parse_all()
         self.tasks = {task.name: task for task in workflow_model.tasks}
@@ -118,12 +200,24 @@ class Workflow:
     @classmethod
     def from_yaml_path(cls, yaml_path: str):
         with open(yaml_path, "r") as f:
-            return Workflow.from_yaml(f.read())
+            yaml_string = f.read()
+            try:
+                data = yaml.safe_load(yaml_string, Loader=LineLoader)
+                inject_metadata(data, file_path=yaml_path)
+                workflow_model = WorkflowModel(**data)
+                return cls(workflow_model, yaml_content=yaml_string)
+            except ValidationError as e:
+                raise WorkflowException(f"Workflow validation failed: {e}") from e
 
     @classmethod
     def from_yaml(cls, yaml_string: str):
-        workflow_model = WorkflowModel(**yaml.safe_load(yaml_string))
-        return cls(workflow_model)
+        try:
+            data = yaml.safe_load(yaml_string, Loader=LineLoader)
+            inject_metadata(data)
+            workflow_model = WorkflowModel(**data)
+            return cls(workflow_model, yaml_content=yaml_string)
+        except ValidationError as e:
+            raise WorkflowException(f"Workflow validation failed: {e}") from e
 
     def get_data_type(self, name: str) -> Type[BaseModel]:
         """Retrieve a generated Pydantic model by name."""
@@ -508,7 +602,21 @@ class Workflow:
     ) -> WorkflowRunResult:
         agent_service = agent_service or self.agent_service
         # 1. Parse Input
-        parsed_input = self.get_data_type("input")(**input_data)
+        try:
+            parsed_input = self.get_data_type("input")(**input_data)
+        except ValidationError as e:
+            input_info = self.workflow_model.data_types.get("input", {})
+            line_number = input_info.get("__line__")
+            file_path = input_info.get("__file_path__")
+            raise WorkflowException(
+                format_yaml_error(
+                    f"Validation error for 'input' data type: {e}",
+                    line_number,
+                    file_path,
+                    self.yaml_content,
+                )
+            ) from e
+
         run_context = RunContext(agent_service=agent_service)
         run_context.data["input"] = parsed_input
 
@@ -562,22 +670,34 @@ class Workflow:
                         continue
 
                 logger.info("Running task <%s>", task.name)
-                if isinstance(task, AgentTask):
-                    await self.run_planning_agent(task, run_context, queue)
-                elif isinstance(task, LLMTask):
-                    await self.run_llm_task(task, run_context, queue)
-                elif isinstance(task, McpTask):
-                    await self.run_mcp_tool(task, run_context, queue)
-                elif isinstance(task, PythonTask):
-                    await self.run_python_tool(task, run_context, queue)
-                elif isinstance(task, RestTask):
-                    await self.run_rest_tool(task, run_context, queue)
-                elif isinstance(task, CombineTask):
-                    await self.run_combine(task, run_context, queue)
-                elif isinstance(task, RagQueryTask):
-                    await self.run_rag_task(task, run_context, queue)
-                else:
-                    logger.warning("Unknown task type: %s", type(task))
+                try:
+                    if isinstance(task, AgentTask):
+                        await self.run_planning_agent(task, run_context, queue)
+                    elif isinstance(task, LLMTask):
+                        await self.run_llm_task(task, run_context, queue)
+                    elif isinstance(task, McpTask):
+                        await self.run_mcp_tool(task, run_context, queue)
+                    elif isinstance(task, PythonTask):
+                        await self.run_python_tool(task, run_context, queue)
+                    elif isinstance(task, RestTask):
+                        await self.run_rest_tool(task, run_context, queue)
+                    elif isinstance(task, CombineTask):
+                        await self.run_combine(task, run_context, queue)
+                    elif isinstance(task, RagQueryTask):
+                        await self.run_rag_task(task, run_context, queue)
+                    else:
+                        logger.warning("Unknown task type: %s", type(task))
+                except Exception as e:
+                    if isinstance(e, WorkflowException):
+                        raise e
+                    raise WorkflowException(
+                        format_yaml_error(
+                            f"Error in task '{task.name}': {e}",
+                            task.line_number,
+                            task.file_path,
+                            self.yaml_content,
+                        )
+                    ) from e
 
                 if task.stop:
                     logger.info(

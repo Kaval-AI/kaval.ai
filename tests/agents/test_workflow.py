@@ -762,7 +762,7 @@ tasks:
 """
         # The error now happens during Workflow.from_yaml (initialization) due to Pydantic validator
         with pytest.raises(
-            ValueError, match="Operator 'eq' requires a list of 2 operands."
+            WorkflowException, match="Operator 'eq' requires a list of 2 operands."
         ):
             Workflow.from_yaml(workflow_yaml)
 
