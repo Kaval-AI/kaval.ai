@@ -19,6 +19,11 @@ async def test_planning_agent_run_success():
     kernel.call_tool = AsyncMock(return_value="Tool Result")
 
     run_context = MagicMock(spec=RunContext)
+    run_context.agent_id = "agent-id"
+    run_context.session_id = "session-id"
+    run_context.run_id = "run-id"
+    run_context.agent_service = AsyncMock()
+
     llm_client = MagicMock(spec=LLMClient)
 
     input_data = {"key": "value"}
@@ -40,7 +45,7 @@ async def test_planning_agent_run_success():
         long_explanation="Planning to call a tool",
         step_number=0,
         max_steps=2,
-        tool_calls=[ToolCall(name="python://tool", call_id="call1", args="{}")],
+        tool_calls=[ToolCall(name="python://tool", call_id="call1", args='{"a": 1}')],
         output=None,
     )
 
@@ -69,7 +74,19 @@ async def test_planning_agent_run_success():
     assert agent._planner_context["call1"] == "Tool Result"
 
     assert llm_client.chat_completions.call_count == 2
-    kernel.call_tool.assert_awaited_once_with(tool_uri="python://tool", arguments={})
+    kernel.call_tool.assert_awaited_once_with(
+        tool_uri="python://tool", arguments={"a": 1}
+    )
+
+    # Verify agent_service.add_task was called for the tool call
+    run_context.agent_service.add_task.assert_awaited_once_with(
+        agent_id=run_context.agent_id,
+        session_id=run_context.session_id,
+        run_id=run_context.run_id,
+        name="python://tool",
+        inputs={"arguments": {"a": 1}},
+        output="Tool Result",
+    )
 
 
 @pytest.mark.asyncio
