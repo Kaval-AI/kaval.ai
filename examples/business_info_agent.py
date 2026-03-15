@@ -106,6 +106,7 @@ async def main():
         llm_client=llm_client,
         input_data=input_data,
         response_model=BusinessInfo,
+        temperature=0,
         streamer=streamer,
     )
 
