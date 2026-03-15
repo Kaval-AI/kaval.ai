@@ -149,6 +149,7 @@ def migrate(
 
         applied_migrations = get_applied_migrations(cur, schema)
 
+        logger.info(f"Loading migrations from {migrations_dir}")
         migrations = get_migrations(migrations_dir)
         if not migrations:
             logger.info("No migrations found.")
@@ -165,10 +166,11 @@ def migrate(
                     )
                     conn.rollback()
                     raise ValueError(f"Checksum mismatch for {filename}")
-                logger.info(f"Migration {filename} already applied.")
+                logger.info(f"Migration {filename} already `app`lied.")
                 continue
 
             try:
+                logger.info(f"Applying migration: {filename}")
                 apply_migration(cur, schema, filename, file_path, checksum)
             except Exception as e:
                 logger.error(f"Error applying migration {filename}: {e}")
