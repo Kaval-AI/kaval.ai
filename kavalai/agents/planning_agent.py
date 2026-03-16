@@ -69,6 +69,7 @@ class PlanningAgent:
         temperature: Optional[float] = None,
         stream_updates: bool = False,
         stream_output: bool = False,
+        auto_persist: bool = True,
     ):
         self._kernel = kernel
         self._run_context = run_context
@@ -79,6 +80,7 @@ class PlanningAgent:
         self._temperature = temperature
         self._stream_updates = stream_updates
         self._stream_output = stream_output
+        self._auto_persist = auto_persist
         self._planner_context = {}
         self._step_outputs = []
 
@@ -98,9 +100,16 @@ class PlanningAgent:
                 f"{await self._kernel.get_tool_descriptions()}\n\n"
                 f"Inputs:\n{self._input_data}\n\n"
                 f"Planner Context (tool results):\n{self._planner_context}\n\n"
-                "If you need to output a structured response, you can use `call_id` in your `tool_calls`. "
-                "The result of that tool call will be stored in `planner_context` and automatically copied "
-                "to the matching field in your final `output` if the field name matches the `call_id`.\n\n"
+            )
+
+            if self._auto_persist:
+                system_prompt += (
+                    "If you need to output a structured response, you can use `call_id` in your `tool_calls`. "
+                    "The result of that tool call will be stored in `planner_context` and automatically copied "
+                    "to the matching field in your final `output` if the field name matches the `call_id`.\n\n"
+                )
+
+            system_prompt += (
                 f"max_steps={max_iterations}\n\n"
                 f"Step Outputs (previous steps):\n{[so.model_dump() for so in self._step_outputs]}\n"
             )
@@ -184,7 +193,7 @@ class PlanningAgent:
 
             if step_output.output is not None:
                 # Auto-persist from planner_context based on call_id matching
-                if hasattr(step_output.output, "model_validate"):
+                if self._auto_persist and hasattr(step_output.output, "model_validate"):
                     try:
                         # Create a dict from current output and update with planner_context
                         output_dict = step_output.output.model_dump()

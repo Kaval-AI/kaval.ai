@@ -101,3 +101,73 @@ async def test_planning_agent_auto_persistence():
         result_mismatch.tool_result == ""
     )  # Should NOT be updated due to type mismatch
     assert result_mismatch.other_field == "mismatch"
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_auto_persistence_off():
+    # Setup mocks
+    kernel = MagicMock(spec=FunctionKernel)
+    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
+    kernel.call_tool = AsyncMock(return_value="REAL_TOOL_OUTPUT")
+
+    run_context = MagicMock(spec=RunContext)
+    llm_client = MagicMock(spec=LLMClient)
+
+    input_data = {}
+    task = "Use tool and return result"
+
+    # auto_persist=False
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data=input_data,
+        response_model=MockResponse,
+        auto_persist=False,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # First iteration: call tool with call_id="tool_result"
+    step1 = StepOutput(
+        short_explanation="Calling tool",
+        long_explanation="I will call the tool to get some data",
+        step_number=0,
+        max_steps=2,
+        tool_calls=[
+            ToolCall(name="python://test_tool", call_id="tool_result", args="{}")
+        ],
+        output=None,
+    )
+
+    # Second iteration: return output with tool_result field EMPTY
+    # Since auto_persist is False, it should NOT be filled.
+    step2 = StepOutput(
+        short_explanation="Returning result",
+        long_explanation="I am returning the result",
+        step_number=1,
+        max_steps=2,
+        tool_calls=[],
+        output=MockResponse(tool_result="original", other_field="from_llm"),
+    )
+
+    llm_client.chat_completions.side_effect = [
+        (step1, {"stats": "dummy"}),
+        (step2, {"stats": "dummy"}),
+    ]
+
+    # Run agent
+    result = await agent.run(task=task, max_iterations=2)
+
+    # Assertions
+    assert result is not None
+    assert (
+        result.tool_result == "original"
+    ), "Value should NOT be auto-persisted when auto_persist=False"
+
+    # Check that system prompt DOES NOT contain auto-persistence instructions
+    llm_client.chat_completions.assert_called()
+    for call in llm_client.chat_completions.call_args_list:
+        messages = call.kwargs["messages"]
+        system_msg = next(m for m in messages if m["role"] == "system")["content"]
+        assert "automatically copied to the matching field" not in system_msg
