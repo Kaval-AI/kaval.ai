@@ -484,6 +484,15 @@ class FunctionKernel:
         try:
             validated_input = definition.input_model(**arguments)
             call_args = validated_input.model_dump()
+
+            # Ensure complex Pydantic types are passed as model instances if needed
+            for param_name, p in inspect.signature(func).parameters.items():
+                if (
+                    param_name in call_args
+                    and isinstance(p.annotation, type)
+                    and issubclass(p.annotation, BaseModel)
+                ):
+                    call_args[param_name] = p.annotation(**call_args[param_name])
         except Exception as e:
             raise FunctionKernelException(
                 f"Python tool '{python_tool}' argument validation failed: {e}"
@@ -548,27 +557,54 @@ class FunctionKernel:
             "",
         ]
 
-        def _get_model_definition(model: Type[BaseModel], indent: int = 4) -> str:
-            import inspect
+        def _get_concise_schema(
+            model: Type[BaseModel], label: str = "input schema:"
+        ) -> str:
+            def _get_type_info(annotation: Any) -> Any:
+                if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+                    return {
+                        field_name: _get_type_info(field.annotation)
+                        for field_name, field in annotation.model_fields.items()
+                    }
+                if hasattr(annotation, "__name__"):
+                    return annotation.__name__
+                res = str(annotation)
+                if res.startswith("typing."):
+                    res = res[7:]
+                return res
 
-            prefix = " " * indent
-            try:
-                source = inspect.getsource(model).strip()
-                # Indent each line of the source
-                return "\n".join(f"{prefix}{line}" for line in source.splitlines())
-            except Exception:
-                # Fallback if source cannot be retrieved (e.g., dynamically created models)
-                fields = []
-                for field_name, field in model.model_fields.items():
-                    annotation = field.annotation
-                    if hasattr(annotation, "__name__"):
-                        type_name = annotation.__name__
-                    else:
-                        type_name = str(annotation)
-                    fields.append(f"{prefix}    {field_name}: {type_name}")
-                return f"{prefix}class {model.__name__}(BaseModel):\n" + "\n".join(
-                    fields
-                )
+            schema_dict = {
+                field_name: _get_type_info(field.annotation)
+                for field_name, field in model.model_fields.items()
+            }
+            return f"{label}\n{json.dumps(schema_dict, indent=2)}"
+
+        def _get_signature_parts(model: Type[BaseModel]) -> str:
+            params = []
+            for field_name, field in model.model_fields.items():
+                annotation = field.annotation
+                if hasattr(annotation, "__name__"):
+                    type_name = annotation.__name__
+                else:
+                    type_name = str(annotation)
+                params.append(f"{field_name}: {type_name}")
+            return ", ".join(params)
+
+        def _get_return_type(model: Type[BaseModel]) -> str:
+            # For our tools, output models often have a 'result' field
+            if "result" in model.model_fields:
+                field = model.model_fields["result"]
+                annotation = field.annotation
+                if hasattr(annotation, "__name__"):
+                    return annotation.__name__
+                # If it's a typing type like List[int] or Any, str(annotation) might be 'typing.Any'
+                # Let's try to be a bit smarter or just use the string
+                res = str(annotation)
+                if res.startswith("typing."):
+                    res = res[7:]
+                return res
+            # If no 'result' field, it might be a custom model
+            return model.__name__
 
         def _format_tool(
             uri: str,
@@ -576,12 +612,18 @@ class FunctionKernel:
             input_model: Type[BaseModel],
             output_model: Type[BaseModel],
         ) -> str:
-            tool_desc = f"### {uri}\n\n"
-            tool_desc += f"Description: {description}\n\n"
-            tool_desc += "Input Model (Pydantic):\n"
-            tool_desc += f"{_get_model_definition(input_model)}\n\n"
-            tool_desc += "Output Model (Pydantic):\n"
-            tool_desc += f"{_get_model_definition(output_model)}\n"
+            signature = _get_signature_parts(input_model)
+            return_type = _get_return_type(output_model)
+
+            tool_desc = f"### {uri}({signature}) -> {return_type}\n"
+            tool_desc += _get_concise_schema(input_model, "input schema:") + "\n"
+
+            # If the output model is not a simple wrapper (i.e. it doesn't just have 'result')
+            # and it's a custom model, show its schema too.
+            if "result" not in output_model.model_fields:
+                tool_desc += _get_concise_schema(output_model, "output schema:") + "\n"
+
+            tool_desc += f"{description}\n"
             return tool_desc
 
         # Python tools

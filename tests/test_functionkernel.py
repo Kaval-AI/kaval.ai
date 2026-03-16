@@ -772,19 +772,21 @@ async def test_tool_descriptions():
 
             desc = await kernel.get_tool_descriptions()
 
-            assert "### python://math.add" in desc
+            assert "### python://math.add(a: int, b: int) -> int" in desc
             assert "### rest://my_rest.<function_name>" in desc
-            assert "### mcp://my_mcp.list_files" in desc
+            assert "### mcp://my_mcp.list_files(path: str) -> Any" in desc
 
             # Verify concise format
-            assert "  - Description:" not in desc
+            assert "Input Model (Pydantic):" not in desc
             # math.add has docstring "Adds two integers."
-            assert "### python://math.add" in desc
-            assert "Description: Adds two integers." in desc
-            assert "Input Model (Pydantic):" in desc
-            assert "Output Model (Pydantic):" in desc
-            assert "class math.add_input(BaseModel):" in desc
-            assert "class math.add_output(BaseModel):" in desc
+            assert "### python://math.add(a: int, b: int) -> int" in desc
+            assert "Adds two integers." in desc
+            assert '"a": "int"' in desc
+            assert '"b": "int"' in desc
+            assert "Input Model (Pydantic):" not in desc
+            assert "Output Model (Pydantic):" not in desc
+            assert "class math.add_input(BaseModel):" not in desc
+            assert "class math.add_output(BaseModel):" not in desc
             assert "Input JSON Schema" not in desc
             assert "Output JSON Schema" not in desc
 
@@ -801,8 +803,13 @@ async def test_tool_descriptions():
                 )
             }
             desc = await kernel.get_tool_descriptions()
-            assert "### rest://bad_desc.tool [GET]" in desc
-            assert "Description: not-json" in desc
+            # Signature for SimpleModel: name: str, value: int
+            # SimpleModel output model: name: str, value: int -> SimpleModel (since no 'result' field)
+            assert (
+                "### rest://bad_desc.tool [GET](name: str, value: int) -> SimpleModel"
+                in desc
+            )
+            assert "not-json" in desc
 
 
 @pytest.mark.asyncio
@@ -1002,6 +1009,66 @@ async def test_register_rest_tool(rest_server):
 
     # Verify descriptions
     descriptions = await kernel.get_tool_descriptions()
-    assert "### rest://test_server.get_item [GET]" in descriptions
-    assert "Description: Get item by id" in descriptions
-    assert "rest://test_server.create_item [POST]" in descriptions
+    assert (
+        "### rest://test_server.get_item [GET](id: int) -> test_server_get_item_output"
+        in descriptions
+    )
+    assert "Get item by id" in descriptions
+    assert (
+        "rest://test_server.create_item [POST](name: str) -> test_server_create_item_output"
+        in descriptions
+    )
+
+
+@pytest.mark.asyncio
+async def test_tool_descriptions_nested():
+    """Tests that tool descriptions correctly expand nested Pydantic models."""
+    kernel = FunctionKernel()
+
+    class NestedInput(BaseModel):
+        field_a: str
+        field_b: int
+
+    class ComplexInput(BaseModel):
+        name: str
+        nested: NestedInput
+
+    class NestedOutput(BaseModel):
+        success: bool
+        message: str
+
+    class ComplexOutput(BaseModel):
+        code: int
+        data: NestedOutput
+
+    @pythontool
+    def complex_tool(name: str, nested: NestedInput) -> ComplexOutput:
+        """A tool with nested pydantic models."""
+        return ComplexOutput(
+            code=200, data=NestedOutput(success=True, message=f"Hello {name}")
+        )
+
+    kernel.register_python_tool("complex_tool", complex_tool)
+
+    desc = await kernel.get_tool_descriptions()
+
+    # Check for signature
+    assert (
+        "### python://complex_tool(name: str, nested: NestedInput) -> ComplexOutput"
+        in desc
+    )
+
+    # Check for input schema expansion
+    assert '"name": "str"' in desc
+    assert '"nested": {' in desc
+    assert '"field_a": "str"' in desc
+    assert '"field_b": "int"' in desc
+
+    # Check for output schema expansion
+    assert "output schema:" in desc
+    assert '"code": "int"' in desc
+    assert '"data": {' in desc
+    assert '"success": "bool"' in desc
+    assert '"message": "str"' in desc
+
+    assert "A tool with nested pydantic models." in desc

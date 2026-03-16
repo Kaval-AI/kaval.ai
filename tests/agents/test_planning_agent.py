@@ -697,3 +697,103 @@ async def test_planning_agent_real_python_tool_gcd():
     # FunctionKernel wraps primitive return values in a model with a 'result' field
     assert agent._planner_context["gcd_result"].result == 6
     assert llm_client.chat_completions.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_complex_nested_models():
+    # Setup real FunctionKernel
+    kernel = FunctionKernel()
+
+    class NestedInput(BaseModel):
+        field_a: str
+        field_b: int
+
+    class ComplexInput(BaseModel):
+        name: str
+        nested: NestedInput
+
+    class NestedOutput(BaseModel):
+        success: bool
+        message: str
+
+    class ComplexOutput(BaseModel):
+        code: int
+        data: NestedOutput
+
+    @pythontool
+    def complex_tool(name: str, nested: NestedInput) -> ComplexOutput:
+        """A tool with nested pydantic models."""
+        return ComplexOutput(
+            code=200,
+            data=NestedOutput(
+                success=True,
+                message=f"Hello {name}, you sent {nested.field_a} and {nested.field_b}",
+            ),
+        )
+
+    kernel.register_python_tool("complex_tool", complex_tool)
+
+    run_context = MagicMock(spec=RunContext)
+    llm_client = MagicMock(spec=LLMClient)
+
+    task = "Use the complex tool"
+
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data={},
+        response_model=MockResponse,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # First iteration: Call complex tool
+    tool_args = '{"name": "Junie", "nested": {"field_a": "test", "field_b": 42}}'
+    step1 = StepOutput(
+        short_explanation="Calling complex tool",
+        long_explanation="I will call the complex tool with nested data.",
+        step_number=0,
+        max_steps=2,
+        tool_calls=[
+            ToolCall(
+                name="python://complex_tool",
+                call_id="complex_result",
+                args=tool_args,
+            )
+        ],
+        output=None,
+    )
+
+    # Second iteration: Final result
+    step2 = StepOutput(
+        short_explanation="Done",
+        long_explanation="The complex tool returned a nested response.",
+        step_number=1,
+        max_steps=2,
+        tool_calls=[],
+        output=MockResponse(answer="Success"),
+    )
+
+    llm_client.chat_completions.side_effect = [
+        (step1, {"stats": "step1"}),
+        (step2, {"stats": "step2"}),
+    ]
+
+    # Run agent
+    result = await agent.run(task=task, max_iterations=5)
+
+    # Assertions
+    assert isinstance(result, MockResponse)
+    assert result.answer == "Success"
+
+    # Verify tool result in planner context
+    tool_result = agent._planner_context["complex_result"]
+    assert isinstance(tool_result, ComplexOutput)
+    assert tool_result.code == 200
+    assert tool_result.data.success is True
+    assert "Junie" in tool_result.data.message
+    assert "test" in tool_result.data.message
+    assert "42" in tool_result.data.message
+
+    assert llm_client.chat_completions.call_count == 2
