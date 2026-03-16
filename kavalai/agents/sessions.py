@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from kavalai.agents.db import Session, Run, Task, ChatMessage, Agent
-from typing import TypedDict
+from typing import TypedDict, Any
 
 
 class SessionSummary(BaseModel):
@@ -42,8 +42,8 @@ class TaskSummary(BaseModel):
     agent_id: UUID | None
     session_id: UUID
     run_id: UUID
-    inputs: dict | None
-    output: dict | None
+    inputs: Any | None
+    output: Any | None
     created_at: datetime
     updated_at: datetime
 
@@ -52,9 +52,9 @@ class RunSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     session_id: UUID
-    input_data: dict | None
-    output_data: dict | None
-    context: dict | None
+    input_data: Any | None
+    output_data: Any | None
+    context: Any | None
     tasks_count: int
     created_at: datetime
     updated_at: datetime
