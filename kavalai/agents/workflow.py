@@ -238,7 +238,17 @@ class Workflow:
             input_data[name] = await run_context.resolve_input_info(info)
 
         # Render prompt with templates and context
-        rendered_prompt = await run_context.render_prompt(task.prompt)
+        try:
+            rendered_prompt = await run_context.render_prompt(task.prompt)
+        except ValueError as e:
+            raise WorkflowException(
+                format_yaml_error(
+                    str(e),
+                    task.line_number,
+                    task.file_path,
+                    self.yaml_content,
+                )
+            ) from e
         input_text = make_prompt(rendered_prompt, input_data)
 
         system_message = dict(role="system", content=input_text)
@@ -503,9 +513,20 @@ class Workflow:
                 chat_history.append({"role": msg.role, "content": msg.content})
 
         # 7. Run PlanningAgent
-        rendered_prompt = (
-            await run_context.render_prompt(task.prompt) if task.prompt else None
-        )
+        rendered_prompt = None
+        if task.prompt:
+            try:
+                rendered_prompt = await run_context.render_prompt(task.prompt)
+            except ValueError as e:
+                raise WorkflowException(
+                    format_yaml_error(
+                        str(e),
+                        task.line_number,
+                        task.file_path,
+                        self.yaml_content,
+                    )
+                ) from e
+
         result = await planning_agent.run(
             task=rendered_prompt,
             chat_history=chat_history,

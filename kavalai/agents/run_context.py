@@ -78,7 +78,7 @@ class RunContext(BaseModel):
                 val = None
 
             if val is None:
-                return ""
+                raise ValueError(f"Could not resolve {prefix}.{path}")
 
             if isinstance(val, (dict, list, BaseModel)):
                 from kavalai.agents.workflow_model import to_plain
