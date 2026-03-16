@@ -38,14 +38,11 @@ class WorkflowException(Exception):
 
 
 class YamlModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
     _line_number: Optional[int] = PrivateAttr(default=None)
     _file_path: Optional[str] = PrivateAttr(default=None)
 
     def __init__(self, **data: Any):
-        # We need to extract metadata before Pydantic validation kicks in if we were to use model_validator,
-        # but since we're using __init__, it's already past validation?
-        # No, super().__init__(**data) runs validation.
-        # So we pop them here.
         line = data.pop("__line__", None)
         file_path = data.pop("__file_path__", None)
         super().__init__(**data)
@@ -77,6 +74,16 @@ class BaseTask(YamlModel):
     stop: bool = False
     stream_updates: bool = False
     stream_output: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_deprecated_stream(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "stream" in data:
+            raise ValueError(
+                "The 'stream' field is deprecated and no longer supported. "
+                "Please use 'stream_updates' and/or 'stream_output' instead."
+            )
+        return data
 
     @model_validator(mode="after")
     def validate_conditions(self) -> "BaseTask":
