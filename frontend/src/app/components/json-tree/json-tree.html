@@ -18,6 +18,13 @@
 
     @if (depth === 0 && isExpandable) {
       <div class="tree-controls">
+        <button (click)="copyToClipboard($event)" [title]="isCopied ? 'Copied!' : 'Copy to Clipboard'" class="control-btn" [class.success]="isCopied">
+          @if (isCopied) {
+            <i class="fas fa-check"></i> Copied
+          } @else {
+            <i class="fas fa-copy"></i> Copy
+          }
+        </button>
         <button (click)="expandAll($event)" title="Expand All" class="control-btn">
           <i class="fas fa-expand-arrows-alt"></i> Expand All
         </button>

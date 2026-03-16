@@ -114,4 +114,25 @@ describe('JsonTreeComponent', () => {
     expect(component.formattedValue).toBe('Array[3]');
     expect(component.children.length).toBe(3);
   });
+
+  it('should copy JSON to clipboard', async () => {
+    const testData = { a: 1, b: 'test' };
+    component.data = testData;
+    component.depth = 0;
+    component.ngOnInit();
+    fixture.detectChanges();
+
+    const writeTextSpy = spyOn(navigator.clipboard, 'writeText').and.returnValue(Promise.resolve());
+    const event = new MouseEvent('click');
+    spyOn(event, 'stopPropagation');
+
+    component.copyToClipboard(event);
+
+    // Wait for the promise to resolve
+    await fixture.whenStable();
+
+    expect(writeTextSpy).toHaveBeenCalledWith(JSON.stringify(testData, null, 2));
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(component.isCopied).toBeTrue();
+  });
 });

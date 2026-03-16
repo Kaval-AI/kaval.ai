@@ -6,7 +6,7 @@
 }
 
 .json-node {
-  user-select: none;
+  /* user-select: none; removed to allow copying content */
 }
 
 .json-line {
@@ -80,6 +80,12 @@
 
 .control-btn i {
   font-size: 10px;
+}
+
+.control-btn.success {
+  background-color: rgba(152, 195, 121, 0.2);
+  border-color: #98c379;
+  color: #98c379;
 }
 
 .json-value.type-string {

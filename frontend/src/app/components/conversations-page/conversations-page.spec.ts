@@ -87,7 +87,7 @@ describe('ConversationsPage', () => {
 
     expect(userServiceSpy.getActiveProjectId).toHaveBeenCalled();
     expect(agentServiceSpy.getAgentsByProject).toHaveBeenCalledWith('proj1');
-    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, 20, 0);
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, undefined, undefined, undefined, 20, 0);
     expect(component.agents).toEqual(mockAgents);
     expect(component.sessions).toEqual(mockSessions);
     expect(component.totalSessions).toBe(1);
@@ -101,9 +101,9 @@ describe('ConversationsPage', () => {
     fixture.detectChanges();
 
     component.selectedAgentId = 'agent1';
-    component.onAgentChange();
+    component.onFilterChange();
 
-    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', 'agent1', 20, 0);
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', 'agent1', undefined, undefined, undefined, 20, 0);
   });
 
   it('should set hasMore to true if exactly limit sessions are returned', () => {
@@ -141,7 +141,7 @@ describe('ConversationsPage', () => {
     component.nextPage();
 
     expect(component.offset).toBe(20);
-    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, 20, 20);
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, undefined, undefined, undefined, 20, 20);
     expect(component.sessions.length).toBe(21);
     expect(component.totalSessions).toBe(21);
   });
@@ -186,6 +186,6 @@ describe('ConversationsPage', () => {
     component.ngOnInit();
 
     expect(component.selectedAgentId).toBe('agent-789');
-    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', 'agent-789', 20, 0);
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', 'agent-789', undefined, undefined, undefined, 20, 0);
   });
 });

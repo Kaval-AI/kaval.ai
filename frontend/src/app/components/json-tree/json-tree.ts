@@ -37,6 +37,7 @@ export class JsonTreeComponent implements OnInit {
   @Input() depth: number = 0;
 
   @ViewChildren(JsonTreeComponent) childComponents!: QueryList<JsonTreeComponent>;
+  isCopied: boolean = false;
 
   isObject: boolean = false;
   isArray: boolean = false;
@@ -94,6 +95,19 @@ export class JsonTreeComponent implements OnInit {
   collapseAll(event: Event) {
     this.setExpandedRecursive(false);
     event.stopPropagation();
+  }
+
+  copyToClipboard(event: Event) {
+    event.stopPropagation();
+    const jsonString = JSON.stringify(this.data, null, 2);
+    navigator.clipboard.writeText(jsonString).then(() => {
+      this.isCopied = true;
+      setTimeout(() => {
+        this.isCopied = false;
+      }, 2000);
+    }).catch(err => {
+      console.error('Failed to copy JSON: ', err);
+    });
   }
 
   private setExpandedRecursive(expanded: boolean) {
