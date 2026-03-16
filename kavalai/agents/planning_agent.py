@@ -91,6 +91,7 @@ class PlanningAgent:
             chat_history = []
 
         StepOutput = get_step_output_type(self._response_model)
+        final_output = None
 
         for iter_no in range(max_iterations):
             system_prompt = (
@@ -191,23 +192,26 @@ class PlanningAgent:
                             pass
 
             if step_output.output is not None:
-                # Auto-persist from planner_context based on call_id matching
-                if self._auto_persist and hasattr(step_output.output, "model_validate"):
-                    try:
-                        # Create a dict from current output and update with planner_context
-                        output_dict = step_output.output.model_dump()
-                        for call_id, value in self._planner_context.items():
-                            if call_id in output_dict:
-                                output_dict[call_id] = value
-                        # Re-validate to catch type mismatches
-                        step_output.output = step_output.output.__class__(**output_dict)
-                    except Exception as e:
-                        logger.error(f"Failed to auto-persist to output: {e}")
+                final_output = step_output.output
+                if not step_output.tool_calls:
+                    break
 
-                if self._streamer and self._stream_output:
-                    await self._streamer.stream_complete(
-                        step_output.output.model_dump_json()
-                    )
-                return step_output.output
+        if final_output is not None:
+            # Auto-persist from planner_context based on call_id matching
+            if self._auto_persist and hasattr(final_output, "model_validate"):
+                try:
+                    # Create a dict from current output and update with planner_context
+                    output_dict = final_output.model_dump()
+                    for call_id, value in self._planner_context.items():
+                        if call_id in output_dict:
+                            output_dict[call_id] = value
+                    # Re-validate to catch type mismatches
+                    final_output = final_output.__class__(**output_dict)
+                except Exception as e:
+                    logger.error(f"Failed to auto-persist to output: {e}")
+
+            if self._streamer and self._stream_output:
+                await self._streamer.stream_complete(final_output.model_dump_json())
+            return final_output
 
         return None

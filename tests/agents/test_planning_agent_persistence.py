@@ -104,6 +104,116 @@ async def test_planning_agent_auto_persistence():
 
 
 @pytest.mark.asyncio
+async def test_planning_agent_auto_persistence_after_all_steps():
+    """
+    Test that auto-persistence is done AFTER all steps, which means even if a tool
+    is called in the same step as the output, its result should be available.
+    Current implementation might fail if it checks for output BEFORE updating planner_context
+    or if it returns too early.
+    """
+    kernel = MagicMock(spec=FunctionKernel)
+    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
+    kernel.call_tool = AsyncMock(return_value="LATE_TOOL_OUTPUT")
+
+    run_context = MagicMock(spec=RunContext)
+    llm_client = MagicMock(spec=LLMClient)
+
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data={},
+        response_model=MockResponse,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # In one single step, LLM provides BOTH a tool call and an output.
+    # Auto-persistence should ensure the output's "tool_result" field is filled with "LATE_TOOL_OUTPUT".
+    step1 = StepOutput(
+        short_explanation="Doing both",
+        long_explanation="I am calling a tool and returning output in the same step",
+        step_number=0,
+        max_steps=1,
+        tool_calls=[
+            ToolCall(name="python://test_tool", call_id="tool_result", args="{}")
+        ],
+        output=MockResponse(tool_result="", other_field="simultaneous"),
+    )
+
+    llm_client.chat_completions.side_effect = [
+        (step1, {"stats": "dummy"}),
+    ]
+
+    result = await agent.run(task="do both", max_iterations=1)
+
+    assert result is not None
+    # IF this is "REAL_TOOL_OUTPUT" it means it used a STALE result (though in this case none exists)
+    # Actually, current code SHOULD fail this test if it processes output BEFORE tools in the same step.
+    # Wait, current code processes tools first? Let's check.
+    assert result.tool_result == "LATE_TOOL_OUTPUT"
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_multiple_outputs():
+    """
+    Test that auto-persistence only happens at the end, and we use the LAST output provided.
+    Currently, the agent returns as soon as it sees ANY output.
+    """
+    kernel = MagicMock(spec=FunctionKernel)
+    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
+    kernel.call_tool = AsyncMock(return_value="SECOND_RESULT")
+
+    run_context = MagicMock(spec=RunContext)
+    llm_client = MagicMock(spec=LLMClient)
+
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data={},
+        response_model=MockResponse,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # Step 1: provides an output but also a tool call for the NEXT output
+    step1 = StepOutput(
+        short_explanation="Providing premature output",
+        long_explanation="I have an output but I'm also calling a tool to improve it later",
+        step_number=0,
+        max_steps=2,
+        tool_calls=[
+            ToolCall(name="python://test_tool", call_id="tool_result", args="{}")
+        ],
+        output=MockResponse(tool_result="premature", other_field="step1"),
+    )
+
+    # Step 2: provides final output
+    step2 = StepOutput(
+        short_explanation="Providing final output",
+        long_explanation="Now I have the full result",
+        step_number=1,
+        max_steps=2,
+        tool_calls=[],
+        output=MockResponse(tool_result="", other_field="step2"),
+    )
+
+    llm_client.chat_completions.side_effect = [
+        (step1, {"stats": "dummy"}),
+        (step2, {"stats": "dummy"}),
+    ]
+
+    result = await agent.run(task="multiple outputs", max_iterations=2)
+
+    # Current implementation will return after step1 with "premature" (or updated "SECOND_RESULT" if tools processed first)
+    # But if we want it to complete all steps or at least handle it better:
+    # Actually, if it returns, it stops.
+    assert result.other_field == "step2"
+    assert result.tool_result == "SECOND_RESULT"
+
+
+@pytest.mark.asyncio
 async def test_planning_agent_auto_persistence_off():
     # Setup mocks
     kernel = MagicMock(spec=FunctionKernel)
