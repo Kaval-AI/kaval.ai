@@ -152,7 +152,7 @@ class PlanningAgent:
                             else tool_call.args
                         )
                     except Exception as e:
-                        logger.warning(f"Failed to parse tool args: {e}")
+                        logger.error(f"Failed to parse tool args: {e}")
                         args = {}
 
                     logger.info(f"Calling tool {tool_call.name} with {args}")
@@ -162,7 +162,7 @@ class PlanningAgent:
                             arguments=args,
                         )
                     except Exception as e:
-                        logger.warning(f"Tool {tool_call.name} failed: {e}")
+                        logger.error(f"Tool {tool_call.name} failed: {e}")
                         tool_result = f"Error: {e}"
 
                     return tool_call, args, tool_result
