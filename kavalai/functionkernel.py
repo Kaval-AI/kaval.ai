@@ -538,7 +538,6 @@ class FunctionKernel:
     async def get_tool_descriptions(self) -> str:
         """Returns a string description of all registered tools for prompts."""
         descriptions = [
-            "AVAILABLE TOOLS:",
             "Each tool call MUST be a valid JSON object matching the ToolCall structure.",
             "Example ToolCall (ensure all required 'args' are provided):",
             "```json",
