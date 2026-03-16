@@ -115,7 +115,6 @@ class PlanningAgent:
             )
 
             logger.info(f"Running iteration {iter_no} for task: {task}")
-            logger.info(f"System prompt: {system_prompt}")
 
             messages = [
                 {"role": "system", "content": system_prompt},
