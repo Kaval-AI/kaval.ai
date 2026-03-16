@@ -67,6 +67,8 @@ class PlanningAgent:
         response_model: Type[BaseModel] = BaseModel,
         streamer: Optional[Streamer] = None,
         temperature: Optional[float] = None,
+        stream_updates: bool = False,
+        stream_output: bool = False,
     ):
         self._kernel = kernel
         self._run_context = run_context
@@ -75,6 +77,8 @@ class PlanningAgent:
         self._response_model = response_model
         self._streamer = streamer
         self._temperature = temperature
+        self._stream_updates = stream_updates
+        self._stream_output = stream_output
         self._planner_context = {}
         self._step_outputs = []
 
@@ -121,7 +125,7 @@ class PlanningAgent:
 
             logger.info(f"Step {iter_no}: {step_output.short_explanation}")
 
-            if self._streamer:
+            if self._streamer and self._stream_updates:
                 await self._streamer.stream_complete(
                     step_output.short_explanation, name="running_task"
                 )
@@ -176,7 +180,7 @@ class PlanningAgent:
                             pass
 
             if step_output.output is not None:
-                if self._streamer:
+                if self._streamer and self._stream_output:
                     await self._streamer.stream_complete(
                         step_output.output.model_dump_json()
                     )

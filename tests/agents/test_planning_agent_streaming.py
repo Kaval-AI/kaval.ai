@@ -38,6 +38,8 @@ async def test_planning_agent_streaming():
         input_data=input_data,
         response_model=MockResponse,
         streamer=streamer,
+        stream_updates=True,
+        stream_output=True,
     )
 
     StepOutput = get_step_output_type(MockResponse)

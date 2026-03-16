@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, AsyncMock, patch
 import asyncio
+import json
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -1127,7 +1128,8 @@ tasks:
         type: context
         value: input.user_message
     output: output
-    stream: true
+    stream_updates: true
+    stream_output: true
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 
@@ -1217,7 +1219,8 @@ tasks:
         type: context
         value: input.user_message
     output: output
-    stream: true
+    stream_updates: true
+    stream_output: true
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 
@@ -1479,6 +1482,139 @@ class TestWorkflowPlanningAgent:
             assert kwargs["response_model"].__name__ == "StepOutput"
             # Verify default temperature from workflow_model (0.0)
             assert kwargs["temperature"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_run_planning_agent_streaming(self):
+        # 1. Setup Workflow Model with an AgentTask and streaming enabled
+        workflow_data = {
+            "name": "test_workflow",
+            "llm_model": "openai/test-model",
+            "data_types": {
+                "output": {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                },
+            },
+            "tasks": [
+                {
+                    "name": "planner_task",
+                    "type": "agent",
+                    "prompt": "Plan and solve this",
+                    "output": "output",
+                    "max_steps": 3,
+                    "stream_updates": True,
+                    "stream_output": True,
+                }
+            ],
+        }
+        workflow_model = WorkflowModel(**workflow_data)
+        workflow = Workflow(workflow_model)
+
+        # 2. Setup RunContext and Queue
+        run_context = RunContext()
+        queue = asyncio.Queue()
+        task = workflow_model.tasks[0]
+
+        # 3. Mock LLMClient and its response
+        StepOutput = get_step_output_type(self.MockOutput)
+        final_output = self.MockOutput(answer="Final result")
+        step_output = StepOutput(
+            short_explanation="Iteration 1",
+            long_explanation="Planning step",
+            step_number=0,
+            max_steps=3,
+            tool_calls=[],
+            output=final_output,
+        )
+
+        with patch("kavalai.agents.workflow.LLMClient") as MockLLMClient:
+            mock_client_instance = MockLLMClient.return_value
+            mock_client_instance.chat_completions = AsyncMock(
+                return_value=(step_output, {})
+            )
+
+            # 4. Run the planning agent task
+            await workflow.run_planning_agent(task, run_context, queue)
+
+            # 5. Check queue for streamed updates and output
+            streamed_items = []
+            while not queue.empty():
+                item_json = await queue.get()
+                streamed_items.append(json.loads(item_json))
+
+            # Expecting:
+            # 1. Update from loop in workflow.py (task name) if we ran via run()
+            # but we called run_planning_agent directly, so:
+            # - Iteration 1 (from PlanningAgent.run)
+            # - Final result (from PlanningAgent.run)
+
+            # Since we call run_planning_agent directly, it doesn't have the task loop from run()
+
+            assert any(
+                item["name"] == "running_task" and item["value"] == "Iteration 1"
+                for item in streamed_items
+            )
+            assert any(
+                item["name"] == "output"
+                and item["value"] == final_output.model_dump_json()
+                for item in streamed_items
+            )
+
+    @pytest.mark.asyncio
+    async def test_run_planning_agent_no_streaming(self):
+        # 1. Setup Workflow Model with an AgentTask and streaming disabled
+        workflow_data = {
+            "name": "test_workflow",
+            "llm_model": "openai/test-model",
+            "data_types": {
+                "output": {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                },
+            },
+            "tasks": [
+                {
+                    "name": "planner_task",
+                    "type": "agent",
+                    "prompt": "Plan and solve this",
+                    "output": "output",
+                    "max_steps": 3,
+                    "stream_updates": False,
+                    "stream_output": False,
+                }
+            ],
+        }
+        workflow_model = WorkflowModel(**workflow_data)
+        workflow = Workflow(workflow_model)
+
+        # 2. Setup RunContext and Queue
+        run_context = RunContext()
+        queue = asyncio.Queue()
+        task = workflow_model.tasks[0]
+
+        # 3. Mock LLMClient and its response
+        StepOutput = get_step_output_type(self.MockOutput)
+        final_output = self.MockOutput(answer="Final result")
+        step_output = StepOutput(
+            short_explanation="Iteration 1",
+            long_explanation="Planning step",
+            step_number=0,
+            max_steps=3,
+            tool_calls=[],
+            output=final_output,
+        )
+
+        with patch("kavalai.agents.workflow.LLMClient") as MockLLMClient:
+            mock_client_instance = MockLLMClient.return_value
+            mock_client_instance.chat_completions = AsyncMock(
+                return_value=(step_output, {})
+            )
+
+            # 4. Run the planning agent task
+            await workflow.run_planning_agent(task, run_context, queue)
+
+            # 5. Check queue (should be empty because streaming is disabled for this task)
+            assert queue.empty()
 
     @pytest.mark.asyncio
     async def test_run_planning_agent_with_custom_temperature(self):

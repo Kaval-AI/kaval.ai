@@ -75,6 +75,8 @@ class BaseTask(YamlModel):
     output: str | dict[str, TypeInputInfo] = ""
     when: Optional[dict] = None
     stop: bool = False
+    stream_updates: bool = False
+    stream_output: bool = False
 
     @model_validator(mode="after")
     def validate_conditions(self) -> "BaseTask":
@@ -112,7 +114,6 @@ class LLMTask(BaseTask):
     prompt: str
     temperature: Optional[float] = None
     use_history: bool = True
-    stream: bool = False
 
 
 class RestTask(BaseTask):
@@ -120,20 +121,17 @@ class RestTask(BaseTask):
     tool: str
     rest_server: str
     method: str = "get"
-    stream: bool = False
 
 
 class McpTask(BaseTask):
     type: Literal["mcp"] = "mcp"
     tool: str
     mcp_server: str
-    stream: bool = False
 
 
 class PythonTask(BaseTask):
     type: Literal["python"] = "python"
     python_tool: str
-    stream: bool = False
 
 
 class AgentTask(BaseTask):
@@ -144,12 +142,10 @@ class AgentTask(BaseTask):
     prompt: Optional[str] = None
     temperature: Optional[float] = None
     use_history: bool = False
-    stream: bool = False
 
 
 class CombineTask(BaseTask):
     type: Literal["combine"] = "combine"
-    stream: bool = False
 
 
 class RagQueryTask(BaseTask):
@@ -159,7 +155,6 @@ class RagQueryTask(BaseTask):
     collection_name: Optional[str] = None
     source_ids: Optional[list[str]] = None
     keep_best: bool = False
-    stream: bool = False
 
 
 Task = Annotated[

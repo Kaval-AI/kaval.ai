@@ -78,7 +78,8 @@ tasks:
         type: context
         value: input.user_message
     output: output
-    stream: true
+    stream_output: true
+    stream_updates: true
 """
     return Workflow.from_yaml(workflow_yaml)
 

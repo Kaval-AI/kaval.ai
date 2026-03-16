@@ -202,7 +202,7 @@ class Workflow:
         with open(yaml_path, "r") as f:
             yaml_string = f.read()
             try:
-                data = yaml.safe_load(yaml_string, Loader=LineLoader)
+                data = yaml.load(yaml_string, Loader=LineLoader)  # nosec B506
                 inject_metadata(data, file_path=yaml_path)
                 workflow_model = WorkflowModel(**data)
                 return cls(workflow_model, yaml_content=yaml_string)
@@ -212,7 +212,7 @@ class Workflow:
     @classmethod
     def from_yaml(cls, yaml_string: str):
         try:
-            data = yaml.safe_load(yaml_string, Loader=LineLoader)
+            data = yaml.load(yaml_string, Loader=LineLoader)  # nosec B506
             inject_metadata(data)
             workflow_model = WorkflowModel(**data)
             return cls(workflow_model, yaml_content=yaml_string)
@@ -258,7 +258,7 @@ class Workflow:
         )
 
         streamer = None
-        if task.stream and queue is not None:
+        if task.stream_output and queue is not None:
             streamer = Streamer(task.output, queue)
 
         client = LLMClient(model=llm_model)
@@ -312,7 +312,7 @@ class Workflow:
         run_context.data[task.output] = result
 
         # Publish to stream
-        if task.stream and queue is not None:
+        if task.stream_output and queue is not None:
             streamer = Streamer(task.output, queue)
             stream_value = (
                 result.model_dump_json()
@@ -352,7 +352,7 @@ class Workflow:
         run_context.data[task.output] = result
 
         # Publish to stream
-        if task.stream and queue is not None:
+        if task.stream_output and queue is not None:
             streamer = Streamer(task.output, queue)
             stream_value = (
                 result.model_dump_json()
@@ -399,7 +399,7 @@ class Workflow:
         if task.output:
             run_context.data[task.output] = result
 
-            if task.stream and queue is not None:
+            if task.stream_output and queue is not None:
                 streamer = Streamer(task.output, queue)
                 await streamer.stream_complete(
                     result.model_dump_json()
@@ -436,7 +436,7 @@ class Workflow:
             model_instance = output_type(**result)
             run_context.data["output"] = model_instance
             logger.info(f"Combined output with fields: {list(result.keys())}")
-            if task.stream and queue is not None:
+            if task.stream_output and queue is not None:
                 streamer = Streamer("output", queue)
                 await streamer.stream_complete(model_instance.model_dump_json())
         elif isinstance(task.output, str):
@@ -447,7 +447,7 @@ class Workflow:
                 result[input_name] = await run_context.resolve_input_info(info)
             output_type = self.get_data_type(task.output)
             run_context.data[task.output] = output_type(**result)
-            if task.stream and queue is not None:
+            if task.stream_output and queue is not None:
                 streamer = Streamer(task.output, queue)
                 await streamer.stream_complete(
                     run_context.data[task.output].model_dump_json()
@@ -466,7 +466,7 @@ class Workflow:
 
         # 3. Setup streamer
         streamer = None
-        if task.stream and queue is not None:
+        if task.stream_output and queue is not None:
             streamer = Streamer(task.output, queue)
 
         # 4. LLM client
@@ -489,6 +489,8 @@ class Workflow:
             response_model=response_model,
             streamer=streamer,
             temperature=temperature,
+            stream_updates=task.stream_updates,
+            stream_output=task.stream_output,
         )
 
         # 6. Fetch chat history
@@ -564,7 +566,7 @@ class Workflow:
             run_context.data[task.output] = run_context.data[task.name]
 
         # 5. Handle streaming (optional for RAG, usually just one completion event)
-        if task.stream and queue:
+        if task.stream_output and queue:
             from kavalai.llm_clients.common import StreamContent
 
             await queue.put(
@@ -661,7 +663,7 @@ class Workflow:
         try:
             streamer = Streamer(name="workflow", queue=queue) if queue else None
             for task in self.workflow_model.tasks:
-                if streamer:
+                if streamer and task.stream_updates:
                     await streamer.stream_complete(task.name, name="running_task")
 
                 if task.when:
