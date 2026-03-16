@@ -22,6 +22,7 @@ from sqlalchemy import select, asc
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, ModelCallStat
 from kavalai.agents.resolvers import resolve_path, find_key_recursive
+from kavalai.agents.workflow_model import to_plain
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,11 @@ class AgentService:
     ) -> Run:
         """Creates a new run entry for a specific session."""
         async with self.session_maker() as session:
-            run = Run(session_id=session_id, input_data=input_data, context=context)
+            run = Run(
+                session_id=session_id,
+                input_data=to_plain(input_data),
+                context=to_plain(context),
+            )
             session.add(run)
             await session.commit()
             await session.refresh(run)
@@ -125,9 +130,9 @@ class AgentService:
             if not run:
                 raise ValueError(f"Run not found: {run_id}")
             if output_data is not None:
-                run.output_data = output_data
+                run.output_data = to_plain(output_data)
             if context is not None:
-                run.context = context
+                run.context = to_plain(context)
             await session.commit()
             await session.refresh(run)
             return run
@@ -148,8 +153,8 @@ class AgentService:
                 session_id=session_id,
                 run_id=run_id,
                 name=name,
-                inputs=inputs,
-                output=output,
+                inputs=to_plain(inputs),
+                output=to_plain(output),
             )
             session.add(task)
             await session.commit()
