@@ -237,7 +237,9 @@ class Workflow:
                 info = info.model_copy(update={"value": name})
             input_data[name] = await run_context.resolve_input_info(info)
 
-        input_text = make_prompt(task.prompt, input_data)
+        # Render prompt with templates and context
+        rendered_prompt = await run_context.render_prompt(task.prompt)
+        input_text = make_prompt(rendered_prompt, input_data)
 
         system_message = dict(role="system", content=input_text)
         messages = [system_message]
@@ -501,8 +503,11 @@ class Workflow:
                 chat_history.append({"role": msg.role, "content": msg.content})
 
         # 7. Run PlanningAgent
+        rendered_prompt = (
+            await run_context.render_prompt(task.prompt) if task.prompt else None
+        )
         result = await planning_agent.run(
-            task=task.prompt,
+            task=rendered_prompt,
             chat_history=chat_history,
             max_iterations=task.max_steps,
         )
@@ -621,6 +626,7 @@ class Workflow:
 
         run_context = RunContext(agent_service=agent_service)
         run_context.data["input"] = parsed_input
+        run_context.templates = {t.name: t.value for t in self.workflow_model.templates}
 
         # 2. Initialize DB Context (Agent -> Session -> Run)
         if agent_service:

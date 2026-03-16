@@ -34,7 +34,10 @@ def resolve_path(obj: Any, path: str) -> Any:
             return None
 
         if part == "length":
-            return len(cur) if hasattr(cur, "__len__") else None
+            try:
+                return len(cur)
+            except (TypeError, AttributeError):
+                return None
 
         # index access for lists/tuples if the path segment is an int
         if isinstance(cur, (list, tuple)):
@@ -48,8 +51,10 @@ def resolve_path(obj: Any, path: str) -> Any:
             return None
 
         if isinstance(cur, dict):
-            cur = cur.get(part)
-            continue
+            if part in cur:
+                cur = cur[part]
+                continue
+            return None
 
         if isinstance(cur, BaseModel):
             # Prefer attribute access; pydantic v2 exposes fields directly
@@ -57,16 +62,22 @@ def resolve_path(obj: Any, path: str) -> Any:
                 cur = getattr(cur, part)
                 continue
             # As a fallback, try model_dump then dict access
-            dumped = cur.model_dump()
-            if part in dumped:
-                cur = dumped[part]
-                continue
+            try:
+                dumped = cur.model_dump()
+                if part in dumped:
+                    cur = dumped[part]
+                    continue
+            except Exception:
+                pass
             return None
 
         # generic attribute access on plain objects
         if hasattr(cur, part):
-            cur = getattr(cur, part)
-            continue
+            try:
+                cur = getattr(cur, part)
+                continue
+            except Exception:
+                pass
 
         return None
 

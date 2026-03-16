@@ -16,7 +16,8 @@ limitations under the License.
 
 import logging
 import operator
-from typing import Optional, Any
+import re
+from typing import Optional, Any, Dict
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -36,11 +37,74 @@ class RunContext(BaseModel):
     session_id: Optional[UUID] = None
     run_id: Optional[UUID] = None
     data: dict = {}
+    templates: Dict[str, str] = {}
     agent_service: Optional[Any] = None
 
     def resolve_context_value(self, path: str):
         """Resolve a dotted path like 'input.user_message' from context data."""
         return resolve_path(self.data, path)
+
+    async def resolve_history_value(self, path: str):
+        """Resolve a value from session history."""
+        if not self.agent_service or not self.session_id:
+            logger.warning(
+                "Cannot load from history: agent_service or session_id not set"
+            )
+            return None
+        return await self.agent_service.get_history_value(self.session_id, str(path))
+
+    async def resolve_template_value(self, name: str):
+        """Resolve a template value by name."""
+        return self.templates.get(name)
+
+    async def render_prompt(self, prompt: str) -> str:
+        """
+        Render a prompt string by replacing {{ templates.NAME }}, {{ context.PATH }},
+        and {{ history.PATH }} with their resolved values.
+        """
+        pattern = re.compile(r"\{\{\s*(templates|context|history)\.(.+?)\s*\}\}")
+
+        async def replace_match(match):
+            prefix = match.group(1)
+            path = match.group(2).strip()
+
+            if prefix == "templates":
+                val = await self.resolve_template_value(path)
+            elif prefix == "context":
+                val = self.resolve_context_value(path)
+            elif prefix == "history":
+                val = await self.resolve_history_value(path)
+            else:
+                val = None
+
+            if val is None:
+                return ""
+
+            if isinstance(val, (dict, list, BaseModel)):
+                from kavalai.agents.workflow_model import to_plain
+                import json
+
+                try:
+                    plain = to_plain(val)
+                    return json.dumps(plain, ensure_ascii=False)
+                except Exception as e:
+                    logger.warning(
+                        f"Error serializing template value {path}: {e}", exc_info=True
+                    )
+                    return str(val)
+
+            return str(val)
+
+        # Since re.sub doesn't support async, we do it manually
+        last_pos = 0
+        pieces = []
+        for match in pattern.finditer(prompt):
+            pieces.append(prompt[last_pos : match.start()])
+            pieces.append(await replace_match(match))
+            last_pos = match.end()
+        pieces.append(prompt[last_pos:])
+
+        return "".join(pieces)
 
     async def resolve_input_info(self, info: TypeInputInfo):
         """Resolve a TypeInputInfo to its actual value."""

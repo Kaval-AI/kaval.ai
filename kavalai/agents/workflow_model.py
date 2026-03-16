@@ -27,7 +27,17 @@ def to_plain(obj):
     if isinstance(obj, (datetime, UUID)):
         return str(obj)
     if isinstance(obj, dict):
-        return {k: to_plain(v) for k, v in obj.items()}
+        # Filter out internal attributes that might not be serializable or cause issues
+        res = {}
+        for k, v in obj.items():
+            try:
+                sk = str(k)
+                if sk.startswith("_") or sk == "metadata":
+                    continue
+                res[sk] = to_plain(v)
+            except Exception:
+                continue
+        return res
     if isinstance(obj, (list, tuple)):
         return [to_plain(v) for v in obj]
     return obj
@@ -229,6 +239,11 @@ class PythonFunction(YamlModel):
     path: str
 
 
+class TemplateModel(YamlModel):
+    name: str
+    value: str
+
+
 class WorkflowModel(YamlModel):
     name: str
     description: str = ""
@@ -239,6 +254,7 @@ class WorkflowModel(YamlModel):
     data_types: dict[str, dict]
     rest_servers: list[RestServer] = []
     mcp_servers: list[McpServer] = []
+    templates: list[TemplateModel] = []
     python_functions: list[PythonFunction] = []
     tasks: list[Task]
 
