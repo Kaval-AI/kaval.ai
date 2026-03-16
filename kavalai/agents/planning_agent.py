@@ -50,7 +50,7 @@ def get_step_output_type(ResponseModel=Type[BaseModel]):
             description="Add tool call requests here, their output will be stored in planner_context accessible with `call_id` key."
         )
         output: Optional[ResponseModel] = Field(
-            description="Leave output None if tool calls are given, this means output should be constructed in down-stream process."
+            description="Final output. If tool calls with call_id are used, you can leave fields with matching names empty in this model, and they will be automatically populated from planner_context."
         )
 
     return StepOutput
@@ -98,6 +98,9 @@ class PlanningAgent:
                 f"{await self._kernel.get_tool_descriptions()}\n\n"
                 f"Inputs:\n{self._input_data}\n\n"
                 f"Planner Context (tool results):\n{self._planner_context}\n\n"
+                "If you need to output a structured response, you can use `call_id` in your `tool_calls`. "
+                "The result of that tool call will be stored in `planner_context` and automatically copied "
+                "to the matching field in your final `output` if the field name matches the `call_id`.\n\n"
                 f"max_steps={max_iterations}\n\n"
                 f"Step Outputs (previous steps):\n{[so.model_dump() for so in self._step_outputs]}\n"
             )
@@ -180,6 +183,19 @@ class PlanningAgent:
                             pass
 
             if step_output.output is not None:
+                # Auto-persist from planner_context based on call_id matching
+                if hasattr(step_output.output, "model_validate"):
+                    try:
+                        # Create a dict from current output and update with planner_context
+                        output_dict = step_output.output.model_dump()
+                        for call_id, value in self._planner_context.items():
+                            if call_id in output_dict:
+                                output_dict[call_id] = value
+                        # Re-validate to catch type mismatches
+                        step_output.output = step_output.output.__class__(**output_dict)
+                    except Exception as e:
+                        logger.error(f"Failed to auto-persist to output: {e}")
+
                 if self._streamer and self._stream_output:
                     await self._streamer.stream_complete(
                         step_output.output.model_dump_json()
