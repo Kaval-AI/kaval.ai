@@ -4,7 +4,7 @@ import logging
 from unittest.mock import AsyncMock, MagicMock
 from pydantic import BaseModel, Field
 from kavalai.agents.planning_agent import PlanningAgent, ToolCall, get_step_output_type
-from kavalai.functionkernel import FunctionKernel
+from kavalai.functionkernel import FunctionKernel, pythontool
 from kavalai.agents.run_context import RunContext
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
@@ -625,3 +625,75 @@ async def test_planning_agent_tool_failure_handling():
     # Check if the error message was put into planner_context
     assert "c1" in agent._planner_context
     assert "Error: Validation error: field required" in agent._planner_context["c1"]
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_real_python_tool_gcd():
+    # Setup real FunctionKernel
+    kernel = FunctionKernel()
+
+    @pythontool
+    def compute_gcd(a: int, b: int) -> int:
+        """Compute the greatest common divisor of two integers."""
+        import math
+
+        return math.gcd(a, b)
+
+    kernel.register_python_tool("gcd_tool", compute_gcd)
+
+    run_context = MagicMock(spec=RunContext)
+    llm_client = MagicMock(spec=LLMClient)
+
+    input_data = {"val1": 48, "val2": 18}
+    task = "Compute GCD of 48 and 18"
+
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data=input_data,
+        response_model=MockResponse,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # First iteration: Call GCD tool
+    step1 = StepOutput(
+        short_explanation="Calculating GCD",
+        long_explanation="I will use the gcd_tool to compute the GCD of 48 and 18.",
+        step_number=0,
+        max_steps=2,
+        tool_calls=[
+            ToolCall(
+                name="python://gcd_tool",
+                call_id="gcd_result",
+                args='{"a": 48, "b": 18}',
+            )
+        ],
+        output=None,
+    )
+
+    # Second iteration: Final result (GCD of 48 and 18 is 6)
+    step2 = StepOutput(
+        short_explanation="GCD computed",
+        long_explanation="The GCD of 48 and 18 is 6.",
+        step_number=1,
+        max_steps=2,
+        tool_calls=[],
+        output=MockResponse(answer="The GCD is 6"),
+    )
+
+    llm_client.chat_completions.side_effect = [
+        (step1, {"stats": "step1"}),
+        (step2, {"stats": "step2"}),
+    ]
+
+    # Run agent
+    result = await agent.run(task=task, max_iterations=5)
+
+    # Assertions
+    assert isinstance(result, MockResponse)
+    assert result.answer == "The GCD is 6"
+    # FunctionKernel wraps primitive return values in a model with a 'result' field
+    assert agent._planner_context["gcd_result"].result == 6
+    assert llm_client.chat_completions.call_count == 2
