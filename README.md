@@ -10,6 +10,134 @@ Features:
 - Agent server REST API with authentication and streaming support.
 - Supports calling REST servers with basic authentication.
 
+## YAML Workflow Tutorial
+
+Kaval.AI workflows are defined in YAML. A workflow consists of metadata, data type definitions, server configurations, and a sequence of tasks.
+
+### Basic Structure
+
+```yaml
+name: My Agent
+description: A brief description of what this agent does.
+version: "1.0"
+temperature: 0.7  # Global LLM temperature (0.0 to 2.0)
+llm_model: openai/gpt-4o  # Optional: default LLM model
+embedding_model: openai/text-embedding-3-small # Default embedding model
+data_types:
+  input:
+    type: object
+    properties:
+      query: { type: string }
+  output:
+    type: object
+    properties:
+      answer: { type: string }
+tasks:
+  - name: My Task
+    type: llm
+    prompt: "Answer this: {{ input.query }}"
+    output: output
+```
+
+### Servers and Functions
+
+You can define external tools via REST, MCP, or Python functions.
+
+```yaml
+rest_servers:
+  - name: my_api
+    url: https://api.example.com
+    # Or use env vars: url_env: MY_API_URL
+
+mcp_servers:
+  - name: sqlite_mcp
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-sqlite", "--db", "test.db"]
+
+python_functions:
+  - name: my_custom_tool
+    path: my_module.my_function
+
+templates:
+  - name: greeting
+    value: "Hello, {{ name }}!"
+```
+
+### Task Types
+
+Kaval.AI supports several task types to build complex logic.
+
+#### 1. LLM Task (`type: llm`)
+Executes a prompt using an LLM.
+- `prompt`: The prompt to execute (supports Jinja2-like templates).
+- `use_history`: Whether to include chat history (default: `true`).
+
+#### 2. Planning Agent Task (`type: agent`)
+A multi-step agent that can use tools (REST, MCP, Python) to achieve a goal.
+- `max_steps`: Maximum number of iterations (default: `1`).
+- `auto_persist`: Automatically populate output fields from tool results matching `call_id` (default: `true`).
+
+Example with `auto_persist`:
+```yaml
+tasks:
+  - name: Research Task
+    type: agent
+    max_steps: 5
+    auto_persist: true
+    prompt: "Find the current stock price of AAPL and its 52-week high."
+    output: stock_report
+
+data_types:
+  stock_report:
+    type: object
+    properties:
+      current_price: { type: number }
+      high_52_week: { type: number }
+      summary: { type: string }
+```
+In this example, if the agent calls a tool with `call_id: current_price`, the result will be automatically placed into the `current_price` field of the `stock_report` output.
+
+#### 3. REST Task (`type: rest`)
+Calls a REST API endpoint.
+- `rest_server`: Name of the defined REST server.
+- `tool`: The endpoint path.
+- `method`: HTTP method (default: `get`).
+
+#### 4. MCP Task (`type: mcp`)
+Calls a tool from an MCP server.
+- `mcp_server`: Name of the defined MCP server.
+- `tool`: Tool name.
+
+#### 5. Python Task (`type: python`)
+Executes a registered Python function.
+- `python_tool`: Name of the defined Python function.
+
+#### 6. RAG Query Task (`type: rag_query`)
+Performs a semantic search in the RAG index.
+- `text`: The query text.
+- `top_k`: Number of results to return (default: `5`).
+
+#### 7. Combine Task (`type: combine`)
+Combines multiple inputs into a structured output without an LLM call.
+
+### Task Control & Context
+
+- `inputs`: Map of inputs for the task. Each input can be a `literal`, `context` (current run), or `history` (previous runs).
+- `when`: Conditional execution using operators like `eq`, `gt`, `contains`, `all`, `any`, etc.
+- `stream_updates`: Stream progress updates (e.g., thoughts).
+- `stream_output`: Stream the final task output.
+
+Example with conditions and inputs:
+```yaml
+  - name: Conditional Task
+    type: llm
+    when: { gt: ["{{ input.score }}", 0.5] }
+    inputs:
+      topic: { type: context, value: "previous_task_name.result_field" }
+    prompt: "Discuss {{ topic }}"
+    output: output
+```
+
 ## License
 Copyright 2026 OÜ KAVAL AI (registry code 17393877)
 
