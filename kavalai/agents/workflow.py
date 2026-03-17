@@ -549,6 +549,18 @@ class Workflow:
         run_context.data[task.name] = result
         run_context.data[task.output] = result
 
+        # 9. Record in DB
+        if self.agent_service and run_context.run_id:
+            await self.agent_service.add_task(
+                agent_id=run_context.agent_id,
+                session_id=run_context.session_id,
+                run_id=run_context.run_id,
+                name=task.name,
+                inputs=input_data,
+                output=to_plain(result),
+                duration_seconds=0.0,  # Duration not easily tracked for complex agent run
+            )
+
     async def run_rag_task(
         self,
         task: RagQueryTask,

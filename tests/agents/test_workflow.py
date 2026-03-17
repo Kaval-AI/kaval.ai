@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, AsyncMock, patch
 import asyncio
 import json
+from uuid import uuid4
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -18,6 +19,7 @@ from kavalai.agents.workflow_model import (
     RestServer,
     RestTask,
     TypeInputInfo,
+    to_plain,
 )
 
 
@@ -1465,11 +1467,24 @@ class TestWorkflowPlanningAgent:
             )
 
             # 4. Run the planning agent task
+            # Set up mock agent service to verify add_task call
+            mock_agent_service = AsyncMock(spec=AgentService)
+            workflow.agent_service = mock_agent_service
+            run_context.run_id = uuid4()
+            run_context.agent_id = uuid4()
+            run_context.session_id = uuid4()
+
             await workflow.run_planning_agent(task, run_context, None)
 
             # 5. Assertions
             assert run_context.data["planner_task"] == final_output
             assert run_context.data["output"] == final_output
+
+            # Verify add_task was called with the correct name
+            mock_agent_service.add_task.assert_called_once()
+            _, kwargs = mock_agent_service.add_task.call_args
+            assert kwargs["name"] == "planner_task"
+            assert kwargs["output"] == to_plain(final_output)
 
             # Verify LLMClient was initialized with the correct model
             MockLLMClient.assert_called_once_with(model="openai/test-model")

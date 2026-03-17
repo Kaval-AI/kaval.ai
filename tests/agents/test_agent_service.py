@@ -58,11 +58,13 @@ class TestAgentService:
             session_id=session.id,
             run_id=run.id,
             agent_id=agent.id,
+            name="TestTask",
             inputs={"query": "AI news"},
             output={"results": ["result1"]},
             duration_seconds=1.5,
         )
         assert task.run_id == run.id
+        assert task.name == "TestTask"
         assert task.output["results"] == ["result1"]
         assert task.duration_seconds == 1.5
 
