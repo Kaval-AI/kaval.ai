@@ -16,15 +16,9 @@ from kavalai.llm_clients.common import Streamer
 class ToolCall(BaseModel):
     """This data structure represents tool call requests."""
 
-    model_config = ConfigDict(extra="forbid")
-
     name: str = Field(description="Tool call name i.e python://mypackage.myfunc")
     call_id: Optional[str] = Field(
         description="Generate an ID, which represents this result in downstream agent runs."
-    )
-    args: str = Field(
-        default="{}",
-        description="Arguments for the tool call in JSON format.",
     )
     literal_args: Optional[dict] = Field(
         default=None,
@@ -36,7 +30,7 @@ class ToolCall(BaseModel):
     )
     input_args: Optional[dict] = Field(
         default=None,
-        description="Map of tool argument names to keys in input_data.",
+        description="Map of tool argument names to keys in #Inputs section.",
     )
     persist_to: Optional[str] = Field(
         default=None, description="Key to store in run_context.data"
@@ -56,10 +50,6 @@ def get_step_output_type(ResponseModel=Type[BaseModel]):
         long_explanation: str = Field(
             description="Add exaplanations or instructions for downstream LLM-calls.",
             max_length=500,
-        )
-        step_number: int = Field(description="Current iteration of planning agent.")
-        max_steps: int = Field(
-            description="If step_number == max_steps - 1, then you must output something, because agent will be terminated."
         )
         tool_calls: list[ToolCall] = Field(
             description="Add tool call requests here, their output will be stored in planner_context accessible with `call_id` key."
@@ -126,27 +116,6 @@ class PlanningAgent:
             # 3. Literal args
             if tool_call.literal_args:
                 args.update(tool_call.literal_args)
-
-            # 4. Handle deprecated 'args' string
-            if (
-                tool_call.args
-                and tool_call.args != "{}"
-                and not (
-                    tool_call.literal_args
-                    or tool_call.input_args
-                    or tool_call.planner_context_args
-                )
-            ):
-                deprecated_args = (
-                    json.loads(tool_call.args)
-                    if isinstance(tool_call.args, str)
-                    else tool_call.args
-                )
-                if isinstance(deprecated_args, dict):
-                    for key, value in deprecated_args.items():
-                        if isinstance(value, str) and value in self._planner_context:
-                            deprecated_args[key] = self._planner_context[value]
-                    args.update(deprecated_args)
         except Exception as e:
             logger.error(f"Failed to resolve tool args: {e}")
             args = {}
@@ -180,11 +149,11 @@ class PlanningAgent:
                 task.strip(),
                 "# Tool calling instructions:",
                 "Each tool call MUST be a valid JSON object matching the ToolCall structure with these fields:",
-                "- name (REQUIRED): The tool URI, e.g., 'python://mypackage.myfunc'",
-                "- literal_args (OPTIONAL): A dictionary of literal values to use as tool arguments.",
-                "- planner_context_args (OPTIONAL): A dictionary mapping tool argument names to keys in planner_context (results from previous tool calls).",
-                "- input_args (OPTIONAL): A dictionary mapping tool argument names to keys in the provided input_data.",
-                "- call_id (OPTIONAL): An identifier to reference this tool's result in LATER STEPS within planner_context. Use this when you need the result in subsequent planning iterations.",
+                "- name: The tool URI, e.g., 'python://mypackage.myfunc'",
+                "- literal_args: A dictionary of literal values to use as tool arguments.",
+                "- planner_context_args: A dictionary mapping tool argument names to keys in planner_context (results from previous tool calls).",
+                "- input_args: A dictionary mapping tool argument names to keys in the provided input_data.",
+                "- call_id: An identifier to reference this tool's result in LATER STEPS within planner_context. Use this when you need the result in subsequent planning iterations.",
                 "- persist_to (OPTIONAL): A key to permanently store the result in run_context.data. Use this when the result needs to be available OUTSIDE the planning agent (e.g., for other agents or final output).",
                 "",
                 "The tool arguments will be merged from literal_args, planner_context_args, and input_args. If the same argument is present in multiple places, the priority is: literal_args > planner_context_args > input_args.",
