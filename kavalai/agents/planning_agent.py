@@ -219,7 +219,7 @@ class PlanningAgent:
                     indent=2,
                 ),
             ]
-            system_prompt = "\n\n".join(prompt_parts)
+            system_prompt = "\n".join(prompt_parts)
 
             logger.info(f"Running iteration {iter_no} for task: {task}")
 
