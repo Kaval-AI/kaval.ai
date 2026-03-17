@@ -1,6 +1,7 @@
 import logging
 import pytest
 import asyncio
+import json
 from unittest.mock import AsyncMock, MagicMock
 from pydantic import BaseModel, Field
 from kavalai.agents.planning_agent import PlanningAgent, ToolCall, get_step_output_type
@@ -56,7 +57,13 @@ async def test_planning_agent_run_success():
     step1 = StepOutput(
         short_explanation="Step 1",
         long_explanation="Planning to call a tool",
-        tool_calls=[ToolCall(name="python://tool", call_id="call1", args={"a": 1})],
+        tool_calls=[
+            ToolCall(
+                name="python://tool",
+                call_id="call1",
+                literal_args=json.dumps({"a": 1}),
+            )
+        ],
         output=None,
     )
 
@@ -124,7 +131,7 @@ async def test_planning_agent_resolves_planner_context_references():
             ToolCall(
                 name="python://test_tool",
                 call_id="curr_call",
-                args={"data": "{{context.prev_call}}"},
+                planner_context_args=json.dumps({"data": "prev_call"}),
             )
         ],
         output=MockResponse(answer="Done"),
@@ -169,16 +176,14 @@ async def test_planning_agent_resolves_args_from_new_fields():
     # Step calling tool with various argument sources
     step1 = StepOutput(
         short_explanation="Testing new fields",
-        long_explanation="Using template strings for input and context",
+        long_explanation="Using new literal_args, input_args and planner_context_args fields",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
                 call_id="curr_call",
-                args={
-                    "literal_val": "Literal Value",
-                    "input_val": "{{input.user_name}}",
-                    "context_val": "{{context.prev_result}}",
-                },
+                literal_args=json.dumps({"literal_val": "Literal Value"}),
+                input_args=json.dumps({"input_val": "user_name"}),
+                planner_context_args=json.dumps({"context_val": "prev_result"}),
             )
         ],
         output=MockResponse(answer="Done"),
@@ -228,7 +233,7 @@ async def test_planning_agent_resolves_args_priority():
             ToolCall(
                 name="python://test_tool",
                 call_id="call1",
-                args={"val": "literal"},
+                literal_args=json.dumps({"val": "literal"}),
             )
         ],
         output=MockResponse(answer="Done"),
@@ -246,7 +251,7 @@ async def test_planning_agent_resolves_args_priority():
             ToolCall(
                 name="python://test_tool",
                 call_id="call2",
-                args={"val": "{{context.val_key}}"},
+                planner_context_args=json.dumps({"val": "val_key"}),
             )
         ],
         output=MockResponse(answer="Done"),
@@ -296,7 +301,7 @@ async def test_planning_agent_resolves_nested_args_from_planner_context():
             ToolCall(
                 name="python://test_tool",
                 call_id="curr_call",
-                args={"data": "{{context.prev_call}}"},
+                literal_args=json.dumps({"data": "{{context.prev_call}}"}),
             )
         ],
         output=MockResponse(answer="Done"),
@@ -432,7 +437,7 @@ async def test_planning_agent_persist_to():
             ToolCall(
                 name="python://test_tool",
                 call_id="c1",
-                args={},
+                literal_args="{}",
                 persist_to="my_key",
             )
         ],
@@ -492,7 +497,7 @@ async def test_planning_agent_tool_error_logging(caplog):
     step1 = StepOutput(
         short_explanation="Calling tool",
         long_explanation="I will call the tool",
-        tool_calls=[ToolCall(name="python://reorder", args={}, call_id="c1")],
+        tool_calls=[ToolCall(name="python://reorder", literal_args="{}", call_id="c1")],
         output=MockErrorResponse(result="done"),
     )
 
@@ -560,7 +565,11 @@ async def test_planning_agent_tool_args_parse_error_logging(caplog):
         short_explanation="Calling tool",
         long_explanation="I will call the tool",
         tool_calls=[
-            ToolCall(name="python://test", args={"invalid": "json"}, call_id="c1")
+            ToolCall(
+                name="python://test",
+                literal_args='{"invalid": "json"}',
+                call_id="c1",
+            )
         ],
         output=MockErrorResponse(result="done"),
     )
@@ -610,7 +619,7 @@ async def test_planning_agent_tool_failure_handling():
     step1 = StepOutput(
         short_explanation="Calling tool",
         long_explanation="Need to call a tool",
-        tool_calls=[ToolCall(name="python://fail", call_id="c1", args={})],
+        tool_calls=[ToolCall(name="python://fail", call_id="c1", literal_args="{}")],
         output=None,
     )
 
@@ -677,7 +686,7 @@ async def test_planning_agent_real_python_tool_gcd():
             ToolCall(
                 name="python://gcd_tool",
                 call_id="gcd_result",
-                args={"a": 48, "b": 18},
+                literal_args=json.dumps({"a": 48, "b": 18}),
             )
         ],
         output=None,
@@ -765,7 +774,7 @@ async def test_planning_agent_complex_nested_models():
             ToolCall(
                 name="python://complex_tool",
                 call_id="complex_result",
-                args=tool_args,
+                literal_args=json.dumps(tool_args),
             )
         ],
         output=None,

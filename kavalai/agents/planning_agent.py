@@ -21,9 +21,17 @@ class ToolCall(BaseModel):
     name: str = Field(
         description="Tool call name i.e python://websearch.serper_web_search"
     )
-    args: str = Field(
+    literal_args: str = Field(
         default="{}",
-        description="A JSON string of arguments for the tool call. Use template strings like {{context.key}} or {{input.key}} to reference data without copying it.",
+        description="Literal values to use as arguments for the tool call.",
+    )
+    planner_context_args: str = Field(
+        default="{}",
+        description="Map of tool argument names to keys in planner_context.",
+    )
+    input_args: str = Field(
+        default="{}",
+        description="Map of tool argument names to keys in input_data.",
     )
     call_id: Optional[str] = Field(
         default=None,
@@ -104,14 +112,48 @@ class PlanningAgent:
         """Resolves arguments and executes a single tool call."""
         duration = 0.0
 
-        # Parse args from JSON string
-        try:
-            args_dict = json.loads(tool_call.args)
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse args as JSON: {tool_call.args}")
-            args_dict = {}
+        def parse_json(field_name: str, value: str) -> dict:
+            if not value:
+                return {}
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse {field_name} as JSON: {value}")
+                return {}
 
-        args = self._resolve_template(args_dict)
+        literal_args = parse_json("literal_args", tool_call.literal_args)
+
+        planner_context_keys = parse_json(
+            "planner_context_args", tool_call.planner_context_args
+        )
+        planner_args = {
+            arg_name: self._planner_context.get(ctx_key)
+            for arg_name, ctx_key in planner_context_keys.items()
+        }
+
+        input_keys = parse_json("input_args", tool_call.input_args)
+
+        input_args = {
+            arg_name: self._input_data.get(input_key)
+            for arg_name, input_key in input_keys.items()
+        }
+
+        # Check for duplicate keys
+        all_keys = (
+            list(literal_args.keys())
+            + list(planner_args.keys())
+            + list(input_args.keys())
+        )
+        duplicates = {k for k in all_keys if all_keys.count(k) > 1}
+        if duplicates:
+            error_msg = f"Duplicate argument names found in ToolCall: {duplicates}"
+            logger.error(error_msg)
+            return tool_call, {}, f"Error: {error_msg}", 0.0
+
+        args = {**literal_args, **planner_args, **input_args}
+
+        # Still resolve templates in literal_args if any (backward compatibility or flexible usage)
+        args = self._resolve_template(args)
 
         logger.info(f"Calling tool {tool_call.name} with {args}")
         try:
@@ -141,16 +183,32 @@ class PlanningAgent:
                 "You are a planning agent. Your goal is to achieve the following task:",
                 task.strip(),
                 "# Tool calling instructions:",
-                "Use tools to fulfill the task."
-                "To call a tool, provide its name and arguments as a JSON string. Example:",
-                '{"name": "python://websearch.serper_web_search", "args": "{\\"query\\": \\"Kaval AI\\"}"}',
+                "Use tools to fulfill the task.",
+                "To call a tool, provide its name and arguments categorized by their source:",
+                "- `literal_args`: A JSON string of literal values for the tool.",
+                "- `planner_context_args`: A JSON string mapping tool argument names to keys in `planner_context` (results of previous tool calls).",
+                "- `input_args`: A JSON object mapping tool argument names to keys in the provided # Inputs.",
                 "",
-                "You can use template strings to reference data without copying it:",
-                "- {{ context.key }}: Reference a result from a previous tool call via call_id.",
-                "- {{ input.key }}: Reference data from the provided # Inputs section.",
+                "Example:",
+                "{",
+                '  "name": "python://websearch.serper_web_search",',
+                '  "literal_args": "{\\"query\\": \\"Kaval AI\\"}",',
+                '  "call_id": "search_result"',
+                "}",
                 "",
-                "Example with templates:",
-                '{"name": "python://data.process", "args": "{\\"raw_data\\": \\"{{ context.fetch_result }}\\", \\"user_id\\": \\"{{ input.user_id }}\\"}", "call_id": "processed_data"}',
+                "Example with context and inputs:",
+                "{",
+                '  "name": "python://data.process",',
+                '  "planner_context_args": "{\\"raw_data\\": \\"search_result\\"}",',
+                '  "input_args": {"user_id": "current_user_id"},',
+                '  "literal_args": "{\\"mode\\": \\"fast\\"}"',
+                "}",
+                "",
+                "IMPORTANT: An argument name must only appear in ONE of the categories. Duplicates will cause an error.",
+                "",
+                "You can still use template strings in `literal_args` if needed:",
+                "- {{context.key}}: Reference a result from a previous tool call via call_id.",
+                "- {{input.key}}: Reference data from the provided # Inputs section.",
                 "",
                 "# Available tools:",
                 await self._kernel.get_tool_descriptions(),
@@ -181,7 +239,6 @@ class PlanningAgent:
             system_prompt = "\n".join(prompt_parts)
 
             logger.info(f"Running iteration {iter_no} for task: {task}")
-            logger.info(f"System prompt:\n{system_prompt}")
 
             messages = [
                 {"role": "system", "content": system_prompt},
