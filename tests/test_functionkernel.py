@@ -771,24 +771,25 @@ async def test_tool_descriptions():
             await kernel._get_mcp_session("my_mcp")
 
             desc = await kernel.get_tool_descriptions()
+            tools = json.loads(desc)
 
-            assert "### python://math.add(a: int, b: int) -> int" in desc
-            assert "### rest://my_rest.<function_name>" in desc
-            assert "### mcp://my_mcp.list_files(path: str) -> Any" in desc
+            tool_names = [t["name"] for t in tools]
+            assert "python://math.add" in tool_names
+            assert "rest://my_rest.<function_name>" in tool_names
+            assert "mcp://my_mcp.list_files" in tool_names
 
-            # Verify concise format
-            assert "Input Model (Pydantic):" not in desc
-            # math.add has docstring "Adds two integers."
-            assert "### python://math.add(a: int, b: int) -> int" in desc
-            assert "Adds two integers." in desc
-            assert '"a": "int"' in desc
-            assert '"b": "int"' in desc
-            assert "Input Model (Pydantic):" not in desc
-            assert "Output Model (Pydantic):" not in desc
-            assert "class math.add_input(BaseModel):" not in desc
-            assert "class math.add_output(BaseModel):" not in desc
-            assert "Input JSON Schema" not in desc
-            assert "Output JSON Schema" not in desc
+            # Find math.add tool
+            math_add = next(t for t in tools if t["name"] == "python://math.add")
+            assert math_add["description"] == "Adds two integers."
+            assert "properties" in math_add["inputSchema"]
+            assert "a" in math_add["inputSchema"]["properties"]
+            assert math_add["inputSchema"]["properties"]["a"]["type"] == "integer"
+
+            # Verify concise format (no pydantic specific titles/types at top level)
+            assert "title" not in math_add["inputSchema"]
+            assert (
+                "type" not in math_add["inputSchema"]
+            )  # It should be inside properties, but not at root if we popped it
 
             # REST server descriptions mapping error
             kernel.register_rest_server(
@@ -803,13 +804,10 @@ async def test_tool_descriptions():
                 )
             }
             desc = await kernel.get_tool_descriptions()
-            # Signature for SimpleModel: name: str, value: int
-            # SimpleModel output model: name: str, value: int -> SimpleModel (since no 'result' field)
-            assert (
-                "### rest://bad_desc.tool [GET](name: str, value: int) -> SimpleModel"
-                in desc
-            )
-            assert "not-json" in desc
+            tools = json.loads(desc)
+            bad_tool = next(t for t in tools if "bad_desc.tool" in t["name"])
+            assert bad_tool["name"] == "rest://bad_desc.tool [GET]"
+            assert bad_tool["description"] == "not-json"
 
 
 @pytest.mark.asyncio
@@ -1009,15 +1007,18 @@ async def test_register_rest_tool(rest_server):
 
     # Verify descriptions
     descriptions = await kernel.get_tool_descriptions()
-    assert (
-        "### rest://test_server.get_item [GET](id: int) -> test_server_get_item_output"
-        in descriptions
+    tools = json.loads(descriptions)
+
+    get_item = next(
+        t for t in tools if t["name"] == "rest://test_server.get_item [GET]"
     )
-    assert "Get item by id" in descriptions
-    assert (
-        "rest://test_server.create_item [POST](name: str) -> test_server_create_item_output"
-        in descriptions
+    assert get_item["description"] == "Get item by id"
+    assert "id" in get_item["inputSchema"]["properties"]
+
+    create_item = next(
+        t for t in tools if t["name"] == "rest://test_server.create_item [POST]"
     )
+    assert "name" in create_item["inputSchema"]["properties"]
 
 
 @pytest.mark.asyncio
@@ -1051,24 +1052,18 @@ async def test_tool_descriptions_nested():
     kernel.register_python_tool("complex_tool", complex_tool)
 
     desc = await kernel.get_tool_descriptions()
+    tools = json.loads(desc)
+    complex_tool = next(t for t in tools if t["name"] == "python://complex_tool")
 
-    # Check for signature
-    assert (
-        "### python://complex_tool(name: str, nested: NestedInput) -> ComplexOutput"
-        in desc
-    )
+    # Check for description
+    assert complex_tool["description"] == "A tool with nested pydantic models."
 
     # Check for input schema expansion
-    assert '"name": "str"' in desc
-    assert '"nested": {' in desc
-    assert '"field_a": "str"' in desc
-    assert '"field_b": "int"' in desc
-
-    # Check for output schema expansion
-    assert "output schema:" in desc
-    assert '"code": "int"' in desc
-    assert '"data": {' in desc
-    assert '"success": "bool"' in desc
-    assert '"message": "str"' in desc
-
-    assert "A tool with nested pydantic models." in desc
+    schema = complex_tool["inputSchema"]
+    assert "properties" in schema
+    assert "name" in schema["properties"]
+    assert schema["properties"]["name"]["type"] == "string"
+    assert "nested" in schema["properties"]
+    assert "$ref" in schema["properties"]["nested"]
+    assert "$defs" in schema
+    assert "NestedInput" in schema["$defs"]

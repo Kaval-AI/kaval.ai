@@ -27,7 +27,7 @@ class MockErrorResponse(BaseModel):
 async def test_planning_agent_run_success():
     # Setup mocks
     kernel = MagicMock(spec=FunctionKernel)
-    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
+    kernel.get_tool_descriptions = AsyncMock(return_value="[]")
     kernel.call_tool = AsyncMock(return_value="Tool Result")
 
     run_context = RunContext()
@@ -56,9 +56,7 @@ async def test_planning_agent_run_success():
     step1 = StepOutput(
         short_explanation="Step 1",
         long_explanation="Planning to call a tool",
-        step_number=0,
-        max_steps=2,
-        tool_calls=[ToolCall(name="python://tool", call_id="call1", args='{"a": 1}')],
+        tool_calls=[ToolCall(name="python://tool", call_id="call1", args={"a": 1})],
         output=None,
     )
 
@@ -66,8 +64,6 @@ async def test_planning_agent_run_success():
     step2 = StepOutput(
         short_explanation="Step 2",
         long_explanation="Finished",
-        step_number=1,
-        max_steps=2,
         tool_calls=[],
         output=MockResponse(answer="Final Answer"),
     )
@@ -124,13 +120,11 @@ async def test_planning_agent_resolves_planner_context_references():
     step1 = StepOutput(
         short_explanation="Calling tool",
         long_explanation="Using reference",
-        step_number=0,
-        max_steps=1,
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
                 call_id="curr_call",
-                args='{"data": "prev_call"}',
+                args={"data": "{{context.prev_call}}"},
             )
         ],
         output=MockResponse(answer="Done"),
@@ -175,16 +169,16 @@ async def test_planning_agent_resolves_args_from_new_fields():
     # Step calling tool with various argument sources
     step1 = StepOutput(
         short_explanation="Testing new fields",
-        long_explanation="Using literal_args, input_args, and planner_context_args",
-        step_number=0,
-        max_steps=1,
+        long_explanation="Using template strings for input and context",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
                 call_id="curr_call",
-                literal_args={"literal_val": "Literal Value"},
-                input_args={"input_val": "user_name"},
-                planner_context_args={"context_val": "prev_result"},
+                args={
+                    "literal_val": "Literal Value",
+                    "input_val": "{{input.user_name}}",
+                    "context_val": "{{context.prev_result}}",
+                },
             )
         ],
         output=MockResponse(answer="Done"),
@@ -226,19 +220,15 @@ async def test_planning_agent_resolves_args_priority():
 
     StepOutput = get_step_output_type(MockResponse)
 
-    # Test literal > context > input
+    # Test literal
     step1 = StepOutput(
         short_explanation="Testing priority",
-        long_explanation="Literal should win",
-        step_number=0,
-        max_steps=1,
+        long_explanation="Literal",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
                 call_id="call1",
-                literal_args={"val": "literal"},
-                input_args={"val": "val_key"},
-                planner_context_args={"val": "val_key"},
+                args={"val": "literal"},
             )
         ],
         output=MockResponse(answer="Done"),
@@ -248,18 +238,15 @@ async def test_planning_agent_resolves_args_priority():
     await agent.run(task="task", max_iterations=1)
     assert agent._planner_context["call1"].result == "literal"
 
-    # Test context > input
+    # Test context resolution
     step2 = StepOutput(
         short_explanation="Testing priority",
-        long_explanation="Context should win",
-        step_number=0,
-        max_steps=1,
+        long_explanation="Context resolution",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
                 call_id="call2",
-                input_args={"val": "val_key"},
-                planner_context_args={"val": "val_key"},
+                args={"val": "{{context.val_key}}"},
             )
         ],
         output=MockResponse(answer="Done"),
@@ -301,17 +288,15 @@ async def test_planning_agent_resolves_nested_args_from_planner_context():
     nested_result = NestedModel(val="target")
     agent._planner_context["prev_call"] = nested_result
 
-    # Step calling tool with reference to 'prev_call' via planner_context_args
+    # Step calling tool with reference to 'prev_call' via template string
     step1 = StepOutput(
         short_explanation="Calling tool",
         long_explanation="Using reference",
-        step_number=0,
-        max_steps=1,
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
                 call_id="curr_call",
-                planner_context_args={"data": "prev_call"},
+                args={"data": "{{context.prev_call}}"},
             )
         ],
         output=MockResponse(answer="Done"),
@@ -327,7 +312,7 @@ async def test_planning_agent_resolves_nested_args_from_planner_context():
 @pytest.mark.asyncio
 async def test_planning_agent_max_iterations():
     kernel = MagicMock(spec=FunctionKernel)
-    kernel.get_tool_descriptions = AsyncMock(return_value="")
+    kernel.get_tool_descriptions = AsyncMock(return_value="[]")
     run_context = MagicMock(spec=RunContext)
     llm_client = MagicMock(spec=LLMClient)
 
@@ -343,8 +328,6 @@ async def test_planning_agent_max_iterations():
     step = StepOutput(
         short_explanation="Wait",
         long_explanation="Waiting...",
-        step_number=0,
-        max_steps=10,
         tool_calls=[],
         output=None,
     )
@@ -361,7 +344,7 @@ async def test_planning_agent_max_iterations():
 async def test_planning_agent_streaming():
     # Setup mocks
     kernel = MagicMock(spec=FunctionKernel)
-    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
+    kernel.get_tool_descriptions = AsyncMock(return_value="[]")
 
     run_context = MagicMock(spec=RunContext)
     llm_client = MagicMock(spec=LLMClient)
@@ -393,8 +376,6 @@ async def test_planning_agent_streaming():
     step = StepOutput(
         short_explanation="Done",
         long_explanation="Finished the task",
-        step_number=0,
-        max_steps=1,
         tool_calls=[],
         output=final_output,
     )
@@ -424,7 +405,7 @@ async def test_planning_agent_streaming():
 async def test_planning_agent_persist_to():
     # Setup mocks
     kernel = MagicMock(spec=FunctionKernel)
-    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
+    kernel.get_tool_descriptions = AsyncMock(return_value="[]")
     kernel.call_tool = AsyncMock(return_value="PERSISTED_VALUE")
 
     run_context = RunContext(data={})
@@ -447,13 +428,11 @@ async def test_planning_agent_persist_to():
     step1 = StepOutput(
         short_explanation="Calling tool",
         long_explanation="I will call the tool to get some data and persist it",
-        step_number=0,
-        max_steps=2,
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
                 call_id="c1",
-                args="{}",
+                args={},
                 persist_to="my_key",
             )
         ],
@@ -464,8 +443,6 @@ async def test_planning_agent_persist_to():
     step2 = StepOutput(
         short_explanation="Returning result",
         long_explanation="I am returning the result",
-        step_number=1,
-        max_steps=2,
         tool_calls=[],
         output=MockPersistenceResponse(tool_result="done", other_field="ok"),
     )
@@ -490,7 +467,7 @@ async def test_planning_agent_persist_to():
 async def test_planning_agent_tool_error_logging(caplog):
     # Setup mocks
     kernel = MagicMock(spec=FunctionKernel)
-    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
+    kernel.get_tool_descriptions = AsyncMock(return_value="[]")
 
     # Simulate a tool failure
     kernel.call_tool = AsyncMock(
@@ -515,9 +492,7 @@ async def test_planning_agent_tool_error_logging(caplog):
     step1 = StepOutput(
         short_explanation="Calling tool",
         long_explanation="I will call the tool",
-        step_number=0,
-        max_steps=1,
-        tool_calls=[ToolCall(name="python://reorder", args="{}", call_id="c1")],
+        tool_calls=[ToolCall(name="python://reorder", args={}, call_id="c1")],
         output=MockErrorResponse(result="done"),
     )
 
@@ -550,7 +525,7 @@ async def test_planning_agent_tool_error_logging(caplog):
 async def test_planning_agent_tool_args_parse_error_logging(caplog):
     # Setup mocks
     kernel = MagicMock(spec=FunctionKernel)
-    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
+    kernel.get_tool_descriptions = AsyncMock(return_value="[]")
 
     run_context = MagicMock(spec=RunContext)
     llm_client = MagicMock(spec=LLMClient)
@@ -565,14 +540,27 @@ async def test_planning_agent_tool_args_parse_error_logging(caplog):
 
     StepOutput = get_step_output_type(MockErrorResponse)
 
-    # Tool call with invalid JSON in args string
+    # Simulate a tool failure
+    kernel.call_tool = AsyncMock(side_effect=Exception("Tool failed"))
+
+    run_context = MagicMock(spec=RunContext)
+    llm_client = MagicMock(spec=LLMClient)
+
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data={},
+        response_model=MockErrorResponse,
+    )
+
+    StepOutput = get_step_output_type(MockErrorResponse)
+
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="I will call the tool with invalid args",
-        step_number=0,
-        max_steps=1,
+        long_explanation="I will call the tool",
         tool_calls=[
-            ToolCall(name="python://test", args='{"invalid": json}', call_id="c1")
+            ToolCall(name="python://test", args={"invalid": "json"}, call_id="c1")
         ],
         output=MockErrorResponse(result="done"),
     )
@@ -582,14 +570,13 @@ async def test_planning_agent_tool_args_parse_error_logging(caplog):
     ]
 
     # Set log level
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.ERROR):
         await agent.run(task="test", max_iterations=1)
 
     error_logs = [
         record.message
         for record in caplog.records
-        if record.levelname == "ERROR"
-        and "Failed to resolve tool args" in record.message
+        if record.levelname == "ERROR" and "Tool python://test failed" in record.message
     ]
 
     assert len(error_logs) > 0
@@ -599,7 +586,7 @@ async def test_planning_agent_tool_args_parse_error_logging(caplog):
 async def test_planning_agent_tool_failure_handling():
     # Setup mocks
     kernel = MagicMock(spec=FunctionKernel)
-    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
+    kernel.get_tool_descriptions = AsyncMock(return_value="[]")
 
     # Mock tool call failure
     kernel.call_tool = AsyncMock(
@@ -623,9 +610,7 @@ async def test_planning_agent_tool_failure_handling():
     step1 = StepOutput(
         short_explanation="Calling tool",
         long_explanation="Need to call a tool",
-        step_number=0,
-        max_steps=2,
-        tool_calls=[ToolCall(name="python://fail", call_id="c1", args="{}")],
+        tool_calls=[ToolCall(name="python://fail", call_id="c1", args={})],
         output=None,
     )
 
@@ -634,8 +619,6 @@ async def test_planning_agent_tool_failure_handling():
     step2 = StepOutput(
         short_explanation="Done",
         long_explanation="Finished the task",
-        step_number=1,
-        max_steps=2,
         tool_calls=[],
         output=final_output,
     )
@@ -690,13 +673,11 @@ async def test_planning_agent_real_python_tool_gcd():
     step1 = StepOutput(
         short_explanation="Calculating GCD",
         long_explanation="I will use the gcd_tool to compute the GCD of 48 and 18.",
-        step_number=0,
-        max_steps=2,
         tool_calls=[
             ToolCall(
                 name="python://gcd_tool",
                 call_id="gcd_result",
-                args='{"a": 48, "b": 18}',
+                args={"a": 48, "b": 18},
             )
         ],
         output=None,
@@ -706,8 +687,6 @@ async def test_planning_agent_real_python_tool_gcd():
     step2 = StepOutput(
         short_explanation="GCD computed",
         long_explanation="The GCD of 48 and 18 is 6.",
-        step_number=1,
-        max_steps=2,
         tool_calls=[],
         output=MockResponse(answer="The GCD is 6"),
     )
@@ -778,12 +757,10 @@ async def test_planning_agent_complex_nested_models():
     StepOutput = get_step_output_type(MockResponse)
 
     # First iteration: Call complex tool
-    tool_args = '{"name": "Junie", "nested": {"field_a": "test", "field_b": 42}}'
+    tool_args = {"name": "Junie", "nested": {"field_a": "test", "field_b": 42}}
     step1 = StepOutput(
         short_explanation="Calling complex tool",
         long_explanation="I will call the complex tool with nested data.",
-        step_number=0,
-        max_steps=2,
         tool_calls=[
             ToolCall(
                 name="python://complex_tool",
@@ -798,8 +775,6 @@ async def test_planning_agent_complex_nested_models():
     step2 = StepOutput(
         short_explanation="Done",
         long_explanation="The complex tool returned a nested response.",
-        step_number=1,
-        max_steps=2,
         tool_calls=[],
         output=MockResponse(answer="Success"),
     )

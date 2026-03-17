@@ -543,87 +543,31 @@ class FunctionKernel:
         return result
 
     async def get_tool_descriptions(self) -> str:
-        """Returns a string description of all registered tools for prompts."""
-        descriptions = []
+        """Returns a string description of all registered tools as a JSON array for prompts."""
+        tools_list = []
 
-        def _get_concise_schema(
-            model: Type[BaseModel], label: str = "input schema:"
-        ) -> str:
-            def _get_type_info(annotation: Any) -> Any:
-                if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-                    return {
-                        field_name: _get_type_info(field.annotation)
-                        for field_name, field in annotation.model_fields.items()
-                    }
-                if hasattr(annotation, "__name__"):
-                    return annotation.__name__
-                res = str(annotation)
-                if res.startswith("typing."):
-                    res = res[7:]
-                return res
+        def _get_input_schema(model: Type[BaseModel]) -> Dict[str, Any]:
+            schema_dict = model.model_json_schema()
+            # Remove pydantic-specific keys to keep it cleaner for LLM
+            schema_dict.pop("title", None)
+            schema_dict.pop("type", None)
+            return schema_dict
 
-            schema_dict = {
-                field_name: _get_type_info(field.annotation)
-                for field_name, field in model.model_fields.items()
-            }
-            return f"{label}\n{json.dumps(schema_dict, indent=2)}"
-
-        def _get_signature_parts(model: Type[BaseModel]) -> str:
-            params = []
-            for field_name, field in model.model_fields.items():
-                annotation = field.annotation
-                if hasattr(annotation, "__name__"):
-                    type_name = annotation.__name__
-                else:
-                    type_name = str(annotation)
-                params.append(f"{field_name}: {type_name}")
-            return ", ".join(params)
-
-        def _get_return_type(model: Type[BaseModel]) -> str:
-            # For our tools, output models often have a 'result' field
-            if "result" in model.model_fields:
-                field = model.model_fields["result"]
-                annotation = field.annotation
-                if hasattr(annotation, "__name__"):
-                    return annotation.__name__
-                # If it's a typing type like List[int] or Any, str(annotation) might be 'typing.Any'
-                # Let's try to be a bit smarter or just use the string
-                res = str(annotation)
-                if res.startswith("typing."):
-                    res = res[7:]
-                return res
-            # If no 'result' field, it might be a custom model
-            return model.__name__
-
-        def _format_tool(
-            uri: str,
-            description: str,
-            input_model: Type[BaseModel],
-            output_model: Type[BaseModel],
-        ) -> str:
-            signature = _get_signature_parts(input_model)
-            return_type = _get_return_type(output_model)
-
-            tool_desc = f"### {uri}({signature}) -> {return_type}\n"
-            tool_desc += _get_concise_schema(input_model, "input schema:") + "\n"
-
-            # If the output model is not a simple wrapper (i.e. it doesn't just have 'result')
-            # and it's a custom model, show its schema too.
-            if "result" not in output_model.model_fields:
-                tool_desc += _get_concise_schema(output_model, "output schema:") + "\n"
-
-            tool_desc += f"{description}\n"
-            return tool_desc
+        def _add_tool(name: str, description: str, input_model: Type[BaseModel]):
+            tools_list.append(
+                {
+                    "name": name,
+                    "description": description,
+                    "inputSchema": _get_input_schema(input_model),
+                }
+            )
 
         # Python tools
         for name, definition in self.python_tool_definitions.items():
-            descriptions.append(
-                _format_tool(
-                    f"python://{name}",
-                    definition.description,
-                    definition.input_model,
-                    definition.output_model,
-                )
+            _add_tool(
+                f"python://{name}",
+                definition.description,
+                definition.input_model,
             )
 
         # REST tools
@@ -638,35 +582,41 @@ class FunctionKernel:
                 except Exception:
                     pass
 
-                descriptions.append(
-                    _format_tool(
-                        f"rest://{server_name}.{tool_name} [{method}]",
-                        description_text,
-                        definition.input_model,
-                        definition.output_model,
-                    )
+                _add_tool(
+                    f"rest://{server_name}.{tool_name} [{method}]",
+                    description_text,
+                    definition.input_model,
                 )
 
         # REST servers - list those without specific tools registered
         for name in self.rest_servers.keys():
             if name not in self.rest_tool_definitions:
-                descriptions.append(f"### rest://{name}.<function_name>\n")
+                tools_list.append(
+                    {
+                        "name": f"rest://{name}.<function_name>",
+                        "description": f"Dynamic REST call to {name} server",
+                        "inputSchema": {"type": "object", "properties": {}},
+                    }
+                )
 
         # MCP tools
         for server_name, tools in self.mcp_tool_definitions.items():
             for tool_name, definition in tools.items():
-                descriptions.append(
-                    _format_tool(
-                        f"mcp://{server_name}.{tool_name}",
-                        definition.description or "",
-                        definition.input_model,
-                        definition.output_model,
-                    )
+                _add_tool(
+                    f"mcp://{server_name}.{tool_name}",
+                    definition.description or "",
+                    definition.input_model,
                 )
 
         # Also list servers that might not have tools fetched yet
         for name in self.mcp_servers.keys():
             if name not in self.mcp_tool_definitions:
-                descriptions.append(f"### mcp://{name}.<tools_not_yet_loaded>\n")
+                tools_list.append(
+                    {
+                        "name": f"mcp://{name}.<tools_not_yet_loaded>",
+                        "description": f"Dynamic MCP call to {name} server",
+                        "inputSchema": {"type": "object", "properties": {}},
+                    }
+                )
 
-        return "\n".join(descriptions).strip()
+        return json.dumps(tools_list, indent=2)

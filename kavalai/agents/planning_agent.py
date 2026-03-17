@@ -16,21 +16,19 @@ from kavalai.llm_clients.common import Streamer
 class ToolCall(BaseModel):
     """This data structure represents tool call requests."""
 
-    name: str = Field(description="Tool call name i.e python://mypackage.myfunc")
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        description="Tool call name i.e python://websearch.serper_web_search"
+    )
+    args: dict = Field(
+        default_factory=dict,
+        description="A dictionary of arguments for the tool call. Use template strings like {{context.key}} or {{input.key}} to reference data without copying it.",
+        json_schema_extra={"additionalProperties": False},
+    )
     call_id: Optional[str] = Field(
-        description="Generate an ID, which represents this result in downstream agent runs."
-    )
-    literal_args: Optional[dict] = Field(
         default=None,
-        description="Literal values to use as arguments for the tool call.",
-    )
-    planner_context_args: Optional[dict] = Field(
-        default=None,
-        description="Map of tool argument names to keys in planner_context.",
-    )
-    input_args: Optional[dict] = Field(
-        default=None,
-        description="Map of tool argument names to keys in #Inputs section.",
+        description="Generate an ID, which represents this result in downstream agent runs.",
     )
     persist_to: Optional[str] = Field(
         default=None, description="Key to store in run_context.data"
@@ -89,36 +87,27 @@ class PlanningAgent:
         self._planner_context = {}
         self._step_outputs = []
 
+    def _resolve_template(self, value: any) -> any:
+        """Resolves template strings like {{context.key}} or {{input.key}}."""
+        if isinstance(value, str):
+            if value.startswith("{{context.") and value.endswith("}}"):
+                key = value[10:-2].strip()
+                return self._planner_context.get(key, value)
+            elif value.startswith("{{input.") and value.endswith("}}"):
+                key = value[8:-2].strip()
+                return self._input_data.get(key, value)
+        elif isinstance(value, dict):
+            return {k: self._resolve_template(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [self._resolve_template(v) for v in value]
+        return value
+
     async def _call_tool(
         self, tool_call: ToolCall
     ) -> tuple[ToolCall, dict, any, float]:
         """Resolves arguments and executes a single tool call."""
         duration = 0.0
-        try:
-            # Initialize args from various sources
-            args = {}
-
-            # 1. Input args
-            if tool_call.input_args:
-                for arg_name, input_key in tool_call.input_args.items():
-                    if input_key in self._input_data:
-                        args[arg_name] = self._input_data[input_key]
-
-            # 2. Planner context args
-            if tool_call.planner_context_args:
-                for (
-                    arg_name,
-                    context_key,
-                ) in tool_call.planner_context_args.items():
-                    if context_key in self._planner_context:
-                        args[arg_name] = self._planner_context[context_key]
-
-            # 3. Literal args
-            if tool_call.literal_args:
-                args.update(tool_call.literal_args)
-        except Exception as e:
-            logger.error(f"Failed to resolve tool args: {e}")
-            args = {}
+        args = self._resolve_template(tool_call.args)
 
         logger.info(f"Calling tool {tool_call.name} with {args}")
         try:
@@ -148,23 +137,16 @@ class PlanningAgent:
                 "You are a planning agent. Your goal is to achieve the following task:",
                 task.strip(),
                 "# Tool calling instructions:",
-                "Each tool call MUST be a valid JSON object matching the ToolCall structure with these fields:",
-                "- name: The tool URI, e.g., 'python://mypackage.myfunc'",
-                "- literal_args: A dictionary of literal values to use as tool arguments.",
-                "- planner_context_args: A dictionary mapping tool argument names to keys in planner_context (results from previous tool calls).",
-                "- input_args: A dictionary mapping tool argument names to keys in the provided input_data.",
-                "- call_id: An identifier to reference this tool's result in LATER STEPS within planner_context. Use this when you need the result in subsequent planning iterations.",
-                "- persist_to (OPTIONAL): A key to permanently store the result in run_context.data. Use this when the result needs to be available OUTSIDE the planning agent (e.g., for other agents or final output).",
+                "Use tools to fulfill the task."
+                "To call a tool, provide its name and arguments as a dict. Example:",
+                '{"name": "python://websearch.serper_web_search", "args": {"query": "Kaval AI"}}',
                 "",
-                "The tool arguments will be merged from literal_args, planner_context_args, and input_args. If the same argument is present in multiple places, the priority is: literal_args > planner_context_args > input_args.",
+                "You can use template strings to reference data without copying it:",
+                "- {{ context.key }}: Reference a result from a previous tool call via call_id.",
+                "- {{ input.key }}: Reference data from the provided # Inputs section.",
                 "",
-                "IMPORTANT: Use call_id for intermediate results needed in later planning steps. Use persist_to for results that should persist beyond planning.",
-                "",
-                "Examples:",
-                '1. Using literal values: {"name": "python://mypackage.myfunc", "literal_args": {"param1": "value1", "param2": 10}}',
-                '2. Using planner_context: {"name": "python://data.process", "planner_context_args": {"raw_data": "fetch_result_id"}, "call_id": "processed_data"}',
-                '3. Using input_data: {"name": "python://user.notify", "input_args": {"email": "user_email_key"}, "literal_args": {"template": "welcome"}}',
-                '4. With persist_to: {"name": "python://report.generate", "persist_to": "final_report", "literal_args": {"format": "pdf"}}',
+                "Example with templates:",
+                '{"name": "python://data.process", "args": {"raw_data": "{{ context.fetch_result }}", "user_id": "{{ input.user_id }}"}, "call_id": "processed_data"}',
                 "",
                 "# Available tools:",
                 await self._kernel.get_tool_descriptions(),
@@ -178,7 +160,11 @@ class PlanningAgent:
                     },
                     indent=2,
                 ),
+                "",
+                "PLanning data",
+                f"current_step={iter_no}",
                 f"max_steps={max_iterations}",
+                "",
                 "Step Outputs (previous steps):",
                 json.dumps(
                     [
@@ -191,6 +177,7 @@ class PlanningAgent:
             system_prompt = "\n".join(prompt_parts)
 
             logger.info(f"Running iteration {iter_no} for task: {task}")
+            logger.info(f"System prompt:\n{system_prompt}")
 
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -219,6 +206,7 @@ class PlanningAgent:
                     logger.error(f"Failed to store LLM stats: {e}")
 
             logger.info(f"Step {iter_no}: {step_output.short_explanation}")
+            logger.info(f"Tool calls {iter_no}: {step_output.tool_calls}")
 
             if self._streamer and self._stream_updates:
                 await self._streamer.stream_complete(
