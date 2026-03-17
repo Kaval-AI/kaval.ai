@@ -100,6 +100,12 @@ async def test_planning_agent_run_success():
         output="Tool Result",
     )
 
+    # Verify agent_service.add_model_call_stats was called for both iterations
+    assert run_context.agent_service.add_model_call_stats.call_count == 2
+    run_context.agent_service.add_model_call_stats.assert_any_await(
+        stats={"stats": "dummy"}, agent_id=run_context.agent_id
+    )
+
 
 @pytest.mark.asyncio
 async def test_planning_agent_max_iterations():

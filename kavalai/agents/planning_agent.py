@@ -157,6 +157,15 @@ class PlanningAgent:
             step_output: StepOutput = result
             self._step_outputs.append(step_output)
 
+            agent_service = getattr(self._run_context, "agent_service", None)
+            if agent_service:
+                try:
+                    await agent_service.add_model_call_stats(
+                        stats=stats, agent_id=self._run_context.agent_id
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to store LLM stats: {e}")
+
             logger.info(f"Step {iter_no}: {step_output.short_explanation}")
 
             if self._streamer and self._stream_updates:
@@ -201,7 +210,7 @@ class PlanningAgent:
                         self._run_context.data[tool_call.persist_to] = tool_result
 
                     agent_service = getattr(self._run_context, "agent_service", None)
-                    if agent_service and hasattr(agent_service, "add_task"):
+                    if agent_service:
                         try:
                             await agent_service.add_task(
                                 agent_id=self._run_context.agent_id,

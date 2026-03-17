@@ -281,9 +281,9 @@ class Workflow:
             temperature=temperature,
         )
         if self.agent_service:
-            async with self.agent_service.session_maker() as session:
-                session.add(stats)
-                await session.commit()
+            await self.agent_service.add_model_call_stats(
+                stats=stats, agent_id=run_context.agent_id
+            )
 
         logger.info(f"Setting {task.output} = {response}")
         run_context.data[task.output] = response

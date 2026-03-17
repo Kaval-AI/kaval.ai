@@ -161,6 +161,18 @@ class AgentService:
             await session.refresh(task)
             return task
 
+    async def add_model_call_stats(
+        self, stats: ModelCallStat, agent_id: Optional[UUID] = None
+    ) -> ModelCallStat:
+        """Records LLM/Embedding call statistics."""
+        async with self.session_maker() as session:
+            if agent_id:
+                stats.agent_id = agent_id
+            session.add(stats)
+            await session.commit()
+            await session.refresh(stats)
+            return stats
+
     async def get_history_value(self, session_id: UUID, key: str) -> Optional[Any]:
         """
         Retrieves a value from the context of previous runs in the same session.
