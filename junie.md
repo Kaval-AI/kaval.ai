@@ -105,6 +105,8 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `app/V000__agents.sql`: Initial schema for agents, sessions, runs, tasks, and chat messages.
     - `app/V001__model_call_stats.sql`: Defines `model_call_stats` for unified tracking of LLM and embedding calls.
     - `app/V002__rag.sql`: Defines `rag_index` (with `embedding` VECTOR, `collection_name`, and `source_id`).
+    - `app/V003__task_name.sql`: Adds `name` to `tasks` table.
+    - `app/V004__task_duration.sql`: Adds `duration_seconds` to `tasks` table.
     - `backoffice/V000__users__projects.sql`: Initial schema for users, projects, and project memberships.
     - `backoffice/V001__project_details.sql`: Adds database connection details to projects.
     - `backoffice/V002__active_project.sql`: Adds `active_project_id` to users.

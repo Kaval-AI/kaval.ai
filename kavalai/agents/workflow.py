@@ -21,6 +21,7 @@ from uuid import UUID
 import yaml
 from environs import Env
 from pydantic import BaseModel, ValidationError
+import time
 
 from kavalai.agents.workflow_model import (
     WorkflowModel,
@@ -272,12 +273,14 @@ class Workflow:
             streamer = Streamer(task.output, queue)
 
         client = LLMClient(model=llm_model)
+        start_time = time.perf_counter()
         response, stats = await client.chat_completions(
             response_model=self.get_data_type(task.output),
             messages=messages,
             streamer=streamer,
             temperature=temperature,
         )
+        duration = time.perf_counter() - start_time
         if self.agent_service:
             await self.agent_service.add_model_call_stats(
                 stats=stats, agent_id=run_context.agent_id
@@ -296,6 +299,7 @@ class Workflow:
                 output=response.model_dump()
                 if isinstance(response, BaseModel)
                 else {"result": response},
+                duration_seconds=duration,
             )
 
     async def run_rest_tool(
@@ -310,12 +314,14 @@ class Workflow:
         tool_uri = f"rest://{task.rest_server}.{task.tool}"
         output_type = self.get_data_type(task.output)
 
+        start_time = time.perf_counter()
         result = await self.kernel.call_tool(
             tool_uri=tool_uri,
             arguments=inputs,
             output_type=output_type,
             method=task.method,
         )
+        duration = time.perf_counter() - start_time
 
         debug_data = str(result)[:50]
         logger.info(f"Setting {task.output} = {debug_data}")
@@ -340,6 +346,7 @@ class Workflow:
                 name=task.name,
                 inputs={"tool": task.tool, "arguments": inputs},
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
+                duration_seconds=duration,
             )
 
     async def run_mcp_tool(
@@ -351,11 +358,13 @@ class Workflow:
         tool_uri = f"mcp://{task.mcp_server}.{task.tool}"
         output_type = self.get_data_type(task.output)
 
+        start_time = time.perf_counter()
         result = await self.kernel.call_tool(
             tool_uri=tool_uri,
             arguments=inputs,
             output_type=output_type,
         )
+        duration = time.perf_counter() - start_time
 
         debug_data = str(result)[:50]
         logger.info(f"Setting {task.output} = {debug_data}")
@@ -384,6 +393,7 @@ class Workflow:
                     "arguments": inputs,
                 },
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
+                duration_seconds=duration,
             )
 
     async def run_python_tool(
@@ -400,11 +410,13 @@ class Workflow:
         tool_uri = f"python://{task.python_tool}"
         output_type = self.get_data_type(task.output) if task.output else None
 
+        start_time = time.perf_counter()
         result = await self.kernel.call_tool(
             tool_uri=tool_uri,
             arguments=inputs,
             output_type=output_type,
         )
+        duration = time.perf_counter() - start_time
 
         if task.output:
             run_context.data[task.output] = result
@@ -429,6 +441,7 @@ class Workflow:
                     "arguments": inputs,
                 },
                 output=to_plain(result),
+                duration_seconds=duration,
             )
 
     async def run_combine(
@@ -568,6 +581,7 @@ class Workflow:
             rag_service = RagService.from_session_maker(
                 self.agent_service.session_maker, model
             )
+            start_time = time.perf_counter()
             results = await rag_service.query(
                 text=text,
                 top_k=task.top_k,
@@ -575,6 +589,7 @@ class Workflow:
                 source_ids=task.source_ids,
                 keep_best=task.keep_best,
             )
+            duration = time.perf_counter() - start_time
 
             # 3. Store results in run_context.data (only similarity, content, and source_id)
             run_context.data[task.name] = [
@@ -617,6 +632,7 @@ class Workflow:
                     "collection_name": task.collection_name,
                 },
                 output=run_context.data[task.name],
+                duration_seconds=duration,
             )
 
     async def run(

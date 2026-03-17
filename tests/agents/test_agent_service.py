@@ -60,9 +60,11 @@ class TestAgentService:
             agent_id=agent.id,
             inputs={"query": "AI news"},
             output={"results": ["result1"]},
+            duration_seconds=1.5,
         )
         assert task.run_id == run.id
         assert task.output["results"] == ["result1"]
+        assert task.duration_seconds == 1.5
 
     async def test_chat_history_retrieval(self, agents_session_maker):
         service = AgentService(agents_session_maker)

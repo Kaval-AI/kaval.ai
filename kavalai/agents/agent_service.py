@@ -142,6 +142,7 @@ class AgentService:
         agent_id: Optional[UUID] = None,
         inputs: Optional[Dict] = None,
         output: Optional[Dict] = None,
+        duration_seconds: Optional[float] = None,
     ) -> Task:
         """Records a specific unit of work (Task) performed within a run."""
         async with self.session_maker() as session:
@@ -152,6 +153,7 @@ class AgentService:
                 name=name,
                 inputs=to_plain(inputs),
                 output=to_plain(output),
+                duration_seconds=duration_seconds,
             )
             session.add(task)
             await session.commit()

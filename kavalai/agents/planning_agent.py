@@ -1,6 +1,7 @@
 import asyncio
 from loguru import logger
 import json
+import time
 from typing import Type, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -98,8 +99,11 @@ class PlanningAgent:
         self._planner_context = {}
         self._step_outputs = []
 
-    async def _call_tool(self, tool_call: ToolCall) -> tuple[ToolCall, dict, any]:
+    async def _call_tool(
+        self, tool_call: ToolCall
+    ) -> tuple[ToolCall, dict, any, float]:
         """Resolves arguments and executes a single tool call."""
+        duration = 0.0
         try:
             # Initialize args from various sources
             args = {}
@@ -149,15 +153,17 @@ class PlanningAgent:
 
         logger.info(f"Calling tool {tool_call.name} with {args}")
         try:
+            start_time = time.perf_counter()
             tool_result = await self._kernel.call_tool(
                 tool_uri=tool_call.name,
                 arguments=args,
             )
+            duration = time.perf_counter() - start_time
         except Exception as e:
             logger.error(f"Tool {tool_call.name} failed: {e}")
             tool_result = f"Error: {e}"
 
-        return tool_call, args, tool_result
+        return tool_call, args, tool_result, duration
 
     async def run(
         self, task: str, chat_history: list[dict] = None, max_iterations: int = 10
@@ -255,7 +261,7 @@ class PlanningAgent:
                     *[self._call_tool(tc) for tc in step_output.tool_calls]
                 )
 
-                for tool_call, args, tool_result in results:
+                for tool_call, args, tool_result, duration in results:
                     if tool_call.call_id:
                         self._planner_context[tool_call.call_id] = tool_result
 
@@ -271,6 +277,7 @@ class PlanningAgent:
                                 name=tool_call.name,
                                 inputs={"arguments": args},
                                 output=tool_result,
+                                duration_seconds=duration,
                             )
                         except Exception as e:
                             logger.error(f"Failed to record task in agent_service: {e}")
