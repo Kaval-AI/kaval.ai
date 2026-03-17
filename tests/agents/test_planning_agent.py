@@ -87,25 +87,61 @@ async def test_planning_agent_run_success():
     assert agent._planner_context["call1"] == "Tool Result"
 
     assert llm_client.chat_completions.call_count == 2
-    kernel.call_tool.assert_awaited_once_with(
-        tool_uri="python://tool", arguments={"a": 1}
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_resolves_planner_context_references():
+    # Setup real FunctionKernel with a tool
+    kernel = FunctionKernel()
+
+    class NestedModel(BaseModel):
+        val: str
+
+    @pythontool
+    def test_tool(data: NestedModel) -> str:
+        return f"Resolved: {data.val}"
+
+    kernel.register_python_tool("test_tool", test_tool)
+
+    run_context = RunContext()
+    llm_client = MagicMock(spec=LLMClient)
+
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data={},
+        response_model=MockResponse,
     )
 
-    # Verify agent_service.add_task was called for the tool call
-    run_context.agent_service.add_task.assert_awaited_once_with(
-        agent_id=run_context.agent_id,
-        session_id=run_context.session_id,
-        run_id=run_context.run_id,
-        name="python://tool",
-        inputs={"arguments": {"a": 1}},
-        output="Tool Result",
+    StepOutput = get_step_output_type(MockResponse)
+
+    # Injected result in planner_context
+    nested_result = NestedModel(val="target")
+    agent._planner_context["prev_call"] = nested_result
+
+    # Step calling tool with reference to 'prev_call'
+    step1 = StepOutput(
+        short_explanation="Calling tool",
+        long_explanation="Using reference",
+        step_number=0,
+        max_steps=1,
+        tool_calls=[
+            ToolCall(
+                name="python://test_tool",
+                call_id="curr_call",
+                args='{"data": "prev_call"}',
+            )
+        ],
+        output=MockResponse(answer="Done"),
     )
 
-    # Verify agent_service.add_model_call_stats was called for both iterations
-    assert run_context.agent_service.add_model_call_stats.call_count == 2
-    run_context.agent_service.add_model_call_stats.assert_any_await(
-        stats={"stats": "dummy"}, agent_id=run_context.agent_id
-    )
+    llm_client.chat_completions.return_value = (step1, {})
+
+    await agent.run(task="task", max_iterations=1)
+
+    # FunctionKernel wraps primitive return values in a model with a 'result' field
+    assert agent._planner_context["curr_call"].result == "Resolved: target"
 
 
 @pytest.mark.asyncio

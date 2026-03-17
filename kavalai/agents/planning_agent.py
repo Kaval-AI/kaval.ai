@@ -182,6 +182,15 @@ class PlanningAgent:
                             if isinstance(tool_call.args, str)
                             else tool_call.args
                         )
+
+                        # Resolve call_id references from planner_context
+                        if isinstance(args, dict):
+                            for key, value in args.items():
+                                if (
+                                    isinstance(value, str)
+                                    and value in self._planner_context
+                                ):
+                                    args[key] = self._planner_context[value]
                     except Exception as e:
                         logger.error(f"Failed to parse tool args: {e}")
                         args = {}
