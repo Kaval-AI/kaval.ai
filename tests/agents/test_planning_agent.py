@@ -145,6 +145,186 @@ async def test_planning_agent_resolves_planner_context_references():
 
 
 @pytest.mark.asyncio
+async def test_planning_agent_resolves_args_from_new_fields():
+    # Setup real FunctionKernel with a tool
+    kernel = FunctionKernel()
+
+    @pythontool
+    def test_tool(literal_val: str, input_val: str, context_val: str) -> str:
+        return f"Literal: {literal_val}, Input: {input_val}, Context: {context_val}"
+
+    kernel.register_python_tool("test_tool", test_tool)
+
+    run_context = RunContext()
+    llm_client = MagicMock(spec=LLMClient)
+
+    input_data = {"user_name": "Alice"}
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data=input_data,
+        response_model=MockResponse,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # Injected result in planner_context
+    agent._planner_context["prev_result"] = "Previous Result"
+
+    # Step calling tool with various argument sources
+    step1 = StepOutput(
+        short_explanation="Testing new fields",
+        long_explanation="Using literal_args, input_args, and planner_context_args",
+        step_number=0,
+        max_steps=1,
+        tool_calls=[
+            ToolCall(
+                name="python://test_tool",
+                call_id="curr_call",
+                literal_args={"literal_val": "Literal Value"},
+                input_args={"input_val": "user_name"},
+                planner_context_args={"context_val": "prev_result"},
+            )
+        ],
+        output=MockResponse(answer="Done"),
+    )
+
+    llm_client.chat_completions.return_value = (step1, {})
+
+    await agent.run(task="task", max_iterations=1)
+
+    assert (
+        agent._planner_context["curr_call"].result
+        == "Literal: Literal Value, Input: Alice, Context: Previous Result"
+    )
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_resolves_args_priority():
+    kernel = FunctionKernel()
+
+    @pythontool
+    def test_tool(val: str) -> str:
+        return val
+
+    kernel.register_python_tool("test_tool", test_tool)
+
+    run_context = RunContext()
+    llm_client = MagicMock(spec=LLMClient)
+
+    # All sources have 'val'
+    input_data = {"val_key": "input"}
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data=input_data,
+        response_model=MockResponse,
+    )
+    agent._planner_context["val_key"] = "context"
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # Test literal > context > input
+    step1 = StepOutput(
+        short_explanation="Testing priority",
+        long_explanation="Literal should win",
+        step_number=0,
+        max_steps=1,
+        tool_calls=[
+            ToolCall(
+                name="python://test_tool",
+                call_id="call1",
+                literal_args={"val": "literal"},
+                input_args={"val": "val_key"},
+                planner_context_args={"val": "val_key"},
+            )
+        ],
+        output=MockResponse(answer="Done"),
+    )
+
+    llm_client.chat_completions.return_value = (step1, {})
+    await agent.run(task="task", max_iterations=1)
+    assert agent._planner_context["call1"].result == "literal"
+
+    # Test context > input
+    step2 = StepOutput(
+        short_explanation="Testing priority",
+        long_explanation="Context should win",
+        step_number=0,
+        max_steps=1,
+        tool_calls=[
+            ToolCall(
+                name="python://test_tool",
+                call_id="call2",
+                input_args={"val": "val_key"},
+                planner_context_args={"val": "val_key"},
+            )
+        ],
+        output=MockResponse(answer="Done"),
+    )
+
+    llm_client.chat_completions.side_effect = [(step2, {})]
+    await agent.run(task="task", max_iterations=1)
+    assert agent._planner_context["call2"].result == "context"
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_resolves_nested_args_from_planner_context():
+    # Setup real FunctionKernel with a tool
+    kernel = FunctionKernel()
+
+    class NestedModel(BaseModel):
+        val: str
+
+    @pythontool
+    def test_tool(data: NestedModel) -> str:
+        return f"Resolved: {data.val}"
+
+    kernel.register_python_tool("test_tool", test_tool)
+
+    run_context = RunContext()
+    llm_client = MagicMock(spec=LLMClient)
+
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data={},
+        response_model=MockResponse,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # Injected result in planner_context
+    nested_result = NestedModel(val="target")
+    agent._planner_context["prev_call"] = nested_result
+
+    # Step calling tool with reference to 'prev_call' via planner_context_args
+    step1 = StepOutput(
+        short_explanation="Calling tool",
+        long_explanation="Using reference",
+        step_number=0,
+        max_steps=1,
+        tool_calls=[
+            ToolCall(
+                name="python://test_tool",
+                call_id="curr_call",
+                planner_context_args={"data": "prev_call"},
+            )
+        ],
+        output=MockResponse(answer="Done"),
+    )
+
+    llm_client.chat_completions.return_value = (step1, {})
+
+    await agent.run(task="task", max_iterations=1)
+
+    assert agent._planner_context["curr_call"].result == "Resolved: target"
+
+
+@pytest.mark.asyncio
 async def test_planning_agent_max_iterations():
     kernel = MagicMock(spec=FunctionKernel)
     kernel.get_tool_descriptions = AsyncMock(return_value="")
@@ -408,7 +588,8 @@ async def test_planning_agent_tool_args_parse_error_logging(caplog):
     error_logs = [
         record.message
         for record in caplog.records
-        if record.levelname == "ERROR" and "Failed to parse tool args" in record.message
+        if record.levelname == "ERROR"
+        and "Failed to resolve tool args" in record.message
     ]
 
     assert len(error_logs) > 0

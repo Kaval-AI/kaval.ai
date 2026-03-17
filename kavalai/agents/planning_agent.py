@@ -25,6 +25,18 @@ class ToolCall(BaseModel):
         default="{}",
         description="Arguments for the tool call in JSON format.",
     )
+    literal_args: Optional[dict] = Field(
+        default=None,
+        description="Literal values to use as arguments for the tool call.",
+    )
+    planner_context_args: Optional[dict] = Field(
+        default=None,
+        description="Map of tool argument names to keys in planner_context.",
+    )
+    input_args: Optional[dict] = Field(
+        default=None,
+        description="Map of tool argument names to keys in input_data.",
+    )
     persist_to: Optional[str] = Field(
         default=None, description="Key to store in run_context.data"
     )
@@ -86,6 +98,67 @@ class PlanningAgent:
         self._planner_context = {}
         self._step_outputs = []
 
+    async def _call_tool(self, tool_call: ToolCall) -> tuple[ToolCall, dict, any]:
+        """Resolves arguments and executes a single tool call."""
+        try:
+            # Initialize args from various sources
+            args = {}
+
+            # 1. Input args
+            if tool_call.input_args:
+                for arg_name, input_key in tool_call.input_args.items():
+                    if input_key in self._input_data:
+                        args[arg_name] = self._input_data[input_key]
+
+            # 2. Planner context args
+            if tool_call.planner_context_args:
+                for (
+                    arg_name,
+                    context_key,
+                ) in tool_call.planner_context_args.items():
+                    if context_key in self._planner_context:
+                        args[arg_name] = self._planner_context[context_key]
+
+            # 3. Literal args
+            if tool_call.literal_args:
+                args.update(tool_call.literal_args)
+
+            # 4. Handle deprecated 'args' string
+            if (
+                tool_call.args
+                and tool_call.args != "{}"
+                and not (
+                    tool_call.literal_args
+                    or tool_call.input_args
+                    or tool_call.planner_context_args
+                )
+            ):
+                deprecated_args = (
+                    json.loads(tool_call.args)
+                    if isinstance(tool_call.args, str)
+                    else tool_call.args
+                )
+                if isinstance(deprecated_args, dict):
+                    for key, value in deprecated_args.items():
+                        if isinstance(value, str) and value in self._planner_context:
+                            deprecated_args[key] = self._planner_context[value]
+                    args.update(deprecated_args)
+        except Exception as e:
+            logger.error(f"Failed to resolve tool args: {e}")
+            args = {}
+
+        logger.info(f"Calling tool {tool_call.name} with {args}")
+        try:
+            tool_result = await self._kernel.call_tool(
+                tool_uri=tool_call.name,
+                arguments=args,
+            )
+        except Exception as e:
+            logger.error(f"Tool {tool_call.name} failed: {e}")
+            tool_result = f"Error: {e}"
+
+        return tool_call, args, tool_result
+
     async def run(
         self, task: str, chat_history: list[dict] = None, max_iterations: int = 10
     ):
@@ -102,17 +175,21 @@ class PlanningAgent:
                 "# Tool calling instructions:",
                 "Each tool call MUST be a valid JSON object matching the ToolCall structure with these fields:",
                 "- name (REQUIRED): The tool URI, e.g., 'python://mypackage.myfunc'",
-                "- args (REQUIRED): A JSON string containing all required arguments for the tool",
+                "- literal_args (OPTIONAL): A dictionary of literal values to use as tool arguments.",
+                "- planner_context_args (OPTIONAL): A dictionary mapping tool argument names to keys in planner_context (results from previous tool calls).",
+                "- input_args (OPTIONAL): A dictionary mapping tool argument names to keys in the provided input_data.",
                 "- call_id (OPTIONAL): An identifier to reference this tool's result in LATER STEPS within planner_context. Use this when you need the result in subsequent planning iterations.",
                 "- persist_to (OPTIONAL): A key to permanently store the result in run_context.data. Use this when the result needs to be available OUTSIDE the planning agent (e.g., for other agents or final output).",
+                "",
+                "The tool arguments will be merged from literal_args, planner_context_args, and input_args. If the same argument is present in multiple places, the priority is: literal_args > planner_context_args > input_args.",
                 "",
                 "IMPORTANT: Use call_id for intermediate results needed in later planning steps. Use persist_to for results that should persist beyond planning.",
                 "",
                 "Examples:",
-                '1. Basic tool call: {"name": "python://mypackage.myfunc", "args": "{\\"param1\\": \\"value1\\", \\"param2\\": 10}"}',
-                '2. With call_id (for reuse in later steps): {"name": "python://data.fetch", "call_id": "user_data", "args": "{\\"user_id\\": 123}"}',
-                '3. With persist_to (for final persistence): {"name": "python://report.generate", "persist_to": "final_report", "args": "{\\"format\\": \\"pdf\\"}"}',
-                '4. With both (reuse AND persist): {"name": "python://analysis.run", "call_id": "analysis_result", "persist_to": "analysis_output", "args": "{}"}',
+                '1. Using literal values: {"name": "python://mypackage.myfunc", "literal_args": {"param1": "value1", "param2": 10}}',
+                '2. Using planner_context: {"name": "python://data.process", "planner_context_args": {"raw_data": "fetch_result_id"}, "call_id": "processed_data"}',
+                '3. Using input_data: {"name": "python://user.notify", "input_args": {"email": "user_email_key"}, "literal_args": {"template": "welcome"}}',
+                '4. With persist_to: {"name": "python://report.generate", "persist_to": "final_report", "literal_args": {"format": "pdf"}}',
                 "",
                 "# Available tools:",
                 await self._kernel.get_tool_descriptions(),
@@ -174,41 +251,8 @@ class PlanningAgent:
                 )
 
             if step_output.tool_calls:
-
-                async def _call_tool(tool_call):
-                    try:
-                        args = (
-                            json.loads(tool_call.args)
-                            if isinstance(tool_call.args, str)
-                            else tool_call.args
-                        )
-
-                        # Resolve call_id references from planner_context
-                        if isinstance(args, dict):
-                            for key, value in args.items():
-                                if (
-                                    isinstance(value, str)
-                                    and value in self._planner_context
-                                ):
-                                    args[key] = self._planner_context[value]
-                    except Exception as e:
-                        logger.error(f"Failed to parse tool args: {e}")
-                        args = {}
-
-                    logger.info(f"Calling tool {tool_call.name} with {args}")
-                    try:
-                        tool_result = await self._kernel.call_tool(
-                            tool_uri=tool_call.name,
-                            arguments=args,
-                        )
-                    except Exception as e:
-                        logger.error(f"Tool {tool_call.name} failed: {e}")
-                        tool_result = f"Error: {e}"
-
-                    return tool_call, args, tool_result
-
                 results = await asyncio.gather(
-                    *[_call_tool(tc) for tc in step_output.tool_calls]
+                    *[self._call_tool(tc) for tc in step_output.tool_calls]
                 )
 
                 for tool_call, args, tool_result in results:
