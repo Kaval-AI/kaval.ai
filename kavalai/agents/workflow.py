@@ -497,6 +497,7 @@ class Workflow:
             llm_client=llm_client,
             input_data=input_data,
             response_model=response_model,
+            agent_service=self.agent_service,
             streamer=streamer,
             temperature=temperature,
             stream_updates=task.stream_updates,

@@ -6,6 +6,7 @@ from typing import Type, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from kavalai.agents.run_context import RunContext
+from kavalai.agents.agent_service import AgentService
 from kavalai.functionkernel import FunctionKernel
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
@@ -66,6 +67,7 @@ class PlanningAgent:
         llm_client: LLMClient,
         input_data: dict[str, dict],
         response_model: Type[BaseModel] = BaseModel,
+        agent_service: Optional[AgentService] = None,
         streamer: Optional[Streamer] = None,
         temperature: Optional[float] = None,
         stream_updates: bool = False,
@@ -76,6 +78,7 @@ class PlanningAgent:
         self._llm_client = llm_client
         self._input_data = input_data
         self._response_model = response_model
+        self._agent_service = agent_service
         self._streamer = streamer
         self._temperature = temperature
         self._stream_updates = stream_updates
@@ -155,10 +158,9 @@ class PlanningAgent:
             step_output: StepOutput = result
             self._step_outputs.append(step_output)
 
-            agent_service = getattr(self._run_context, "agent_service", None)
-            if agent_service:
+            if self._agent_service:
                 try:
-                    await agent_service.add_model_call_stats(
+                    await self._agent_service.add_model_call_stats(
                         stats=stats, agent_id=self._run_context.agent_id
                     )
                 except Exception as e:
@@ -207,10 +209,9 @@ class PlanningAgent:
                     if tool_call.persist_to:
                         self._run_context.data[tool_call.persist_to] = tool_result
 
-                    agent_service = getattr(self._run_context, "agent_service", None)
-                    if agent_service:
+                    if self._agent_service:
                         try:
-                            await agent_service.add_task(
+                            await self._agent_service.add_task(
                                 agent_id=self._run_context.agent_id,
                                 session_id=self._run_context.session_id,
                                 run_id=self._run_context.run_id,

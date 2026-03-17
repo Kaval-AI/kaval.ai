@@ -30,7 +30,7 @@ async def test_planning_agent_run_success():
     kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
     kernel.call_tool = AsyncMock(return_value="Tool Result")
 
-    run_context = MagicMock(spec=RunContext)
+    run_context = RunContext()
     run_context.agent_id = "agent-id"
     run_context.session_id = "session-id"
     run_context.run_id = "run-id"
@@ -47,6 +47,7 @@ async def test_planning_agent_run_success():
         llm_client=llm_client,
         input_data=input_data,
         response_model=MockResponse,
+        agent_service=run_context.agent_service,
     )
 
     StepOutput = get_step_output_type(MockResponse)
@@ -450,7 +451,8 @@ async def test_planning_agent_real_python_tool_gcd():
 
     kernel.register_python_tool("gcd_tool", compute_gcd)
 
-    run_context = MagicMock(spec=RunContext)
+    run_context = RunContext()
+    run_context.agent_service = AsyncMock()
     llm_client = MagicMock(spec=LLMClient)
 
     input_data = {"val1": 48, "val2": 18}
@@ -462,6 +464,7 @@ async def test_planning_agent_real_python_tool_gcd():
         llm_client=llm_client,
         input_data=input_data,
         response_model=MockResponse,
+        agent_service=run_context.agent_service,
     )
 
     StepOutput = get_step_output_type(MockResponse)
