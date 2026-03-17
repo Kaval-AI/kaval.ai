@@ -170,7 +170,11 @@ class PlanningAgent:
         return tool_call, args, tool_result, duration
 
     async def run(
-        self, task: str, chat_history: list[dict] = None, max_iterations: int = 10
+        self,
+        task_name: str,
+        task: str,
+        chat_history: list[dict] = None,
+        max_iterations: int = 10,
     ):
         if chat_history is None:
             chat_history = []
@@ -238,7 +242,7 @@ class PlanningAgent:
             ]
             system_prompt = "\n".join(prompt_parts)
 
-            logger.info(f"Running iteration {iter_no} for task: {task}")
+            logger.info(f"Running iteration {iter_no} for task: {task_name}")
 
             messages = [
                 {"role": "system", "content": system_prompt},

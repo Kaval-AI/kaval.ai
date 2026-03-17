@@ -81,7 +81,7 @@ async def test_planning_agent_run_success():
     ]
 
     # Run agent
-    result = await agent.run(task=task, max_iterations=5)
+    result = await agent.run(task_name="test_task", task=task, max_iterations=5)
 
     # Assertions
     assert isinstance(result, MockResponse)
@@ -139,7 +139,7 @@ async def test_planning_agent_resolves_planner_context_references():
 
     llm_client.chat_completions.return_value = (step1, {})
 
-    await agent.run(task="task", max_iterations=1)
+    await agent.run(task_name="test_task", task="task", max_iterations=1)
 
     # FunctionKernel wraps primitive return values in a model with a 'result' field
     assert agent._planner_context["curr_call"].result == "Resolved: target"
@@ -191,7 +191,7 @@ async def test_planning_agent_resolves_args_from_new_fields():
 
     llm_client.chat_completions.return_value = (step1, {})
 
-    await agent.run(task="task", max_iterations=1)
+    await agent.run(task_name="test_task", task="task", max_iterations=1)
 
     assert (
         agent._planner_context["curr_call"].result
@@ -240,7 +240,7 @@ async def test_planning_agent_resolves_args_priority():
     )
 
     llm_client.chat_completions.return_value = (step1, {})
-    await agent.run(task="task", max_iterations=1)
+    await agent.run(task_name="test_task", task="task", max_iterations=1)
     assert agent._planner_context["call1"].result == "literal"
 
     # Test context resolution
@@ -258,7 +258,7 @@ async def test_planning_agent_resolves_args_priority():
     )
 
     llm_client.chat_completions.side_effect = [(step2, {})]
-    await agent.run(task="task", max_iterations=1)
+    await agent.run(task_name="test_task", task="task", max_iterations=1)
     assert agent._planner_context["call2"].result == "context"
 
 
@@ -309,7 +309,7 @@ async def test_planning_agent_resolves_nested_args_from_planner_context():
 
     llm_client.chat_completions.return_value = (step1, {})
 
-    await agent.run(task="task", max_iterations=1)
+    await agent.run(task_name="test_task", task="task", max_iterations=1)
 
     assert agent._planner_context["curr_call"].result == "Resolved: target"
 
@@ -339,7 +339,7 @@ async def test_planning_agent_max_iterations():
 
     llm_client.chat_completions.return_value = (step, {})
 
-    result = await agent.run(task="task", max_iterations=3)
+    result = await agent.run(task_name="test_task", task="task", max_iterations=3)
 
     assert result is None
     assert llm_client.chat_completions.call_count == 3
@@ -388,7 +388,7 @@ async def test_planning_agent_streaming():
     llm_client.chat_completions.return_value = (step, {"stats": "dummy"})
 
     # Run agent
-    result = await agent.run(task=task, max_iterations=1)
+    result = await agent.run(task_name="test_task", task=task, max_iterations=1)
 
     # Assertions
     assert result == final_output
@@ -458,7 +458,7 @@ async def test_planning_agent_persist_to():
     ]
 
     # Run agent
-    result = await agent.run(task=task, max_iterations=2)
+    result = await agent.run(task_name="test_task", task=task, max_iterations=2)
 
     # Assertions
     assert result is not None
@@ -507,7 +507,7 @@ async def test_planning_agent_tool_error_logging(caplog):
 
     # Set log level to capture warnings/errors
     with caplog.at_level(logging.WARNING):
-        await agent.run(task="test", max_iterations=1)
+        await agent.run(task_name="test_task", task="test", max_iterations=1)
 
     error_logs = [
         record.message
@@ -580,7 +580,7 @@ async def test_planning_agent_tool_args_parse_error_logging(caplog):
 
     # Set log level
     with caplog.at_level(logging.ERROR):
-        await agent.run(task="test", max_iterations=1)
+        await agent.run(task_name="test_task", task="test", max_iterations=1)
 
     error_logs = [
         record.message
@@ -635,7 +635,7 @@ async def test_planning_agent_tool_failure_handling():
     llm_client.chat_completions.side_effect = [(step1, {}), (step2, {1: 1})]
 
     # Run agent
-    result = await agent.run(task="task", max_iterations=2)
+    result = await agent.run(task_name="test_task", task="task", max_iterations=2)
 
     # Assertions
     assert result == final_output
@@ -706,7 +706,7 @@ async def test_planning_agent_real_python_tool_gcd():
     ]
 
     # Run agent
-    result = await agent.run(task=task, max_iterations=5)
+    result = await agent.run(task_name="test_task", task=task, max_iterations=5)
 
     # Assertions
     assert isinstance(result, MockResponse)
@@ -794,7 +794,7 @@ async def test_planning_agent_complex_nested_models():
     ]
 
     # Run agent
-    result = await agent.run(task=task, max_iterations=5)
+    result = await agent.run(task_name="test_task", task=task, max_iterations=5)
 
     # Assertions
     assert isinstance(result, MockResponse)

@@ -540,6 +540,7 @@ class Workflow:
                 ) from e
 
         result = await planning_agent.run(
+            task_name=task.name,
             task=rendered_prompt,
             chat_history=chat_history,
             max_iterations=task.max_steps,
