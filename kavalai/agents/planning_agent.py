@@ -216,12 +216,10 @@ class PlanningAgent:
                                 run_id=self._run_context.run_id,
                                 name=tool_call.name,
                                 inputs={"arguments": args},
-                                output=tool_result
-                                if not hasattr(tool_result, "model_dump")
-                                else tool_result.model_dump(),
+                                output=tool_result,
                             )
-                        except TypeError:
-                            pass
+                        except Exception as e:
+                            logger.error(f"Failed to record task in agent_service: {e}")
 
             if step_output.output is not None:
                 final_output = step_output.output
