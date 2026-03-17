@@ -198,17 +198,17 @@ async def test_planning_agent_streaming():
 
 
 @pytest.mark.asyncio
-async def test_planning_agent_auto_persistence():
+async def test_planning_agent_persist_to():
     # Setup mocks
     kernel = MagicMock(spec=FunctionKernel)
     kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
-    kernel.call_tool = AsyncMock(return_value="REAL_TOOL_OUTPUT")
+    kernel.call_tool = AsyncMock(return_value="PERSISTED_VALUE")
 
-    run_context = MagicMock(spec=RunContext)
+    run_context = RunContext(data={})
     llm_client = MagicMock(spec=LLMClient)
 
     input_data = {}
-    task = "Use tool and return result"
+    task = "Use tool and persist result"
 
     agent = PlanningAgent(
         kernel=kernel,
@@ -220,52 +220,36 @@ async def test_planning_agent_auto_persistence():
 
     StepOutput = get_step_output_type(MockPersistenceResponse)
 
-    # First iteration: call tool with call_id="tool_result"
+    # First iteration: call tool with persist_to="my_key"
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="I will call the tool to get some data",
+        long_explanation="I will call the tool to get some data and persist it",
         step_number=0,
         max_steps=2,
         tool_calls=[
-            ToolCall(name="python://test_tool", call_id="tool_result", args="{}")
+            ToolCall(
+                name="python://test_tool",
+                call_id="c1",
+                args="{}",
+                persist_to="my_key",
+            )
         ],
         output=None,
     )
 
-    # Second iteration: return output with tool_result field EMPTY (None)
-    # The expectation is that PlanningAgent will fill it from planner_context["tool_result"]
+    # Second iteration: return output
     step2 = StepOutput(
         short_explanation="Returning result",
-        long_explanation="I am returning the result I got from the tool",
+        long_explanation="I am returning the result",
         step_number=1,
         max_steps=2,
         tool_calls=[],
-        output=MockPersistenceResponse(tool_result="", other_field="from_llm"),
-    )
-
-    # Third case: type mismatch
-    agent_mismatch = PlanningAgent(
-        kernel=kernel,
-        run_context=run_context,
-        llm_client=llm_client,
-        input_data=input_data,
-        response_model=MockPersistenceResponse,
-    )
-    agent_mismatch._planner_context = {"tool_result": 123}  # Int instead of string
-
-    step_mismatch = StepOutput(
-        short_explanation="Returning result",
-        long_explanation="I am returning the result",
-        step_number=0,
-        max_steps=1,
-        tool_calls=[],
-        output=MockPersistenceResponse(tool_result="", other_field="mismatch"),
+        output=MockPersistenceResponse(tool_result="done", other_field="ok"),
     )
 
     llm_client.chat_completions.side_effect = [
         (step1, {"stats": "dummy"}),
         (step2, {"stats": "dummy"}),
-        (step_mismatch, {"stats": "dummy"}),
     ]
 
     # Run agent
@@ -273,144 +257,31 @@ async def test_planning_agent_auto_persistence():
 
     # Assertions
     assert result is not None
-    assert result.other_field == "from_llm"
-    # This is what we want to achieve:
-    assert (
-        result.tool_result == "REAL_TOOL_OUTPUT"
-    ), "Value should be auto-persisted from planner_context"
-
-    # Run agent for mismatch
-    result_mismatch = await agent_mismatch.run(task=task, max_iterations=1)
-    assert result_mismatch is not None
-    assert (
-        result_mismatch.tool_result == ""
-    )  # Should NOT be updated due to type mismatch
-    assert result_mismatch.other_field == "mismatch"
+    assert result.tool_result == "done"
+    # Check if value was persisted to run_context.data
+    assert run_context.data.get("my_key") == "PERSISTED_VALUE"
+    assert "my_key" in run_context.data, "Value should be persisted to run_context.data"
 
 
 @pytest.mark.asyncio
-async def test_planning_agent_auto_persistence_after_all_steps():
-    """
-    Test that auto-persistence is done AFTER all steps, which means even if a tool
-    is called in the same step as the output, its result should be available.
-    """
-    kernel = MagicMock(spec=FunctionKernel)
-    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
-    kernel.call_tool = AsyncMock(return_value="LATE_TOOL_OUTPUT")
-
-    run_context = MagicMock(spec=RunContext)
-    llm_client = MagicMock(spec=LLMClient)
-
-    agent = PlanningAgent(
-        kernel=kernel,
-        run_context=run_context,
-        llm_client=llm_client,
-        input_data={},
-        response_model=MockPersistenceResponse,
-    )
-
-    StepOutput = get_step_output_type(MockPersistenceResponse)
-
-    # In one single step, LLM provides BOTH a tool call and an output.
-    # Auto-persistence should ensure the output's "tool_result" field is filled with "LATE_TOOL_OUTPUT".
-    step1 = StepOutput(
-        short_explanation="Doing both",
-        long_explanation="I am calling a tool and returning output in the same step",
-        step_number=0,
-        max_steps=1,
-        tool_calls=[
-            ToolCall(name="python://test_tool", call_id="tool_result", args="{}")
-        ],
-        output=MockPersistenceResponse(tool_result="", other_field="simultaneous"),
-    )
-
-    llm_client.chat_completions.side_effect = [
-        (step1, {"stats": "dummy"}),
-    ]
-
-    result = await agent.run(task="do both", max_iterations=1)
-
-    assert result is not None
-    assert result.tool_result == "LATE_TOOL_OUTPUT"
-
-
-@pytest.mark.asyncio
-async def test_planning_agent_multiple_outputs():
-    """
-    Test that auto-persistence only happens at the end, and we use the LAST output provided.
-    Currently, the agent returns as soon as it sees ANY output.
-    """
-    kernel = MagicMock(spec=FunctionKernel)
-    kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
-    kernel.call_tool = AsyncMock(return_value="SECOND_RESULT")
-
-    run_context = MagicMock(spec=RunContext)
-    llm_client = MagicMock(spec=LLMClient)
-
-    agent = PlanningAgent(
-        kernel=kernel,
-        run_context=run_context,
-        llm_client=llm_client,
-        input_data={},
-        response_model=MockPersistenceResponse,
-    )
-
-    StepOutput = get_step_output_type(MockPersistenceResponse)
-
-    # Step 1: provides an output but also a tool call for the NEXT output
-    step1 = StepOutput(
-        short_explanation="Providing premature output",
-        long_explanation="I have an output but I'm also calling a tool to improve it later",
-        step_number=0,
-        max_steps=2,
-        tool_calls=[
-            ToolCall(name="python://test_tool", call_id="tool_result", args="{}")
-        ],
-        output=MockPersistenceResponse(tool_result="premature", other_field="step1"),
-    )
-
-    # Step 2: provides final output
-    step2 = StepOutput(
-        short_explanation="Providing final output",
-        long_explanation="Now I have the full result",
-        step_number=1,
-        max_steps=2,
-        tool_calls=[],
-        output=MockPersistenceResponse(tool_result="", other_field="step2"),
-    )
-
-    llm_client.chat_completions.side_effect = [
-        (step1, {"stats": "dummy"}),
-        (step2, {"stats": "dummy"}),
-    ]
-
-    result = await agent.run(task="multiple outputs", max_iterations=2)
-
-    assert result.other_field == "step2"
-    assert result.tool_result == "SECOND_RESULT"
-
-
-@pytest.mark.asyncio
-async def test_planning_agent_auto_persistence_off():
+async def test_planning_agent_no_auto_persistence():
     # Setup mocks
     kernel = MagicMock(spec=FunctionKernel)
     kernel.get_tool_descriptions = AsyncMock(return_value="Mock Tool Description")
     kernel.call_tool = AsyncMock(return_value="REAL_TOOL_OUTPUT")
 
-    run_context = MagicMock(spec=RunContext)
+    run_context = RunContext(data={})
     llm_client = MagicMock(spec=LLMClient)
 
     input_data = {}
     task = "Use tool and return result"
 
-    # auto_persist=False
     agent = PlanningAgent(
         kernel=kernel,
         run_context=run_context,
         llm_client=llm_client,
         input_data=input_data,
         response_model=MockPersistenceResponse,
-        auto_persist=False,
     )
 
     StepOutput = get_step_output_type(MockPersistenceResponse)
@@ -450,7 +321,7 @@ async def test_planning_agent_auto_persistence_off():
     assert result is not None
     assert (
         result.tool_result == "original"
-    ), "Value should NOT be auto-persisted when auto_persist=False"
+    ), "Value should NOT be auto-persisted anymore"
 
     # Check that system prompt DOES NOT contain auto-persistence instructions
     llm_client.chat_completions.assert_called()

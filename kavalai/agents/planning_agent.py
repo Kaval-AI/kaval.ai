@@ -26,6 +26,9 @@ class ToolCall(BaseModel):
         default="{}",
         description="Arguments for the tool call in JSON format.",
     )
+    persist_to: Optional[str] = Field(
+        default=None, description="Key to store in run_context.data"
+    )
 
 
 def get_step_output_type(ResponseModel=Type[BaseModel]):
@@ -69,7 +72,6 @@ class PlanningAgent:
         temperature: Optional[float] = None,
         stream_updates: bool = False,
         stream_output: bool = False,
-        auto_persist: bool = True,
     ):
         self._kernel = kernel
         self._run_context = run_context
@@ -80,7 +82,6 @@ class PlanningAgent:
         self._temperature = temperature
         self._stream_updates = stream_updates
         self._stream_output = stream_output
-        self._auto_persist = auto_persist
         self._planner_context = {}
         self._step_outputs = []
 
@@ -94,26 +95,36 @@ class PlanningAgent:
         final_output = None
 
         for iter_no in range(max_iterations):
-            system_prompt = (
-                "You are a planning agent. Your goal is to achieve the following task:\n"
-                f"{task}\n\n"
-                "Available Tools:\n"
-                f"{await self._kernel.get_tool_descriptions()}\n\n"
-                f"Inputs:\n{self._input_data}\n\n"
-                f"Planner Context (tool results):\n{self._planner_context}\n\n"
-            )
-
-            if self._auto_persist:
-                system_prompt += (
-                    "If you need to output a structured response, you can use `call_id` in your `tool_calls`. "
-                    "The result of that tool call will be stored in `planner_context` and automatically copied "
-                    "to the matching field in your final `output` if the field name matches the `call_id`.\n\n"
-                )
-
-            system_prompt += (
-                f"max_steps={max_iterations}\n\n"
-                f"Step Outputs (previous steps):\n{[so.model_dump() for so in self._step_outputs]}\n"
-            )
+            prompt_parts = [
+                "You are a planning agent. Your goal is to achieve the following task:",
+                task.strip(),
+                "# Tool calling instructions:",
+                "Each tool call MUST be a valid JSON object matching the ToolCall structure.",
+                "Example ToolCall (ensure all required 'args' are provided):",
+                '{"name": "python://mypackage.myfunc", "call_id": "step1", "args": "{\\"param1\\": \\"value1\\", \\"param2\\": 10}"}',
+                "# Available tools:",
+                await self._kernel.get_tool_descriptions(),
+                "# Inputs:",
+                json.dumps(self._input_data, indent=2),
+                "Planner Context (tool results):",
+                json.dumps(
+                    {
+                        k: v.model_dump() if hasattr(v, "model_dump") else v
+                        for k, v in self._planner_context.items()
+                    },
+                    indent=2,
+                ),
+                f"max_steps={max_iterations}",
+                "Step Outputs (previous steps):",
+                json.dumps(
+                    [
+                        so.model_dump() if hasattr(so, "model_dump") else so
+                        for so in self._step_outputs
+                    ],
+                    indent=2,
+                ),
+            ]
+            system_prompt = "\n\n".join(prompt_parts)
 
             logger.info(f"Running iteration {iter_no} for task: {task}")
 
@@ -175,6 +186,9 @@ class PlanningAgent:
                     if tool_call.call_id:
                         self._planner_context[tool_call.call_id] = tool_result
 
+                    if tool_call.persist_to:
+                        self._run_context.data[tool_call.persist_to] = tool_result
+
                     agent_service = getattr(self._run_context, "agent_service", None)
                     if agent_service and hasattr(agent_service, "add_task"):
                         try:
@@ -197,19 +211,6 @@ class PlanningAgent:
                     break
 
         if final_output is not None:
-            # Auto-persist from planner_context based on call_id matching
-            if self._auto_persist and hasattr(final_output, "model_validate"):
-                try:
-                    # Create a dict from current output and update with planner_context
-                    output_dict = final_output.model_dump()
-                    for call_id, value in self._planner_context.items():
-                        if call_id in output_dict:
-                            output_dict[call_id] = value
-                    # Re-validate to catch type mismatches
-                    final_output = final_output.__class__(**output_dict)
-                except Exception as e:
-                    logger.error(f"Failed to auto-persist to output: {e}")
-
             if self._streamer and self._stream_output:
                 await self._streamer.stream_complete(final_output.model_dump_json())
             return final_output

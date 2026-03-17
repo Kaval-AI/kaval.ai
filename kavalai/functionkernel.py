@@ -546,16 +546,7 @@ class FunctionKernel:
 
     async def get_tool_descriptions(self) -> str:
         """Returns a string description of all registered tools for prompts."""
-        descriptions = [
-            "Each tool call MUST be a valid JSON object matching the ToolCall structure.",
-            "Example ToolCall (ensure all required 'args' are provided):",
-            "```json",
-            '{"name": "python://mypackage.myfunc", "call_id": "step1", "args": "{"param1": "value1", "param2": 10}"}',
-            "```",
-            "",
-            "---",
-            "",
-        ]
+        descriptions = []
 
         def _get_concise_schema(
             model: Type[BaseModel], label: str = "input schema:"
