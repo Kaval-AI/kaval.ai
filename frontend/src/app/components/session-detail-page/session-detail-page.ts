@@ -141,6 +141,13 @@ export class SessionDetailPage implements OnInit {
     return date.toLocaleString();
   }
 
+  getTaskNames(tasks: Task[]): string {
+    return tasks
+      .map((t) => t.name || t.id.substring(0, 8))
+      .filter((name, index, self) => self.indexOf(name) === index)
+      .join(', ');
+  }
+
   goBack(): void {
     this.router.navigate(['/conversations']);
   }

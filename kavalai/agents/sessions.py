@@ -44,6 +44,7 @@ class TaskSummary(BaseModel):
     run_id: UUID
     inputs: Any | None
     output: Any | None
+    name: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -164,6 +164,11 @@
   margin-left: 10px;
 }
 
+.task-names {
+  font-style: italic;
+  color: #666;
+}
+
 .run-actions {
   display: flex;
   gap: 8px;

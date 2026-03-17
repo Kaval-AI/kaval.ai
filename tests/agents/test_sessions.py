@@ -37,6 +37,7 @@ async def test_get_session_details(agents_db):
         run_id=r1.id,
         inputs={"cmd": "ls"},
         output={"out": "file1"},
+        name="test_task",
         created_at=now - timedelta(minutes=3),
     )
 
@@ -53,6 +54,7 @@ async def test_get_session_details(agents_db):
     assert details.runs[0].tasks_count == 1
     assert len(details.tasks) == 1
     assert details.tasks[0].id == t1.id
+    assert details.tasks[0].name == "test_task"
 
 
 @pytest.mark.asyncio
