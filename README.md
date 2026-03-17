@@ -75,15 +75,13 @@ Executes a prompt using an LLM.
 #### 2. Planning Agent Task (`type: agent`)
 A multi-step agent that can use tools (REST, MCP, Python) to achieve a goal.
 - `max_steps`: Maximum number of iterations (default: `1`).
-- `auto_persist`: Automatically populate output fields from tool results matching `call_id` (default: `true`).
 
-Example with `auto_persist`:
+Example:
 ```yaml
 tasks:
   - name: Research Task
     type: agent
     max_steps: 5
-    auto_persist: true
     prompt: "Find the current stock price of AAPL and its 52-week high."
     output: stock_report
 

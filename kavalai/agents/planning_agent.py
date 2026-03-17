@@ -70,7 +70,6 @@ class PlanningAgent:
         temperature: Optional[float] = None,
         stream_updates: bool = False,
         stream_output: bool = False,
-        auto_persist: bool = True,
     ):
         self._kernel = kernel
         self._run_context = run_context
@@ -81,7 +80,6 @@ class PlanningAgent:
         self._temperature = temperature
         self._stream_updates = stream_updates
         self._stream_output = stream_output
-        self._auto_persist = auto_persist
         self._planner_context = {}
         self._step_outputs = []
 

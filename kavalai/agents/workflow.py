@@ -501,7 +501,6 @@ class Workflow:
             temperature=temperature,
             stream_updates=task.stream_updates,
             stream_output=task.stream_output,
-            auto_persist=task.auto_persist,
         )
 
         # 6. Fetch chat history
