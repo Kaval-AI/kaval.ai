@@ -21,10 +21,9 @@ class ToolCall(BaseModel):
     name: str = Field(
         description="Tool call name i.e python://websearch.serper_web_search"
     )
-    args: dict = Field(
-        default_factory=dict,
-        description="A dictionary of arguments for the tool call. Use template strings like {{context.key}} or {{input.key}} to reference data without copying it.",
-        json_schema_extra={"additionalProperties": False},
+    args: str = Field(
+        default="{}",
+        description="A JSON string of arguments for the tool call. Use template strings like {{context.key}} or {{input.key}} to reference data without copying it.",
     )
     call_id: Optional[str] = Field(
         default=None,
@@ -39,8 +38,6 @@ def get_step_output_type(ResponseModel=Type[BaseModel]):
     class StepOutput(BaseModel):
         """Data structure that helps passing around information between consecutive agent runs."""
 
-        model_config = ConfigDict(extra="forbid")
-
         short_explanation: str = Field(
             description="Human friendly summary of planned steps. Be very concise, maximum 50 characters.",
             max_length=50,
@@ -50,11 +47,10 @@ def get_step_output_type(ResponseModel=Type[BaseModel]):
             max_length=500,
         )
         tool_calls: list[ToolCall] = Field(
-            description="Add tool call requests here, their output will be stored in planner_context accessible with `call_id` key."
+            default=[],
+            description="Add tool call requests here, their output will be stored in planner_context accessible with `call_id` key.",
         )
-        output: Optional[ResponseModel] = Field(
-            description="Final output. If tool calls with call_id are used, you can leave fields with matching names empty in this model, and they will be automatically populated from planner_context."
-        )
+        output: Optional[ResponseModel] = None
 
     return StepOutput
 
@@ -107,7 +103,15 @@ class PlanningAgent:
     ) -> tuple[ToolCall, dict, any, float]:
         """Resolves arguments and executes a single tool call."""
         duration = 0.0
-        args = self._resolve_template(tool_call.args)
+
+        # Parse args from JSON string
+        try:
+            args_dict = json.loads(tool_call.args)
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse args as JSON: {tool_call.args}")
+            args_dict = {}
+
+        args = self._resolve_template(args_dict)
 
         logger.info(f"Calling tool {tool_call.name} with {args}")
         try:
@@ -138,15 +142,15 @@ class PlanningAgent:
                 task.strip(),
                 "# Tool calling instructions:",
                 "Use tools to fulfill the task."
-                "To call a tool, provide its name and arguments as a dict. Example:",
-                '{"name": "python://websearch.serper_web_search", "args": {"query": "Kaval AI"}}',
+                "To call a tool, provide its name and arguments as a JSON string. Example:",
+                '{"name": "python://websearch.serper_web_search", "args": "{\\"query\\": \\"Kaval AI\\"}"}',
                 "",
                 "You can use template strings to reference data without copying it:",
                 "- {{ context.key }}: Reference a result from a previous tool call via call_id.",
                 "- {{ input.key }}: Reference data from the provided # Inputs section.",
                 "",
                 "Example with templates:",
-                '{"name": "python://data.process", "args": {"raw_data": "{{ context.fetch_result }}", "user_id": "{{ input.user_id }}"}, "call_id": "processed_data"}',
+                '{"name": "python://data.process", "args": "{\\"raw_data\\": \\"{{ context.fetch_result }}\\", \\"user_id\\": \\"{{ input.user_id }}\\"}", "call_id": "processed_data"}',
                 "",
                 "# Available tools:",
                 await self._kernel.get_tool_descriptions(),
