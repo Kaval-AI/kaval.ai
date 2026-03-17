@@ -16,7 +16,7 @@ limitations under the License.
 
 import inspect
 import json
-import logging
+from loguru import logger
 import os
 from typing import Any, Dict, List, Optional, Callable, Type
 
@@ -31,8 +31,6 @@ from kavalai.agents.workflow_model import (
     RestServer,
     WorkflowException,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class FunctionKernelException(WorkflowException):

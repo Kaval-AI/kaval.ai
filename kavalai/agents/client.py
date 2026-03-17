@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import logging
 import urllib.parse
 from typing import Optional, Type
 
@@ -23,8 +22,6 @@ from json_schema_to_pydantic import create_model
 from pydantic import BaseModel
 
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
-
-logger = logging.getLogger(__name__)
 
 
 class AgentClient:

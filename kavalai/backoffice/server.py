@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import logging
+from loguru import logger
 import os
 from datetime import datetime
 from uuid import UUID
@@ -39,7 +39,6 @@ from kavalai.agents.rag_service import RagService
 from contextlib import asynccontextmanager
 
 # Set up the app logger
-logger = logging.getLogger(__name__)
 logger.propagate = True
 
 app = FastAPI()

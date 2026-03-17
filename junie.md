@@ -12,7 +12,7 @@ Kaval.AI can be run using Docker. The provided `Dockerfile` and `entrypoint.sh` 
 
 ## Project Overview
 Kaval.AI is an AI agent writing framework where agent steps are defined using YAML. It consists of two main parts:
-- **kavalai.agents**: The core SDK/runtime that runs on client infrastructure. It handles agent logic, workflows, and its own database.
+- **kavalai.agents**: The core SDK/runtime that runs on client infrastructure. It handles agent logic, workflows, and its own database. It uses `loguru` for all logging and prefers f-strings for formatting.
 - **kavalai.backoffice**: A management UI for configuring and monitoring agents.
 
 ## Directory Structure

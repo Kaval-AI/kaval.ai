@@ -69,7 +69,8 @@ async def test_resolve_input_info_history_missing_service(caplog):
     info = TypeInputInfo(type="history", value="key")
     assert await rc.resolve_input_info(info) is None
     assert (
-        "Cannot load from history: agent_service or session_id not set" in caplog.text
+        "Cannot load from history for key: agent_service or session_id not set"
+        in caplog.text
     )
 
 

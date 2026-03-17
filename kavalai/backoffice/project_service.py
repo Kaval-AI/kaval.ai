@@ -172,9 +172,7 @@ class ProjectService:
     async def test_connection(self, project: db.Project) -> Dict[str, str]:
         from kavalai.agents.db import db_manager
         from sqlalchemy import text
-        import logging
-
-        logger = logging.getLogger(__name__)
+        from loguru import logger
 
         try:
             logger.info(

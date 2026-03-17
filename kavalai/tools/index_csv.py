@@ -36,14 +36,12 @@ Modes:
 import argparse
 import asyncio
 import csv
-import logging
+from loguru import logger
 import os
 import sys
 from typing import List, Optional, Generator, Dict
 
 from kavalai.agents.rag_service import RagService
-
-logger = logging.getLogger(__name__)
 
 
 def csv_row_generator(

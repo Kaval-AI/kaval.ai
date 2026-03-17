@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from loguru import logger
 import json
 from typing import Type, Optional
 
@@ -9,8 +9,6 @@ from kavalai.agents.run_context import RunContext
 from kavalai.functionkernel import FunctionKernel
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
-
-logger = logging.getLogger(__name__)
 
 
 class ToolCall(BaseModel):
@@ -72,6 +70,7 @@ class PlanningAgent:
         temperature: Optional[float] = None,
         stream_updates: bool = False,
         stream_output: bool = False,
+        auto_persist: bool = True,
     ):
         self._kernel = kernel
         self._run_context = run_context
@@ -82,6 +81,7 @@ class PlanningAgent:
         self._temperature = temperature
         self._stream_updates = stream_updates
         self._stream_output = stream_output
+        self._auto_persist = auto_persist
         self._planner_context = {}
         self._step_outputs = []
 

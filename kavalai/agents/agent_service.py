@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import logging
 from typing import Optional, Dict, List, Any
 from uuid import UUID
 
@@ -23,8 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, ModelCallStat
 from kavalai.agents.resolvers import resolve_path, find_key_recursive
 from kavalai.agents.workflow_model import to_plain
-
-logger = logging.getLogger(__name__)
 
 
 class AgentService:

@@ -21,11 +21,8 @@ from typing import List, Optional, Union
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-import logging
+from loguru import logger
 from kavalai.agents.db import RagIndex
-
-
-logger = logging.getLogger(__name__)
 
 
 class Normalizer:

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import logging
+from loguru import logger
 import os
 import asyncio
 import random
@@ -31,8 +31,6 @@ from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.openai_client import OpenAIClient
 from kavalai.llm_clients.common import Streamer
 
-
-logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 

@@ -14,14 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import logging
 import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from kavalai.agents.workflow_model import WorkflowModel, TypeInputInfo
-
-logger = logging.getLogger(__name__)
 
 
 def validate_rest_server_env_vars(workflow_model: "WorkflowModel"):

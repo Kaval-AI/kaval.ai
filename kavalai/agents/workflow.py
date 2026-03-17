@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import logging
+from loguru import logger
 from typing import Dict, Type, Optional, Any
 from uuid import UUID
 
@@ -50,8 +50,6 @@ from kavalai.agents.run_context import RunContext
 from kavalai.functionkernel import FunctionKernel
 import asyncio
 import importlib
-
-logger = logging.getLogger(__name__)
 
 
 class LineLoader(yaml.SafeLoader):
@@ -696,10 +694,10 @@ class Workflow:
 
                 if task.when:
                     if not await run_context.evaluate_condition(task.when):
-                        logger.info("Skipping task <%s> due to condition", task.name)
+                        logger.info(f"Skipping task <{task.name}> due to condition")
                         continue
 
-                logger.info("Running task <%s>", task.name)
+                logger.info(f"Running task {task.name}")
                 try:
                     if isinstance(task, AgentTask):
                         await self.run_planning_agent(task, run_context, queue)
@@ -716,7 +714,7 @@ class Workflow:
                     elif isinstance(task, RagQueryTask):
                         await self.run_rag_task(task, run_context, queue)
                     else:
-                        logger.warning("Unknown task type: %s", type(task))
+                        logger.warning(f"Unknown task type: {type(task)}")
                 except Exception as e:
                     if isinstance(e, WorkflowException):
                         raise e
@@ -731,7 +729,7 @@ class Workflow:
 
                 if task.stop:
                     logger.info(
-                        "Stopping workflow after task <%s> due to stop: True", task.name
+                        f"Stopping workflow after task <{task.name}> due to stop: True"
                     )
                     break
         finally:

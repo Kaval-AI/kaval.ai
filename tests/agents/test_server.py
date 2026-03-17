@@ -1,5 +1,6 @@
 import json
 import os
+import logging
 from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
@@ -270,9 +271,8 @@ async def test_stream_agent_endpoint(
 @patch("kavalai.agents.server.Workflow")
 @patch("kavalai.agents.server.db_manager")
 @patch("kavalai.agents.server.uvicorn.run")
-@patch("kavalai.agents.server.logger")
 def test_run_agent_server_logging(
-    mock_logger, mock_uvicorn, mock_db_manager, mock_workflow_class, mock_env
+    mock_uvicorn, mock_db_manager, mock_workflow_class, mock_env, caplog
 ):
     mock_env.side_effect = lambda key, default=None: {
         "KAVALAI_AGENT_WORKFLOW_PATH": "test_path.yaml",
@@ -302,9 +302,12 @@ def test_run_agent_server_logging(
     mock_workflow_instance.get_data_type.return_value = str
     mock_workflow_class.from_yaml_path.return_value = mock_workflow_instance
 
-    run_agent_server()
+    with caplog.at_level(logging.INFO):
+        run_agent_server()
 
-    info_logs = [call.args[0] for call in mock_logger.info.call_args_list]
+    info_logs = [
+        record.message for record in caplog.records if record.levelname == "INFO"
+    ]
 
     assert any("Database URI:" in log for log in info_logs)
     assert any("Database Schema: test_schema" in log for log in info_logs)
@@ -326,9 +329,8 @@ def test_run_agent_server_logging(
 @patch("kavalai.agents.server.Workflow")
 @patch("kavalai.agents.server.db_manager")
 @patch("kavalai.agents.server.uvicorn.run")
-@patch("kavalai.agents.server.logger")
 def test_run_agent_server_no_auth_warning(
-    mock_logger, mock_uvicorn, mock_db_manager, mock_workflow_class, mock_env
+    mock_uvicorn, mock_db_manager, mock_workflow_class, mock_env, caplog
 ):
     mock_env.side_effect = lambda key, default=None: {
         "KAVALAI_AGENT_WORKFLOW_PATH": "test_path.yaml",
@@ -356,7 +358,10 @@ def test_run_agent_server_no_auth_warning(
     mock_workflow_instance.get_data_type.return_value = str
     mock_workflow_class.from_yaml_path.return_value = mock_workflow_instance
 
-    run_agent_server()
+    with caplog.at_level(logging.WARNING):
+        run_agent_server()
 
-    warning_logs = [call.args[0] for call in mock_logger.warning.call_args_list]
+    warning_logs = [
+        record.message for record in caplog.records if record.levelname == "WARNING"
+    ]
     assert any("Basic Auth is NOT configured" in log for log in warning_logs)

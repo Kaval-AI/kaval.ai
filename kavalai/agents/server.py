@@ -16,7 +16,7 @@ limitations under the License.
 """
 
 import asyncio
-import logging
+from loguru import logger
 import secrets
 from contextlib import asynccontextmanager
 from typing import Annotated, Callable
@@ -38,7 +38,6 @@ from kavalai.agents.db import db_manager
 from kavalai.agents.workflow import Workflow
 from kavalai.llm_clients.common import Streamer
 
-logger = logging.getLogger(__name__)
 
 security = HTTPBasic(auto_error=False)
 

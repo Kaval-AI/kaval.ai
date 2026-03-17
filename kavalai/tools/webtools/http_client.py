@@ -15,15 +15,12 @@ limitations under the License.
 """
 
 import os
-import logging
 from typing import Optional, Dict, Any, Union
 
 import httpx
 from pydantic import BaseModel
 
 from kavalai.functionkernel import pythontool
-
-logger = logging.getLogger(__name__)
 
 
 class HttpResponse(BaseModel):

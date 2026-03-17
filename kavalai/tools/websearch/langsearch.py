@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import os
-import logging
 from typing import Optional, List, Literal
 
 import httpx
@@ -23,7 +22,6 @@ from pydantic import BaseModel, Field
 
 from kavalai.functionkernel import pythontool
 
-logger = logging.getLogger(__name__)
 
 # Constants
 LANGSEARCH_API_DOMAIN = "https://api.langsearch.com"

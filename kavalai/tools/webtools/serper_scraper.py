@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import os
-import logging
 from typing import Optional, Dict, Any
 
 import httpx
@@ -23,7 +22,6 @@ from pydantic import BaseModel
 
 from kavalai.functionkernel import pythontool
 
-logger = logging.getLogger(__name__)
 
 # Constants
 SERPER_SCRAPE_ENDPOINT = "https://scrape.serper.dev"

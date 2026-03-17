@@ -1,6 +1,6 @@
+import logging
 import pytest
 import asyncio
-import logging
 from unittest.mock import AsyncMock, MagicMock
 from pydantic import BaseModel, Field
 from kavalai.agents.planning_agent import PlanningAgent, ToolCall, get_step_output_type
@@ -381,13 +381,13 @@ async def test_planning_agent_tool_error_logging(caplog):
         await agent.run(task="test", max_iterations=1)
 
     error_logs = [
-        record
+        record.message
         for record in caplog.records
         if record.levelname == "ERROR"
         and "Tool python://reorder failed" in record.message
     ]
     warning_logs = [
-        record
+        record.message
         for record in caplog.records
         if record.levelname == "WARNING"
         and "Tool python://reorder failed" in record.message
@@ -437,7 +437,7 @@ async def test_planning_agent_tool_args_parse_error_logging(caplog):
         await agent.run(task="test", max_iterations=1)
 
     error_logs = [
-        record
+        record.message
         for record in caplog.records
         if record.levelname == "ERROR" and "Failed to parse tool args" in record.message
     ]

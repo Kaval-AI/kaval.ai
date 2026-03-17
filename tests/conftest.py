@@ -1,4 +1,6 @@
 import os
+import logging
+from loguru import logger
 
 os.environ["KAVALAI_DB_SCHEMA"] = "test_agents"
 
@@ -10,6 +12,17 @@ from kavalai.migrate_db import migrate
 from kavalai.paths import SQL_MIGRATIONS_PATH
 
 from kavalai.agents.db import Base, build_db_uri, db_manager
+
+
+@pytest.fixture(autouse=True)
+def caplog_loguru(caplog):
+    class PropagateHandler(logging.Handler):
+        def emit(self, record):
+            logging.getLogger(record.name).handle(record)
+
+    handler_id = logger.add(PropagateHandler(), format="{message}")
+    yield caplog
+    logger.remove(handler_id)
 
 
 @pytest.fixture(scope="session")

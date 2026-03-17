@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import os
-import logging
 from typing import Optional, List, Dict, Any
 
 import httpx
@@ -23,7 +22,6 @@ from pydantic import BaseModel, Field
 
 from kavalai.functionkernel import pythontool
 
-logger = logging.getLogger(__name__)
 
 # Constants
 GOOGLE_CUSTOM_SEARCH_ENDPOINT = "https://www.googleapis.com/customsearch/v1"

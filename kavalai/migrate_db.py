@@ -16,22 +16,16 @@ limitations under the License.
 
 import argparse
 import hashlib
-import logging
 import os
 import time
 from typing import List, Tuple
 
+from loguru import logger
 import psycopg2
 from psycopg2 import sql
 
 from kavalai.paths import SQL_MIGRATIONS_PATH
 from kavalai.agents.db import parse_db_uri
-
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
 
 
 def calculate_checksum(file_path: str) -> str:

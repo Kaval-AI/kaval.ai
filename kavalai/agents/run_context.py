@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import logging
+from loguru import logger
 import operator
 import re
 from typing import Optional, Any, Dict
@@ -24,8 +24,6 @@ from pydantic import BaseModel, ConfigDict
 
 from kavalai.agents.resolvers import resolve_path
 from kavalai.agents.workflow_model import Task, TypeInputInfo
-
-logger = logging.getLogger(__name__)
 
 
 class RunContext(BaseModel):
@@ -48,7 +46,7 @@ class RunContext(BaseModel):
         """Resolve a value from session history."""
         if not self.agent_service or not self.session_id:
             logger.warning(
-                "Cannot load from history: agent_service or session_id not set"
+                f"Cannot load from history for {path}: agent_service or session_id not set"
             )
             return None
         return await self.agent_service.get_history_value(self.session_id, str(path))
@@ -111,12 +109,12 @@ class RunContext(BaseModel):
         if info.type == "literal":
             return info.value
         if info.type == "history":
+            path = info.value or info.name
             if not self.agent_service or not self.session_id:
                 logger.warning(
-                    "Cannot load from history: agent_service or session_id not set"
+                    f"Cannot load from history for {path}: agent_service or session_id not set"
                 )
                 return None
-            path = info.value or info.name
             return await self.agent_service.get_history_value(
                 self.session_id, str(path)
             )

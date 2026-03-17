@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import logging
 from datetime import datetime
 from typing import Optional, Union, Callable, AsyncContextManager
 from uuid import UUID
@@ -27,8 +26,6 @@ from sqlalchemy.orm import aliased
 from kavalai.agents.db import RagIndex, Agent, db_manager
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.normalizer import Normalizer
-
-logger = logging.getLogger(__name__)
 
 
 class RagServiceResult(BaseModel):

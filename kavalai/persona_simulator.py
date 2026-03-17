@@ -26,7 +26,7 @@ import os
 import urllib.parse
 from argparse import ArgumentParser
 from typing import Optional, List, Dict
-import logging
+from loguru import logger
 import httpx
 import yaml
 from json_schema_to_pydantic import create_model
@@ -35,8 +35,6 @@ from rich.console import Console
 
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.tools.openapi_spec_parser import OpenApiSpecParser
-
-logger = logging.getLogger(__name__)
 
 
 class TaskConfig(BaseModel):
