@@ -1,0 +1,138 @@
+.tasks-list-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tasks-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid #ddd;
+  background-color: #f8f9fa;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tasks-header h4 {
+  margin: 0;
+  color: #333;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #007bff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.back-button:hover {
+  background-color: #e9ecef;
+}
+
+.tasks-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  background-color: #fff;
+}
+
+.task-item {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  background-color: #fcfcfc;
+  overflow: hidden;
+}
+
+.task-item.has-errors {
+  border-left: 4px solid #dc3545;
+}
+
+.task-item-header {
+  padding: 0.75rem 1rem;
+  background-color: #f1f3f5;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.task-name {
+  font-weight: 600;
+  color: #495057;
+  flex: 1;
+}
+
+.task-time, .task-duration {
+  font-size: 0.8rem;
+  color: #868e96;
+}
+
+.task-item-body {
+  padding: 1rem;
+}
+
+.task-section {
+  margin-bottom: 1rem;
+}
+
+.task-section:last-child {
+  margin-bottom: 0;
+}
+
+.task-section label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #adb5bd;
+  margin-bottom: 0.5rem;
+}
+
+.prompt-content {
+  background-color: #2b2b2b;
+  color: #a9b7c6;
+  padding: 0.75rem;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+
+.task-section.errors {
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+  margin-top: 1rem;
+}
+
+.error-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #dc3545;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.no-errors {
+  color: #6c757d;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: #6c757d;
+}

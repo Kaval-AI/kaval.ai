@@ -227,9 +227,9 @@
 
 .modal-content {
   background-color: white;
-  width: 80%;
-  max-width: 1000px;
-  max-height: 80%;
+  width: 90%;
+  max-width: 1200px;
+  max-height: 90%;
   border-radius: 8px;
   display: flex;
   flex-direction: column;

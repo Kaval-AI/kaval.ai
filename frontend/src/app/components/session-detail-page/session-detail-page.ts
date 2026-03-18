@@ -22,6 +22,7 @@ import { ChatMessage } from '../../models/chat-message';
 import { Run } from '../../models/run';
 import { Task } from '../../models/task';
 import { JsonTreeComponent } from '../json-tree/json-tree';
+import { TasksList } from '../tasks-list/tasks-list';
 
 interface RunBlock {
   run: Run;
@@ -32,7 +33,7 @@ interface RunBlock {
 @Component({
   selector: 'app-session-detail-page',
   standalone: true,
-  imports: [CommonModule, RouterModule, JsonTreeComponent],
+  imports: [CommonModule, RouterModule, JsonTreeComponent, TasksList],
   templateUrl: './session-detail-page.html',
   styleUrl: './session-detail-page.css',
 })
@@ -49,6 +50,7 @@ export class SessionDetailPage implements OnInit {
   modalTitle: string = '';
   modalData: any = null;
   modalType: 'json' | 'tasks' = 'json';
+  modalRunId: string = '';
 
   constructor(
     private route: ActivatedRoute,
@@ -124,11 +126,9 @@ export class SessionDetailPage implements OnInit {
     this.showModal = true;
   }
 
-  openTasksModal(run: Run, tasks: Task[]): void {
-    this.modalTitle = `Tasks for Run ${run.id}`;
-    this.modalData = tasks;
-    this.modalType = 'tasks';
-    this.showModal = true;
+  openTasksPage(run: Run): void {
+    if (!this.sessionId) return;
+    this.router.navigate(['/conversations', this.sessionId, 'runs', run.id, 'tasks']);
   }
 
   closeModal(): void {

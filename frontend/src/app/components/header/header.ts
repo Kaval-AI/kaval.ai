@@ -74,6 +74,9 @@ export class Header implements OnInit {
     const projectId = target.value;
     if (projectId) {
       this.userService.setActiveProject(projectId);
+      this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
+        this.router.navigate([this.router.url]);
+      });
     }
   }
 

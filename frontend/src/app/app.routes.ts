@@ -20,6 +20,7 @@ import { MetricsPage } from './components/metrics-page/metrics-page';
 import { LlmCallStatsPage } from './components/llm-call-stats-page/llm-call-stats-page';
 import { RagPage } from './components/rag-page/rag-page';
 import { SessionDetailPage } from './components/session-detail-page/session-detail-page';
+import { RunTasksPage } from './components/run-tasks-page/run-tasks-page';
 
 import { ProjectsPage } from './components/projects-page/projects-page';
 import { AgentsPage } from './components/agents-page/agents-page';
@@ -37,6 +38,7 @@ export const routes: Routes = [
   { path: 'user-edit/:id', component: UserEditPage, data: { title: 'Edit User' } },
   { path: 'conversations', component: ConversationsPage, data: { title: 'Conversations' } },
   { path: 'conversations/:sessionId', component: SessionDetailPage, data: { title: 'Conversation History' } },
+  { path: 'conversations/:sessionId/runs/:runId/tasks', component: RunTasksPage, data: { title: 'Run Tasks' } },
   { path: 'tests', component: TestsPage, data: { title: 'Acceptance Tests' } },
   { path: 'metrics', component: MetricsPage, data: { title: 'Metrics' } },
   { path: 'llm-call-stats', component: LlmCallStatsPage, data: { title: 'Model Calls' } },

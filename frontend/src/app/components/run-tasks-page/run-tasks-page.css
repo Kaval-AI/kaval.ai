@@ -1,0 +1,44 @@
+.run-tasks-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.back-button {
+  background: transparent;
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.info .label {
+  color: #666;
+  margin-right: 6px;
+}
+
+.info .value {
+  font-weight: 600;
+}
+
+.info .sep {
+  margin: 0 8px;
+  color: #bbb;
+}
+
+.content {
+  padding: 12px 16px;
+  overflow: auto;
+}
+
+.loading-state, .error-state, .empty-state {
+  margin-top: 16px;
+}

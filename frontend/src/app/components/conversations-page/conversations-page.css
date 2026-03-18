@@ -132,6 +132,14 @@ button:disabled {
   color: #555;
 }
 
+.stat-item.has-errors {
+  color: #dc3545;
+}
+
+.stat-item.has-errors strong {
+  color: #dc3545;
+}
+
 .session-previews {
   background: #f9f9f9;
   padding: 12px;

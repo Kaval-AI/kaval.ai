@@ -65,6 +65,7 @@
               <span class="stat-item">Runs: <strong>{{ session.runs_count }}</strong></span>
               <span class="stat-item">Tasks: <strong>{{ session.tasks_count }}</strong></span>
               <span class="stat-item">Messages: <strong>{{ session.messages_count }}</strong></span>
+              <span class="stat-item" [class.has-errors]="(session.errors_count ?? 0) > 0">Errors: <strong>{{ session.errors_count ?? 0 }}</strong></span>
             </div>
 
             <div class="session-previews">

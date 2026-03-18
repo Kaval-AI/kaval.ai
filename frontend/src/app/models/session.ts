@@ -25,6 +25,7 @@ export interface SessionSummary {
   runs_count: number;
   tasks_count: number;
   messages_count: number;
+  errors_count: number;
   first_message: string | null;
   last_message: string | null;
   created_at: string;

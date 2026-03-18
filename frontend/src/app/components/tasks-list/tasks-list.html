@@ -1,0 +1,57 @@
+<div class="tasks-list-container">
+  <div class="tasks-header">
+    <button class="back-button" (click)="onBack()">
+      <span class="icon">←</span> Back to Agent Run
+    </button>
+    <h4>Tasks for Run {{ runId }}</h4>
+  </div>
+
+  @if (tasks.length === 0) {
+    <div class="empty-state">No tasks recorded for this run.</div>
+  } @else {
+    <div class="tasks-scroll-area">
+      @for (task of tasks; track task.id) {
+        <div class="task-item" [class.has-errors]="task.errors && task.errors.length > 0">
+          <div class="task-item-header">
+            <span class="task-name">{{ task.name || 'Unnamed Task' }}</span>
+            <span class="task-time">{{ formatDate(task.created_at) }}</span>
+            @if (task.duration_seconds) {
+              <span class="task-duration">({{ task.duration_seconds.toFixed(2) }}s)</span>
+            }
+          </div>
+
+          <div class="task-item-body">
+            @if (task.prompt) {
+              <div class="task-section">
+                <label>Prompt:</label>
+                <div class="prompt-content">{{ task.prompt }}</div>
+              </div>
+            }
+
+            <div class="task-section">
+              <label>Inputs:</label>
+              <app-json-tree [data]="task.inputs" [isExpanded]="false"></app-json-tree>
+            </div>
+            <div class="task-section">
+              <label>Output:</label>
+              <app-json-tree [data]="task.output" [isExpanded]="false"></app-json-tree>
+            </div>
+
+            <div class="task-section errors">
+              <label>Errors:</label>
+              @if (task.errors && task.errors.length > 0) {
+                <ul class="error-list">
+                  @for (error of task.errors; track $index) {
+                    <li>{{ error }}</li>
+                  }
+                </ul>
+              } @else {
+                <div class="no-errors">No errors</div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

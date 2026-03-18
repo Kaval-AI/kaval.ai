@@ -17,7 +17,7 @@ limitations under the License.
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, select, desc, asc
+from sqlalchemy import func, select, desc, asc, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from kavalai.agents.db import Session, Run, Task, ChatMessage, Agent
 from typing import TypedDict, Any
@@ -32,6 +32,7 @@ class SessionSummary(BaseModel):
     messages_count: int
     first_message: str | None
     last_message: str | None
+    errors_count: int
     created_at: datetime
     updated_at: datetime
 
@@ -45,6 +46,9 @@ class TaskSummary(BaseModel):
     inputs: Any | None
     output: Any | None
     name: str | None = None
+    prompt: str | None = None
+    errors: list[str] | None = None
+    duration_seconds: float | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -141,6 +145,21 @@ async def get_sessions_summary(
         .group_by(ChatMessage.session_id)
         .subquery()
     )
+    errors_count_sub = (
+        select(Task.session_id, func.count(Task.id).label("count"))
+        .where(Task.errors.is_not(None))
+        .where(
+            case(
+                (
+                    func.jsonb_typeof(Task.errors) == "array",
+                    func.jsonb_array_length(Task.errors) > 0,
+                ),
+                else_=True,
+            )
+        )
+        .group_by(Task.session_id)
+        .subquery()
+    )
 
     # Subqueries for first and last messages
     # Using window functions might be more efficient but let's try a common approach
@@ -158,6 +177,7 @@ async def get_sessions_summary(
             func.coalesce(runs_count_sub.c.count, 0).label("runs_count"),
             func.coalesce(tasks_count_sub.c.count, 0).label("tasks_count"),
             func.coalesce(messages_count_sub.c.count, 0).label("messages_count"),
+            func.coalesce(errors_count_sub.c.count, 0).label("errors_count"),
             Session.created_at,
             Session.updated_at,
         )
@@ -165,6 +185,7 @@ async def get_sessions_summary(
         .outerjoin(runs_count_sub, Session.id == runs_count_sub.c.session_id)
         .outerjoin(tasks_count_sub, Session.id == tasks_count_sub.c.session_id)
         .outerjoin(messages_count_sub, Session.id == messages_count_sub.c.session_id)
+        .outerjoin(errors_count_sub, Session.id == errors_count_sub.c.session_id)
     )
 
     if agent_id:
@@ -212,6 +233,7 @@ async def get_sessions_summary(
                 runs_count=row.runs_count,
                 tasks_count=row.tasks_count,
                 messages_count=row.messages_count,
+                errors_count=row.errors_count,
                 first_message=first_msg,
                 last_message=last_msg,
                 created_at=row.created_at,

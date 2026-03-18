@@ -19,7 +19,7 @@ import { ConversationsPage } from './conversations-page';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { ActivatedRoute } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, throwError, BehaviorSubject } from 'rxjs';
 import { Agent } from '../../models/agent';
 import { SessionSummary } from '../../models/session';
 
@@ -43,6 +43,7 @@ describe('ConversationsPage', () => {
       runs_count: 1,
       tasks_count: 2,
       messages_count: 3,
+      errors_count: 0,
       first_message: 'Hello',
       last_message: 'Bye',
       created_at: new Date().toISOString(),
@@ -52,7 +53,11 @@ describe('ConversationsPage', () => {
 
   beforeEach(async () => {
     agentServiceSpy = jasmine.createSpyObj('AgentService', ['getAgentsByProject', 'getSessions']);
-    userServiceSpy = jasmine.createSpyObj('UserService', ['getActiveProjectId']);
+    const userDetailsSubject = new BehaviorSubject<any>({ active_project_id: 'proj1' });
+    userServiceSpy = {
+      getActiveProjectId: jasmine.createSpy('getActiveProjectId'),
+      userDetails: userDetailsSubject.asObservable()
+    } as any;
     routeMock = {
       queryParams: of({})
     };
@@ -71,30 +76,33 @@ describe('ConversationsPage', () => {
   });
 
   it('should create', () => {
-    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of([]));
     agentServiceSpy.getSessions.and.returnValue(of({ sessions: [], total_count: 0 }));
     fixture.detectChanges();
     expect(component).toBeTruthy();
   });
 
+  it('loadSessions', () => {
+    agentServiceSpy.getSessions.and.returnValue(of({ sessions: [], total_count: 0 }));
+    component.activeProjectId = 'proj1';
+    component.loadSessions();
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, undefined, jasmine.any(String), jasmine.any(String), 20, 0);
+  });
+
   it('should load agents and sessions on init', () => {
-    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
     agentServiceSpy.getSessions.and.returnValue(of({ sessions: mockSessions, total_count: 1 }));
 
     fixture.detectChanges();
 
-    expect(userServiceSpy.getActiveProjectId).toHaveBeenCalled();
     expect(agentServiceSpy.getAgentsByProject).toHaveBeenCalledWith('proj1');
-    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, undefined, undefined, undefined, 20, 0);
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, undefined, jasmine.any(String), jasmine.any(String), 20, 0);
     expect(component.agents).toEqual(mockAgents);
     expect(component.sessions).toEqual(mockSessions);
     expect(component.totalSessions).toBe(1);
   });
 
   it('should filter by agent when agent selection changes', () => {
-    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
     agentServiceSpy.getSessions.and.returnValue(of({ sessions: mockSessions, total_count: 1 }));
 
@@ -103,11 +111,10 @@ describe('ConversationsPage', () => {
     component.selectedAgentId = 'agent1';
     component.onFilterChange();
 
-    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', 'agent1', undefined, undefined, undefined, 20, 0);
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', 'agent1', undefined, jasmine.any(String), jasmine.any(String), 20, 0);
   });
 
   it('should set hasMore to true if exactly limit sessions are returned', () => {
-    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
 
     // Create exactly 'limit' (20) sessions
@@ -120,7 +127,6 @@ describe('ConversationsPage', () => {
   });
 
   it('should load more sessions when nextPage is called', () => {
-    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
 
     // Initial load returns exactly 'limit' sessions so hasMore remains true
@@ -141,13 +147,12 @@ describe('ConversationsPage', () => {
     component.nextPage();
 
     expect(component.offset).toBe(20);
-    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, undefined, undefined, undefined, 20, 20);
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', undefined, undefined, jasmine.any(String), jasmine.any(String), 20, 20);
     expect(component.sessions.length).toBe(21);
     expect(component.totalSessions).toBe(21);
   });
 
   it('should handle error when loading sessions', () => {
-    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
     agentServiceSpy.getSessions.and.returnValue(throwError(() => new Error('API Error')));
 
@@ -159,7 +164,6 @@ describe('ConversationsPage', () => {
   });
 
   it('should set hasMore to false if fewer than limit sessions are returned', () => {
-    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
     agentServiceSpy.getSessions.and.returnValue(of({ sessions: mockSessions, total_count: 1 })); // length 1 < limit 20
 
@@ -179,13 +183,12 @@ describe('ConversationsPage', () => {
 
   it('should set selectedAgentId from query parameters', () => {
     routeMock.queryParams = of({ agentId: 'agent-789' });
-    userServiceSpy.getActiveProjectId.and.returnValue('proj1');
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
     agentServiceSpy.getSessions.and.returnValue(of({ sessions: mockSessions, total_count: 1 }));
 
     component.ngOnInit();
 
     expect(component.selectedAgentId).toBe('agent-789');
-    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', 'agent-789', undefined, undefined, undefined, 20, 0);
+    expect(agentServiceSpy.getSessions).toHaveBeenCalledWith('proj1', 'agent-789', undefined, jasmine.any(String), jasmine.any(String), 20, 0);
   });
 });

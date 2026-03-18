@@ -1,0 +1,26 @@
+<div class="run-tasks-container">
+  <div class="header">
+    <button class="back-button" (click)="goBack()">
+      <span class="icon">←</span> Back to Agent Run
+    </button>
+
+    <div class="info" *ngIf="sessionId && runId">
+      <span class="label">Session:</span>
+      <span class="value">{{ sessionId }}</span>
+      <span class="sep">|</span>
+      <span class="label">Run:</span>
+      <span class="value">{{ runId }}</span>
+    </div>
+  </div>
+
+  <div class="content">
+    <div *ngIf="loading" class="loading-state">Loading tasks...</div>
+    <div *ngIf="error" class="error-state">{{ error }}</div>
+    <div *ngIf="!loading && !error && tasks.length === 0" class="empty-state">No tasks found for this run.</div>
+
+    <app-tasks-list *ngIf="!loading && !error && tasks.length > 0"
+      [tasks]="tasks"
+      [runId]="runId || ''"
+      (backToRun)="goBack()"></app-tasks-list>
+  </div>
+</div>

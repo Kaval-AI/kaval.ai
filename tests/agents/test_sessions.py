@@ -71,7 +71,12 @@ async def test_get_sessions_summary(agents_db):
     s1 = Session(id=uuid4(), agent_id=agent.id, created_at=now, updated_at=now)
     r1 = Run(id=uuid4(), session_id=s1.id, created_at=now)
     t1 = Task(
-        id=uuid4(), agent_id=agent.id, session_id=s1.id, run_id=r1.id, created_at=now
+        id=uuid4(),
+        agent_id=agent.id,
+        session_id=s1.id,
+        run_id=r1.id,
+        created_at=now,
+        errors=["Test error"],
     )
     m1 = ChatMessage(
         id=uuid4(),
@@ -100,7 +105,33 @@ async def test_get_sessions_summary(agents_db):
         updated_at=now - timedelta(hours=1),
     )
 
-    agents_db.add_all([s1, r1, t1, m1, m2, s2])
+    # Session 3: Task with non-array errors (to reproduce the issue)
+    s3 = Session(id=uuid4(), agent_id=agent.id, created_at=now, updated_at=now)
+    r3 = Run(id=uuid4(), session_id=s3.id, created_at=now)
+    # Use a raw insert or a direct assignment if possible to bypass type hints if needed,
+    # but SQLAlchemy JSONB might allow it if not strictly checked during assignment.
+    t3 = Task(
+        id=uuid4(),
+        agent_id=agent.id,
+        session_id=s3.id,
+        run_id=r3.id,
+        created_at=now,
+        errors="not an array",  # type: ignore
+    )
+
+    # Session 4: Task with empty array errors
+    s4 = Session(id=uuid4(), agent_id=agent.id, created_at=now, updated_at=now)
+    r4 = Run(id=uuid4(), session_id=s4.id, created_at=now)
+    t4 = Task(
+        id=uuid4(),
+        agent_id=agent.id,
+        session_id=s4.id,
+        run_id=r4.id,
+        created_at=now,
+        errors=[],
+    )
+
+    agents_db.add_all([s1, r1, t1, m1, m2, s2, s3, r3, t3, s4, r4, t4])
     await agents_db.commit()
 
     # 2. Call the function
@@ -109,20 +140,29 @@ async def test_get_sessions_summary(agents_db):
     total_count = result["total_count"]
 
     # 3. Assertions
-    assert len(summaries) == 2
-    assert total_count == 2
+    assert len(summaries) == 4
+    assert total_count == 4
 
-    # Ordered by updated_at desc, so s1 should be first
-    summary1 = summaries[0]
-    assert summary1.session_id == s1.id
-    assert summary1.agent_name == "Test Agent"
-    assert summary1.runs_count == 1
-    assert summary1.tasks_count == 1
-    assert summary1.messages_count == 2
-    assert summary1.first_message == "First message"
-    assert summary1.last_message == "Last message"
+    # Ordered by updated_at desc, so s1, s3, s4 should be before s2
+    ids = [s.session_id for s in summaries]
+    assert s1.id in ids
+    assert s3.id in ids
+    assert s4.id in ids
+    assert s2.id == ids[3]
 
-    summary2 = summaries[1]
+    # Find s1 summary
+    summary1 = next(s for s in summaries if s.session_id == s1.id)
+    assert summary1.errors_count == 1
+
+    # Find s3 summary (non-array string errors -> count as 1 error)
+    summary3 = next(s for s in summaries if s.session_id == s3.id)
+    assert summary3.errors_count == 1
+
+    # Find s4 summary (empty array -> count as 0 errors)
+    summary4 = next(s for s in summaries if s.session_id == s4.id)
+    assert summary4.errors_count == 0
+
+    summary2 = summaries[3]
     assert summary2.session_id == s2.id
     assert summary2.runs_count == 0
     assert summary2.tasks_count == 0

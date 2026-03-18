@@ -22,6 +22,9 @@ export interface Task {
   inputs: any | null;
   output: any | null;
   name: string | null;
+  prompt: string | null;
+  errors: string[] | null;
+  duration_seconds: number | null;
   created_at: string;
   updated_at: string;
 }
