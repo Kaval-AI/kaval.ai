@@ -154,7 +154,7 @@ async def get_sessions_summary(
                     func.jsonb_typeof(Task.errors) == "array",
                     func.jsonb_array_length(Task.errors) > 0,
                 ),
-                else_=True,
+                else_=func.jsonb_typeof(Task.errors) != "null",
             )
         )
         .group_by(Task.session_id)
