@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from kavalai.agents.run_context import RunContext
 from kavalai.agents.agent_service import AgentService
+from kavalai.agents.task_logger import TaskLogger
 from kavalai.functionkernel import FunctionKernel
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
@@ -73,6 +74,7 @@ class PlanningAgent:
         input_data: dict[str, dict],
         response_model: Type[BaseModel] = BaseModel,
         agent_service: Optional[AgentService] = None,
+        task_logger: Optional[TaskLogger] = None,
         streamer: Optional[Streamer] = None,
         temperature: Optional[float] = None,
         stream_updates: bool = False,
@@ -84,6 +86,7 @@ class PlanningAgent:
         self._input_data = input_data
         self._response_model = response_model
         self._agent_service = agent_service
+        self._task_logger = task_logger
         self._streamer = streamer
         self._temperature = temperature
         self._stream_updates = stream_updates
@@ -108,9 +111,13 @@ class PlanningAgent:
 
     async def _call_tool(
         self, tool_call: ToolCall
-    ) -> tuple[ToolCall, dict, any, float]:
-        """Resolves arguments and executes a single tool call."""
+    ) -> tuple[ToolCall, dict, any, float, Optional[list[str]]]:
+        """Resolves arguments and executes a single tool call.
+
+        Returns: (tool_call, args, tool_result, duration, errors)
+        """
         duration = 0.0
+        errors = []
 
         def parse_json(field_name: str, value: str) -> dict:
             if not value:
@@ -118,7 +125,9 @@ class PlanningAgent:
             try:
                 return json.loads(value)
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse {field_name} as JSON: {value}")
+                error_msg = f"Failed to parse {field_name} as JSON: {value}"
+                logger.error(error_msg)
+                errors.append(error_msg)
                 return {}
 
         literal_args = parse_json("literal_args", tool_call.literal_args)
@@ -148,7 +157,8 @@ class PlanningAgent:
         if duplicates:
             error_msg = f"Duplicate argument names found in ToolCall: {duplicates}"
             logger.error(error_msg)
-            return tool_call, {}, f"Error: {error_msg}", 0.0
+            errors.append(error_msg)
+            return tool_call, {}, f"Error: {error_msg}", 0.0, errors
 
         args = {**literal_args, **planner_args, **input_args}
 
@@ -156,6 +166,7 @@ class PlanningAgent:
         args = self._resolve_template(args)
 
         logger.info(f"Calling tool {tool_call.name} with {args}")
+        tool_result = None
         try:
             start_time = time.perf_counter()
             tool_result = await self._kernel.call_tool(
@@ -164,10 +175,13 @@ class PlanningAgent:
             )
             duration = time.perf_counter() - start_time
         except Exception as e:
-            logger.error(f"Tool {tool_call.name} failed: {e}")
+            duration = time.perf_counter() - start_time
+            error_msg = f"Tool {tool_call.name} failed: {e}"
+            logger.error(error_msg)
+            errors.append(str(e))
             tool_result = f"Error: {e}"
 
-        return tool_call, args, tool_result, duration
+        return tool_call, args, tool_result, duration, errors
 
     async def run(
         self,
@@ -181,6 +195,8 @@ class PlanningAgent:
 
         StepOutput = get_step_output_type(self._response_model)
         final_output = None
+        start_time = time.perf_counter()
+        initial_system_prompt = None  # Capture the first system prompt for logging
 
         for iter_no in range(max_iterations):
             prompt_parts = [
@@ -242,6 +258,10 @@ class PlanningAgent:
             ]
             system_prompt = "\n".join(prompt_parts)
 
+            # Capture the initial system prompt for logging
+            if iter_no == 0:
+                initial_system_prompt = system_prompt
+
             logger.info(f"Running iteration {iter_no} for task: {task_name}")
 
             messages = [
@@ -283,31 +303,39 @@ class PlanningAgent:
                     *[self._call_tool(tc) for tc in step_output.tool_calls]
                 )
 
-                for tool_call, args, tool_result, duration in results:
+                for tool_call, args, tool_result, duration, errors in results:
                     if tool_call.call_id:
                         self._planner_context[tool_call.call_id] = tool_result
 
                     if tool_call.persist_to:
                         self._run_context.data[tool_call.persist_to] = tool_result
 
-                    if self._agent_service:
-                        try:
-                            await self._agent_service.add_task(
-                                agent_id=self._run_context.agent_id,
-                                session_id=self._run_context.session_id,
-                                run_id=self._run_context.run_id,
-                                name=tool_call.name,
-                                inputs={"arguments": args},
-                                output=tool_result,
-                                duration_seconds=duration,
-                            )
-                        except Exception as e:
-                            logger.error(f"Failed to record task in agent_service: {e}")
+                    if self._task_logger:
+                        await self._task_logger.log_tool_call(
+                            tool_uri=tool_call.name,
+                            arguments=args,
+                            output=tool_result,
+                            duration=duration,
+                            errors=errors,
+                        )
 
             if step_output.output is not None:
                 final_output = step_output.output
                 if not step_output.tool_calls:
                     break
+
+        # Log the overall agent task with the initial system prompt
+        duration = time.perf_counter() - start_time
+        if self._task_logger and initial_system_prompt:
+            from kavalai.agents.workflow_model import to_plain
+
+            await self._task_logger.log_agent_task(
+                task_name=task_name,
+                system_prompt=initial_system_prompt,
+                input_data=self._input_data,
+                output=to_plain(final_output) if final_output else None,
+                duration=duration,
+            )
 
         if final_output is not None:
             if self._streamer and self._stream_output:

@@ -5,6 +5,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock
 from pydantic import BaseModel, Field
 from kavalai.agents.planning_agent import PlanningAgent, ToolCall, get_step_output_type
+from kavalai.agents.task_logger import TaskLogger
 from kavalai.functionkernel import FunctionKernel, pythontool
 from kavalai.agents.run_context import RunContext
 from kavalai.llm_clients.llm_client import LLMClient
@@ -810,3 +811,353 @@ async def test_planning_agent_complex_nested_models():
     assert "42" in tool_result.data.message
 
     assert llm_client.chat_completions.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_logs_agent_task(agent_service, session_maker):
+    """Test that PlanningAgent logs the overall agent task with system prompt."""
+    # Create agent, session, and run
+    agent_db = await agent_service.get_or_create_agent(
+        name="test_agent",
+        description="Test agent",
+        input_schema={},
+        output_schema={},
+        workflow={},
+    )
+    session = await agent_service.get_or_create_session(agent_id=agent_db.id)
+    run = await agent_service.create_run(session_id=session.id, input_data={})
+
+    # Setup mocks
+    kernel = MagicMock(spec=FunctionKernel)
+    kernel.get_tool_descriptions = AsyncMock(return_value="[Tool: test_tool]")
+
+    run_context = RunContext(agent_service=agent_service)
+    run_context.agent_id = agent_db.id
+    run_context.session_id = session.id
+    run_context.run_id = run.id
+
+    llm_client = MagicMock(spec=LLMClient)
+
+    input_data = {"query": "test query"}
+    task = "Solve this task"
+
+    # Create task logger
+    task_logger = TaskLogger(agent_service, run_context)
+
+    # Create planning agent with task_logger
+    planning_agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data=input_data,
+        response_model=MockResponse,
+        agent_service=agent_service,
+        task_logger=task_logger,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # Mock LLM response - single step that completes
+    final_output = MockResponse(answer="Final Answer")
+    step = StepOutput(
+        short_explanation="Done",
+        long_explanation="Completed the task",
+        tool_calls=[],
+        output=final_output,
+    )
+
+    llm_client.chat_completions.return_value = (step, {"stats": "dummy"})
+
+    # Run agent
+    result = await planning_agent.run(
+        task_name="planning_task", task=task, max_iterations=5
+    )
+
+    # Verify result
+    assert result == final_output
+
+    # Verify the agent task was logged with system prompt
+    async with session_maker() as db_session:
+        from kavalai.agents.db import Task
+        from sqlalchemy import select
+
+        result = await db_session.execute(select(Task).where(Task.run_id == run.id))
+        tasks = result.scalars().all()
+
+        assert len(tasks) == 1
+        task_db = tasks[0]
+        assert task_db.name == "planning_task"
+        assert task_db.prompt is not None
+        assert "You are a planning agent" in task_db.prompt
+        assert "Solve this task" in task_db.prompt
+        assert "[Tool: test_tool]" in task_db.prompt
+        assert task_db.inputs == {"query": "test query"}
+        assert task_db.output == {"answer": "Final Answer"}
+        assert task_db.duration_seconds > 0
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_logs_tool_calls(agent_service, session_maker):
+    """Test that PlanningAgent logs individual tool calls."""
+    # Create agent, session, and run
+    agent_db = await agent_service.get_or_create_agent(
+        name="test_agent",
+        description="Test agent",
+        input_schema={},
+        output_schema={},
+        workflow={},
+    )
+    session = await agent_service.get_or_create_session(agent_id=agent_db.id)
+    run = await agent_service.create_run(session_id=session.id, input_data={})
+
+    # Setup real kernel with a tool
+    kernel = FunctionKernel()
+
+    @pythontool
+    def test_tool(query: str) -> str:
+        return f"Result for {query}"
+
+    kernel.register_python_tool("test_tool", test_tool)
+
+    run_context = RunContext(agent_service=agent_service)
+    run_context.agent_id = agent_db.id
+    run_context.session_id = session.id
+    run_context.run_id = run.id
+
+    llm_client = MagicMock(spec=LLMClient)
+
+    input_data = {"query": "test query"}
+    task = "Use the tool"
+
+    # Create task logger
+    task_logger = TaskLogger(agent_service, run_context)
+
+    # Create planning agent with task_logger
+    planning_agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data=input_data,
+        response_model=MockResponse,
+        agent_service=agent_service,
+        task_logger=task_logger,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # First step: call tool
+    step1 = StepOutput(
+        short_explanation="Calling tool",
+        long_explanation="Using test_tool",
+        tool_calls=[
+            ToolCall(
+                name="python://test_tool",
+                call_id="call1",
+                literal_args=json.dumps({"query": "search term"}),
+            )
+        ],
+        output=None,
+    )
+
+    # Second step: return result
+    step2 = StepOutput(
+        short_explanation="Done",
+        long_explanation="Completed",
+        tool_calls=[],
+        output=MockResponse(answer="Final Answer"),
+    )
+
+    llm_client.chat_completions.side_effect = [
+        (step1, {"stats": "dummy"}),
+        (step2, {"stats": "dummy"}),
+    ]
+
+    # Run agent
+    result = await planning_agent.run(
+        task_name="planning_task", task=task, max_iterations=5
+    )
+
+    # Verify result
+    assert result.answer == "Final Answer"
+
+    # Verify both the agent task and tool call were logged
+    async with session_maker() as db_session:
+        from kavalai.agents.db import Task
+        from sqlalchemy import select
+
+        result = await db_session.execute(
+            select(Task).where(Task.run_id == run.id).order_by(Task.created_at)
+        )
+        tasks = result.scalars().all()
+
+        # Should have 2 tasks: 1 tool call + 1 agent task
+        assert len(tasks) == 2
+
+        # First task: tool call
+        tool_task = tasks[0]
+        assert tool_task.name == "python://test_tool"
+        assert tool_task.inputs == {"arguments": {"query": "search term"}}
+        assert "Result for search term" in str(tool_task.output)
+
+        # Second task: overall agent task
+        agent_task = tasks[1]
+        assert agent_task.name == "planning_task"
+        assert agent_task.prompt is not None
+        assert "You are a planning agent" in agent_task.prompt
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_logging_without_agent_service():
+    """Test that PlanningAgent works without agent_service (no logging)."""
+    # Setup mocks
+    kernel = MagicMock(spec=FunctionKernel)
+    kernel.get_tool_descriptions = AsyncMock(return_value="[]")
+    kernel.call_tool = AsyncMock(return_value="Tool Result")
+
+    run_context = RunContext(agent_service=None)
+    llm_client = MagicMock(spec=LLMClient)
+
+    input_data = {"key": "value"}
+    task = "Solve this task"
+
+    # Create planning agent without task_logger (None agent_service)
+    planning_agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data=input_data,
+        response_model=MockResponse,
+        agent_service=None,
+        task_logger=None,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # Mock LLM response
+    final_output = MockResponse(answer="Final Answer")
+    step = StepOutput(
+        short_explanation="Done",
+        long_explanation="Finished",
+        tool_calls=[],
+        output=final_output,
+    )
+
+    llm_client.chat_completions.return_value = (step, {"stats": "dummy"})
+
+    # Run agent - should not raise any errors
+    result = await planning_agent.run(
+        task_name="test_task", task=task, max_iterations=1
+    )
+
+    # Verify result
+    assert result == final_output
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_logs_tool_call_errors(agent_service, session_maker):
+    """Test that PlanningAgent logs tool call errors."""
+    # Create agent, session, and run
+    agent_db = await agent_service.get_or_create_agent(
+        name="test_agent",
+        description="Test agent",
+        input_schema={},
+        output_schema={},
+        workflow={},
+    )
+    session = await agent_service.get_or_create_session(agent_id=agent_db.id)
+    run = await agent_service.create_run(session_id=session.id, input_data={})
+
+    # Setup kernel that will fail
+    kernel = MagicMock(spec=FunctionKernel)
+    kernel.get_tool_descriptions = AsyncMock(return_value="[Tool: failing_tool]")
+    kernel.call_tool = AsyncMock(
+        side_effect=Exception("ValidationError: Missing required field")
+    )
+
+    run_context = RunContext(agent_service=agent_service)
+    run_context.agent_id = agent_db.id
+    run_context.session_id = session.id
+    run_context.run_id = run.id
+
+    llm_client = MagicMock(spec=LLMClient)
+
+    input_data = {"query": "test"}
+    task = "Call the tool"
+
+    # Create task logger
+    from kavalai.agents.task_logger import TaskLogger
+
+    task_logger = TaskLogger(agent_service, run_context)
+
+    # Create planning agent with task_logger
+    planning_agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data=input_data,
+        response_model=MockResponse,
+        agent_service=agent_service,
+        task_logger=task_logger,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # Step 1: call tool that will fail
+    step1 = StepOutput(
+        short_explanation="Calling tool",
+        long_explanation="Attempting to call tool",
+        tool_calls=[
+            ToolCall(
+                name="python://failing_tool",
+                call_id="call1",
+                literal_args=json.dumps({"param": "value"}),
+            )
+        ],
+        output=None,
+    )
+
+    # Step 2: return result after tool failure
+    step2 = StepOutput(
+        short_explanation="Handling error",
+        long_explanation="Tool failed",
+        tool_calls=[],
+        output=MockResponse(answer="Error handled"),
+    )
+
+    llm_client.chat_completions.side_effect = [
+        (step1, {"stats": "dummy"}),
+        (step2, {"stats": "dummy"}),
+    ]
+
+    # Run agent
+    result = await planning_agent.run(
+        task_name="planning_task", task=task, max_iterations=5
+    )
+
+    # Verify result
+    assert result.answer == "Error handled"
+
+    # Verify the tool call was logged with errors
+    async with session_maker() as db_session:
+        from kavalai.agents.db import Task
+        from sqlalchemy import select
+
+        result = await db_session.execute(
+            select(Task).where(Task.run_id == run.id).order_by(Task.created_at)
+        )
+        tasks = result.scalars().all()
+
+        # Should have 2 tasks: 1 failed tool call + 1 overall agent task
+        assert len(tasks) == 2
+
+        # First task: failed tool call
+        tool_task = tasks[0]
+        assert tool_task.name == "python://failing_tool"
+        assert tool_task.errors is not None
+        assert len(tool_task.errors) > 0
+        assert "ValidationError" in tool_task.errors[0]
+        assert "Error:" in str(tool_task.output)
+
+        # Second task: overall agent task
+        agent_task = tasks[1]
+        assert agent_task.name == "planning_task"

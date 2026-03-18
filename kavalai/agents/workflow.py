@@ -45,6 +45,7 @@ from kavalai.agents.workflow_validation import (
     validate_workflow,
 )
 from kavalai.agents.rag_service import RagService
+from kavalai.agents.task_logger import TaskLogger
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
 from kavalai.agents.run_context import RunContext
@@ -290,16 +291,15 @@ class Workflow:
         run_context.data[task.output] = response
 
         if self.agent_service and run_context.run_id:
-            await self.agent_service.add_task(
-                agent_id=run_context.agent_id,
-                session_id=run_context.session_id,
-                run_id=run_context.run_id,
-                name=task.name,
-                inputs={"prompt": input_text},
+            task_logger = TaskLogger(self.agent_service, run_context)
+            await task_logger.log_llm_task(
+                task_name=task.name,
+                prompt=input_text,
+                input_data=input_data,
                 output=response.model_dump()
                 if isinstance(response, BaseModel)
                 else {"result": response},
-                duration_seconds=duration,
+                duration=duration,
             )
 
     async def run_rest_tool(
@@ -339,14 +339,13 @@ class Workflow:
 
         # Store the tool run info.
         if self.agent_service and run_context.run_id:
-            await self.agent_service.add_task(
-                agent_id=run_context.agent_id,
-                session_id=run_context.session_id,
-                run_id=run_context.run_id,
-                name=task.name,
-                inputs={"tool": task.tool, "arguments": inputs},
+            task_logger = TaskLogger(self.agent_service, run_context)
+            tool_uri = f"rest://{task.rest_server}.{task.tool}"
+            await task_logger.log_tool_call(
+                tool_uri=tool_uri,
+                arguments=inputs,
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
-                duration_seconds=duration,
+                duration=duration,
             )
 
     async def run_mcp_tool(
@@ -382,18 +381,13 @@ class Workflow:
 
         # Store the tool run info.
         if self.agent_service and run_context.run_id:
-            await self.agent_service.add_task(
-                agent_id=run_context.agent_id,
-                session_id=run_context.session_id,
-                run_id=run_context.run_id,
-                name=task.name,
-                inputs={
-                    "mcp_server": task.mcp_server,
-                    "tool": task.tool,
-                    "arguments": inputs,
-                },
+            task_logger = TaskLogger(self.agent_service, run_context)
+            tool_uri = f"mcp://{task.mcp_server}.{task.tool}"
+            await task_logger.log_tool_call(
+                tool_uri=tool_uri,
+                arguments=inputs,
                 output=result.model_dump() if isinstance(result, BaseModel) else result,
-                duration_seconds=duration,
+                duration=duration,
             )
 
     async def run_python_tool(
@@ -431,17 +425,13 @@ class Workflow:
 
         # Record in DB
         if self.agent_service and run_context.run_id:
-            await self.agent_service.add_task(
-                agent_id=run_context.agent_id,
-                session_id=run_context.session_id,
-                run_id=run_context.run_id,
-                name=task.name,
-                inputs={
-                    "python_tool": task.python_tool,
-                    "arguments": inputs,
-                },
+            task_logger = TaskLogger(self.agent_service, run_context)
+            tool_uri = f"python://{task.python_tool}"
+            await task_logger.log_tool_call(
+                tool_uri=tool_uri,
+                arguments=inputs,
                 output=to_plain(result),
-                duration_seconds=duration,
+                duration=duration,
             )
 
     async def run_combine(
@@ -504,6 +494,9 @@ class Workflow:
             if task.temperature is not None
             else self.workflow_model.temperature
         )
+        task_logger = (
+            TaskLogger(self.agent_service, run_context) if self.agent_service else None
+        )
         planning_agent = PlanningAgent(
             kernel=self.kernel,
             run_context=run_context,
@@ -511,6 +504,7 @@ class Workflow:
             input_data=input_data,
             response_model=response_model,
             agent_service=self.agent_service,
+            task_logger=task_logger,
             streamer=streamer,
             temperature=temperature,
             stream_updates=task.stream_updates,
@@ -550,17 +544,7 @@ class Workflow:
         run_context.data[task.name] = result
         run_context.data[task.output] = result
 
-        # 9. Record in DB
-        if self.agent_service and run_context.run_id:
-            await self.agent_service.add_task(
-                agent_id=run_context.agent_id,
-                session_id=run_context.session_id,
-                run_id=run_context.run_id,
-                name=task.name,
-                inputs=input_data,
-                output=to_plain(result),
-                duration_seconds=0.0,  # Duration not easily tracked for complex agent run
-            )
+        # Note: Logging is handled inside PlanningAgent.run() to capture the full system prompt
 
     async def run_rag_task(
         self,
@@ -634,18 +618,14 @@ class Workflow:
 
         # Store the tool run info.
         if self.agent_service and run_context.run_id:
-            await self.agent_service.add_task(
-                agent_id=run_context.agent_id,
-                session_id=run_context.session_id,
-                run_id=run_context.run_id,
-                name=task.name,
-                inputs={
-                    "text": text,
-                    "top_k": task.top_k,
-                    "collection_name": task.collection_name,
-                },
+            task_logger = TaskLogger(self.agent_service, run_context)
+            await task_logger.log_rag_query(
+                task_name=task.name,
+                query_text=text,
+                top_k=task.top_k,
+                collection_name=task.collection_name,
                 output=run_context.data[task.name],
-                duration_seconds=duration,
+                duration=duration,
             )
 
     async def run(

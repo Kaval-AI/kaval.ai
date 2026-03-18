@@ -142,6 +142,8 @@ class AgentService:
         agent_id: Optional[UUID] = None,
         inputs: Optional[Dict] = None,
         output: Optional[Dict] = None,
+        prompt: Optional[str] = None,
+        errors: Optional[list[str]] = None,
         duration_seconds: Optional[float] = None,
     ) -> Task:
         """Records a specific unit of work (Task) performed within a run."""
@@ -153,6 +155,8 @@ class AgentService:
                 name=name,
                 inputs=to_plain(inputs),
                 output=to_plain(output),
+                prompt=prompt,
+                errors=errors,
                 duration_seconds=duration_seconds,
             )
             session.add(task)

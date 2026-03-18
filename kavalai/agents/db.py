@@ -286,6 +286,8 @@ class Task(Base):
     inputs: Mapped[dict | None] = mapped_column(JSONB)
     output: Mapped[dict | None] = mapped_column(JSONB)
     name: Mapped[str | None] = mapped_column(TEXT)
+    prompt: Mapped[str | None] = mapped_column(TEXT)
+    errors: Mapped[list[str] | None] = mapped_column(JSONB)
     duration_seconds: Mapped[float | None] = mapped_column(Numeric)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
