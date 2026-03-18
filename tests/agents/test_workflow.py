@@ -1384,9 +1384,10 @@ tasks:
         # 3. Define a runner function that creates its own session and service
         async def run_one(user_message):
             agent_service = AgentService(agents_session_maker)
-            return await workflow.run(
+            # Create a new workflow instance with the agent_service
+            wf = Workflow(workflow.workflow_model, agent_service=agent_service)
+            return await wf.run(
                 input_data={"user_message": user_message},
-                agent_service=agent_service,
             )
 
         # 4. Run two instances concurrently

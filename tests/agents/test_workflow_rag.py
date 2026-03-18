@@ -196,8 +196,6 @@ async def test_workflow_dispatch_to_rag_task(agents_session_maker, monkeypatch):
     agent_service = AgentService(agents_session_maker)
     workflow = Workflow(workflow_model, agent_service=agent_service)
 
-    await workflow.run(
-        input_data={"user_message": "hello"}, agent_service=agent_service
-    )
+    await workflow.run(input_data={"user_message": "hello"})
 
     mock_run_rag_task.assert_called_once()
