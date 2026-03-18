@@ -125,7 +125,7 @@ export class SessionDetailPage implements OnInit {
   }
 
   openTasksModal(run: Run, tasks: Task[]): void {
-    this.modalTitle = `Tasks for Run ${run.id.substring(0, 8)}`;
+    this.modalTitle = `Tasks for Run ${run.id}`;
     this.modalData = tasks;
     this.modalType = 'tasks';
     this.showModal = true;
@@ -143,7 +143,7 @@ export class SessionDetailPage implements OnInit {
 
   getTaskNames(tasks: Task[]): string {
     return tasks
-      .map((t) => t.name || t.id.substring(0, 8))
+      .map((t) => t.name || t.id)
       .filter((name, index, self) => self.indexOf(name) === index)
       .join(', ');
   }

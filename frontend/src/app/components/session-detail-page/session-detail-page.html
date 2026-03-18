@@ -54,7 +54,7 @@
           <div class="run-header">
             <div class="run-info">
               <span class="run-tag">Run</span>
-              <span class="run-id">{{ block.run.id.substring(0, 8) }}</span>
+              <span class="run-id">{{ block.run.id }}</span>
               <span class="run-stats">
                 <strong>{{ block.run.tasks_count }}</strong> tasks executed
                 @if (block.tasks.length > 0) {
@@ -120,7 +120,7 @@
               <tbody>
                 @for (task of modalData; track task.id) {
                   <tr>
-                    <td>{{ task.id.substring(0, 8) }}</td>
+                    <td>{{ task.id }}</td>
                     <td>{{ task.name || '-' }}</td>
                     <td><app-json-tree [data]="task.inputs" [isExpanded]="false"></app-json-tree></td>
                     <td><app-json-tree [data]="task.output" [isExpanded]="false"></app-json-tree></td>

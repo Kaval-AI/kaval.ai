@@ -55,6 +55,7 @@ async def test_get_session_details(agents_db):
     assert len(details.tasks) == 1
     assert details.tasks[0].id == t1.id
     assert details.tasks[0].name == "test_task"
+    assert details.tasks[0].run_id == r1.id
 
 
 @pytest.mark.asyncio
