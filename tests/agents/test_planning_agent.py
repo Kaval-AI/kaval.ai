@@ -10,6 +10,17 @@ from kavalai.functionkernel import FunctionKernel, pythontool
 from kavalai.agents.run_context import RunContext
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
+from kavalai.agents.agent_service import AgentService
+
+
+@pytest.fixture
+def session_maker(agents_session_maker):
+    return agents_session_maker
+
+
+@pytest.fixture
+def agent_service(session_maker):
+    return AgentService(session_maker)
 
 
 class MockResponse(BaseModel):
@@ -1153,9 +1164,7 @@ async def test_planning_agent_logs_tool_call_errors(agent_service, session_maker
         # First task: failed tool call
         tool_task = tasks[0]
         assert tool_task.name == "python://failing_tool"
-        assert tool_task.errors is not None
-        assert len(tool_task.errors) > 0
-        assert "ValidationError" in tool_task.errors[0]
+        assert tool_task.errors == ["ValidationError: Missing required field"]
         assert "Error:" in str(tool_task.output)
 
         # Second task: overall agent task
