@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
@@ -24,7 +23,7 @@ import { TasksList } from '../tasks-list/tasks-list';
 @Component({
   selector: 'app-run-tasks-page',
   standalone: true,
-  imports: [CommonModule, RouterModule, TasksList],
+  imports: [RouterModule, TasksList],
   templateUrl: './run-tasks-page.html',
   styleUrl: './run-tasks-page.css',
 })
