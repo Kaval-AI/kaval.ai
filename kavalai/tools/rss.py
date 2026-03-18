@@ -24,6 +24,7 @@ import feedparser
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from kavalai.functionkernel import pythontool
 from pydantic import BaseModel
 
 app = FastAPI(title="RSS-Parser", version="1.0.0")
@@ -84,6 +85,7 @@ def get_rss_feed_endpoint(
         )
 
 
+@pythontool
 def get_rss_feed(
     url: str,
     max_results: int = 5,

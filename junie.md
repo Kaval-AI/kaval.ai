@@ -67,7 +67,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `tools/`: Utility tools.
         - `cli_chat.py`: Command line tool for chatting with agents. Now supports Ctrl+D (EOF) to exit and uses streaming server endpoint for real-time responses.
         - `selenium_browser.py`: Selenium-based browser automation tool (FastAPI). Supports navigate, click, type, and screenshot actions.
-        - `rss.py`: RSS feed parser tool.
+        - `rss.py`: RSS feed parser tool, converted to a `@pythontool` for direct use in workflows.
         - `websearch/langsearch.py`: LangSearch API client for web searches. Optimized for AI applications, returns summaries and snippets in a format compatible with Bing Search API.
         - `websearch/serper.py`: Serper API client for Google Search. Supports country, language, date range and pagination.
         - `websearch/google_custom_search.py`: Google Custom Search JSON API client. Requires API key and Search Engine ID (cx).
