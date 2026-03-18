@@ -18,6 +18,17 @@ import pytest
 
 from kavalai.agents.task_logger import TaskLogger
 from kavalai.agents.run_context import RunContext
+from kavalai.agents.agent_service import AgentService
+
+
+@pytest.fixture
+def session_maker(agents_session_maker):
+    return agents_session_maker
+
+
+@pytest.fixture
+def agent_service(session_maker):
+    return AgentService(session_maker)
 
 
 @pytest.mark.asyncio

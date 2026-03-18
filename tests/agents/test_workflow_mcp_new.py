@@ -123,7 +123,7 @@ async def test_workflow_mcp_http_support(monkeypatch):
     client = FakeClient(session)
     last_url = None
 
-    def fake_sse_client(url):
+    def fake_sse_client(url, timeout=None):
         nonlocal last_url
         last_url = url
         return client

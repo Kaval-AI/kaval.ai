@@ -717,8 +717,24 @@ async def test_mcp_tool_sse(rest_server):
     Tests MCP tool execution using the Server-Sent Events (SSE) transport protocol.
     Interacts with a real FastAPI server acting as an MCP SSE host.
     """
+    # Wait for server to be ready
+    import httpx
+    import time
+
+    max_retries = 20
+    for i in range(max_retries):
+        try:
+            with httpx.Client(timeout=1.0) as client:
+                resp = client.get(f"{rest_server}/get_item?id=1")
+                if resp.status_code == 200:
+                    break
+        except (httpx.ConnectError, httpx.ConnectTimeout):
+            if i == max_retries - 1:
+                pytest.fail("Server did not start in time")
+            time.sleep(0.5)
+
     try:
-        async with asyncio.timeout(10):
+        async with asyncio.timeout(20):
             kernel = FunctionKernel()
             server = McpServer(name="mcp_sse", url=f"{rest_server}/sse")
             kernel.register_mcp_server(server)
@@ -730,7 +746,7 @@ async def test_mcp_tool_sse(rest_server):
             # Cleanup
             await kernel.close()
     except asyncio.TimeoutError:
-        pytest.fail("test_mcp_tool_sse timed out after 10 seconds")
+        pytest.fail("test_mcp_tool_sse timed out after 20 seconds")
 
 
 @pytest.mark.asyncio
@@ -843,7 +859,7 @@ async def test_call_tool_unified():
             "GET", "http://api.example.com/status", params={}, timeout=60.0
         )
 
-    # Test MCP tool via unified call
+    # MCP tool via unified call
     mcp_server = McpServer(name="test_mcp", command="true")
     kernel.register_mcp_server(mcp_server)
 

@@ -32,6 +32,8 @@ from kavalai.agents.workflow_model import (
     WorkflowException,
 )
 
+SSE_CLIENT_TIMEOUT_SECONDS = 30.0
+
 
 class FunctionKernelException(WorkflowException):
     pass
@@ -317,7 +319,7 @@ class FunctionKernel:
                 )
 
             logger.info(f"Connecting to HTTP MCP server {server_name} at {url}")
-            aclient = sse_client(url)
+            aclient = sse_client(url, timeout=SSE_CLIENT_TIMEOUT_SECONDS)
             read, write = await aclient.__aenter__()
             self.mcp_cleanups.append(aclient)
         else:
