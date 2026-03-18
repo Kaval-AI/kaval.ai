@@ -119,7 +119,7 @@ async def handle_agent_run(
 
     Args:
         workflow: The Workflow instance to execute.
-        session_provider: An optional SQLAlchemy async_sessionmaker for database sessions.
+        session_provider: An optional SQLAlchemy async_sessionmaker for database sessions (unused, kept for compatibility).
         input_data: The input data for the workflow (already extracted from request).
         session_id: Optional session ID for continuing a previous session.
         external_id: Optional external identifier for tracking.
@@ -127,12 +127,10 @@ async def handle_agent_run(
     Returns:
         A tuple of (session_id, output_data).
     """
-    agent_service = AgentService(session_provider)
     result = await workflow.run(
         input_data=input_data,
         session_id=session_id,
         external_id=external_id,
-        agent_service=agent_service,
     )
     return result.session_id, result.data
 
@@ -150,7 +148,7 @@ async def handle_agent_stream(
 
     Args:
         workflow: The Workflow instance to execute.
-        session_provider: An optional SQLAlchemy async_sessionmaker for database sessions.
+        session_provider: An optional SQLAlchemy async_sessionmaker for database sessions (unused, kept for compatibility).
         input_data: The input data for the workflow (already extracted from request).
         session_id: Optional session ID for continuing a previous session.
         external_id: Optional external identifier for tracking.
@@ -158,7 +156,6 @@ async def handle_agent_stream(
     Yields:
         Server-Sent Events formatted strings (data: ...\n\n).
     """
-    agent_service = AgentService(session_provider)
     queue = asyncio.Queue()
 
     # Get the dynamic output type from workflow
@@ -175,7 +172,6 @@ async def handle_agent_stream(
             session_id=session_id,
             external_id=external_id,
             queue=queue,
-            agent_service=agent_service,
         )
     )
 
@@ -438,9 +434,6 @@ def create_app_from_env_conf(
     if workflow_path is None:
         workflow_path = env.str("KAVALAI_AGENT_WORKFLOW_PATH")
 
-    logger.info(f"Loading workflow from {workflow_path}.")
-    workflow = Workflow.from_yaml_path(workflow_path)
-
     # Log database connection info
     if db_uri is None:
         db_uri = env("KAVALAI_DB_URI")
@@ -486,6 +479,12 @@ def create_app_from_env_conf(
         pool_size=pool_size,
         max_overflow=max_overflow,
     )
+
+    # Create agent service and workflow with it
+    agent_service = AgentService(session_provider)
+
+    logger.info(f"Loading workflow from {workflow_path}.")
+    workflow = Workflow.from_yaml_path(workflow_path, agent_service=agent_service)
 
     return create_agent_app(
         workflow=workflow,

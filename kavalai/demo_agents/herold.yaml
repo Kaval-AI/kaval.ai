@@ -1,5 +1,8 @@
 name: Herold news agent
 description: An agent that can converse with the user on hot daily news topics.
+python_functions:
+  - name: kavalai.tools.rss.get_rss_feed
+    path: kavalai.tools.rss.get_rss_feed
 data_types:
   input:
     type: object

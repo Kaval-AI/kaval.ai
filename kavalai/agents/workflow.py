@@ -198,24 +198,32 @@ class Workflow:
                     )
 
     @classmethod
-    def from_yaml_path(cls, yaml_path: str):
+    def from_yaml_path(
+        cls, yaml_path: str, agent_service: Optional[AgentService] = None
+    ):
         with open(yaml_path, "r") as f:
             yaml_string = f.read()
             try:
                 data = yaml.load(yaml_string, Loader=LineLoader)  # nosec B506
                 inject_metadata(data, file_path=yaml_path)
                 workflow_model = WorkflowModel(**data)
-                return cls(workflow_model, yaml_content=yaml_string)
+                return cls(
+                    workflow_model,
+                    agent_service=agent_service,
+                    yaml_content=yaml_string,
+                )
             except ValidationError as e:
                 raise WorkflowException(f"Workflow validation failed: {e}") from e
 
     @classmethod
-    def from_yaml(cls, yaml_string: str):
+    def from_yaml(cls, yaml_string: str, agent_service: Optional[AgentService] = None):
         try:
             data = yaml.load(yaml_string, Loader=LineLoader)  # nosec B506
             inject_metadata(data)
             workflow_model = WorkflowModel(**data)
-            return cls(workflow_model, yaml_content=yaml_string)
+            return cls(
+                workflow_model, agent_service=agent_service, yaml_content=yaml_string
+            )
         except ValidationError as e:
             raise WorkflowException(f"Workflow validation failed: {e}") from e
 
@@ -634,9 +642,8 @@ class Workflow:
         session_id: Optional[UUID] = None,
         external_id: Optional[str] = None,
         queue: asyncio.Queue | None = None,
-        agent_service: Optional[AgentService] = None,
     ) -> WorkflowRunResult:
-        agent_service = agent_service or self.agent_service
+        agent_service = self.agent_service
         # 1. Parse Input
         try:
             parsed_input = self.get_data_type("input")(**input_data)
