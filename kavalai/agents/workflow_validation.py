@@ -191,15 +191,27 @@ def validate_workflow(workflow_model: "WorkflowModel"):
                     task,
                 )
 
-        # Check allowed_mcp_servers existence
-        if isinstance(task, AgentTask) and task.allowed_mcp_servers:
+        # Check allowed_tools existence
+        if isinstance(task, AgentTask) and task.allowed_tools:
+            # We don't have a full list of all tools in all servers here easily,
+            # but we can check if the server part of mcp://server.tool exists
             mcp_server_names = [s.name for s in workflow_model.mcp_servers]
-            for s_name in task.allowed_mcp_servers:
-                if s_name not in mcp_server_names:
-                    raise_error(
-                        f"Task '{task.name}' refers to undefined allowed MCP server '{s_name}'.",
-                        task,
-                    )
+            rest_server_names = [s.name for s in workflow_model.rest_servers]
+            for tool_uri in task.allowed_tools:
+                if tool_uri.startswith("mcp://"):
+                    server_name = tool_uri.replace("mcp://", "").split(".")[0]
+                    if server_name not in mcp_server_names:
+                        raise_error(
+                            f"Task '{task.name}' refers to undefined allowed MCP server in '{tool_uri}'.",
+                            task,
+                        )
+                elif tool_uri.startswith("rest://"):
+                    server_name = tool_uri.replace("rest://", "").split(".")[0]
+                    if server_name not in rest_server_names:
+                        raise_error(
+                            f"Task '{task.name}' refers to undefined allowed REST server in '{tool_uri}'.",
+                            task,
+                        )
 
         # After task week, its output is available for next tasks
         if isinstance(task.output, str) and task.output:

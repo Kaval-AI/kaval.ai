@@ -79,6 +79,7 @@ class PlanningAgent:
         temperature: Optional[float] = None,
         stream_updates: bool = False,
         stream_output: bool = False,
+        allowed_tools: Optional[list[str]] = None,
     ):
         self._kernel = kernel
         self._run_context = run_context
@@ -91,6 +92,7 @@ class PlanningAgent:
         self._temperature = temperature
         self._stream_updates = stream_updates
         self._stream_output = stream_output
+        self._allowed_tools = allowed_tools
         self._planner_context = {}
         self._step_outputs = []
 
@@ -231,7 +233,7 @@ class PlanningAgent:
                 "- {{input.key}}: Reference data from the provided # Inputs section.",
                 "",
                 "# Available tools:",
-                await self._kernel.get_tool_descriptions(),
+                await self._kernel.get_tool_descriptions(self._allowed_tools),
                 "# Inputs:",
                 json.dumps(self._input_data, indent=2),
                 "Planner Context (tool results from previous steps, accessible via call_id):",

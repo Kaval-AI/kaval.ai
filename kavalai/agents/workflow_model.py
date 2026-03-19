@@ -154,7 +154,7 @@ class PythonTask(BaseTask):
 class AgentTask(BaseTask):
     type: Literal["agent"] = "agent"
     max_steps: int = 1
-    allowed_mcp_servers: list[str] = []
+    allowed_tools: list[str] = Field(default_factory=list)
     timeout: Optional[int] = None
     prompt: Optional[str] = None
     temperature: Optional[float] = None

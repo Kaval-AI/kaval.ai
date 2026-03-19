@@ -144,7 +144,7 @@ A higher-level task that uses an LLM to autonomously decide which tools (REST or
       type: agent
       prompt: "Research the given topic and provide a detailed report."
       max_steps: 10
-      allowed_mcp_servers: ["filesystem", "google_search"]
+      allowed_tools: ["mcp://filesystem.*", "mcp://google_search.*"]
       inputs:
         topic: {type: context, value: input.user_query}
       output: output

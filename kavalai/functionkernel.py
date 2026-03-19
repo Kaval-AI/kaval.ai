@@ -544,7 +544,9 @@ class FunctionKernel:
                 return result
         return result
 
-    async def get_tool_descriptions(self) -> str:
+    async def get_tool_descriptions(
+        self, allowed_tools: Optional[List[str]] = None
+    ) -> str:
         """Returns a string description of all registered tools as a JSON array for prompts."""
         tools_list = []
 
@@ -556,6 +558,17 @@ class FunctionKernel:
             return schema_dict
 
         def _add_tool(name: str, description: str, input_model: Type[BaseModel]):
+            if allowed_tools is not None and len(allowed_tools) > 0:
+                # If we have an allowed list, only add if the tool is in it.
+                # Note: name could be python://tool, rest://server.tool [METHOD], mcp://server.tool
+                # We check for exact match or if it's a prefix for dynamic tools
+                if name not in allowed_tools:
+                    # Also check if it's a dynamic rest/mcp server and if the server is allowed
+                    # e.g. rest://server.* or mcp://server.*
+                    server_prefix = name.split(".")[0] + ".*"
+                    if server_prefix not in allowed_tools:
+                        return
+
             tools_list.append(
                 {
                     "name": name,
