@@ -26,6 +26,36 @@ from kavalai.agents.client import AgentClient
 console = Console()
 
 
+async def chat_loop(client: AgentClient):
+    while True:
+        try:
+            user_input = Prompt.ask("[bold cyan]You[/bold cyan]")
+            if user_input.lower() in ("exit", "quit"):
+                break
+
+            if not user_input.strip():
+                continue
+
+            # Assuming the agent expects a 'user_message' field based on the issue description.
+            # If the schema is different, this might need more complex input handling.
+            if "user_message" not in client.input_schema.model_fields:
+                console.print(
+                    f"[bold red]Error: Agent input schema does not have 'user_message' field. Fields: {client.input_schema.model_fields.keys()}[/bold red]"
+                )
+                break
+
+            data = client.input_schema(user_message=user_input)
+
+            console.print("[bold yellow]Agent:[/bold yellow] ", end="")
+            async for line in client.stream_agent(data):
+                console.print(line)
+
+        except (KeyboardInterrupt, EOFError):
+            break
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+
+
 async def main():
     parser = ArgumentParser(description="CLI Chat tool for Kaval.AI agents.")
     parser.add_argument(
@@ -57,33 +87,7 @@ async def main():
     console.print(f"Input schema: {client.input_schema.model_fields.keys()}")
     console.print(f"Output schema: {client.output_schema.model_fields.keys()}")
 
-    while True:
-        try:
-            user_input = Prompt.ask("[bold cyan]You[/bold cyan]")
-            if user_input.lower() in ("exit", "quit"):
-                break
-
-            if not user_input.strip():
-                continue
-
-            # Assuming the agent expects a 'user_message' field based on the issue description.
-            # If the schema is different, this might need more complex input handling.
-            if "user_message" not in client.input_schema.model_fields:
-                console.print(
-                    f"[bold red]Error: Agent input schema does not have 'user_message' field. Fields: {client.input_schema.model_fields.keys()}[/bold red]"
-                )
-                break
-
-            data = client.input_schema(user_message=user_input)
-
-            console.print("[bold yellow]Agent:[/bold yellow] ", end="")
-            async for line in client.stream_agent(data):
-                console.print(line)
-
-        except (KeyboardInterrupt, EOFError):
-            break
-        except Exception as e:
-            console.print(f"[bold red]Error: {e}[/bold red]")
+    await chat_loop(client)
 
     console.print("[bold blue]Goodbye![/bold blue]")
 

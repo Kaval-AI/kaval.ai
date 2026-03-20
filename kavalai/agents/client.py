@@ -97,5 +97,9 @@ class AgentClient:
             async with client.stream("POST", url, json=payload) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        yield line[6:]
+                    async for chunk in self._process_stream_line(line):
+                        yield chunk
+
+    async def _process_stream_line(self, line: str):
+        if line.startswith("data: "):
+            yield line[6:]

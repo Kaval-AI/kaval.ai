@@ -39,7 +39,7 @@ import csv
 from loguru import logger
 import os
 import sys
-from typing import List, Optional, Generator, Dict
+from typing import List, Optional, Generator, Dict, Any
 
 from kavalai.agents.rag_service import RagService
 
@@ -75,16 +75,22 @@ def content_splitter_generator(
                 continue
 
             content = row[field]
-            if mode == "lines":
-                for line in content.splitlines():
-                    if line.strip():
-                        yield {
-                            "text": line.strip(),
-                            "meta": row_meta,
-                            "source_id": source_id,
-                        }
-            else:  # full
-                yield {"text": content, "meta": row_meta, "source_id": source_id}
+            yield from _split_content(content, row_meta, source_id, mode)
+
+
+def _split_content(
+    content: str, row_meta: Dict[str, Any], source_id: str, mode: str
+) -> Generator[Dict[str, Any], None, None]:
+    if mode == "lines":
+        for line in content.splitlines():
+            if line.strip():
+                yield {
+                    "text": line.strip(),
+                    "meta": row_meta,
+                    "source_id": source_id,
+                }
+    else:  # full
+        yield {"text": content, "meta": row_meta, "source_id": source_id}
 
 
 async def index_csv(
