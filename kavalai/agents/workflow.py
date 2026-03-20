@@ -679,10 +679,15 @@ class Workflow:
 
             # Get or create session (using UUID or string external_id)
             if session_id:
-                run_context.session_id = session_id
+                session = await agent_service.get_or_create_session(
+                    agent_id=agent.id, session_id=session_id
+                )
+                if not session:
+                    raise WorkflowException(f"Session with ID {session_id} not found")
+                run_context.session_id = session.id
             else:
                 session = await agent_service.get_or_create_session(
-                    agent_id=agent.id, session_id=session_id, external_id=external_id
+                    agent_id=agent.id, session_id=None, external_id=external_id
                 )
                 run_context.session_id = session.id
 

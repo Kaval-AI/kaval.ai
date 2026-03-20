@@ -72,3 +72,43 @@ tasks:
     error_msg = str(excinfo.value)
     assert "history.task0.res" in error_msg
     assert "Line 7" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_workflow_run_with_non_existent_session_id(agents_session_maker):
+    from kavalai.agents.agent_service import AgentService
+    from uuid import uuid4
+
+    service = AgentService(agents_session_maker)
+
+    yaml_content = """
+name: Test Agent
+description: A test agent
+data_types:
+  input:
+    type: object
+    properties:
+      user_message: { type: string }
+  output:
+    type: object
+    properties:
+      reply: { type: string }
+tasks:
+  - name: reply_task
+    type: combine
+    inputs:
+      reply: { type: literal, value: "hello" }
+    output:
+      reply: { type: literal, value: "hello" }
+"""
+    wf = Workflow.from_yaml(yaml_content)
+    wf.agent_service = service
+
+    non_existent_session_id = uuid4()
+
+    with pytest.raises(WorkflowException) as excinfo:
+        await wf.run(
+            input_data={"user_message": "hi"}, session_id=non_existent_session_id
+        )
+
+    assert f"Session with ID {non_existent_session_id} not found" in str(excinfo.value)
