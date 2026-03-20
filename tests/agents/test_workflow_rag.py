@@ -18,7 +18,7 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
             source_id="source-1",
             content="test content",
             embedding_size=1536,
-            rag_metadata={},
+            rag_metadata={"key": "value"},
             similarity=0.9,
         )
     ]
@@ -62,6 +62,7 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
     assert run_context.data["rag_task"][0]["content"] == "test content"
     assert run_context.data["rag_task"][0]["similarity"] == 0.9
     assert run_context.data["rag_task"][0]["source_id"] == "source-1"
+    assert run_context.data["rag_task"][0]["metadata"] == '{"key": "value"}'
     # Ensure other fields are NOT present
     assert "id" not in run_context.data["rag_task"][0]
     assert "model" not in run_context.data["rag_task"][0]

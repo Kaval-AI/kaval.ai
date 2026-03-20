@@ -19,6 +19,7 @@ from typing import Dict, Type, Optional, Any
 from uuid import UUID
 
 import yaml
+import json
 from environs import Env
 from pydantic import BaseModel, ValidationError
 import time
@@ -597,12 +598,13 @@ class Workflow:
             )
             duration = time.perf_counter() - start_time
 
-            # 3. Store results in run_context.data (only similarity, content, and source_id)
+            # 3. Store results in run_context.data (similarity, content, source_id, and metadata)
             run_context.data[task.name] = [
                 {
                     "similarity": r.similarity,
                     "content": r.content,
                     "source_id": r.source_id,
+                    "metadata": json.dumps(r.rag_metadata) if r.rag_metadata else None,
                 }
                 for r in results
             ]

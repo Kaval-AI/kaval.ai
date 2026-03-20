@@ -32,6 +32,7 @@ async def test_projects_rag_query_with_source_ids(client):
         "collection_name": "test_collection",
         "top_k": 5,
         "source_ids": ["source1", "source2"],
+        "keep_best": True,
     }
 
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(
@@ -59,4 +60,5 @@ async def test_projects_rag_query_with_source_ids(client):
             top_k=5,
             collection_name="test_collection",
             source_ids=["source1", "source2"],
+            keep_best=True,
         )
