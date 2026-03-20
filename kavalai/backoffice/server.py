@@ -500,6 +500,7 @@ async def projects_rag_query(
     collection_name = query_data.get("collection_name")
     top_k = query_data.get("top_k", 5)
     source_ids = query_data.get("source_ids")
+    keep_best = query_data.get("keep_best", False)
     normalizer_yaml = query_data.get("normalizer_yaml")
 
     if not model or not text:
@@ -530,6 +531,7 @@ async def projects_rag_query(
             top_k=top_k,
             collection_name=collection_name,
             source_ids=source_ids,
+            keep_best=keep_best,
         )
         return results
 

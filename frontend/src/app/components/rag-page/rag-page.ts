@@ -37,6 +37,7 @@ export class RagPage implements OnInit {
   collectionName: string = '';
   sourceIdsInput: string = '';
   topK: number = 10;
+  keepBest: boolean = false;
   normalizerYaml: string = '';
 
   loading: boolean = false;
@@ -90,6 +91,7 @@ export class RagPage implements OnInit {
       collection_name: this.collectionName || undefined,
       top_k: this.topK,
       source_ids: sourceIds,
+      keep_best: this.keepBest,
       normalizer_yaml: this.normalizerYaml || undefined
     }).subscribe({
       next: (results) => {

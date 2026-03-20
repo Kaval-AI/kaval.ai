@@ -47,6 +47,13 @@
         <label for="topK">Top K</label>
         <input type="number" id="topK" [(ngModel)]="topK" min="1" max="100" class="form-control">
       </div>
+
+      <div class="form-group col-keep-best">
+        <label class="checkbox-container">
+          <input type="checkbox" [(ngModel)]="keepBest">
+          <span>Keep Best Only</span>
+        </label>
+      </div>
     </div>
 
     <div class="form-group mt-3">
