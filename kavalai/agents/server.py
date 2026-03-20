@@ -141,6 +141,7 @@ async def handle_agent_stream(
     input_data: dict,
     session_id: Optional[UUID] = None,
     external_id: Optional[str] = None,
+    output_streamer_name: str = "run_output",
 ):
     """Execute the agent workflow and yield streaming output.
 
@@ -152,6 +153,7 @@ async def handle_agent_stream(
         input_data: The input data for the workflow (already extracted from request).
         session_id: Optional session ID for continuing a previous session.
         external_id: Optional external identifier for tracking.
+        output_streamer_name: Optional name for the output streamer (default: "run_output").
 
     Yields:
         Server-Sent Events formatted strings (data: ...\n\n).
@@ -187,7 +189,7 @@ async def handle_agent_stream(
 
     # Stream final output
     output = OutputType(session_id=result.session_id, data=result.data)
-    streamer = Streamer("output", queue)
+    streamer = Streamer(output_streamer_name, queue)
     await streamer.stream_complete(output.model_dump_json())
 
     # Yield any remaining items in the queue (including our final output)

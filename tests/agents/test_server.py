@@ -205,7 +205,11 @@ async def test_stream_agent_endpoint(
         if streamer:
             await streamer.stream_partial('{"agent_response": "He')
             await streamer.stream_partial('{"agent_response": "Hello world"}')
-            await streamer.stream_complete('{"agent_response": "Hello world"}')
+            # In the actual implementation, the LLMTask also calls streamer.stream_complete
+            # with the task name.
+            await streamer.stream_complete(
+                '{"agent_response": "Hello world"}', name="output"
+            )
 
         response = response_model(agent_response="Hello world")
         from kavalai.agents.db import ModelCallStat
@@ -258,7 +262,7 @@ async def test_stream_agent_endpoint(
         # Final output
         final_output = json.loads(lines[4])
         assert final_output["type"] == "complete"
-        assert final_output["name"] == "output"
+        assert final_output["name"] == "run_output"
         final_value = json.loads(final_output["value"])
         assert "session_id" in final_value
         assert final_value["data"]["agent_response"] == "Hello world"
