@@ -201,18 +201,18 @@ class RunContext(BaseModel):
             elif key == "all":
                 if not isinstance(val, list):
                     raise ValueError("'all' requires a list of conditions.")
-                results = []
                 for c in val:
-                    results.append(await self.evaluate_condition(c))
-                return all(results)
+                    if not await self.evaluate_condition(c):
+                        return False
+                return True
 
             elif key == "any":
                 if not isinstance(val, list):
                     raise ValueError("'any' requires a list of conditions.")
-                results = []
                 for c in val:
-                    results.append(await self.evaluate_condition(c))
-                return any(results)
+                    if await self.evaluate_condition(c):
+                        return True
+                return False
 
             elif key == "not":
                 if not isinstance(val, dict):

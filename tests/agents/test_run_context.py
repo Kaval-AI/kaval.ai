@@ -235,6 +235,97 @@ async def test_evaluate_condition_errors():
 
 
 @pytest.mark.asyncio
+async def test_evaluate_condition_complex_none():
+    rc = RunContext(data={"a": None, "b": 10})
+
+    # all with None
+    assert (
+        await rc.evaluate_condition(
+            {"all": [{"is_null": {"type": "context", "value": "a"}}, {"eq": [10, 10]}]}
+        )
+        is True
+    )
+    assert (
+        await rc.evaluate_condition(
+            {
+                "all": [
+                    {"is_not_null": {"type": "context", "value": "a"}},
+                    {"eq": [10, 10]},
+                ]
+            }
+        )
+        is False
+    )
+
+    # any with None
+    assert (
+        await rc.evaluate_condition(
+            {
+                "any": [
+                    {"is_not_null": {"type": "context", "value": "a"}},
+                    {"eq": [10, 10]},
+                ]
+            }
+        )
+        is True
+    )
+    assert (
+        await rc.evaluate_condition(
+            {
+                "any": [
+                    {"is_not_null": {"type": "context", "value": "a"}},
+                    {"eq": [10, 20]},
+                ]
+            }
+        )
+        is False
+    )
+
+    # complex expression
+    # (a is null AND b == 10) OR (b == 20)
+    cond = {
+        "any": [
+            {
+                "all": [
+                    {"is_null": {"type": "context", "value": "a"}},
+                    {"eq": [{"type": "context", "value": "b"}, 10]},
+                ]
+            },
+            {"eq": [{"type": "context", "value": "b"}, 20]},
+        ]
+    }
+    assert await rc.evaluate_condition(cond) is True
+
+    rc.data["b"] = 20
+    assert await rc.evaluate_condition(cond) is True
+
+    rc.data["a"] = "not null"
+    rc.data["b"] = 10
+    assert await rc.evaluate_condition(cond) is False
+
+
+@pytest.mark.asyncio
+async def test_evaluate_condition_short_circuit():
+    rc = RunContext()
+
+    # 'all' short-circuit: second condition is invalid (not a list of 2),
+    # but it shouldn't be reached if the first one is False.
+    assert await rc.evaluate_condition({"all": [{"eq": [1, 2]}, {"eq": [1]}]}) is False
+
+    # If first is True, second IS reached and raises ValueError
+    with pytest.raises(ValueError, match="requires a list of 2 operands"):
+        await rc.evaluate_condition({"all": [{"eq": [1, 1]}, {"eq": [1]}]})
+
+    # 'any' short-circuit: second condition is invalid,
+    # but it shouldn't be reached if the first one is True.
+    assert await rc.evaluate_condition({"any": [{"eq": [1, 1]}, {"eq": [1]}]}) is True
+
+    # If first is False, second IS reached and raises ValueError
+    with pytest.raises(ValueError, match="requires a list of 2 operands"):
+        await rc.evaluate_condition({"any": [{"eq": [1, 2]}, {"eq": [1]}]})
+
+
+@pytest.mark.asyncio
 async def test_evaluate_condition_unknown_key():
     rc = RunContext()
     # If the key is not an operator, 'all', 'any', or 'not', it should fall through to return True (line 135)
