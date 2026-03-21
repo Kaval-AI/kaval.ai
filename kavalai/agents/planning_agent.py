@@ -285,10 +285,11 @@ class PlanningAgent:
             if tool_call.persist_to:
                 self._run_context.data[tool_call.persist_to] = tool_result
                 if self._streamer and self._stream_persisted:
+                    stream_value = to_plain(tool_result)
+                    if not isinstance(stream_value, str):
+                        stream_value = json.dumps(stream_value)
                     await self._streamer.stream_complete(
-                        to_plain(tool_result)
-                        if not isinstance(tool_result, (str, int, float, bool))
-                        else tool_result,
+                        stream_value,
                         name=tool_call.persist_to,
                     )
 
