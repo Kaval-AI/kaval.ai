@@ -188,6 +188,119 @@ class PlanningAgent:
 
         return tool_call, args, tool_result, duration, errors
 
+    async def _build_system_prompt(
+        self, task: str, iter_no: int, max_iterations: int
+    ) -> str:
+        prompt_parts = [
+            "You are a planning agent. Your goal is to achieve the following task:",
+            task.strip(),
+            "# Tool calling instructions:",
+            "Use tools to fulfill the task.",
+            "To call a tool, provide its name and arguments categorized by their source:",
+            "- `literal_args`: A JSON string of literal values for the tool.",
+            "- `planner_context_args`: A JSON string mapping tool argument names to keys in `planner_context` (results of previous tool calls).",
+            "- `input_args`: A JSON object mapping tool argument names to keys in the provided # Inputs.",
+            "",
+            "Example:",
+            "{",
+            '  "name": "python://websearch.serper_web_search",',
+            '  "literal_args": "{\\"query\\": \\"Kaval AI\\"}",',
+            '  "call_id": "search_result"',
+            "}",
+            "",
+            "Example with context and inputs:",
+            "{",
+            '  "name": "python://data.process",',
+            '  "planner_context_args": "{\\"raw_data\\": \\"search_result\\"}",',
+            '  "input_args": {"user_id": "current_user_id"},',
+            '  "literal_args": "{\\"mode\\": \\"fast\\"}"',
+            "}",
+            "",
+            "IMPORTANT: An argument name must only appear in ONE of the categories. Duplicates will cause an error.",
+            "",
+            "You can still use template strings in `literal_args` if needed:",
+            "- {{context.key}}: Reference a result from a previous tool call via call_id.",
+            "- {{input.key}}: Reference data from the provided # Inputs section.",
+            "",
+            "# Available tools:",
+            await self._kernel.get_tool_descriptions(self._allowed_tools),
+            "# Inputs:",
+            json.dumps(self._input_data, indent=2),
+            "Planner Context (tool results from previous steps, accessible via call_id):",
+            json.dumps(
+                {
+                    k: v.model_dump() if hasattr(v, "model_dump") else v
+                    for k, v in self._planner_context.items()
+                },
+                indent=2,
+            ),
+            "",
+            "Planning data",
+            f"current_step={iter_no}",
+            f"max_steps={max_iterations}",
+            "",
+            "Step Outputs (previous steps):",
+            json.dumps(
+                [
+                    so.model_dump() if hasattr(so, "model_dump") else so
+                    for so in self._step_outputs
+                ],
+                indent=2,
+            ),
+        ]
+        return "\n".join(prompt_parts)
+
+    async def _get_llm_response(
+        self, messages: list[dict], response_model: Type[BaseModel]
+    ) -> tuple[BaseModel, dict]:
+        result, stats = await self._llm_client.chat_completions(
+            messages=messages,
+            response_model=response_model,
+            streamer=self._streamer,
+            temperature=self._temperature,
+        )
+
+        if self._agent_service:
+            try:
+                await self._agent_service.add_model_call_stats(
+                    stats=stats, agent_id=self._run_context.agent_id
+                )
+            except Exception as e:
+                logger.error(f"Failed to store LLM stats: {e}")
+
+        if self._streamer and self._stream_updates:
+            await self._streamer.stream_complete(
+                result.short_explanation, name="running_task"
+            )
+
+        return result, stats
+
+    async def _process_tool_calls(self, tool_calls: list[ToolCall]):
+        results = await asyncio.gather(*[self._call_tool(tc) for tc in tool_calls])
+
+        for tool_call, args, tool_result, duration, errors in results:
+            if tool_call.call_id:
+                self._planner_context[tool_call.call_id] = tool_result
+
+            if tool_call.persist_to:
+                self._run_context.data[tool_call.persist_to] = tool_result
+                if self._streamer and self._stream_persisted:
+                    await self._streamer.stream_complete(
+                        to_plain(tool_result)
+                        if not isinstance(tool_result, (str, int, float, bool))
+                        else tool_result,
+                        name=tool_call.persist_to,
+                    )
+
+            if self._task_logger:
+                await self._task_logger.log_tool_call(
+                    tool_uri=tool_call.name,
+                    arguments=args,
+                    output=tool_result,
+                    duration=duration,
+                    errors=errors,
+                )
+
     async def run(
         self,
         task_name: str,
@@ -204,64 +317,9 @@ class PlanningAgent:
         initial_system_prompt = None  # Capture the first system prompt for logging
 
         for iter_no in range(max_iterations):
-            prompt_parts = [
-                "You are a planning agent. Your goal is to achieve the following task:",
-                task.strip(),
-                "# Tool calling instructions:",
-                "Use tools to fulfill the task.",
-                "To call a tool, provide its name and arguments categorized by their source:",
-                "- `literal_args`: A JSON string of literal values for the tool.",
-                "- `planner_context_args`: A JSON string mapping tool argument names to keys in `planner_context` (results of previous tool calls).",
-                "- `input_args`: A JSON object mapping tool argument names to keys in the provided # Inputs.",
-                "",
-                "Example:",
-                "{",
-                '  "name": "python://websearch.serper_web_search",',
-                '  "literal_args": "{\\"query\\": \\"Kaval AI\\"}",',
-                '  "call_id": "search_result"',
-                "}",
-                "",
-                "Example with context and inputs:",
-                "{",
-                '  "name": "python://data.process",',
-                '  "planner_context_args": "{\\"raw_data\\": \\"search_result\\"}",',
-                '  "input_args": {"user_id": "current_user_id"},',
-                '  "literal_args": "{\\"mode\\": \\"fast\\"}"',
-                "}",
-                "",
-                "IMPORTANT: An argument name must only appear in ONE of the categories. Duplicates will cause an error.",
-                "",
-                "You can still use template strings in `literal_args` if needed:",
-                "- {{context.key}}: Reference a result from a previous tool call via call_id.",
-                "- {{input.key}}: Reference data from the provided # Inputs section.",
-                "",
-                "# Available tools:",
-                await self._kernel.get_tool_descriptions(self._allowed_tools),
-                "# Inputs:",
-                json.dumps(self._input_data, indent=2),
-                "Planner Context (tool results from previous steps, accessible via call_id):",
-                json.dumps(
-                    {
-                        k: v.model_dump() if hasattr(v, "model_dump") else v
-                        for k, v in self._planner_context.items()
-                    },
-                    indent=2,
-                ),
-                "",
-                "PLanning data",
-                f"current_step={iter_no}",
-                f"max_steps={max_iterations}",
-                "",
-                "Step Outputs (previous steps):",
-                json.dumps(
-                    [
-                        so.model_dump() if hasattr(so, "model_dump") else so
-                        for so in self._step_outputs
-                    ],
-                    indent=2,
-                ),
-            ]
-            system_prompt = "\n".join(prompt_parts)
+            system_prompt = await self._build_system_prompt(
+                task, iter_no, max_iterations
+            )
 
             # Capture the initial system prompt for logging
             if iter_no == 0:
@@ -277,59 +335,14 @@ class PlanningAgent:
                 },
             ] + chat_history
 
-            result, stats = await self._llm_client.chat_completions(
-                messages=messages,
-                response_model=StepOutput,
-                streamer=self._streamer,
-                temperature=self._temperature,
-            )
-
-            step_output: StepOutput = result
+            step_output, stats = await self._get_llm_response(messages, StepOutput)
             self._step_outputs.append(step_output)
-
-            if self._agent_service:
-                try:
-                    await self._agent_service.add_model_call_stats(
-                        stats=stats, agent_id=self._run_context.agent_id
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to store LLM stats: {e}")
 
             logger.info(f"Step {iter_no}: {step_output.short_explanation}")
             logger.info(f"Tool calls {iter_no}: {step_output.tool_calls}")
 
-            if self._streamer and self._stream_updates:
-                await self._streamer.stream_complete(
-                    step_output.short_explanation, name="running_task"
-                )
-
             if step_output.tool_calls:
-                results = await asyncio.gather(
-                    *[self._call_tool(tc) for tc in step_output.tool_calls]
-                )
-
-                for tool_call, args, tool_result, duration, errors in results:
-                    if tool_call.call_id:
-                        self._planner_context[tool_call.call_id] = tool_result
-
-                    if tool_call.persist_to:
-                        self._run_context.data[tool_call.persist_to] = tool_result
-                        if self._streamer and self._stream_persisted:
-                            await self._streamer.stream_complete(
-                                to_plain(tool_result)
-                                if not isinstance(tool_result, (str, int, float, bool))
-                                else tool_result,
-                                name=tool_call.persist_to,
-                            )
-
-                    if self._task_logger:
-                        await self._task_logger.log_tool_call(
-                            tool_uri=tool_call.name,
-                            arguments=args,
-                            output=tool_result,
-                            duration=duration,
-                            errors=errors,
-                        )
+                await self._process_tool_calls(step_output.tool_calls)
 
             if step_output.output is not None:
                 final_output = step_output.output
