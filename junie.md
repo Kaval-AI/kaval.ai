@@ -7,7 +7,7 @@ Kaval.AI can be run using Docker. The provided `Dockerfile` and `entrypoint.sh` 
 - `backoffice-migrations`: Run database migrations for the backoffice.
 - `agent-migrations`: Run database migrations for the agents.
 - `backoffice-server`: Start the backoffice Nginx and FastAPI server (requires `KAVALAI_BO_DB_URI` / `KAVALAI_BO_DB_SCHEMA`).
-- `agent-server`: Start an agent REST server (requires `WORKFLOW_YAML_PATH` and `KAVALAI_DB_URI` / `KAVALAI_DB_SCHEMA`).
+- `agent-server`: Start an agent REST server (requires `WORKFLOW_YAML_PATH` and `KAVALAI_DB_URI` / `KAVALAI_DB_SCHEMA`). Supports optional HTTP basic authentication via `KAVALAI_AGENT_BASIC_AUTH_USER` and `KAVALAI_AGENT_BASIC_AUTH_PASSWORD`.
 - `torproxy`: A Tor and Privoxy proxy service (using `dperson/torproxy`).
 
 ## Project Overview

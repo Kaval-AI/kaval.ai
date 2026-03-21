@@ -283,14 +283,14 @@ def test_run_agent_server_logging(
         "KAVALAI_DB_URI": "postgresql://user:password@localhost/dbname",
         "KAVALAI_DB_SCHEMA": "test_schema",
         "KAVALAI_AGENT_BASIC_AUTH_USER": "admin",
-        "KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD": "secret_password",
+        "KAVALAI_AGENT_BASIC_AUTH_PASSWORD": "secret_password",
     }.get(key, default)
 
     mock_env.str.side_effect = lambda key, default=None: {
         "KAVALAI_AGENT_WORKFLOW_PATH": "test_path.yaml",
         "KAVALAI_AGENT_HOST": "0.0.0.0",
         "KAVALAI_AGENT_BASIC_AUTH_USER": "admin",
-        "KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD": "secret_password",
+        "KAVALAI_AGENT_BASIC_AUTH_PASSWORD": "secret_password",
     }.get(key, default)
 
     mock_env.int.side_effect = lambda key, default=None: {
@@ -341,14 +341,14 @@ def test_run_agent_server_no_auth_warning(
         "KAVALAI_DB_URI": "postgresql://user:password@localhost/dbname",
         "KAVALAI_DB_SCHEMA": "test_schema",
         "KAVALAI_AGENT_BASIC_AUTH_USER": "",
-        "KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD": "",
+        "KAVALAI_AGENT_BASIC_AUTH_PASSWORD": "",
     }.get(key, default)
 
     mock_env.str.side_effect = lambda key, default=None: {
         "KAVALAI_AGENT_WORKFLOW_PATH": "test_path.yaml",
         "KAVALAI_AGENT_HOST": "0.0.0.0",
         "KAVALAI_AGENT_BASIC_AUTH_USER": "",
-        "KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD": "",
+        "KAVALAI_AGENT_BASIC_AUTH_PASSWORD": "",
     }.get(key, default)
 
     mock_env.int.side_effect = lambda key, default=None: {

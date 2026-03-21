@@ -49,7 +49,7 @@ def validate_auth(credentials: Optional[HTTPBasicCredentials]):
     """Validate HTTP Basic Authentication.
 
     Authentication is disabled if KAVALAI_AGENT_BASIC_AUTH_USER and
-    KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD are not set in the environment.
+    KAVALAI_AGENT_BASIC_AUTH_PASSWORD are not set in the environment.
 
     Args:
         credentials: The credentials provided in the request.
@@ -61,7 +61,7 @@ def validate_auth(credentials: Optional[HTTPBasicCredentials]):
         HTTPException: If authentication fails.
     """
     expected_username = env.str("KAVALAI_AGENT_BASIC_AUTH_USER", "")
-    expected_password = env.str("KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD", "")
+    expected_password = env.str("KAVALAI_AGENT_BASIC_AUTH_PASSWORD", "")
 
     # Basic auth is disabled
     if not expected_username and not expected_password:
@@ -465,7 +465,7 @@ def create_app_from_env_conf(
 
     # Log basic auth info
     auth_user = env.str("KAVALAI_AGENT_BASIC_AUTH_USER", "")
-    auth_password = env.str("KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD", "")
+    auth_password = env.str("KAVALAI_AGENT_BASIC_AUTH_PASSWORD", "")
 
     if auth_user or auth_password:
         logger.info(f"Basic Auth configured for user: {auth_user}")

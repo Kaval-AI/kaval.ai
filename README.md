@@ -208,7 +208,7 @@ export KAVALAI_DB_SCHEMA=agents
 export KAVALAI_DB_POOL_SIZE=0
 export KAVALAI_DB_MAX_OVERFLOW=0
 export KAVALAI_AGENT_BASIC_AUTH_USER=admin
-export KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD=password
+export KAVALAI_AGENT_BASIC_AUTH_PASSWORD=password
 export OPENAI_API_KEY=your_api_key_here
 
 python -m kavalai.agents.server
@@ -325,7 +325,7 @@ To run an agent server, you need to configure the environment variables.
 | Variable | Description |
 | --- | --- |
 | `KAVALAI_AGENT_BASIC_AUTH_USER` | Username for Basic Authentication. |
-| `KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD` | Password for Basic Authentication. |
+| `KAVALAI_AGENT_BASIC_AUTH_PASSWORD` | Password for Basic Authentication. |
 | `KAVALAI_AGENT_HOST` | Host to bind the server to (default: `0.0.0.0`). |
 | `KAVALAI_AGENT_PORT` | Port to bind the server to (default: `10000`). |
 | `KAVALAI_SQL_ECHO` | Enable SQL query logging (default: `0`). |
@@ -342,7 +342,7 @@ KAVALAI_DB_SCHEMA=agents \
 KAVALAI_DB_POOL_SIZE=0 \
 KAVALAI_DB_MAX_OVERFLOW=0 \
 KAVALAI_AGENT_BASIC_AUTH_USER=admin \
-KAVALAI_AGENT_BASIC_AUTH_USER_PASSWORD=password \
+KAVALAI_AGENT_BASIC_AUTH_PASSWORD=password \
 OPENAI_API_KEY=your_api_key_here \
 python -m kavalai.agents.server
 ```
