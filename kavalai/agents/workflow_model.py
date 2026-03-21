@@ -159,6 +159,7 @@ class AgentTask(BaseTask):
     prompt: Optional[str] = None
     temperature: Optional[float] = None
     use_history: bool = False
+    stream_persisted: bool = False
 
 
 class CombineTask(BaseTask):

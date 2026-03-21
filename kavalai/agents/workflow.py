@@ -518,6 +518,7 @@ class Workflow:
             temperature=temperature,
             stream_updates=task.stream_updates,
             stream_output=task.stream_output,
+            stream_persisted=task.stream_persisted,
             allowed_tools=task.allowed_tools,
         )
 

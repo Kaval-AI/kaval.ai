@@ -1,17 +1,18 @@
 import asyncio
-from loguru import logger
 import json
 import time
 from typing import Type, Optional
 
+from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict
 
-from kavalai.agents.run_context import RunContext
 from kavalai.agents.agent_service import AgentService
+from kavalai.agents.run_context import RunContext
 from kavalai.agents.task_logger import TaskLogger
 from kavalai.functionkernel import FunctionKernel
-from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
+from kavalai.llm_clients.llm_client import LLMClient
+from kavalai.agents.workflow_model import to_plain
 
 
 class ToolCall(BaseModel):
@@ -79,6 +80,7 @@ class PlanningAgent:
         temperature: Optional[float] = None,
         stream_updates: bool = False,
         stream_output: bool = False,
+        stream_persisted: bool = False,
         allowed_tools: Optional[list[str]] = None,
     ):
         self._kernel = kernel
@@ -92,6 +94,7 @@ class PlanningAgent:
         self._temperature = temperature
         self._stream_updates = stream_updates
         self._stream_output = stream_output
+        self._stream_persisted = stream_persisted
         self._allowed_tools = allowed_tools
         self._planner_context = {}
         self._step_outputs = []
@@ -311,6 +314,13 @@ class PlanningAgent:
 
                     if tool_call.persist_to:
                         self._run_context.data[tool_call.persist_to] = tool_result
+                        if self._streamer and self._stream_persisted:
+                            await self._streamer.stream_complete(
+                                to_plain(tool_result)
+                                if not isinstance(tool_result, (str, int, float, bool))
+                                else tool_result,
+                                name=tool_call.persist_to,
+                            )
 
                     if self._task_logger:
                         await self._task_logger.log_tool_call(
@@ -329,8 +339,6 @@ class PlanningAgent:
         # Log the overall agent task with the initial system prompt
         duration = time.perf_counter() - start_time
         if self._task_logger and initial_system_prompt:
-            from kavalai.agents.workflow_model import to_plain
-
             await self._task_logger.log_agent_task(
                 task_name=task_name,
                 system_prompt=initial_system_prompt,

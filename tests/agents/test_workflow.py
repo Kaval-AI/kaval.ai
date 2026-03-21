@@ -1633,6 +1633,101 @@ class TestWorkflowPlanningAgent:
             assert queue.empty()
 
     @pytest.mark.asyncio
+    async def test_run_planning_agent_stream_persisted(self):
+        # 1. Setup Workflow Model with an AgentTask and stream_persisted enabled
+        workflow_data = {
+            "name": "test_workflow",
+            "llm_model": "openai/test-model",
+            "data_types": {
+                "output": {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                },
+            },
+            "tasks": [
+                {
+                    "name": "planner_task",
+                    "type": "agent",
+                    "prompt": "Plan and solve this",
+                    "output": "output",
+                    "max_steps": 3,
+                    "stream_persisted": True,
+                    "stream_output": True,
+                }
+            ],
+        }
+        workflow_model = WorkflowModel(**workflow_data)
+        workflow = Workflow(workflow_model)
+
+        # 2. Setup RunContext and Queue
+        run_context = RunContext()
+        queue = asyncio.Queue()
+        task = workflow_model.tasks[0]
+
+        # 3. Mock LLMClient and its response
+        from kavalai.agents.planning_agent import get_step_output_type, ToolCall
+
+        StepOutput = get_step_output_type(self.MockOutput)
+
+        tool_call = ToolCall(
+            name="test_tool",
+            literal_args=json.dumps({"arg": "val"}),
+            persist_to="persisted_val",
+            call_id="call_1",
+        )
+
+        step_output_1 = StepOutput(
+            short_explanation="Iteration 1",
+            long_explanation="Calling tool",
+            step_number=0,
+            max_steps=3,
+            tool_calls=[tool_call],
+            output=None,
+        )
+
+        final_output = self.MockOutput(answer="Final result")
+        step_output_2 = StepOutput(
+            short_explanation="Iteration 2",
+            long_explanation="Done",
+            step_number=1,
+            max_steps=3,
+            tool_calls=[],
+            output=final_output,
+        )
+
+        with patch("kavalai.agents.workflow.LLMClient") as MockLLMClient:
+            mock_client_instance = MockLLMClient.return_value
+            mock_client_instance.chat_completions = AsyncMock(
+                side_effect=[(step_output_1, {}), (step_output_2, {})]
+            )
+
+            # Mock Kernel call_tool
+            workflow.kernel.call_tool = AsyncMock(return_value="tool_result_value")
+
+            # 4. Run the planning agent task
+            await workflow.run_planning_agent(task, run_context, queue)
+
+            # 5. Check queue for streamed persisted value
+            streamed_items = []
+            while not queue.empty():
+                item_json = await queue.get()
+                streamed_items.append(json.loads(item_json))
+
+            # Expecting:
+            # - persisted_val (from PlanningAgent.run because stream_persisted is True)
+            # - output (from PlanningAgent.run because stream_output is True)
+
+            assert any(
+                item["name"] == "persisted_val" and item["value"] == "tool_result_value"
+                for item in streamed_items
+            )
+            assert any(
+                item["name"] == "output"
+                and item["value"] == final_output.model_dump_json()
+                for item in streamed_items
+            )
+
+    @pytest.mark.asyncio
     async def test_run_planning_agent_with_custom_temperature(self):
         # 1. Setup Workflow Model with an AgentTask and custom temperature
         workflow_data = {
