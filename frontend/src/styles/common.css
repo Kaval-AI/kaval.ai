@@ -4,12 +4,16 @@
   --accent-color: #acc12f;
   --dark-green-color: #002626;
   --header-height: 64px;
+  /* design colors */
+  --rosy-granite: #e6e6e8;
+  --charcoal-blue: #273e46;
+  --lime-moss: #abc130;
 }
 
 body {
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
-  font-family: 'Roboto', sans-serif;
+  font-family: 'Space Grotesque', sans-serif;
   margin: 0;
 }
 
@@ -27,6 +31,7 @@ button {
   cursor: pointer;
   font-weight: 500;
   transition: opacity 0.2s;
+  font-family: 'Pilat Wide', sans-serif;
 }
 
 button:hover {
@@ -97,7 +102,11 @@ a:hover {
 }
 
 h1 {
-  font-family: system-ui;
+  font-family: 'Chakra Petch', sans-serif;
+}
+
+h2 {
+  font-family: 'Space Mono', monospace;
 }
 
 .stats-grid {
