@@ -579,6 +579,7 @@ class Workflow:
             if resolved is not None:
                 text = str(resolved)
 
+        duration = 0.0
         if not text:
             run_context.data[task.name] = []
         else:
