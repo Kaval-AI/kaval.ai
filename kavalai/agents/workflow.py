@@ -788,6 +788,10 @@ class Workflow:
                     content=agent_resp,
                 )
 
+        logger.info(
+            f"Workflow completed successfully for session_id={run_context.session_id}"
+        )
+
         return WorkflowRunResult(
             session_id=run_context.session_id,
             data=output_model,
