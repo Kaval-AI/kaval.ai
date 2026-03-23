@@ -488,7 +488,9 @@ class Workflow:
 
         # 3. Setup streamer
         streamer = None
-        if task.stream_output and queue is not None:
+        if (
+            task.stream_output or task.stream_persisted or task.stream_updates
+        ) and queue is not None:
             streamer = Streamer(task.output, queue)
 
         # 4. LLM client
