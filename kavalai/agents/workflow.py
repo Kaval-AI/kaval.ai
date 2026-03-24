@@ -783,7 +783,7 @@ class Workflow:
 
             # Also log assistant message if we have a final output with a textual response
             if output_model is not None:
-                agent_resp = getattr(output_model, "agent_response", str(output_model))
+                agent_resp = getattr(output_model, "agent_response", "")
                 await agent_service.add_chat_message(
                     agent_id=run_context.agent_id,
                     session_id=run_context.session_id,
