@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, ModelCallStat
 from kavalai.agents.resolvers import resolve_path, find_key_recursive
 from kavalai.agents.workflow_model import to_plain
+from kavalai.agents.utils import clean_text
 
 
 class AgentService:
@@ -152,11 +153,11 @@ class AgentService:
                 agent_id=agent_id,
                 session_id=session_id,
                 run_id=run_id,
-                name=name,
+                name=clean_text(name),
                 inputs=to_plain(inputs),
                 output=to_plain(output),
-                prompt=prompt,
-                errors=errors,
+                prompt=clean_text(prompt),
+                errors=to_plain(errors),
                 duration_seconds=duration_seconds,
             )
             session.add(task)
@@ -242,7 +243,7 @@ class AgentService:
                 session_id=session_id,
                 run_id=run_id,
                 role=role,
-                content=content,
+                content=clean_text(content),
             )
             session.add(message)
             await session.commit()

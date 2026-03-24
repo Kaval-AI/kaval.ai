@@ -19,9 +19,13 @@ from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, model_validator, Field, PrivateAttr, ConfigDict
 
+from .utils import clean_text
+
 
 def to_plain(obj):
     """Recursively convert Pydantic models, dicts, and lists into plain JSON-serializable types."""
+    if isinstance(obj, str):
+        return clean_text(obj)
     if isinstance(obj, BaseModel):
         return to_plain(obj.model_dump())
     if isinstance(obj, (datetime, UUID)):
