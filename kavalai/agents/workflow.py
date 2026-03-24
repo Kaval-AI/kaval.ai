@@ -452,7 +452,8 @@ class Workflow:
             for field_name, info in task.output.items():
                 if info.value is None and info.name is None:
                     info = info.model_copy(update={"value": field_name})
-                result[field_name] = await run_context.resolve_input_info(info)
+                val = await run_context.resolve_input_info(info)
+                result[field_name] = to_plain(val)
             # Store as 'output' in context (standard output key for final result)
             output_type = self.get_data_type("output")
             model_instance = output_type(**result)
@@ -466,7 +467,8 @@ class Workflow:
             for input_name, info in task.inputs.items():
                 if info.value is None and info.name is None:
                     info = info.model_copy(update={"value": input_name})
-                result[input_name] = await run_context.resolve_input_info(info)
+                val = await run_context.resolve_input_info(info)
+                result[input_name] = to_plain(val)
             output_type = self.get_data_type(task.output)
             run_context.data[task.output] = output_type(**result)
             if task.stream_output and queue is not None:

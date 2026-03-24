@@ -1454,9 +1454,7 @@ class TestWorkflowPlanningAgent:
         final_output = self.MockOutput(answer="Final result")
         step_output = StepOutput(
             short_explanation="Done",
-            long_explanation="Finished task",
-            step_number=0,
-            max_steps=3,
+            instructions="Proceed",
             tool_calls=[],
             output=final_output,
         )
@@ -1536,9 +1534,7 @@ class TestWorkflowPlanningAgent:
         final_output = self.MockOutput(answer="Final result")
         step_output = StepOutput(
             short_explanation="Iteration 1",
-            long_explanation="Planning step",
-            step_number=0,
-            max_steps=3,
+            instructions="Proceed",
             tool_calls=[],
             output=final_output,
         )
@@ -1613,9 +1609,7 @@ class TestWorkflowPlanningAgent:
         final_output = self.MockOutput(answer="Final result")
         step_output = StepOutput(
             short_explanation="Iteration 1",
-            long_explanation="Planning step",
-            step_number=0,
-            max_steps=3,
+            instructions="Proceed",
             tool_calls=[],
             output=final_output,
         )
@@ -1678,9 +1672,7 @@ class TestWorkflowPlanningAgent:
 
         step_output_1 = StepOutput(
             short_explanation="Iteration 1",
-            long_explanation="Calling tool",
-            step_number=0,
-            max_steps=3,
+            instructions="Calling tool",
             tool_calls=[tool_call],
             output=None,
         )
@@ -1688,9 +1680,7 @@ class TestWorkflowPlanningAgent:
         final_output = self.MockOutput(answer="Final result")
         step_output_2 = StepOutput(
             short_explanation="Iteration 2",
-            long_explanation="Done",
-            step_number=1,
-            max_steps=3,
+            instructions="Done",
             tool_calls=[],
             output=final_output,
         )
@@ -1773,9 +1763,7 @@ class TestWorkflowPlanningAgent:
         final_output = self.MockOutput(answer="Final result")
         step_output = StepOutput(
             short_explanation="Done",
-            long_explanation="Finished task",
-            step_number=0,
-            max_steps=3,
+            instructions="Proceed",
             tool_calls=[],
             output=final_output,
         )
@@ -1833,9 +1821,7 @@ class TestWorkflowPlanningAgent:
         final_output = self.MockOutput(answer="Final result")
         step_output = StepOutput(
             short_explanation="Done",
-            long_explanation="Finished task",
-            step_number=0,
-            max_steps=3,
+            instructions="Proceed",
             tool_calls=[],
             output=final_output,
         )

@@ -123,6 +123,7 @@ async def main():
 
     result = await agent.run(
         task=task,
+        task_name="Planner task",
         max_iterations=10,
         chat_history=[{"role": "user", "content": "Get me Kaval.AI profile."}],
     )

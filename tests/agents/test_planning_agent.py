@@ -68,7 +68,7 @@ async def test_planning_agent_run_success():
     # Mock LLM response for first iteration (tool call)
     step1 = StepOutput(
         short_explanation="Step 1",
-        long_explanation="Planning to call a tool",
+        instructions="Planning to call a tool",
         tool_calls=[
             ToolCall(
                 name="python://tool",
@@ -82,7 +82,7 @@ async def test_planning_agent_run_success():
     # Mock LLM response for second iteration (final answer)
     step2 = StepOutput(
         short_explanation="Step 2",
-        long_explanation="Finished",
+        instructions="Finished",
         tool_calls=[],
         output=MockResponse(answer="Final Answer"),
     )
@@ -138,7 +138,7 @@ async def test_planning_agent_resolves_planner_context_references():
     # Step calling tool with reference to 'prev_call'
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="Using reference",
+        instructions="Using reference",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
@@ -188,7 +188,7 @@ async def test_planning_agent_resolves_args_from_new_fields():
     # Step calling tool with various argument sources
     step1 = StepOutput(
         short_explanation="Testing new fields",
-        long_explanation="Using new literal_args, input_args and planner_context_args fields",
+        instructions="Using new literal_args, input_args and planner_context_args fields",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
@@ -240,7 +240,7 @@ async def test_planning_agent_resolves_args_priority():
     # Test literal
     step1 = StepOutput(
         short_explanation="Testing priority",
-        long_explanation="Literal",
+        instructions="Literal",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
@@ -258,7 +258,7 @@ async def test_planning_agent_resolves_args_priority():
     # Test context resolution
     step2 = StepOutput(
         short_explanation="Testing priority",
-        long_explanation="Context resolution",
+        instructions="Context resolution",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
@@ -308,7 +308,7 @@ async def test_planning_agent_resolves_nested_args_from_planner_context():
     # Step calling tool with reference to 'prev_call' via template string
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="Using reference",
+        instructions="Using reference",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
@@ -344,7 +344,7 @@ async def test_planning_agent_max_iterations():
     StepOutput = get_step_output_type(MockResponse)
     step = StepOutput(
         short_explanation="Wait",
-        long_explanation="Waiting...",
+        instructions="Waiting...",
         tool_calls=[],
         output=None,
     )
@@ -392,7 +392,7 @@ async def test_planning_agent_streaming():
     final_output = MockResponse(answer="Final Answer")
     step = StepOutput(
         short_explanation="Done",
-        long_explanation="Finished the task",
+        instructions="Finished the task",
         tool_calls=[],
         output=final_output,
     )
@@ -444,7 +444,7 @@ async def test_planning_agent_persist_to():
     # First iteration: call tool with persist_to="my_key"
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="I will call the tool to get some data and persist it",
+        instructions="I will call the tool to get some data and persist it",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
@@ -459,7 +459,7 @@ async def test_planning_agent_persist_to():
     # Second iteration: return output
     step2 = StepOutput(
         short_explanation="Returning result",
-        long_explanation="I am returning the result",
+        instructions="I am returning the result",
         tool_calls=[],
         output=MockPersistenceResponse(tool_result="done", other_field="ok"),
     )
@@ -508,7 +508,7 @@ async def test_planning_agent_tool_error_logging(caplog):
 
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="I will call the tool",
+        instructions="I will call the tool",
         tool_calls=[ToolCall(name="python://reorder", literal_args="{}", call_id="c1")],
         output=MockErrorResponse(result="done"),
     )
@@ -575,7 +575,7 @@ async def test_planning_agent_tool_args_parse_error_logging(caplog):
 
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="I will call the tool",
+        instructions="I will call the tool",
         tool_calls=[
             ToolCall(
                 name="python://test",
@@ -630,7 +630,7 @@ async def test_planning_agent_tool_failure_handling():
     # First step: LLM calls a tool (which will fail)
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="Need to call a tool",
+        instructions="Need to call a tool",
         tool_calls=[ToolCall(name="python://fail", call_id="c1", literal_args="{}")],
         output=None,
     )
@@ -639,7 +639,7 @@ async def test_planning_agent_tool_failure_handling():
     final_output = MockResponse(answer="Handled failure")
     step2 = StepOutput(
         short_explanation="Done",
-        long_explanation="Finished the task",
+        instructions="Finished the task",
         tool_calls=[],
         output=final_output,
     )
@@ -693,7 +693,7 @@ async def test_planning_agent_real_python_tool_gcd():
     # First iteration: Call GCD tool
     step1 = StepOutput(
         short_explanation="Calculating GCD",
-        long_explanation="I will use the gcd_tool to compute the GCD of 48 and 18.",
+        instructions="I will use the gcd_tool to compute the GCD of 48 and 18.",
         tool_calls=[
             ToolCall(
                 name="python://gcd_tool",
@@ -707,7 +707,7 @@ async def test_planning_agent_real_python_tool_gcd():
     # Second iteration: Final result (GCD of 48 and 18 is 6)
     step2 = StepOutput(
         short_explanation="GCD computed",
-        long_explanation="The GCD of 48 and 18 is 6.",
+        instructions="The GCD of 48 and 18 is 6.",
         tool_calls=[],
         output=MockResponse(answer="The GCD is 6"),
     )
@@ -781,7 +781,7 @@ async def test_planning_agent_complex_nested_models():
     tool_args = {"name": "Junie", "nested": {"field_a": "test", "field_b": 42}}
     step1 = StepOutput(
         short_explanation="Calling complex tool",
-        long_explanation="I will call the complex tool with nested data.",
+        instructions="I will call the complex tool with nested data.",
         tool_calls=[
             ToolCall(
                 name="python://complex_tool",
@@ -795,7 +795,7 @@ async def test_planning_agent_complex_nested_models():
     # Second iteration: Final result
     step2 = StepOutput(
         short_explanation="Done",
-        long_explanation="The complex tool returned a nested response.",
+        instructions="The complex tool returned a nested response.",
         tool_calls=[],
         output=MockResponse(answer="Success"),
     )
@@ -872,7 +872,7 @@ async def test_planning_agent_logs_agent_task(agent_service, session_maker):
     final_output = MockResponse(answer="Final Answer")
     step = StepOutput(
         short_explanation="Done",
-        long_explanation="Completed the task",
+        instructions="Completed the task",
         tool_calls=[],
         output=final_output,
     )
@@ -959,7 +959,7 @@ async def test_planning_agent_logs_tool_calls(agent_service, session_maker):
     # First step: call tool
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="Using test_tool",
+        instructions="Using test_tool",
         tool_calls=[
             ToolCall(
                 name="python://test_tool",
@@ -973,7 +973,7 @@ async def test_planning_agent_logs_tool_calls(agent_service, session_maker):
     # Second step: return result
     step2 = StepOutput(
         short_explanation="Done",
-        long_explanation="Completed",
+        instructions="Completed",
         tool_calls=[],
         output=MockResponse(answer="Final Answer"),
     )
@@ -1048,7 +1048,7 @@ async def test_planning_agent_logging_without_agent_service():
     final_output = MockResponse(answer="Final Answer")
     step = StepOutput(
         short_explanation="Done",
-        long_explanation="Finished",
+        instructions="Finished",
         tool_calls=[],
         output=final_output,
     )
@@ -1116,7 +1116,7 @@ async def test_planning_agent_logs_tool_call_errors(agent_service, session_maker
     # Step 1: call tool that will fail
     step1 = StepOutput(
         short_explanation="Calling tool",
-        long_explanation="Attempting to call tool",
+        instructions="Attempting to call tool",
         tool_calls=[
             ToolCall(
                 name="python://failing_tool",
@@ -1130,7 +1130,7 @@ async def test_planning_agent_logs_tool_call_errors(agent_service, session_maker
     # Step 2: return result after tool failure
     step2 = StepOutput(
         short_explanation="Handling error",
-        long_explanation="Tool failed",
+        instructions="Tool failed",
         tool_calls=[],
         output=MockResponse(answer="Error handled"),
     )
