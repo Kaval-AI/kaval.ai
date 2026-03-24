@@ -82,6 +82,7 @@ class PlanningAgent:
         stream_output: bool = False,
         stream_persisted: bool = False,
         allowed_tools: Optional[list[str]] = None,
+        llm_kwargs: Optional[dict] = None,
     ):
         self._kernel = kernel
         self._run_context = run_context
@@ -96,6 +97,7 @@ class PlanningAgent:
         self._stream_output = stream_output
         self._stream_persisted = stream_persisted
         self._allowed_tools = allowed_tools
+        self._llm_kwargs = llm_kwargs or {}
         self._planner_context = {}
         self._step_outputs = []
 
@@ -258,6 +260,7 @@ class PlanningAgent:
             response_model=response_model,
             streamer=self._streamer,
             temperature=self._temperature,
+            **self._llm_kwargs,
         )
 
         if self._agent_service:

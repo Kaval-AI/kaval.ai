@@ -135,6 +135,7 @@ class LLMTask(BaseTask):
     prompt: str
     temperature: Optional[float] = None
     use_history: bool = True
+    llm_kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
 class RestTask(BaseTask):
@@ -164,6 +165,7 @@ class AgentTask(BaseTask):
     temperature: Optional[float] = None
     use_history: bool = False
     stream_persisted: bool = False
+    llm_kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
 class CombineTask(BaseTask):
@@ -255,6 +257,7 @@ class WorkflowModel(YamlModel):
     version: str = "1.0"
     temperature: float = 0.0
     llm_model: Optional[str] = None
+    llm_kwargs: dict[str, Any] = Field(default_factory=dict)
     embedding_model: str = "openai/text-embedding-3-small"
     data_types: dict[str, dict]
     rest_servers: list[RestServer] = []

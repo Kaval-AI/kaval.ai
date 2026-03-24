@@ -278,6 +278,9 @@ class Workflow:
             else self.workflow_model.temperature
         )
 
+        llm_kwargs = self.workflow_model.llm_kwargs.copy()
+        llm_kwargs.update(task.llm_kwargs)
+
         streamer = None
         if task.stream_output and queue is not None:
             streamer = Streamer(task.output, queue)
@@ -289,6 +292,7 @@ class Workflow:
             messages=messages,
             streamer=streamer,
             temperature=temperature,
+            **llm_kwargs,
         )
         duration = time.perf_counter() - start_time
         if self.agent_service:
@@ -507,6 +511,10 @@ class Workflow:
             if task.temperature is not None
             else self.workflow_model.temperature
         )
+
+        llm_kwargs = self.workflow_model.llm_kwargs.copy()
+        llm_kwargs.update(task.llm_kwargs)
+
         task_logger = (
             TaskLogger(self.agent_service, run_context) if self.agent_service else None
         )
@@ -524,6 +532,7 @@ class Workflow:
             stream_output=task.stream_output,
             stream_persisted=task.stream_persisted,
             allowed_tools=task.allowed_tools,
+            llm_kwargs=llm_kwargs,
         )
 
         # 6. Fetch chat history
