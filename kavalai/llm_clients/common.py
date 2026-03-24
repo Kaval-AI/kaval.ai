@@ -22,6 +22,7 @@ from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
+from kavalai.agents.workflow_model import to_plain
 
 
 def fix_json(data: str) -> Any:
@@ -144,7 +145,5 @@ def create_model_call_stat(
         batch_size=batch_size,
         duration_seconds=duration_sections,
         cost=cost,
-        response_data=response_data
-        if isinstance(response_data, (dict, list)) or response_data is None
-        else str(response_data),
+        response_data=to_plain(response_data),
     )

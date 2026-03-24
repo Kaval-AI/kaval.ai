@@ -35,7 +35,7 @@ def to_plain(obj):
         res = {}
         for k, v in obj.items():
             try:
-                sk = str(k)
+                sk = clean_text(str(k))
                 if sk.startswith("_") or sk == "metadata":
                     continue
                 res[sk] = to_plain(v)
