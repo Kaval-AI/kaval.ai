@@ -268,8 +268,13 @@ class Workflow:
             for msg in history:
                 messages.append(dict(role=msg.role, content=msg.content))
 
-        llm_model = self.workflow_model.llm_model or self.env.str(
-            "KAVALAI_DEFAULT_LLM_MODEL"
+        llm_model = (
+            task.llm_model
+            if task.llm_model
+            else (
+                self.workflow_model.llm_model
+                or self.env.str("KAVALAI_DEFAULT_LLM_MODEL")
+            )
         )
 
         temperature = (
@@ -500,8 +505,13 @@ class Workflow:
             streamer = Streamer(task.output, queue)
 
         # 4. LLM client
-        llm_model = self.workflow_model.llm_model or self.env.str(
-            "KAVALAI_DEFAULT_LLM_MODEL"
+        llm_model = (
+            task.llm_model
+            if task.llm_model
+            else (
+                self.workflow_model.llm_model
+                or self.env.str("KAVALAI_DEFAULT_LLM_MODEL")
+            )
         )
         llm_client = LLMClient(model=llm_model)
 

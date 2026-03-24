@@ -233,7 +233,7 @@ class AgentService:
         agent_id: UUID,
         session_id: UUID,
         role: str,
-        content: str,
+        content: Optional[str],
         run_id: Optional[UUID] = None,
     ) -> ChatMessage:
         """Helper to append messages to the chat history."""
@@ -243,7 +243,7 @@ class AgentService:
                 session_id=session_id,
                 run_id=run_id,
                 role=role,
-                content=clean_text(content),
+                content=clean_text(content or ""),
             )
             session.add(message)
             await session.commit()

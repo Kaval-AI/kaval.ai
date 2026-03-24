@@ -135,6 +135,7 @@ class LLMTask(BaseTask):
     prompt: str
     temperature: Optional[float] = None
     use_history: bool = True
+    llm_model: Optional[str] = None
     llm_kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -165,6 +166,7 @@ class AgentTask(BaseTask):
     temperature: Optional[float] = None
     use_history: bool = False
     stream_persisted: bool = False
+    llm_model: Optional[str] = None
     llm_kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
