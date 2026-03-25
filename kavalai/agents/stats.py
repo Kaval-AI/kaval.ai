@@ -53,18 +53,29 @@ async def get_summary_stats(session: AsyncSession, agent_id: str | None = None):
     if agent_id:
         stmt_sessions = stmt_sessions.where(Session.agent_id == agent_id)
 
+    # Get total tokens
+    stmt_tokens = select(
+        func.sum(ModelCallStat.prompt_tokens), func.sum(ModelCallStat.completion_tokens)
+    ).where(ModelCallStat.call_type == "llm", ModelCallStat.created_at >= start_date)
+    if agent_id:
+        stmt_tokens = stmt_tokens.where(ModelCallStat.agent_id == agent_id)
+
     res_llm_cost = await session.execute(stmt_llm_cost)
     res_embedding_cost = await session.execute(stmt_embedding_cost)
     res_sessions = await session.execute(stmt_sessions)
+    res_tokens = await session.execute(stmt_tokens)
 
     llm_cost = float(res_llm_cost.scalar() or 0)
     embedding_cost = float(res_embedding_cost.scalar() or 0)
+    tokens_row = res_tokens.one()
 
     return {
         "total_cost": llm_cost + embedding_cost,
         "llm_cost": llm_cost,
         "embedding_cost": embedding_cost,
         "total_sessions": int(res_sessions.scalar() or 0),
+        "total_prompt_tokens": int(tokens_row[0] or 0),
+        "total_completion_tokens": int(tokens_row[1] or 0),
     }
 
 

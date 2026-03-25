@@ -16,6 +16,7 @@ limitations under the License.
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { of } from 'rxjs';
 import { ProjectsPage } from './projects-page';
 import { ProjectService } from '../../services/project-service';
@@ -33,18 +34,20 @@ describe('ProjectsPage', () => {
   let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
-    projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll', 'delete']);
+    projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll', 'delete', 'update', 'getMembers', 'addMember', 'updateMember', 'removeMember']);
     agentServiceSpy = jasmine.createSpyObj('AgentService', ['getSummaryStats']);
-    userServiceSpy = jasmine.createSpyObj('UserService', ['getIsAdmin', 'setActiveProject', 'getActiveProjectId'], { userDetails: of({ id: 'u1' }) });
+    userServiceSpy = jasmine.createSpyObj('UserService', ['getIsAdmin', 'setActiveProject', 'getActiveProjectId', 'getUsers'], { userDetails: of({ id: 'u1' }) });
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     projectServiceSpy.getAll.and.returnValue(of([]));
+    projectServiceSpy.getMembers.and.returnValue(of([]));
     agentServiceSpy.getSummaryStats.and.returnValue(of({ total_cost: null, llm_cost: null, embedding_cost: null, total_sessions: 0 }));
     userServiceSpy.getIsAdmin.and.returnValue(true);
     userServiceSpy.getActiveProjectId.and.returnValue(null);
+    userServiceSpy.getUsers.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
-      imports: [ProjectsPage, CommonModule],
+      imports: [ProjectsPage, CommonModule, FormsModule],
       providers: [
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: AgentService, useValue: agentServiceSpy },
@@ -87,10 +90,29 @@ describe('ProjectsPage', () => {
     expect(component.selectedProject).toEqual(mockProjects[1]);
   });
 
-  it('should navigate to edit page', () => {
-    component.selectedProject = { id: '1' } as Project;
+  it('should enter edit mode and open access details', () => {
+    component.selectedProject = { id: '1', name: 'P1' } as Project;
+    component.accessDetailsCollapsed = true;
     component.editProject();
-    expect(routerSpy.navigate).toHaveBeenCalledWith(['/project-edit', '1']);
+    expect(component.isEditing).toBeTrue();
+    expect(component.editableProject.name).toBe('P1');
+    expect(component.accessDetailsCollapsed).toBeFalse();
+  });
+
+  it('should save project and exit edit mode', () => {
+    const originalProject = { id: '1', name: 'P1' } as Project;
+    const updatedProject = { id: '1', name: 'Updated' } as Project;
+    component.selectedProject = originalProject;
+    component.editableProject = { name: 'Updated' };
+    component.isEditing = true;
+    projectServiceSpy.update.and.returnValue(of(updatedProject));
+    projectServiceSpy.getAll.and.returnValue(of([updatedProject]));
+
+    component.saveProject();
+
+    expect(projectServiceSpy.update).toHaveBeenCalledWith('1', { name: 'Updated' });
+    expect(component.isEditing).toBeFalse();
+    expect(component.selectedProject?.name).toBe('Updated');
   });
 
   it('should navigate to create page', () => {
@@ -101,7 +123,7 @@ describe('ProjectsPage', () => {
   it('should delete a project after confirmation', () => {
     const existingProject = { id: '1', name: 'Existing' } as Project;
     component.selectedProject = existingProject;
-    spyOn(window, 'confirm').and.returnValue(true);
+    component.deleteConfirmationName = 'Existing';
     projectServiceSpy.delete.and.returnValue(of(undefined));
     projectServiceSpy.getAll.and.returnValue(of([]));
 
@@ -111,10 +133,10 @@ describe('ProjectsPage', () => {
     expect(component.selectedProject).toBeNull();
   });
 
-  it('should not delete a project if not confirmed', () => {
+  it('should not delete a project if name does not match', () => {
     const existingProject = { id: '1', name: 'Existing' } as Project;
     component.selectedProject = existingProject;
-    spyOn(window, 'confirm').and.returnValue(false);
+    component.deleteConfirmationName = 'Wrong';
 
     component.deleteProject();
 
@@ -131,5 +153,22 @@ describe('ProjectsPage', () => {
     component.selectProject(mockProjects[1]);
 
     expect(component.selectedProject?.id).toBe('2');
+    expect(projectServiceSpy.getMembers).toHaveBeenCalledWith('2');
+  });
+
+  it('should toggle access details section collapse', () => {
+    expect(component.accessDetailsCollapsed).toBeTrue();
+    component.accessDetailsCollapsed = false;
+    expect(component.accessDetailsCollapsed).toBeFalse();
+    component.accessDetailsCollapsed = true;
+    expect(component.accessDetailsCollapsed).toBeTrue();
+  });
+
+  it('should toggle connection strings section collapse', () => {
+    expect(component.connectionStringsCollapsed).toBeTrue();
+    component.connectionStringsCollapsed = false;
+    expect(component.connectionStringsCollapsed).toBeFalse();
+    component.connectionStringsCollapsed = true;
+    expect(component.connectionStringsCollapsed).toBeTrue();
   });
 });
