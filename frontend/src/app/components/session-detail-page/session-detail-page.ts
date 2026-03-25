@@ -22,7 +22,6 @@ import { ChatMessage } from '../../models/chat-message';
 import { Run } from '../../models/run';
 import { Task } from '../../models/task';
 import { JsonTreeComponent } from '../json-tree/json-tree';
-import { TasksList } from '../tasks-list/tasks-list';
 
 interface RunBlock {
   run: Run;
@@ -33,7 +32,7 @@ interface RunBlock {
 @Component({
   selector: 'app-session-detail-page',
   standalone: true,
-  imports: [CommonModule, RouterModule, JsonTreeComponent, TasksList],
+  imports: [CommonModule, RouterModule, JsonTreeComponent],
   templateUrl: './session-detail-page.html',
   styleUrl: './session-detail-page.css',
 })

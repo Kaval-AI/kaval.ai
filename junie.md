@@ -93,9 +93,11 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `configs-page/`: LLM profile and provider configuration.
         - `llm-call-stats-page/`: Detailed list of LLM calls with request/response data (paginated).
         - `rag-page/`: RAG-related configuration and testing.
+        - `theme-page/`: Testbed for DaisyUI and Tailwind CSS components and styling.
         - `sidebar-menu/`, `header/`, `dropdown-menu/`: Layout and navigation components.
         - `json-tree/`: Tree-like component for displaying nested JSON data (IDE-style).
     - `src/styles/`: Global CSS styles and theme definitions.
+        - `theme.css`: Custom DaisyUI and Tailwind CSS theme definitions using CSS variables.
 - `tests/`: Comprehensive backend test suite.
     - `agents/`: Tests for core SDK, workflow execution, and agent database.
     - `backoffice/`: Tests for management API, project isolation, and memberships.

@@ -1,3 +1,4 @@
-@import './styles/reset.css';
-@import './styles/common.css';
-@import './styles/dropdown-menu.css';
+@import "tailwindcss";
+@plugin "daisyui";
+
+@import './styles/theme.css';

@@ -21,6 +21,7 @@ import { LlmCallStatsPage } from './components/llm-call-stats-page/llm-call-stat
 import { RagPage } from './components/rag-page/rag-page';
 import { SessionDetailPage } from './components/session-detail-page/session-detail-page';
 import { RunTasksPage } from './components/run-tasks-page/run-tasks-page';
+import { ThemePage } from './components/theme-page/theme-page';
 
 import { ProjectsPage } from './components/projects-page/projects-page';
 import { AgentsPage } from './components/agents-page/agents-page';
@@ -43,6 +44,7 @@ export const routes: Routes = [
   { path: 'metrics', component: MetricsPage, data: { title: 'Metrics' } },
   { path: 'llm-call-stats', component: LlmCallStatsPage, data: { title: 'Model Calls' } },
   { path: 'rag', component: RagPage, data: { title: 'RAG' } },
+  { path: 'theme', component: ThemePage, data: { title: 'Theme' } },
 
   // Wildcard route for 404 - Should always be last
   { path: '**', redirectTo: '' },
