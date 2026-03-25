@@ -14,7 +14,6 @@
 }
 
 app-header {
-  height: var(--header-height);
   flex-shrink: 0;
 }
 

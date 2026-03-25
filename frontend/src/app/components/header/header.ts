@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { Component, inject, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { UserInfo } from '../user-info/user-info';
 import { NavigationService } from '../../services/navigation-service';
 import { ProjectService } from '../../services/project-service';
@@ -25,7 +25,7 @@ import { CommonModule } from '@angular/common';
 @Component({
   selector: 'app-header',
   standalone: true,
-  imports: [UserInfo, CommonModule],
+  imports: [UserInfo, CommonModule, RouterLink, RouterLinkActive],
   templateUrl: './header.html',
   styleUrl: './header.css',
 })
@@ -82,5 +82,14 @@ export class Header implements OnInit {
 
   startNewProject() {
     this.router.navigate(['/project-edit', 'new']);
+  }
+
+  isAdmin(): boolean {
+    return this.userService.getIsAdmin();
+  }
+
+  get activeProjectName(): string | null {
+    if (!this.activeProjectId) return null;
+    return this.projects.find(p => p.id === this.activeProjectId)?.name || null;
   }
 }
