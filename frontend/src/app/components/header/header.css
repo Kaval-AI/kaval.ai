@@ -15,5 +15,12 @@ header {
   color: var(--color-primary-content);
 }
 
-.breadcrumbs {
+.dropdown-content {
+  background-color: var(--dropdown-bg);
+  color: var(--color-base-content);
+}
+
+.dropdown-content .menu-title {
+  color: var(--color-info);
+  opacity: 1; /* override daisyui opacity */
 }
