@@ -50,7 +50,32 @@
   /* border size */
   --border: 1px;
 
+  /* fonts */
+  --font-family-header: "Chakra Petch", sans-serif;
+  --font-family-body: "Space Grotesk", sans-serif;
+  --font-family-accent: "Space Mono", monospace;
+
+  --font-family: var(--font-family-body);
+
   /* effects */
   --depth: 1;
   --noise: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-family-header);
+}
+
+.accent-font,
+code,
+pre,
+kbd,
+samp,
+.mono {
+  font-family: var(--font-family-accent);
 }
