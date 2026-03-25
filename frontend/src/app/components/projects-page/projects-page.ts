@@ -24,6 +24,7 @@ import { UserService } from '../../services/user-service';
 import { UserDetails } from '../../models/user-details';
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions, Chart, registerables } from 'chart.js';
+import { NavigationService } from '../../services/navigation-service';
 
 Chart.register(...registerables);
 
@@ -39,6 +40,7 @@ export class ProjectsPage implements OnInit {
   private agentService = inject(AgentService);
   private userService = inject(UserService);
   private router = inject(Router);
+  private navigationService = inject(NavigationService);
 
   projects: Project[] = [];
   selectedProject: Project | null = null;
@@ -113,6 +115,7 @@ export class ProjectsPage implements OnInit {
   statsCollapsed = false;
 
   ngOnInit() {
+    this.navigationService.setTitle('Project info');
     this.userService.userDetails.subscribe(details => {
       if (details && details.active_project_id) {
         const newActiveProjectId = details.active_project_id !== 'None' ? details.active_project_id : null;
@@ -563,6 +566,18 @@ export class ProjectsPage implements OnInit {
 
   startNewProject() {
     this.router.navigate(['/project-edit', 'new']);
+  }
+
+  onProjectSelect(event: Event) {
+    const target = event.target as HTMLSelectElement;
+    const projectId = target.value;
+    if (projectId) {
+      this.userService.setActiveProject(projectId);
+      const project = this.projects.find(p => p.id === projectId);
+      if (project) {
+        this.selectProject(project);
+      }
+    }
   }
 
   getDbUri(type: 'postgresql' | 'asyncpg' | 'jdbc' | 'env', maskPassword = false): string {

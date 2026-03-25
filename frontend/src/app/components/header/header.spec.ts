@@ -69,52 +69,6 @@ describe('Header', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should load projects on init', () => {
-    const mockProjects: Project[] = [{ id: '1', name: 'Project 1' } as Project];
-    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
-
-    component.ngOnInit();
-
-    expect(projectServiceSpy.getAll).toHaveBeenCalled();
-    expect(component.projects).toEqual(mockProjects);
-  });
-
-  it('should set active project if none selected and projects exist', () => {
-    const mockProjects: Project[] = [{ id: '1', name: 'Project 1' } as Project];
-    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
-    userServiceSpy.getActiveProjectId.and.returnValue(null);
-
-    component.loadProjects();
-
-    expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('1');
-  });
-
-  it('should handle project selection and refresh current component', () => {
-    const event = { target: { value: '2' } } as any;
-    component.onProjectSelect(event);
-    expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('2');
-    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/', { skipLocationChange: true });
-  });
-
-  it('should show active project in the select element', async () => {
-    const mockProjects: Project[] = [
-      { id: '1', name: 'Project 1' } as Project,
-      { id: '2', name: 'Project 2' } as Project
-    ];
-    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
-    userServiceSpy.getActiveProjectId.and.returnValue('2');
-    // Simulate user details update with active project id '2'
-    const userDetailsSubject = new BehaviorSubject<any>({ id: 'u1', active_project_id: '2' });
-    Object.defineProperty(userServiceSpy, 'userDetails', { get: () => userDetailsSubject.asObservable() });
-
-    component.ngOnInit();
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    const select: HTMLSelectElement = fixture.nativeElement.querySelector('select');
-    expect(select.value).toBe('2');
-  });
-
   it('should show breadcrumbs with page title and active project name', async () => {
     const mockProjects: Project[] = [
       { id: '1', name: 'Project 1' } as Project

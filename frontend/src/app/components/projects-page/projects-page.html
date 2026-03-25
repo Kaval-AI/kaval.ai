@@ -7,6 +7,28 @@
   </div>
 } @else if (projects.length > 0) {
 <div class="p-6 max-w-6xl mx-auto space-y-6">
+  <!-- Project Selector Section -->
+  <div class="card bg-base-100 shadow-xl border border-base-200">
+    <div class="card-body">
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center gap-4 flex-1">
+          <label class="font-bold text-lg whitespace-nowrap">Active Project:</label>
+          <select class="select select-bordered w-full max-w-md"
+                  (change)="onProjectSelect($event)"
+                  [value]="selectedProject?.id || ''">
+            <option value="" disabled>-- Choose a Project --</option>
+            @for (p of projects; track p.id) {
+              <option [value]="p.id" [selected]="p.id === (selectedProject?.id || '')">{{ p.name }}</option>
+            }
+          </select>
+        </div>
+        <button class="btn btn-primary" (click)="startNewProject()">
+          <i class="fas fa-plus"></i> New Project
+        </button>
+      </div>
+    </div>
+  </div>
+
   @if (selectedProject) {
     <!-- Project Header Dashboard -->
     <div class="card bg-base-100 shadow-xl border border-base-200">

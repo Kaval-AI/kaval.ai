@@ -22,44 +22,33 @@
       <a routerLink="/" class="flex items-center">
         <img src="assets/images/logo.svg" alt="Kaval.AI Logo" class="h-8 w-auto mr-2 logo" />
       </a>
-      <div class="breadcrumbs text-sm text-primary">
-        <ul>
-          @if (activeProjectName) {
-            <li>
-              <a routerLink="/" class="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-4 h-4 mr-2 stroke-current">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                </svg>
-                {{ activeProjectName }}
-              </a>
-            </li>
-          }
-          <li>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-4 h-4 mr-2 stroke-current">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
-            </svg>
-            {{ title() }}
-          </li>
-        </ul>
-      </div>
-    </div>
-  </div>
-  <div class="navbar-center hidden sm:flex">
-    <div class="flex items-center gap-2">
-      @if (projects.length > 0) {
-        <div class="join">
-          <select class="select select-bordered select-sm join-item"
-                  (change)="onProjectSelect($event)"
-                  [value]="activeProjectId || ''">
-            <option value="" disabled>-- Choose a Project --</option>
-            @for (p of projects; track p.id) {
-              <option [value]="p.id" [selected]="p.id === (activeProjectId || '')">{{ p.name }}</option>
+      @if (title()) {
+        <div class="breadcrumbs text-sm text-primary">
+          <ul>
+            @if (activeProjectName) {
+              <li>
+                <a routerLink="/" class="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-4 h-4 mr-2 stroke-current">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                  </svg>
+                  {{ activeProjectName }}
+                </a>
+              </li>
             }
-          </select>
-          <button class="btn btn-sm btn-outline join-item" (click)="startNewProject()">Add</button>
+            <li>
+              <div class="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-4 h-4 mr-2 stroke-current">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                </svg>
+                {{ title() }}
+              </div>
+            </li>
+          </ul>
         </div>
       }
     </div>
+  </div>
+  <div class="navbar-center hidden sm:flex">
   </div>
   <div class="navbar-end gap-2">
     <app-user-info></app-user-info>

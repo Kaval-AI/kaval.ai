@@ -164,6 +164,20 @@ describe('ProjectsPage', () => {
     expect(projectServiceSpy.getMembers).toHaveBeenCalledWith('2');
   });
 
+  it('should handle project selection from select element', () => {
+    const mockProjects: Project[] = [
+      { id: '1', name: 'P1' } as Project,
+      { id: '2', name: 'P2' } as Project
+    ];
+    component.projects = mockProjects;
+    const event = { target: { value: '2' } } as any;
+
+    component.onProjectSelect(event);
+
+    expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('2');
+    expect(component.selectedProject?.id).toBe('2');
+  });
+
   it('should toggle access details section collapse', () => {
     expect(component.accessDetailsCollapsed).toBeTrue();
     component.accessDetailsCollapsed = false;
