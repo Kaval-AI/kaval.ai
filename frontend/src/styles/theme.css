@@ -1,36 +1,56 @@
-@theme {
-  --color-primary: #abc130;
-  --color-primary-content: #002626;
-  --color-secondary: #273e46;
-  --color-secondary-content: #e6e6e8;
-  --color-accent: #acc12f;
-  --color-accent-content: #002626;
-  --color-neutral: #273e46;
-  --color-neutral-content: #e6e6e8;
-  --color-base-100: #ffffff;
-  --color-base-200: #f8f9fa;
-  --color-base-300: #e6e6e8;
-  --color-base-content: #333333;
+@plugin "daisyui/theme" {
+  name: "kavalai";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
 
-  --radius-selector: 0.5rem;
+  /* see https://daisyui.com/docs/colors/ */
+  /* background color and shades for elevations + font color*/
+  --color-base-100: #f4f4f6;
+  --color-base-200: #e5e5e8;
+  --color-base-300: #d6d6da;
+  --color-base-content: #273e47;
+
+  /* primary brand color */
+  --color-primary: #acc12f;
+  --color-primary-content: #273e47;
+
+  /* secondary color */
+  --color-secondary: #b185a7;
+  --color-secondary-content: #f3fbf6ff;
+
+  /* other colors */
+  --color-accent: #1b998b;
+  --color-accent-content: #f3fbf6ff;
+
+  --color-neutral: #a8a8af;
+  --color-neutral-content: #f3fbf6ff;
+
+  --color-info: #6d9999;
+  --color-info-content: #f3fbf6ff;
+
+  --color-success: #809537;
+  --color-success-content: #f3fbf6ff;
+
+  --color-warning: #e67f0d;
+  --color-warning-content: #273e47;
+
+  --color-error: #82204a;
+  --color-error-content: #f3fbf6ff;
+
+  /* border radius */
+  --radius-selector: 1rem;
   --radius-field: 0.25rem;
   --radius-box: 0.5rem;
+
+  /* base sizes */
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
-  --border-field: 1px;
-}
 
-[data-theme="kavalai"] {
-  --color-primary: #abc130;
-  --color-primary-content: #002626;
-  --color-secondary: #273e46;
-  --color-secondary-content: #e6e6e8;
-  --color-accent: #acc12f;
-  --color-accent-content: #002626;
-  --color-neutral: #273e46;
-  --color-neutral-content: #e6e6e8;
-  --color-base-100: #ffffff;
-  --color-base-200: #f8f9fa;
-  --color-base-300: #e6e6e8;
-  --color-base-content: #333333;
+  /* border size */
+  --border: 1px;
+
+  /* effects */
+  --depth: 1;
+  --noise: 0;
 }
