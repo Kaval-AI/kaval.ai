@@ -30,7 +30,7 @@ describe('AgentsPage', () => {
   let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
-    agentServiceSpy = jasmine.createSpyObj('AgentService', ['getAgentsByProject', 'getAgentSvgUrl', 'getAgentStats']);
+    agentServiceSpy = jasmine.createSpyObj('AgentService', ['getAgentsByProject', 'getAgentSvgUrl', 'getSummaryStats', 'getDailyStats']);
     userServiceSpy = {
       userDetails: new BehaviorSubject<any>({ active_project_id: null }),
       getActiveProjectId: jasmine.createSpy('getActiveProjectId')
@@ -65,8 +65,9 @@ describe('AgentsPage', () => {
   it('should load agents if active project exists', () => {
     const mockAgents: Agent[] = [{ id: '1', name: 'Agent 1' } as Agent];
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
-    agentServiceSpy.getAgentStats.and.returnValue(of({
-      runs: [], sessions: [], messages: []
+    agentServiceSpy.getSummaryStats.and.returnValue(of({}));
+    agentServiceSpy.getDailyStats.and.returnValue(of({
+      sessions: [], messages: [], tasks: [], runs: {}, llm: {}, embedding: {}
     }));
 
     userServiceSpy.userDetails.next({ active_project_id: 'proj1' });
@@ -93,17 +94,21 @@ describe('AgentsPage', () => {
   it('should prepare chart data with DD-MM labels', () => {
     const mockAgents: Agent[] = [{ id: '1', name: 'Agent 1' } as Agent];
     agentServiceSpy.getAgentsByProject.and.returnValue(of(mockAgents));
-    const mockStats = {
-      runs: [{ date: '2023-01-25', count: 5 }],
+    agentServiceSpy.getSummaryStats.and.returnValue(of({}));
+    const mockDailyStats = {
       sessions: [{ date: '2023-01-25', count: 2 }],
-      messages: [{ date: '2023-01-25', count: 10 }]
+      messages: [{ date: '2023-01-25', count: 10 }],
+      tasks: [{ date: '2023-01-25', count: 5 }],
+      runs: { 'Agent 1': [{ date: '2023-01-25', count: 5 }] },
+      llm: {},
+      embedding: {}
     };
-    agentServiceSpy.getAgentStats.and.returnValue(of(mockStats));
+    agentServiceSpy.getDailyStats.and.returnValue(of(mockDailyStats));
 
     userServiceSpy.userDetails.next({ active_project_id: 'proj1' });
     fixture.detectChanges();
 
-    expect(component.lineChartData.labels).toContain('25-01');
+    expect(component.activityChartData.labels).toContain('25-01');
   });
 
   it('should navigate to conversations with agentId', () => {
