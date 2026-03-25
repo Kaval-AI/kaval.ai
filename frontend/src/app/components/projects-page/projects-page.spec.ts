@@ -35,13 +35,21 @@ describe('ProjectsPage', () => {
 
   beforeEach(async () => {
     projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll', 'delete', 'update', 'getMembers', 'addMember', 'updateMember', 'removeMember']);
-    agentServiceSpy = jasmine.createSpyObj('AgentService', ['getSummaryStats']);
+    agentServiceSpy = jasmine.createSpyObj('AgentService', ['getSummaryStats', 'getDailyStats']);
     userServiceSpy = jasmine.createSpyObj('UserService', ['getIsAdmin', 'setActiveProject', 'getActiveProjectId', 'getUsers'], { userDetails: of({ id: 'u1' }) });
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     projectServiceSpy.getAll.and.returnValue(of([]));
     projectServiceSpy.getMembers.and.returnValue(of([]));
     agentServiceSpy.getSummaryStats.and.returnValue(of({ total_cost: null, llm_cost: null, embedding_cost: null, total_sessions: 0 }));
+    agentServiceSpy.getDailyStats.and.returnValue(of({
+      sessions: [],
+      messages: [],
+      tasks: [],
+      runs: {},
+      llm: {},
+      embedding: {}
+    }));
     userServiceSpy.getIsAdmin.and.returnValue(true);
     userServiceSpy.getActiveProjectId.and.returnValue(null);
     userServiceSpy.getUsers.and.returnValue(of([]));

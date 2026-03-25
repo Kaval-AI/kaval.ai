@@ -180,45 +180,150 @@
             </div>
           }
         </div>
+
+        <div class="divider"></div>
+
+        <!-- Stats Section -->
+        <div class="space-y-6">
+          <h2 class="text-xl font-bold flex items-center justify-between cursor-pointer group" (click)="statsCollapsed = !statsCollapsed">
+            <span class="flex items-center gap-2">
+              <i class="fas fa-chart-line text-secondary"></i>
+              Statistics (Last 7 Days)
+            </span>
+            <i class="fas" [ngClass]="statsCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'"></i>
+          </h2>
+
+          @if (!statsCollapsed) {
+            @if (dbConnectionError) {
+              <div class="alert alert-warning text-sm max-w-md">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>{{ dbConnectionError }}</span>
+              </div>
+            } @else if (summaryStats) {
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Activity Chart -->
+                <div class="card bg-base-100 border border-base-200 shadow-sm h-full min-h-[350px]">
+                  <div class="card-body p-4">
+                    <h3 class="text-sm font-bold opacity-70 mb-2">Activity</h3>
+                    @if (dailyStats) {
+                      <div class="w-full h-full">
+                        <canvas baseChart
+                          [data]="activityChartData"
+                          [options]="chartOptions"
+                          [type]="'line'">
+                        </canvas>
+                      </div>
+                    } @else {
+                      <div class="flex items-center justify-center h-full">
+                        <span class="loading loading-spinner loading-md"></span>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <!-- Tokens Chart -->
+                <div class="card bg-base-100 border border-base-200 shadow-sm h-full min-h-[350px]">
+                  <div class="card-body p-4">
+                    <h3 class="text-sm font-bold opacity-70 mb-2">Tokens</h3>
+                    @if (dailyStats) {
+                      <div class="w-full h-full">
+                        <canvas baseChart
+                          [data]="tokensChartData"
+                          [options]="chartOptions"
+                          [type]="'line'">
+                        </canvas>
+                      </div>
+                    } @else {
+                      <div class="flex items-center justify-center h-full">
+                        <span class="loading loading-spinner loading-md"></span>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <!-- Average Durations Chart -->
+                <div class="card bg-base-100 border border-base-200 shadow-sm h-full min-h-[350px]">
+                  <div class="card-body p-4">
+                    <h3 class="text-sm font-bold opacity-70 mb-2">Average Durations (seconds)</h3>
+                    @if (dailyStats) {
+                      <div class="w-full h-full">
+                        <canvas baseChart
+                          [data]="durationsChartData"
+                          [options]="chartOptions"
+                          [type]="'line'">
+                        </canvas>
+                      </div>
+                    } @else {
+                      <div class="flex items-center justify-center h-full">
+                        <span class="loading loading-spinner loading-md"></span>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <!-- Workflow Runtimes Chart -->
+                <div class="card bg-base-100 border border-base-200 shadow-sm h-full min-h-[350px]">
+                  <div class="card-body p-4">
+                    <h3 class="text-sm font-bold opacity-70 mb-2">Workflow Runtimes (seconds)</h3>
+                    @if (dailyStats) {
+                      <div class="w-full h-full">
+                        <canvas baseChart
+                          [data]="runtimesChartData"
+                          [options]="chartOptions"
+                          [type]="'line'">
+                        </canvas>
+                      </div>
+                    } @else {
+                      <div class="flex items-center justify-center h-full">
+                        <span class="loading loading-spinner loading-md"></span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <!-- Summary Stats Row -->
+              <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mt-4">
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-3">
+                  <div class="stat-title text-[10px]">Total Sessions</div>
+                  <div class="stat-value text-primary text-lg">{{ summaryStats.total_sessions }}</div>
+                </div>
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-3">
+                  <div class="stat-title text-[10px]">Chat Messages</div>
+                  <div class="stat-value text-accent text-lg">{{ summaryStats.total_messages }}</div>
+                </div>
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-3">
+                  <div class="stat-title text-[10px]">Total Tasks</div>
+                  <div class="stat-value text-secondary text-lg">{{ summaryStats.total_tasks }}</div>
+                </div>
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-3">
+                  <div class="stat-title text-[10px]">Workflow Runs</div>
+                  <div class="stat-value text-info text-lg">{{ summaryStats.total_runs || 0 }}</div>
+                </div>
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-3">
+                  <div class="stat-title text-[10px]">Input Tokens</div>
+                  <div class="stat-value text-warning text-lg">{{ summaryStats.total_prompt_tokens | number }}</div>
+                </div>
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-3">
+                  <div class="stat-title text-[10px]">Output Tokens</div>
+                  <div class="stat-value text-error text-lg">{{ summaryStats.total_completion_tokens | number }}</div>
+                </div>
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-3">
+                  <div class="stat-title text-[10px]">Embedding Tokens</div>
+                  <div class="stat-value text-neutral text-lg">{{ summaryStats.total_embedding_tokens | number }}</div>
+                </div>
+              </div>
+            } @else {
+              <div class="flex justify-center p-8">
+                <span class="loading loading-spinner loading-lg"></span>
+              </div>
+            }
+          }
+        </div>
       </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Stats Summary -->
-      <div class="card bg-base-100 shadow-xl border border-base-200">
-        <div class="card-body">
-          <h2 class="card-title mb-4">
-            <i class="fas fa-chart-line text-secondary"></i>
-            Quick Stats
-          </h2>
-          @if (dbConnectionError) {
-            <div class="alert alert-warning text-sm">
-              <i class="fas fa-exclamation-triangle"></i>
-              <span>{{ dbConnectionError }}</span>
-            </div>
-          } @else if (summaryStats) {
-            <div class="stats stats-vertical shadow w-full">
-              <div class="stat">
-                <div class="stat-title text-wrap">Sessions (last 30 days)</div>
-                <div class="stat-value text-primary text-2xl">{{ summaryStats.total_sessions }}</div>
-              </div>
-              <div class="stat">
-                <div class="stat-title text-wrap">Input Tokens</div>
-                <div class="stat-value text-secondary text-2xl">{{ summaryStats.total_prompt_tokens | number }}</div>
-              </div>
-              <div class="stat">
-                <div class="stat-title text-wrap">Output Tokens</div>
-                <div class="stat-value text-accent text-2xl">{{ summaryStats.total_completion_tokens | number }}</div>
-              </div>
-            </div>
-          } @else {
-            <div class="flex justify-center p-4">
-              <span class="loading loading-spinner loading-md"></span>
-            </div>
-          }
-        </div>
-      </div>
-
       <!-- User Management Section -->
       <div class="card bg-base-100 shadow-xl border border-base-200 lg:col-span-2">
         <div class="card-body">
