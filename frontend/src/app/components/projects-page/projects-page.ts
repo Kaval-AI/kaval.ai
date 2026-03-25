@@ -21,6 +21,7 @@ import { ProjectService } from '../../services/project-service';
 import { AgentService } from '../../services/agent-service';
 import { Project } from '../../models/project';
 import { UserService } from '../../services/user-service';
+import { ToastService } from '../../services/toast-service';
 import { UserDetails } from '../../models/user-details';
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions, Chart, registerables } from 'chart.js';
@@ -41,6 +42,7 @@ export class ProjectsPage implements OnInit {
   private userService = inject(UserService);
   private router = inject(Router);
   private navigationService = inject(NavigationService);
+  private toastService = inject(ToastService);
 
   projects: Project[] = [];
   selectedProject: Project | null = null;
@@ -106,6 +108,8 @@ export class ProjectsPage implements OnInit {
   projectMembers: any[] = [];
   allUsers: UserDetails[] = [];
   showAddUserModal = false;
+  showRemoveMemberModal = false;
+  memberToRemove: any = null;
   newMemberUserId = '';
   newMemberRole: 'owner' | 'viewer' = 'viewer';
 
@@ -113,6 +117,10 @@ export class ProjectsPage implements OnInit {
   accessDetailsCollapsed = true;
   connectionStringsCollapsed = true; // Default to collapsed for connection strings as they are often long
   statsCollapsed = false;
+
+  // Password visibility
+  showPassword = false;
+  showConnectionPassword = false;
 
   ngOnInit() {
     this.navigationService.setTitle('Project info');
@@ -529,36 +537,64 @@ export class ProjectsPage implements OnInit {
       this.projectService.addMember(this.selectedProject.id, this.newMemberUserId, this.newMemberRole).subscribe({
         next: () => {
           this.loadProjectMembers(this.selectedProject!.id);
+          this.toastService.success('User added to project');
           this.closeAddUserModal();
         },
         error: (err) => {
           console.error('Failed to add member:', err);
+          const errorMessage = err.error?.detail || 'Failed to add user to project';
+          this.toastService.error(errorMessage);
         }
       });
     }
   }
 
-  updateMemberRole(userId: string, newRole: string) {
+  updateMemberRole(userId: string, newRole: string, event?: MouseEvent) {
     if (this.selectedProject) {
       this.projectService.updateMember(this.selectedProject.id, userId, newRole).subscribe({
         next: () => {
           this.loadProjectMembers(this.selectedProject!.id);
+          this.toastService.success('Role updated');
+          if (event) {
+            (document.activeElement as HTMLElement).blur();
+          }
         },
         error: (err) => {
           console.error('Failed to update member role:', err);
+          const errorMessage = err.error?.detail || 'Failed to update member role';
+          let position: { x: number; y: number } | undefined;
+          if (event) {
+            position = { x: event.clientX, y: event.clientY };
+            (document.activeElement as HTMLElement).blur();
+          }
+          this.toastService.error(errorMessage, 3000, position);
         }
       });
     }
   }
 
-  removeMember(userId: string) {
-    if (this.selectedProject && confirm('Remove this user from the project?')) {
-      this.projectService.removeMember(this.selectedProject.id, userId).subscribe({
+  confirmRemoveMember(member: any) {
+    this.memberToRemove = member;
+    this.showRemoveMemberModal = true;
+  }
+
+  closeRemoveMemberModal() {
+    this.showRemoveMemberModal = false;
+    this.memberToRemove = null;
+  }
+
+  removeMember() {
+    if (this.selectedProject && this.memberToRemove) {
+      this.projectService.removeMember(this.selectedProject.id, this.memberToRemove.id).subscribe({
         next: () => {
           this.loadProjectMembers(this.selectedProject!.id);
+          this.toastService.success('User removed from project');
+          this.closeRemoveMemberModal();
         },
         error: (err) => {
           console.error('Failed to remove member:', err);
+          const errorMessage = err.error?.detail || 'Failed to remove user from project';
+          this.toastService.error(errorMessage);
         }
       });
     }
@@ -580,7 +616,7 @@ export class ProjectsPage implements OnInit {
     }
   }
 
-  getDbUri(type: 'postgresql' | 'asyncpg' | 'jdbc' | 'env', maskPassword = false): string {
+  getDbUri(type: 'postgresql' | 'asyncpg' | 'jdbc' | 'env', maskPassword = true): string {
     if (!this.selectedProject) return '';
     const p = this.selectedProject;
     const user = p.db_user || 'user';
@@ -604,10 +640,13 @@ export class ProjectsPage implements OnInit {
     }
   }
 
-  copyToClipboard(text: string) {
+  copyToClipboard(text: string, event?: MouseEvent) {
     navigator.clipboard.writeText(text).then(() => {
-      // Could add a toast notification here if available
-      console.log('Copied to clipboard');
+      let position: { x: number; y: number } | undefined;
+      if (event) {
+        position = { x: event.clientX, y: event.clientY };
+      }
+      this.toastService.success('Copied to clipboard', 1500, position);
     });
   }
 }

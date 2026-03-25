@@ -17,11 +17,12 @@ limitations under the License.
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { ProjectsPage } from './projects-page';
 import { ProjectService } from '../../services/project-service';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
+import { ToastService } from '../../services/toast-service';
 import { Project } from '../../models/project';
 import { Router } from '@angular/router';
 
@@ -31,12 +32,14 @@ describe('ProjectsPage', () => {
   let projectServiceSpy: jasmine.SpyObj<ProjectService>;
   let agentServiceSpy: jasmine.SpyObj<AgentService>;
   let userServiceSpy: jasmine.SpyObj<UserService>;
+  let toastServiceSpy: jasmine.SpyObj<ToastService>;
   let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
     projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll', 'delete', 'update', 'getMembers', 'addMember', 'updateMember', 'removeMember']);
     agentServiceSpy = jasmine.createSpyObj('AgentService', ['getSummaryStats', 'getDailyStats']);
     userServiceSpy = jasmine.createSpyObj('UserService', ['getIsAdmin', 'setActiveProject', 'getActiveProjectId', 'getUsers'], { userDetails: of({ id: 'u1' }) });
+    toastServiceSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'show']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     projectServiceSpy.getAll.and.returnValue(of([]));
@@ -60,6 +63,7 @@ describe('ProjectsPage', () => {
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: AgentService, useValue: agentServiceSpy },
         { provide: UserService, useValue: userServiceSpy },
+        { provide: ToastService, useValue: toastServiceSpy },
         { provide: Router, useValue: routerSpy }
       ]
     }).compileComponents();
@@ -192,5 +196,67 @@ describe('ProjectsPage', () => {
     expect(component.connectionStringsCollapsed).toBeFalse();
     component.connectionStringsCollapsed = true;
     expect(component.connectionStringsCollapsed).toBeTrue();
+  });
+
+  it('should get db uri with masked password by default', () => {
+    component.selectedProject = {
+      db_user: 'myuser',
+      db_password: 'mypassword',
+      db_host: 'myhost',
+      db_port: 5432,
+      db_name: 'mydb'
+    } as Project;
+
+    const uri = component.getDbUri('postgresql');
+    expect(uri).toContain('••••••••');
+    expect(uri).not.toContain('mypassword');
+  });
+
+  it('should get db uri with plain password when maskPassword is false', () => {
+    component.selectedProject = {
+      db_user: 'myuser',
+      db_password: 'mypassword',
+      db_host: 'myhost',
+      db_port: 5432,
+      db_name: 'mydb'
+    } as Project;
+
+    const uri = component.getDbUri('postgresql', false);
+    expect(uri).toContain('mypassword');
+    expect(uri).not.toContain('••••••••');
+  });
+
+  it('should copy text to clipboard and show success toast with position', async () => {
+    const text = 'test connection string';
+    const event = { clientX: 100, clientY: 200 } as MouseEvent;
+    spyOn(navigator.clipboard, 'writeText').and.returnValue(Promise.resolve());
+
+    component.copyToClipboard(text, event);
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(text);
+    // Wait for the promise to resolve
+    await fixture.whenStable();
+    expect(toastServiceSpy.success).toHaveBeenCalledWith('Copied to clipboard', 1500, { x: 100, y: 200 });
+  });
+
+  it('should update member role and show success toast', () => {
+    component.selectedProject = { id: 'p1' } as Project;
+    projectServiceSpy.updateMember.and.returnValue(of({}));
+    projectServiceSpy.getMembers.and.returnValue(of([]));
+
+    component.updateMemberRole('u1', 'owner');
+
+    expect(projectServiceSpy.updateMember).toHaveBeenCalledWith('p1', 'u1', 'owner');
+    expect(toastServiceSpy.success).toHaveBeenCalledWith('Role updated');
+  });
+
+  it('should show error toast when member role update fails', () => {
+    component.selectedProject = { id: 'p1' } as Project;
+    const errorResponse = { error: { detail: 'Cannot demote the last owner' } };
+    projectServiceSpy.updateMember.and.returnValue(throwError(() => errorResponse));
+
+    component.updateMemberRole('u1', 'viewer');
+
+    expect(toastServiceSpy.error).toHaveBeenCalledWith('Cannot demote the last owner', 3000, undefined);
   });
 });
