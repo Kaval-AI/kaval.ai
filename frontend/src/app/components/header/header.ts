@@ -16,6 +16,7 @@ limitations under the License.
 import { Component, inject, OnInit } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, ActivatedRoute, NavigationEnd } from '@angular/router';
 import { UserInfo } from '../user-info/user-info';
+import { HeaderDropdown } from './header-dropdown/header-dropdown';
 import { NavigationService } from '../../services/navigation-service';
 import { ProjectService } from '../../services/project-service';
 import { UserService } from '../../services/user-service';
@@ -26,7 +27,7 @@ import { filter, map, mergeMap } from 'rxjs/operators';
 @Component({
   selector: 'app-header',
   standalone: true,
-  imports: [UserInfo, CommonModule, RouterLink, RouterLinkActive],
+  imports: [UserInfo, HeaderDropdown, CommonModule, RouterLink, RouterLinkActive],
   templateUrl: './header.html',
   styleUrl: './header.css',
 })
@@ -73,10 +74,6 @@ export class Header implements OnInit {
         this.activeProjectId = null;
       }
     });
-  }
-
-  isAdmin(): boolean {
-    return this.userService.getIsAdmin();
   }
 
   get activeProjectName(): string | null {

@@ -94,7 +94,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `llm-call-stats-page/`: Detailed list of LLM calls with request/response data (paginated).
         - `rag-page/`: RAG-related configuration and testing.
         - `theme-page/`: Testbed for DaisyUI and Tailwind CSS components and styling.
-        - `sidebar-menu/`, `header/`, `dropdown-menu/`: Layout and navigation components. `header/` now uses a DaisyUI navbar with an integrated megamenu (background color `#4D5C65`) and breadcrumbs with icons (aligned to the left) for the active project and current page. The dropdown menu font color is `--color-base-content`, submenu headers use `--color-info`, and the background color is `#9999A1`.
+        - `sidebar-menu/`, `header/`, `header-dropdown/`, `dropdown-menu/`: Layout and navigation components. `header/` now uses a DaisyUI navbar with an integrated megamenu (via `header-dropdown/` component, background color `#4D5C65`) and breadcrumbs with icons (aligned to the left) for the active project and current page. The dropdown menu font color is `--color-base-content`, submenu headers use `--color-info`, and the background color is `#9999A1`. The dropdown menu is configured to close when an item is clicked via its `closeMenu()` method, which uses a 200ms delay to ensure navigation events are processed before the menu is hidden. It uses `isMenuOpen` state synchronized with focus to manage visibility and a high `z-50` index to ensure it stays above other content.
         - `json-tree/`: Tree-like component for displaying nested JSON data (IDE-style).
     - `src/styles/`: Global CSS styles and theme definitions.
         - `theme.css`: Custom DaisyUI and Tailwind CSS theme definitions using CSS variables.
