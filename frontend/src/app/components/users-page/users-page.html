@@ -1,78 +1,173 @@
-<div class="users-container">
-  <div class="header-section">
-    <div class="header-top">
-      @if (!showForm) {
-        <button (click)="addUser()">
+<div class="p-6 max-w-6xl mx-auto space-y-6">
+  <div class="card bg-base-100 shadow-xl border border-base-200">
+    <div class="card-body">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h1 class="text-3xl font-bold font-header">System Users</h1>
+          <p class="text-base-content/70">Manage system users and their permissions.</p>
+        </div>
+        <button class="btn btn-primary w-full sm:w-auto" (click)="addUser()">
           <i class="fas fa-plus"></i> Add User
         </button>
-      }
+      </div>
     </div>
-    <p class="subtitle">Manage system users and their permissions.</p>
   </div>
 
-  @if (showForm) {
-    <div class="user-form">
-      <form [formGroup]="userForm" (ngSubmit)="saveUser()">
-        <div class="form-group">
-          <label for="email">Email</label>
-          <input type="email" id="email" formControlName="email" class="form-control" />
+  <div class="card bg-base-100 shadow-xl border border-base-200">
+    <div class="card-body">
+      <div class="overflow-x-auto">
+        <table class="table table-zebra w-full">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (user of users; track user.id) {
+              <tr>
+                <td>
+                  <div class="flex items-center gap-3">
+                    <div class="avatar placeholder">
+                      <div class="bg-neutral text-neutral-content rounded-full w-8">
+                        @if (user.picture) {
+                          <img [src]="user.picture" [alt]="user.name" />
+                        } @else {
+                          <span>{{ user.name?.charAt(0) || user.email?.charAt(0) }}</span>
+                        }
+                      </div>
+                    </div>
+                    <div class="font-bold">{{ user.name }}</div>
+                  </div>
+                </td>
+                <td>{{ user.email }}</td>
+                <td>
+                  <span class="badge" [ngClass]="user.is_admin ? 'badge-primary' : 'badge-ghost'">
+                    {{ user.is_admin ? 'Admin' : 'User' }}
+                  </span>
+                </td>
+                <td>
+                  <div class="flex gap-2">
+                    <button class="btn btn-primary btn-xs flex items-center gap-1" (click)="editUser(user)" title="Edit">
+                      <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <button class="btn btn-ghost btn-xs text-error flex items-center gap-1" (click)="deleteUser(user)" title="Delete">
+                      <i class="fas fa-trash"></i> Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal) {
+  <div class="modal modal-open">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg text-error">Confirm Deletion</h3>
+      <p class="py-4">
+        Are you sure you want to delete user <strong>{{ userToDelete?.email }}</strong>?
+        This action cannot be undone.
+      </p>
+      <div class="modal-action">
+        <button type="button" class="btn" (click)="closeDeleteModal()" [disabled]="isDeleting">Cancel</button>
+        <button type="button" class="btn btn-error" (click)="confirmDelete()" [disabled]="isDeleting">
+          @if (isDeleting) { <span class="loading loading-spinner loading-xs"></span> }
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Error Modal -->
+@if (showErrorModal) {
+  <div class="modal modal-open">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg text-error">Error</h3>
+      <p class="py-4">{{ errorMessage }}</p>
+      <div class="modal-action">
+        <button type="button" class="btn" (click)="closeErrorModal()">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Add User Modal -->
+@if (showAddModal) {
+  <div class="modal modal-open">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Add New User</h3>
+      <form [formGroup]="userForm" (ngSubmit)="saveUser()" class="py-4 space-y-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Email</span></label>
+          <input type="email" formControlName="email" class="input input-bordered w-full" placeholder="email@example.com" />
         </div>
-        <div class="form-group">
-          <label for="name">Name</label>
-          <input type="text" id="name" formControlName="name" class="form-control" />
+        <div class="form-control">
+          <label class="label"><span class="label-text">Name</span></label>
+          <input type="text" formControlName="name" class="input input-bordered w-full" placeholder="User Name" />
         </div>
-        <div class="form-group">
-          <label for="picture">Picture URL</label>
-          <input type="text" id="picture" formControlName="picture" class="form-control" />
+        <div class="form-control">
+          <label class="label"><span class="label-text">Picture URL</span></label>
+          <input type="text" formControlName="picture" class="input input-bordered w-full" placeholder="https://..." />
         </div>
-        <div class="form-group checkbox">
-          <label>
-            <input type="checkbox" formControlName="is_admin" /> Is Admin
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-4">
+            <input type="checkbox" formControlName="is_admin" class="checkbox checkbox-primary" />
+            <span class="label-text">Is Admin</span>
           </label>
         </div>
-        <div class="form-actions">
-          <button type="button" (click)="cancelForm()">Cancel</button>
-          <button type="submit" [disabled]="userForm.invalid">Save</button>
+        <div class="modal-action">
+          <button type="button" class="btn" (click)="closeAddModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="userForm.invalid || isSaving">
+            @if (isSaving) { <span class="loading loading-spinner loading-xs"></span> }
+            Save
+          </button>
         </div>
       </form>
     </div>
-  } @else {
-    <div class="table-container">
-      <table class="common-table">
-        <thead>
-          <tr>
-            <th>Picture</th>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Admin</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (user of users; track user.id) {
-            <tr>
-              <td>
-                <img [src]="user.picture || 'assets/default-avatar.png'" alt="avatar" class="avatar" />
-              </td>
-              <td>{{ user.name }}</td>
-              <td>{{ user.email }}</td>
-              <td>
-                <span class="badge" [ngStyle]="{'opacity': user.is_admin ? '1' : '0.6'}">
-                  {{ user.is_admin ? 'Admin' : 'User' }}
-                </span>
-              </td>
-              <td class="actions">
-                <button class="action-btn" (click)="editUser(user)" title="Edit">
-                  <i class="fas fa-edit"></i>
-                </button>
-                <button class="action-btn danger" (click)="deleteUser(user)" title="Delete">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+  </div>
+}
+
+<!-- Edit User Modal -->
+@if (showEditModal) {
+  <div class="modal modal-open">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Edit User</h3>
+      <form [formGroup]="editForm" (ngSubmit)="updateUser()" class="py-4 space-y-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Email</span></label>
+          <input type="email" formControlName="email" class="input input-bordered w-full" />
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Name</span></label>
+          <input type="text" formControlName="name" class="input input-bordered w-full" />
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Picture URL</span></label>
+          <input type="text" formControlName="picture" class="input input-bordered w-full" />
+        </div>
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-4">
+            <input type="checkbox" formControlName="is_admin" class="checkbox checkbox-primary" />
+            <span class="label-text">Is Admin</span>
+          </label>
+        </div>
+        <div class="modal-action">
+          <button type="button" class="btn" (click)="closeEditModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="editForm.invalid || isSaving">
+            @if (isSaving) { <span class="loading loading-spinner loading-xs"></span> }
+            Update
+          </button>
+        </div>
+      </form>
     </div>
-  }
-</div>
+  </div>
+}

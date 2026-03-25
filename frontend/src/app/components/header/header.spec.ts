@@ -109,4 +109,19 @@ describe('Header', () => {
     expect(projectLink).toBeTruthy();
     expect(projectLink.textContent).toContain('Project 1');
   });
+
+  it('should hide project breadcrumb if isProjectRoute is false', async () => {
+    const mockProjects: Project[] = [{ id: '1', name: 'Project 1' } as Project];
+    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
+    userServiceSpy.getActiveProjectId.and.returnValue('1');
+    component.isProjectRoute = false;
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const breadcrumbs = fixture.nativeElement.querySelectorAll('.breadcrumbs li');
+    expect(breadcrumbs.length).toBe(1);
+    expect(breadcrumbs[0].textContent).toContain('Test Title');
+    expect(breadcrumbs[0].textContent).not.toContain('Project 1');
+  });
 });

@@ -33,9 +33,24 @@ export class UsersPage implements OnInit {
   private router = inject(Router);
 
   users: UserDetails[] = [];
-  showForm = false;
+  showAddModal = false;
+  showEditModal = false;
+  showDeleteModal = false;
+  showErrorModal = false;
+  errorMessage = '';
+  userToDelete: UserDetails | null = null;
+  selectedUser: UserDetails | null = null;
+  isSaving = false;
+  isDeleting = false;
 
   userForm = this.fb.group({
+    email: ['', [Validators.required, Validators.email]],
+    name: ['', [Validators.required]],
+    is_admin: [false],
+    picture: [''],
+  });
+
+  editForm = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
     name: ['', [Validators.required]],
     is_admin: [false],
@@ -53,29 +68,67 @@ export class UsersPage implements OnInit {
   }
 
   editUser(user: UserDetails) {
-    if (user.id) {
-      this.router.navigate(['/user-edit', user.id]);
-    }
+    this.selectedUser = user;
+    this.editForm.patchValue(user);
+    this.showEditModal = true;
   }
 
   addUser() {
-    this.showForm = true;
+    this.showAddModal = true;
     this.userForm.reset({ is_admin: false });
   }
 
-  cancelForm() {
-    this.showForm = false;
+  closeAddModal() {
+    this.showAddModal = false;
     this.userForm.reset();
+  }
+
+  closeEditModal() {
+    this.showEditModal = false;
+    this.selectedUser = null;
+    this.editForm.reset();
   }
 
   saveUser() {
     if (this.userForm.invalid) return;
 
+    this.isSaving = true;
     const userData = this.userForm.value as Partial<UserDetails>;
 
-    this.userService.createUser(userData).subscribe(() => {
-      this.loadUsers();
-      this.showForm = false;
+    this.userService.createUser(userData).subscribe({
+      next: () => {
+        this.loadUsers();
+        this.showAddModal = false;
+        this.isSaving = false;
+      },
+      error: (err) => {
+        this.isSaving = false;
+        this.showError(err.error?.message || 'Failed to create user.');
+      }
+    });
+  }
+
+  updateUser() {
+    if (this.editForm.invalid || !this.selectedUser?.id) return;
+
+    this.isSaving = true;
+    const userData = this.editForm.value as Partial<UserDetails>;
+
+    this.userService.updateUser(this.selectedUser.id, userData).subscribe({
+      next: () => {
+        this.loadUsers();
+        this.showEditModal = false;
+        this.isSaving = false;
+        // If it's self, update details in service
+        const currentUser = this.userService.getUserDetailsValue();
+        if (currentUser && currentUser.id === this.selectedUser?.id) {
+          this.userService.updateUserDetails();
+        }
+      },
+      error: (err) => {
+        this.isSaving = false;
+        this.showError(err.error?.message || 'Failed to update user.');
+      }
     });
   }
 
@@ -85,14 +138,43 @@ export class UsersPage implements OnInit {
     // Safety check: don't allow deleting yourself
     const currentUser = this.userService.getUserDetailsValue();
     if (currentUser && currentUser.id === user.id) {
-      alert('You cannot delete yourself.');
+      this.showError('You cannot delete yourself.');
       return;
     }
 
-    if (confirm(`Are you sure you want to delete user ${user.email}?`)) {
-      this.userService.deleteUser(user.id).subscribe(() => {
+    this.userToDelete = user;
+    this.showDeleteModal = true;
+  }
+
+  confirmDelete() {
+    if (!this.userToDelete?.id) return;
+
+    this.isDeleting = true;
+    this.userService.deleteUser(this.userToDelete.id).subscribe({
+      next: () => {
         this.loadUsers();
-      });
-    }
+        this.closeDeleteModal();
+        this.isDeleting = false;
+      },
+      error: (err) => {
+        this.isDeleting = false;
+        this.showError(err.error?.message || 'Failed to delete user.');
+      }
+    });
+  }
+
+  closeDeleteModal() {
+    this.showDeleteModal = false;
+    this.userToDelete = null;
+  }
+
+  showError(message: string) {
+    this.errorMessage = message;
+    this.showErrorModal = true;
+  }
+
+  closeErrorModal() {
+    this.showErrorModal = false;
+    this.errorMessage = '';
   }
 }

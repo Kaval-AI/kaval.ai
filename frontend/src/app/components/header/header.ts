@@ -41,6 +41,7 @@ export class Header implements OnInit {
   title = this.navigationService.title;
   projects: Project[] = [];
   activeProjectId: string | null = null;
+  isProjectRoute = true;
 
   ngOnInit(): void {
     // Listen for route changes to update title from route data
@@ -56,6 +57,7 @@ export class Header implements OnInit {
       if (data && data['title']) {
         this.navigationService.setTitle(data['title']);
       }
+      this.isProjectRoute = data && data['isProjectRoute'] !== false;
     });
 
     this.userService.userDetails.subscribe(details => {

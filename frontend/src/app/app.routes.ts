@@ -31,20 +31,20 @@ import { UsersPage } from './components/users-page/users-page';
 
 export const routes: Routes = [
   // Default route
-  { path: '', component: ProjectsPage, data: { title: 'Projects' } },
+  { path: '', component: ProjectsPage, data: { title: 'Projects', isProjectRoute: false } },
 
   { path: 'agents', component: AgentsPage, data: { title: 'Agents' } },
-  { path: 'users', component: UsersPage, data: { title: 'Users' } },
-  { path: 'project-edit/:id', component: ProjectEditPage, data: { title: 'Edit Project' } },
-  { path: 'user-edit/:id', component: UserEditPage, data: { title: 'Edit User' } },
+  { path: 'users', component: UsersPage, data: { title: 'Users', isProjectRoute: false } },
+  { path: 'project-edit/:id', component: ProjectEditPage, data: { title: 'Edit Project', isProjectRoute: false } },
+  { path: 'user-edit/:id', component: UserEditPage, data: { title: 'Edit User', isProjectRoute: false } },
   { path: 'conversations', component: ConversationsPage, data: { title: 'Conversations' } },
   { path: 'conversations/:sessionId', component: SessionDetailPage, data: { title: 'Conversation History' } },
   { path: 'conversations/:sessionId/runs/:runId/tasks', component: RunTasksPage, data: { title: 'Run Tasks' } },
-  { path: 'tests', component: TestsPage, data: { title: 'Acceptance Tests' } },
-  { path: 'metrics', component: MetricsPage, data: { title: 'Metrics' } },
-  { path: 'llm-call-stats', component: LlmCallStatsPage, data: { title: 'Model Calls' } },
-  { path: 'rag', component: RagPage, data: { title: 'RAG' } },
-  { path: 'theme', component: ThemePage, data: { title: 'Theme' } },
+  { path: 'tests', component: TestsPage, data: { title: 'Acceptance Tests', isProjectRoute: false } },
+  { path: 'metrics', component: MetricsPage, data: { title: 'Metrics', isProjectRoute: false } },
+  { path: 'llm-call-stats', component: LlmCallStatsPage, data: { title: 'Model Calls', isProjectRoute: false } },
+  { path: 'rag', component: RagPage, data: { title: 'RAG', isProjectRoute: false } },
+  { path: 'theme', component: ThemePage, data: { title: 'Theme', isProjectRoute: false } },
 
   // Wildcard route for 404 - Should always be last
   { path: '**', redirectTo: '' },

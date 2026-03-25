@@ -1,91 +1,18 @@
-.users-container {
-  padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
+/*
+Copyright 2026 OÜ KAVAL AI (registry code 17393877)
 
-.header-section {
-  margin-bottom: 32px;
-}
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-.header-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
+http://www.apache.org/licenses/LICENSE-2.0
 
-.subtitle {
-  color: #666;
-  font-size: 14px;
-}
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid #eee;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  padding: 6px 10px;
-  background: #f5f5f5;
-  color: var(--dark-green-color);
-}
-
-.action-btn.danger {
-  background: #fff5f5;
-  color: #dc3545;
-}
-
-.action-btn.danger:hover {
-  background: #dc3545;
-  color: white;
-}
-
-.action-btn:hover {
-  background: var(--accent-color);
-}
-
-.user-form {
-  max-width: 500px;
-  background: white;
-  padding: 24px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  border: 1px solid #eee;
-  margin-top: 20px;
-}
-
-.form-group {
-  margin-bottom: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.form-group label {
-  font-weight: bold;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.checkbox label {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-}
-
-.form-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
+/* Users page is now mostly styled with Tailwind and DaisyUI.
+   Custom styles are kept to a minimum. */

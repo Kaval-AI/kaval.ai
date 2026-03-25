@@ -44,12 +44,51 @@ describe('UsersPage', () => {
     fixture.detectChanges();
   });
 
-  it('should navigate to user-edit when editUser is called', () => {
-    const mockUser = { id: '123', email: 'test@example.com' };
-    const navigateSpy = spyOn(router, 'navigate');
+  it('should open edit modal when editUser is called', () => {
+    const mockUser = { id: '123', email: 'test@example.com', name: 'Test User', is_admin: false, picture: '' };
 
     component.editUser(mockUser as any);
 
-    expect(navigateSpy).toHaveBeenCalledWith(['/user-edit', '123']);
+    expect(component.selectedUser).toBe(mockUser as any);
+    expect(component.showEditModal).toBeTrue();
+    expect(component.editForm.value.email).toBe('test@example.com');
+  });
+
+  it('should open delete modal when deleteUser is called', () => {
+    const mockUser = { id: '123', email: 'test@example.com', name: 'Test User', is_admin: false, picture: '' };
+    userServiceSpy.getUserDetailsValue.and.returnValue({ id: '456' } as any);
+
+    component.deleteUser(mockUser as any);
+
+    expect(component.userToDelete).toBe(mockUser as any);
+    expect(component.showDeleteModal).toBeTrue();
+  });
+
+  it('should show error modal when trying to delete self', () => {
+    const mockUser = { id: '123', email: 'test@example.com', name: 'Test User', is_admin: false, picture: '' };
+    userServiceSpy.getUserDetailsValue.and.returnValue({ id: '123' } as any);
+
+    component.deleteUser(mockUser as any);
+
+    expect(component.showErrorModal).toBeTrue();
+    expect(component.errorMessage).toBe('You cannot delete yourself.');
+  });
+
+  it('should display page title and description', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('h1')?.textContent).toContain('System Users');
+    expect(compiled.querySelector('p')?.textContent).toContain('Manage system users and their permissions.');
+  });
+
+  it('should use non-outline button for edit', () => {
+    const mockUser = { id: '123', email: 'test@example.com', name: 'Test User', is_admin: false, picture: '' };
+    component.users = [mockUser as any];
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const editButton = compiled.querySelector('button[title="Edit"]');
+    expect(editButton).toBeTruthy();
+    expect(editButton?.classList.contains('btn-outline')).toBeFalse();
+    expect(editButton?.classList.contains('btn-primary')).toBeTrue();
   });
 });

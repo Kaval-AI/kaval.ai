@@ -87,7 +87,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `navigation-service.ts`: Manages the current page title displayed in the header.
     - `public/assets/images/`: Public assets including logos and icons.
     - `src/app/components/`: UI components organized by feature.
-        - `agents-page/`, `projects-page/`, `users-page/`: CRUD interfaces for main entities. `projects-page/` includes a collapsible dashboard with project details, database configuration, and unified statistics charts (Activity, Tokens, Average Durations, and Workflow Runtimes).
+        - `agents-page/`, `projects-page/`, `users-page/`: CRUD interfaces for main entities. `projects-page/` includes a collapsible dashboard with project details, database configuration, and unified statistics charts (Activity, Tokens, Average Durations, and Workflow Runtimes). `users-page/` uses DaisyUI modals for user creation, editing, deletion confirmations, and error reporting.
         - `conversations-page/`, `session-detail-page/`: Agent session monitoring and debugging.
         - `run-tasks-page/`: Full-page view for tasks of a specific run, navigated from session detail. Route: `/conversations/:sessionId/runs/:runId/tasks`.
         - `configs-page/`: LLM profile and provider configuration.
