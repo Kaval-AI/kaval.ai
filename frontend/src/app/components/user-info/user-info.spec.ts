@@ -82,4 +82,25 @@ describe('UserInfo', () => {
 
     expect(navigateSpy).toHaveBeenCalledWith(['/user-edit', '123']);
   });
+
+  it('should open menu when openMenu is called', () => {
+    component.openMenu();
+    expect(component.isMenuOpen).toBeTrue();
+  });
+
+  it('should close menu when closeMenu is called', (done) => {
+    component.isMenuOpen = true;
+    component.closeMenu();
+    setTimeout(() => {
+      expect(component.isMenuOpen).toBeFalse();
+      done();
+    }, 250);
+  });
+
+  it('should close menu when onMenuClick is called', () => {
+    component.isMenuOpen = true;
+    const closeMenuSpy = spyOn(component, 'closeMenu');
+    component.onMenuClick();
+    expect(closeMenuSpy).toHaveBeenCalled();
+  });
 });
