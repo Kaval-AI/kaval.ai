@@ -19,12 +19,13 @@ import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { Task } from '../../models/task';
 import { TasksList } from '../tasks-list/tasks-list';
+import { TaskTimelineChart } from '../task-timeline-chart/task-timeline-chart';
 import { NavigationService } from '../../services/navigation-service';
 
 @Component({
   selector: 'app-run-tasks-page',
   standalone: true,
-  imports: [RouterModule, TasksList],
+  imports: [RouterModule, TasksList, TaskTimelineChart],
   templateUrl: './run-tasks-page.html',
   styleUrl: './run-tasks-page.css',
 })

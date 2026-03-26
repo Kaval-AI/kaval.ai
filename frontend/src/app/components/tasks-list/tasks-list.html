@@ -1,11 +1,4 @@
 <div class="tasks-list-container">
-  <div class="tasks-header">
-    <button class="back-button" (click)="onBack()">
-      <span class="icon">←</span> Back to Agent Run
-    </button>
-    <h4>Tasks for Run {{ runId }}</h4>
-  </div>
-
   @if (tasks.length === 0) {
     <div class="empty-state">No tasks recorded for this run.</div>
   } @else {

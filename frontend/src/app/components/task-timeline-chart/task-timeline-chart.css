@@ -1,0 +1,23 @@
+.timeline-container {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.timeline-row {
+  min-height: 1.5rem;
+}
+
+.task-box {
+  min-width: 2px;
+  transition: all 0.2s ease-in-out;
+  cursor: help;
+}
+
+.task-box:hover {
+  filter: brightness(1.1);
+  z-index: 10;
+}
+
+.task-label {
+  flex-shrink: 0;
+}

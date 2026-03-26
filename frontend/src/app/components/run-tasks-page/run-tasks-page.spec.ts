@@ -18,7 +18,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunTasksPage } from './run-tasks-page';
 import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
-import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of, BehaviorSubject, throwError } from 'rxjs';
 import { Task } from '../../models/task';
 import { TasksList } from '../tasks-list/tasks-list';
@@ -28,7 +28,7 @@ describe('RunTasksPage', () => {
   let fixture: ComponentFixture<RunTasksPage>;
   let agentServiceSpy: jasmine.SpyObj<AgentService>;
   let userServiceSpy: jasmine.SpyObj<UserService>;
-  let routerSpy: jasmine.SpyObj<Router>;
+  let router: Router;
   let userDetailsSubject: BehaviorSubject<any>;
 
   const mockTasks: Task[] = [
@@ -43,14 +43,13 @@ describe('RunTasksPage', () => {
     userServiceSpy = {
       userDetails: userDetailsSubject.asObservable()
     } as any;
-    routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     await TestBed.configureTestingModule({
       imports: [RunTasksPage, TasksList],
       providers: [
+        provideRouter([]),
         { provide: AgentService, useValue: agentServiceSpy },
         { provide: UserService, useValue: userServiceSpy },
-        { provide: Router, useValue: routerSpy },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -62,6 +61,8 @@ describe('RunTasksPage', () => {
 
     fixture = TestBed.createComponent(RunTasksPage);
     component = fixture.componentInstance;
+    router = TestBed.inject(Router);
+    spyOn(router, 'navigate');
   });
 
   it('should create', () => {
@@ -93,7 +94,7 @@ describe('RunTasksPage', () => {
     fixture.detectChanges();
     component.sessionId = 'sess1';
     component.goBack();
-    expect(routerSpy.navigate).toHaveBeenCalledWith(['/conversations', 'sess1']);
+    expect(router.navigate).toHaveBeenCalledWith(['/conversations', 'sess1']);
   });
 
   it('should reload tasks when project changes', () => {

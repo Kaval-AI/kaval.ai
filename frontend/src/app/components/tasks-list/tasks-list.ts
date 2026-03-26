@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Task } from '../../models/task';
 import { JsonTreeComponent } from '../json-tree/json-tree';
@@ -28,14 +28,9 @@ import { JsonTreeComponent } from '../json-tree/json-tree';
 export class TasksList {
   @Input() tasks: Task[] = [];
   @Input() runId: string = '';
-  @Output() backToRun = new EventEmitter<void>();
 
   formatDate(dateStr: string): string {
     const date = new Date(dateStr);
     return date.toLocaleString();
-  }
-
-  onBack(): void {
-    this.backToRun.emit();
   }
 }

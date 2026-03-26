@@ -6,12 +6,12 @@
     </button>
     @if (sessionId && runId) {
       <div class="flex flex-wrap gap-2">
-        <div class="badge badge-outline gap-2 p-3 font-mono text-[10px]">
+        <a [routerLink]="['/conversations', sessionId]" class="badge badge-outline gap-2 p-3 font-mono text-[10px] hover:bg-base-200 cursor-pointer transition-colors no-underline">
           <span class="opacity-50">Session:</span> {{ sessionId }}
-        </div>
-        <div class="badge badge-outline badge-accent gap-2 p-3 font-mono text-[10px]">
+        </a>
+        <a [routerLink]="['/conversations', sessionId]" class="badge badge-outline badge-accent gap-2 p-3 font-mono text-[10px] hover:bg-accent/10 cursor-pointer transition-colors no-underline">
           <span class="opacity-50 text-base-content">Run:</span> {{ runId }}
-        </div>
+        </a>
       </div>
     }
   </div>
@@ -36,10 +36,14 @@
           <p class="text-base-content/60">No tasks were executed in this run.</p>
         </div>
       } @else {
+        <div class="mb-8">
+          <h2 class="text-lg font-bold mb-4">Task Execution Timeline</h2>
+          <app-task-timeline-chart [tasks]="tasks"></app-task-timeline-chart>
+        </div>
+
         <app-tasks-list
           [tasks]="tasks"
-          [runId]="runId || ''"
-          (backToRun)="goBack()"></app-tasks-list>
+          [runId]="runId || ''"></app-tasks-list>
       }
     </div>
   </div>

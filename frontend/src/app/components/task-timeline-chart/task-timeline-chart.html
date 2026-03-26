@@ -1,0 +1,25 @@
+<div class="timeline-container bg-base-200 p-4 rounded-box">
+  <div class="timeline-header flex justify-between text-xs text-neutral mb-2">
+    <span>0s</span>
+    <span>{{ formatDuration(totalDuration) }}</span>
+  </div>
+  <div class="timeline-body relative h-auto">
+    @for (box of taskBoxes; track box.id) {
+    <div class="timeline-row flex items-center mb-1">
+      <div class="task-label text-xs truncate mr-2 w-32" [title]="box.name">
+        {{ box.name }}
+      </div>
+      <div class="flex-1 relative h-6 bg-base-300 rounded overflow-hidden">
+        <div
+          class="task-box absolute h-full bg-primary flex items-center justify-center text-[10px] text-primary-content px-1 truncate"
+          [style.left.%]="box.left"
+          [style.width.%]="box.width"
+          [title]="box.name + ' (' + formatDuration(box.duration) + ')'"
+        >
+          {{ formatDuration(box.duration) }}
+        </div>
+      </div>
+    </div>
+    }
+  </div>
+</div>
