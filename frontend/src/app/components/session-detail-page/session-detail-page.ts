@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { AgentService } from '../../services/agent-service';
@@ -22,6 +22,7 @@ import { ChatMessage } from '../../models/chat-message';
 import { Run } from '../../models/run';
 import { Task } from '../../models/task';
 import { JsonTreeComponent } from '../json-tree/json-tree';
+import { NavigationService } from '../../services/navigation-service';
 
 interface RunBlock {
   run: Run;
@@ -37,6 +38,12 @@ interface RunBlock {
   styleUrl: './session-detail-page.css',
 })
 export class SessionDetailPage implements OnInit {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private agentService = inject(AgentService);
+  private userService = inject(UserService);
+  private navigationService = inject(NavigationService);
+
   sessionId: string | null = null;
   projectId: string | null = null;
   runBlocks: RunBlock[] = [];
@@ -51,16 +58,13 @@ export class SessionDetailPage implements OnInit {
   modalType: 'json' | 'tasks' = 'json';
   modalRunId: string = '';
 
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private agentService: AgentService,
-    private userService: UserService
-  ) {}
-
   ngOnInit(): void {
     this.route.paramMap.subscribe((params) => {
       this.sessionId = params.get('sessionId');
+      this.navigationService.setBreadcrumbs([
+        { label: 'Conversations', link: '/conversations' },
+        { label: this.sessionId || 'Session Details' }
+      ]);
     });
 
     this.userService.userDetails.subscribe((user) => {

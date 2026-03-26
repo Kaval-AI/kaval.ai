@@ -29,12 +29,21 @@ describe('NavigationService', () => {
     expect(service).toBeTruthy();
   });
 
-  it('should have an initial empty title', () => {
-    expect(service.title()).toBe('');
+  it('should have initial empty breadcrumbs', () => {
+    expect(service.breadcrumbs()).toEqual([]);
   });
 
-  it('should update the title', () => {
+  it('should update breadcrumbs via setTitle', () => {
     service.setTitle('Test Title');
-    expect(service.title()).toBe('Test Title');
+    expect(service.breadcrumbs()).toEqual([{ label: 'Test Title' }]);
+  });
+
+  it('should update nested breadcrumbs', () => {
+    const breadcrumbs = [
+      { label: 'Parent', link: '/parent' },
+      { label: 'Child' }
+    ];
+    service.setBreadcrumbs(breadcrumbs);
+    expect(service.breadcrumbs()).toEqual(breadcrumbs);
   });
 });

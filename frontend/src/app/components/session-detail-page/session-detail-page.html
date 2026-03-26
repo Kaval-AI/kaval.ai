@@ -1,86 +1,101 @@
-<div class="session-detail-container">
-  <div class="header">
-    <div class="header-left">
-      <button class="back-button" (click)="goBack()">
-        <span class="icon">←</span> Back to Conversations
-      </button>
-    </div>
+<div class="p-6 max-w-5xl mx-auto space-y-6">
+  <!-- Header with Back Button -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <button class="btn btn-sm btn-ghost gap-2" (click)="goBack()">
+      <i class="fas fa-arrow-left"></i> Back to Conversations
+    </button>
     @if (sessionId) {
-      <div class="session-info">
-        <span class="label">Session ID:</span>
-        <span class="value">{{ sessionId }}</span>
+      <div class="badge badge-outline gap-2 p-3 font-mono text-xs">
+        <span class="opacity-50">Session ID:</span> {{ sessionId }}
       </div>
     }
   </div>
 
-  <div class="chat-area">
+  <!-- Content Area -->
+  <div class="space-y-6">
     @if (loading) {
-      <div class="loading-state">
-        Loading session details...
+      <div class="flex flex-col items-center justify-center min-h-[30vh] space-y-4">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <p class="text-base-content/60 font-medium">Loading session details...</p>
       </div>
     }
 
     @if (error) {
-      <div class="error-state">
-        {{ error }}
+      <div class="alert alert-error shadow-lg">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>{{ error }}</span>
       </div>
     }
 
     @if (!loading && !error && runBlocks.length === 0 && unassignedMessages.length === 0) {
-      <div class="empty-state">
-        No messages or runs in this session.
+      <div class="flex flex-col items-center justify-center min-h-[30vh] text-center space-y-4 bg-base-100 rounded-box border border-dashed border-base-300 p-12">
+        <div class="text-6xl text-base-content/10"><i class="fas fa-comment-slash"></i></div>
+        <h3 class="text-xl font-bold">Session Empty</h3>
+        <p class="text-base-content/60">No messages or runs found in this session.</p>
       </div>
     }
 
-    <div class="message-list">
+    <div class="flex flex-col space-y-8">
+      <!-- Unassigned Messages -->
       @if (unassignedMessages.length > 0) {
-        @for (msg of unassignedMessages; track msg.id) {
-          <div class="message-wrapper" [ngClass]="msg.role">
-            <div class="message-bubble">
-              <div class="message-header">
-                <span class="role">{{ msg.role === 'user' ? 'User' : 'Agent' }}</span>
-                <span class="time">{{ formatDate(msg.created_at) }}</span>
+        <div class="space-y-4">
+          @for (msg of unassignedMessages; track msg.id) {
+            <div class="chat" [ngClass]="msg.role === 'user' ? 'chat-end' : 'chat-start'">
+              <div class="chat-header opacity-50 text-xs mb-1">
+                {{ msg.role === 'user' ? 'User' : 'Agent' }}
+                <time class="ml-1">{{ formatDate(msg.created_at) }}</time>
               </div>
-              <div class="message-content">
+              <div class="chat-bubble shadow-sm" [ngClass]="msg.role === 'user' ? 'chat-bubble-primary' : 'chat-bubble-base-200 text-base-content'">
                 {{ msg.content }}
               </div>
             </div>
-          </div>
-        }
+          }
+        </div>
       }
 
+      <!-- Run Blocks -->
       @for (block of runBlocks; track block.run.id) {
-        <div class="run-block">
-          <div class="run-header">
-            <div class="run-info">
-              <span class="run-tag">Run</span>
-              <span class="run-id">{{ block.run.id }}</span>
-              <span class="run-stats">
-                <strong>{{ block.run.tasks_count }}</strong> tasks executed
-                @if (block.tasks.length > 0) {
-                  (<span class="task-names">{{ getTaskNames(block.tasks) }}</span>)
-                }
-              </span>
+        <div class="card bg-base-100 shadow-xl border border-base-200 overflow-hidden">
+          <!-- Run Header -->
+          <div class="bg-base-200/50 p-4 border-b border-base-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-accent/10 rounded text-accent">
+                <i class="fas fa-play text-xs"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-sm">Run</span>
+                  <span class="font-mono text-xs opacity-60">{{ block.run.id }}</span>
+                </div>
+                <div class="text-xs opacity-70">
+                  <span class="font-bold">{{ block.run.tasks_count }}</span> tasks executed
+                  @if (block.tasks.length > 0) {
+                    <span class="mx-1">•</span>
+                    <span class="italic">{{ getTaskNames(block.tasks) }}</span>
+                  }
+                </div>
+              </div>
             </div>
-            <div class="run-actions">
-              <button class="small-button" (click)="openJsonModal('Run Input', block.run.input_data)" [disabled]="!block.run.input_data">Input</button>
-              <button class="small-button" (click)="openJsonModal('Run Output', block.run.output_data)" [disabled]="!block.run.output_data">Output</button>
-              <button class="small-button" (click)="openJsonModal('Run Context', block.run.context)" [disabled]="!block.run.context">Context</button>
-              <button class="small-button primary" (click)="openTasksPage(block.run)">Tasks</button>
+            <div class="flex flex-wrap gap-1">
+              <button class="btn btn-xs btn-outline" (click)="openJsonModal('Run Input', block.run.input_data)" [disabled]="!block.run.input_data">Input</button>
+              <button class="btn btn-xs btn-outline" (click)="openJsonModal('Run Output', block.run.output_data)" [disabled]="!block.run.output_data">Output</button>
+              <button class="btn btn-xs btn-outline" (click)="openJsonModal('Run Context', block.run.context)" [disabled]="!block.run.context">Context</button>
+              <button class="btn btn-xs btn-primary gap-1" (click)="openTasksPage(block.run)">
+                <i class="fas fa-tasks"></i> Tasks
+              </button>
             </div>
           </div>
 
-          <div class="run-messages">
+          <!-- Run Messages -->
+          <div class="card-body p-4 sm:p-6 space-y-4 bg-base-100/30">
             @for (msg of block.messages; track msg.id) {
-              <div class="message-wrapper" [ngClass]="msg.role">
-                <div class="message-bubble">
-                  <div class="message-header">
-                    <span class="role">{{ msg.role === 'user' ? 'User' : 'Agent' }}</span>
-                    <span class="time">{{ formatDate(msg.created_at) }}</span>
-                  </div>
-                  <div class="message-content">
-                    {{ msg.content }}
-                  </div>
+              <div class="chat" [ngClass]="msg.role === 'user' ? 'chat-end' : 'chat-start'">
+                <div class="chat-header opacity-50 text-xs mb-1">
+                  {{ msg.role === 'user' ? 'User' : 'Agent' }}
+                  <time class="ml-1">{{ formatDate(msg.created_at) }}</time>
+                </div>
+                <div class="chat-bubble shadow-sm" [ngClass]="msg.role === 'user' ? 'chat-bubble-primary' : 'chat-bubble-base-200 text-base-content'">
+                  {{ msg.content }}
                 </div>
               </div>
             }
@@ -89,24 +104,29 @@
       }
     </div>
   </div>
-</div>
 
-@if (showModal) {
-  <div class="modal-overlay" (click)="closeModal()">
-    <div class="modal-content" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <h3>{{ modalTitle }}</h3>
-        <button class="close-button" (click)="closeModal()">×</button>
-      </div>
-      <div class="modal-body">
-        @if (modalType === 'json') {
-          @if (modalData) {
-            <app-json-tree [data]="modalData" [isExpanded]="true"></app-json-tree>
-          } @else {
-            <div class="empty-state">No data available.</div>
+  <!-- JSON Modal -->
+  @if (showModal) {
+    <div class="modal modal-open">
+      <div class="modal-box max-w-4xl">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-lg">{{ modalTitle }}</h3>
+          <button class="btn btn-sm btn-circle btn-ghost" (click)="closeModal()">✕</button>
+        </div>
+        <div class="max-h-[60vh] overflow-auto bg-base-200 rounded-box p-4">
+          @if (modalType === 'json') {
+            @if (modalData) {
+              <app-json-tree [data]="modalData" [isExpanded]="true"></app-json-tree>
+            } @else {
+              <div class="py-8 text-center opacity-50 italic">No data available.</div>
+            }
           }
-        }
+        </div>
+        <div class="modal-action">
+          <button class="btn" (click)="closeModal()">Close</button>
+        </div>
       </div>
+      <div class="modal-backdrop" (click)="closeModal()"></div>
     </div>
-  </div>
-}
+  }
+</div>

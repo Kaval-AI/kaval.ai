@@ -38,7 +38,7 @@ export class Header implements OnInit {
   private router = inject(Router);
   private activatedRoute = inject(ActivatedRoute);
 
-  title = this.navigationService.title;
+  breadcrumbs = this.navigationService.breadcrumbs;
   projects: Project[] = [];
   activeProjectId: string | null = null;
   isProjectRoute = true;

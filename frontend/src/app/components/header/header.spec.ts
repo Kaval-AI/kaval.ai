@@ -37,7 +37,7 @@ describe('Header', () => {
   beforeEach(async () => {
     projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll']);
     userServiceSpy = jasmine.createSpyObj('UserService', ['getActiveProjectId', 'setActiveProject', 'updateUserDetails', 'getIsAdmin'], { userDetails: of({ id: 'u1' }) });
-    navigationServiceSpy = jasmine.createSpyObj('NavigationService', ['setTitle'], { title: () => 'Test Title' });
+    navigationServiceSpy = jasmine.createSpyObj('NavigationService', ['setTitle'], { breadcrumbs: () => [{ label: 'Test Title' }] });
     routerSpy = jasmine.createSpyObj('Router', ['navigate', 'navigateByUrl'], { url: '/test' });
 
     projectServiceSpy.getAll.and.returnValue(of([]));

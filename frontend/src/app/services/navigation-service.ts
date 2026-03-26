@@ -16,15 +16,24 @@ limitations under the License.
 
 import { Injectable, signal } from '@angular/core';
 
+export interface Breadcrumb {
+  label: string;
+  link?: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
 export class NavigationService {
-  private titleSignal = signal<string>('');
+  private breadcrumbsSignal = signal<Breadcrumb[]>([]);
 
-  readonly title = this.titleSignal.asReadonly();
+  readonly breadcrumbs = this.breadcrumbsSignal.asReadonly();
+
+  setBreadcrumbs(breadcrumbs: Breadcrumb[]) {
+    this.breadcrumbsSignal.set(breadcrumbs);
+  }
 
   setTitle(title: string) {
-    this.titleSignal.set(title);
+    this.setBreadcrumbs([{ label: title }]);
   }
 }

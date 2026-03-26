@@ -1,86 +1,151 @@
-<div class="conversations-container">
-  <div class="header">
-    <div class="title-section">
-      @if (!loading || sessions.length > 0) {
-        <span class="total-badge">
-          Total: {{ totalSessions }}
-        </span>
-      }
-    </div>
-    <div class="controls">
-      <input
-        type="text"
-        [(ngModel)]="searchText"
-        (keyup.enter)="onFilterChange()"
-        placeholder="Search in messages..."
-        class="search-input"
-      >
-      <div class="date-range">
-        <label>From:</label>
-        <input type="datetime-local" [(ngModel)]="startDate" (change)="onFilterChange()">
-        <label>To:</label>
-        <input type="datetime-local" [(ngModel)]="endDate" (change)="onFilterChange()">
+<div class="p-6 max-w-6xl mx-auto space-y-6">
+  <!-- Header with Filters -->
+  <div class="card bg-base-100 shadow-xl border border-base-200">
+    <div class="card-body p-4 sm:p-6">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="flex items-center gap-3">
+          <div class="p-2 bg-primary/10 rounded-lg text-primary">
+            <i class="fas fa-comments text-xl"></i>
+          </div>
+          <div>
+            <h2 class="text-xl font-bold">Conversations</h2>
+            @if (!loading || sessions.length > 0) {
+              <div class="badge badge-sm badge-outline opacity-70">{{ totalSessions }} Sessions</div>
+            }
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2 w-full md:w-auto">
+          <div class="join w-full sm:w-auto">
+            <input
+              type="text"
+              [(ngModel)]="searchText"
+              (keyup.enter)="onFilterChange()"
+              placeholder="Search in messages..."
+              class="input input-bordered input-sm join-item flex-1 sm:w-48"
+            >
+            <button class="btn btn-sm btn-primary join-item" (click)="onFilterChange()" [disabled]="loading">
+              <i class="fas fa-search"></i>
+            </button>
+          </div>
+          <button (click)="loadSessions(true)" class="btn btn-sm btn-ghost" [disabled]="loading">
+            <i class="fas fa-sync" [class.animate-spin]="loading"></i>
+          </button>
+        </div>
       </div>
-      <select [(ngModel)]="selectedAgentId" (change)="onFilterChange()">
-        <option value="">All Agents</option>
-        @for (agent of agents; track agent.id) {
-          <option [value]="agent.id">{{ agent.name }}</option>
-        }
-      </select>
-      <button (click)="loadSessions(true)" [disabled]="loading">Refresh</button>
+
+      <div class="divider my-2"></div>
+
+      <!-- Advanced Filters Row -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="form-control w-full">
+          <label class="label py-1"><span class="label-text-alt font-bold">Agent</span></label>
+          <select class="select select-bordered select-sm w-full" [(ngModel)]="selectedAgentId" (change)="onFilterChange()">
+            <option value="">All Agents</option>
+            @for (agent of agents; track agent.id) {
+              <option [value]="agent.id">{{ agent.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="form-control w-full">
+          <label class="label py-1"><span class="label-text-alt font-bold">From</span></label>
+          <input type="datetime-local" class="input input-bordered input-sm w-full" [(ngModel)]="startDate" (change)="onFilterChange()">
+        </div>
+        <div class="form-control w-full">
+          <label class="label py-1"><span class="label-text-alt font-bold">To</span></label>
+          <input type="datetime-local" class="input input-bordered input-sm w-full" [(ngModel)]="endDate" (change)="onFilterChange()">
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="scroll-area">
+  <!-- Content Area -->
+  <div class="space-y-4">
     @if (loading && sessions.length === 0) {
-      <div class="loading-state">
-        Loading sessions...
+      <div class="flex flex-col items-center justify-center min-h-[30vh] space-y-4">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <p class="text-base-content/60 font-medium">Loading conversations...</p>
       </div>
     }
 
     @if (error) {
-      <div class="error-state">
-        {{ error }}
+      <div class="alert alert-error shadow-lg">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>{{ error }}</span>
       </div>
     }
 
     @if (!loading && !error && sessions.length === 0) {
-      <div class="empty-state">
-        No sessions found.
+      <div class="flex flex-col items-center justify-center min-h-[30vh] text-center space-y-4 bg-base-100 rounded-box border border-dashed border-base-300 p-12">
+        <div class="text-6xl text-base-content/10"><i class="fas fa-comment-slash"></i></div>
+        <h3 class="text-xl font-bold">No Sessions Found</h3>
+        <p class="text-base-content/60">No conversations match your current filters.</p>
+        <button class="btn btn-outline btn-sm" (click)="searchText = ''; selectedAgentId = ''; onFilterChange()">Clear Filters</button>
       </div>
     }
 
     @if (sessions.length > 0) {
-      <div class="sessions-list">
+      <div class="grid grid-cols-1 gap-4">
         @for (session of sessions; track session.session_id) {
-          <div class="session-card" (click)="viewSession(session.session_id)">
-            <div class="session-header">
-              <span class="session-id">
-                <strong>{{ session.agent_name }}</strong> | Session: {{ session.session_id }}
-              </span>
-              <span class="session-date">Updated: {{ formatDate(session.updated_at) }}</span>
-            </div>
+          <div class="card bg-base-100 shadow-sm border border-base-200 hover:border-primary/50 transition-all cursor-pointer group"
+               (click)="viewSession(session.session_id)">
+            <div class="card-body p-4 sm:p-5">
+              <div class="flex flex-col sm:flex-row justify-between items-start gap-2 mb-3">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-full bg-base-200 flex items-center justify-center text-xs font-bold text-base-content/70">
+                    {{ session.agent_name.substring(0, 2).toUpperCase() }}
+                  </div>
+                  <div>
+                    <h3 class="font-bold group-hover:text-primary transition-colors">{{ session.agent_name }}</h3>
+                    <div class="text-[10px] opacity-50 font-mono">{{ session.session_id }}</div>
+                  </div>
+                </div>
+                <div class="text-xs opacity-60 bg-base-200 px-2 py-1 rounded">
+                  <i class="far fa-clock mr-1"></i> {{ formatDate(session.updated_at) }}
+                </div>
+              </div>
 
-            <div class="session-stats">
-              <span class="stat-item">Runs: <strong>{{ session.runs_count }}</strong></span>
-              <span class="stat-item">Tasks: <strong>{{ session.tasks_count }}</strong></span>
-              <span class="stat-item">Messages: <strong>{{ session.messages_count }}</strong></span>
-              <span class="stat-item" [class.has-errors]="session.errors_count > 0">Errors: <strong>{{ session.errors_count }}</strong></span>
-            </div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                <div class="bg-base-200/50 rounded p-2 text-center">
+                  <div class="text-[10px] uppercase opacity-50 font-bold">Runs</div>
+                  <div class="text-sm font-bold">{{ session.runs_count }}</div>
+                </div>
+                <div class="bg-base-200/50 rounded p-2 text-center">
+                  <div class="text-[10px] uppercase opacity-50 font-bold">Tasks</div>
+                  <div class="text-sm font-bold">{{ session.tasks_count }}</div>
+                </div>
+                <div class="bg-base-200/50 rounded p-2 text-center">
+                  <div class="text-[10px] uppercase opacity-50 font-bold">Messages</div>
+                  <div class="text-sm font-bold">{{ session.messages_count }}</div>
+                </div>
+                <div class="rounded p-2 text-center" [class.bg-error/10]="session.errors_count > 0" [class.text-error]="session.errors_count > 0" [class.bg-base-200/50]="session.errors_count === 0">
+                  <div class="text-[10px] uppercase opacity-50 font-bold">Errors</div>
+                  <div class="text-sm font-bold">{{ session.errors_count }}</div>
+                </div>
+              </div>
 
-            <div class="session-previews">
-              @if (session.first_message) {
-                <div class="preview-item">
-                  <label>First Message:</label>
-                  <p class="preview-text">{{ session.first_message }}</p>
+              @if (session.first_message || session.last_message) {
+                <div class="space-y-2">
+                  @if (session.first_message) {
+                    <div class="text-sm flex gap-2">
+                      <span class="font-bold text-primary/70 shrink-0">Start:</span>
+                      <p class="italic opacity-70 line-clamp-1">{{ session.first_message }}</p>
+                    </div>
+                  }
+                  @if (session.last_message) {
+                    <div class="text-sm flex gap-2">
+                      <span class="font-bold text-accent/70 shrink-0">Latest:</span>
+                      <p class="font-medium line-clamp-2">{{ session.last_message }}</p>
+                    </div>
+                  }
                 </div>
               }
-              @if (session.last_message) {
-                <div class="preview-item">
-                  <label>Last Message:</label>
-                  <p class="preview-text">{{ session.last_message }}</p>
+
+              <div class="card-actions justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div class="text-xs text-primary font-bold flex items-center gap-1">
+                  View details <i class="fas fa-chevron-right text-[10px]"></i>
                 </div>
-              }
+              </div>
             </div>
           </div>
         }
@@ -88,8 +153,13 @@
     }
 
     @if (sessions.length > 0 && hasMore) {
-      <div class="pagination">
-        <button (click)="nextPage()" [disabled]="loading">Load More</button>
+      <div class="flex justify-center pt-4">
+        <button class="btn btn-outline btn-wide" (click)="nextPage()" [disabled]="loading">
+          @if (loading) {
+            <span class="loading loading-spinner"></span>
+          }
+          Load More
+        </button>
       </div>
     }
   </div>
