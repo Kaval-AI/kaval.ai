@@ -53,7 +53,7 @@
   --color-success: #809537;
   --color-success-content: #f3fbf6ff;
 
-  --header-bg: #4D5C65;
+  --header-bg: #4d5c65;
   --dropdown-bg: #e5e5e8;
 
   --color-warning: #e67f0d;
@@ -75,16 +75,19 @@
   --border: 1px;
 
   /* fonts */
-  --font-family-header: "Chakra Petch", sans-serif;
-  --font-family-body: "Space Grotesk", sans-serif;
-  --font-family-accent: "Space Mono", monospace;
-
+  --default-font-family: var(--font-family-body);
   --font-family: var(--font-family-body);
   --font-weight: 500;
 
   /* effects */
   --depth: 1;
   --noise: 0;
+}
+
+@theme {
+  --font-family-header: "Chakra Petch", sans-serif;
+  --font-family-body: "Space Grotesk", sans-serif;
+  --font-family-accent: "Space Mono", monospace;
 }
 
 h1,
