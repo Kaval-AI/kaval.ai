@@ -89,14 +89,14 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `src/app/components/`: UI components organized by feature.
         - `agents-page/`, `projects-page/`, `users-page/`: CRUD interfaces for main entities. `projects-page/` includes a collapsible dashboard with project details, database configuration, and unified statistics charts (Activity, Tokens, Average Durations, and Workflow Runtimes). `users-page/` uses DaisyUI modals for user creation, editing, deletion confirmations, and error reporting.
         - `conversations-page/`, `session-detail-page/`: Agent session monitoring and debugging. Updated to use Tailwind CSS and DaisyUI with chat-style message bubbles and project-consistent layouts.
-        - `run-tasks-page/`: Full-page view for tasks of a specific run, navigated from session detail. Route: `/conversations/:sessionId/runs/:runId/tasks`. Updated to use Tailwind CSS and DaisyUI.
+        - `run-tasks-page/`: Full-page view for tasks of a specific run, navigated from session detail. Route: `/conversations/:sessionId/runs/:runId/tasks`. Updated to use Tailwind CSS and DaisyUI with theme fonts.
         - `configs-page/`: LLM profile and provider configuration.
         - `llm-call-stats-page/`: Detailed list of LLM calls with request/response data (paginated).
         - `rag-page/`: RAG-related configuration and testing.
         - `task-timeline-chart/`: Chart component for visualizing task execution timeline using start times and durations.
         - `theme-page/`: Testbed for DaisyUI and Tailwind CSS components and styling.
         - `sidebar-menu/`, `header/`, `header-dropdown/`, `dropdown-menu/`: Layout and navigation components. `header/` now uses a DaisyUI navbar with an integrated megamenu (via `header-dropdown/` component, background color `#4D5C65`) and breadcrumbs with icons (aligned to the left) for the active project and current page. The dropdown menu font color is `--color-base-content`, submenu headers use `--color-info`, and the background color is `#9999A1`. The dropdown menu is configured to close when an item is clicked via its `closeMenu()` method, which uses a 200ms delay to ensure navigation events are processed before the menu is hidden. It uses `isMenuOpen` state synchronized with focus to manage visibility and a high `z-50` index to ensure it stays above other content.
-        - `json-tree/`: Tree-like component for displaying nested JSON data (IDE-style).
+        - `json-tree/`: Tree-like component for displaying nested JSON data (IDE-style). Uses `--font-family-accent` for mono/code content.
     - `src/styles/`: Global CSS styles and theme definitions.
         - `theme.css`: Custom DaisyUI and Tailwind CSS theme definitions using CSS variables.
 - `tests/`: Comprehensive backend test suite.
