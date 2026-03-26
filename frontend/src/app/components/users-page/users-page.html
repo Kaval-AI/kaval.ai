@@ -70,7 +70,7 @@
 <!-- Delete Confirmation Modal -->
 @if (showDeleteModal) {
   <div class="modal modal-open">
-    <div class="modal-box">
+    <div class="modal-box w-full max-w-lg md:max-w-xl">
       <h3 class="font-bold text-lg text-error">Confirm Deletion</h3>
       <p class="py-4">
         Are you sure you want to delete user <strong>{{ userToDelete?.email }}</strong>?
@@ -90,7 +90,7 @@
 <!-- Error Modal -->
 @if (showErrorModal) {
   <div class="modal modal-open">
-    <div class="modal-box">
+    <div class="modal-box w-full max-w-lg md:max-w-xl">
       <h3 class="font-bold text-lg text-error">Error</h3>
       <p class="py-4">{{ errorMessage }}</p>
       <div class="modal-action">
@@ -103,7 +103,7 @@
 <!-- Add User Modal -->
 @if (showAddModal) {
   <div class="modal modal-open">
-    <div class="modal-box">
+    <div class="modal-box w-full max-w-lg md:max-w-xl">
       <h3 class="font-bold text-lg">Add New User</h3>
       <form [formGroup]="userForm" (ngSubmit)="saveUser()" class="py-4 space-y-4">
         <div class="form-control">
@@ -139,7 +139,7 @@
 <!-- Edit User Modal -->
 @if (showEditModal) {
   <div class="modal modal-open">
-    <div class="modal-box">
+    <div class="modal-box w-full max-w-lg md:max-w-xl">
       <h3 class="font-bold text-lg">Edit User</h3>
       <form [formGroup]="editForm" (ngSubmit)="updateUser()" class="py-4 space-y-4">
         <div class="form-control">
