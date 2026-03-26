@@ -259,4 +259,39 @@ describe('ProjectsPage', () => {
 
     expect(toastServiceSpy.error).toHaveBeenCalledWith('Cannot demote the last owner', 3000, undefined);
   });
+
+  it('should display member avatar image if picture exists', () => {
+    const mockMembers = [
+      { id: 'u1', name: 'User 1', email: 'u1@example.com', picture: 'https://example.com/u1.jpg', role: 'owner' }
+    ];
+    component.projects = [{ id: 'p1', name: 'P1' } as Project];
+    component.selectedProject = component.projects[0];
+    component.projectMembers = mockMembers;
+    fixture.detectChanges();
+
+    const img = fixture.nativeElement.querySelector('td img');
+    expect(img).toBeTruthy();
+    expect(img.src).toBe('https://example.com/u1.jpg');
+    expect(img.alt).toBe('User 1');
+
+    const placeholder = fixture.nativeElement.querySelector('td .avatar.placeholder span');
+    expect(placeholder).toBeFalsy();
+  });
+
+  it('should display placeholder if member picture is missing', () => {
+    const mockMembers = [
+      { id: 'u2', name: 'User 2', email: 'u2@example.com', picture: null, role: 'viewer' }
+    ];
+    component.projects = [{ id: 'p1', name: 'P1' } as Project];
+    component.selectedProject = component.projects[0];
+    component.projectMembers = mockMembers;
+    fixture.detectChanges();
+
+    const img = fixture.nativeElement.querySelector('td img');
+    expect(img).toBeFalsy();
+
+    const placeholder = fixture.nativeElement.querySelector('td .avatar.placeholder span');
+    expect(placeholder).toBeTruthy();
+    expect(placeholder.textContent).toContain('U');
+  });
 });
