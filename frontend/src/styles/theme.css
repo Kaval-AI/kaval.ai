@@ -104,6 +104,15 @@ code,
 pre,
 kbd,
 samp,
-.mono {
+.mono,
+.font-mono {
   font-family: var(--font-family-accent);
+}
+
+.font-header {
+  font-family: var(--font-family-header);
+}
+
+.font-body {
+  font-family: var(--font-family-body);
 }

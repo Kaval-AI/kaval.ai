@@ -88,7 +88,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `public/assets/images/`: Public assets including logos and icons.
     - `src/app/components/`: UI components organized by feature.
         - `agents-page/`, `projects-page/`, `users-page/`: CRUD interfaces for main entities. `projects-page/` includes a collapsible dashboard with project details, database configuration, and unified statistics charts (Activity, Tokens, Average Durations, and Workflow Runtimes). `users-page/` uses DaisyUI modals for user creation, editing, deletion confirmations, and error reporting.
-        - `conversations-page/`, `session-detail-page/`: Agent session monitoring and debugging. Updated to use Tailwind CSS and DaisyUI with chat-style message bubbles and project-consistent layouts.
+        - `conversations-page/`, `session-detail-page/`: Agent session monitoring and debugging. `session-detail-page/` displays chat messages and executed tasks in a unified chronological timeline per run, using Tailwind CSS and DaisyUI with chat-style bubbles and integrated task detail modals. Task items are centered and aligned within a max-width container to ensure readability on large screens.
         - `run-tasks-page/`: Full-page view for tasks of a specific run, navigated from session detail. Route: `/conversations/:sessionId/runs/:runId/tasks`. Updated to use Tailwind CSS and DaisyUI with theme fonts.
         - `configs-page/`: LLM profile and provider configuration.
         - `llm-call-stats-page/`: Detailed list of LLM calls with request/response data (paginated).

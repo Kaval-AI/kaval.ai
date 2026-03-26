@@ -92,35 +92,35 @@
             <div class="card-body p-4 sm:p-5">
               <div class="flex flex-col sm:flex-row justify-between items-start gap-2 mb-3">
                 <div class="flex items-center gap-2">
-                  <div class="w-8 h-8 rounded-full bg-base-200 flex items-center justify-center text-xs font-bold text-base-content/70">
+                  <div class="w-8 h-8 rounded-full bg-base-200 flex items-center justify-center text-xs font-bold text-base-content/70 font-header">
                     {{ session.agent_name.substring(0, 2).toUpperCase() }}
                   </div>
                   <div>
-                    <h3 class="font-bold group-hover:text-primary transition-colors">{{ session.agent_name }}</h3>
+                    <h3 class="font-bold group-hover:text-primary transition-colors font-header">{{ session.agent_name }}</h3>
                     <div class="text-[10px] opacity-50 font-mono">{{ session.session_id }}</div>
                   </div>
                 </div>
-                <div class="text-xs opacity-60 bg-base-200 px-2 py-1 rounded">
+                <div class="text-xs opacity-60 bg-base-200 px-2 py-1 rounded font-body">
                   <i class="far fa-clock mr-1"></i> {{ formatDate(session.updated_at) }}
                 </div>
               </div>
 
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                 <div class="bg-base-200/50 rounded p-2 text-center">
-                  <div class="text-[10px] uppercase opacity-50 font-bold">Runs</div>
-                  <div class="text-sm font-bold">{{ session.runs_count }}</div>
+                  <div class="text-[10px] uppercase opacity-50 font-bold font-header">Runs</div>
+                  <div class="text-sm font-bold font-header">{{ session.runs_count }}</div>
                 </div>
                 <div class="bg-base-200/50 rounded p-2 text-center">
-                  <div class="text-[10px] uppercase opacity-50 font-bold">Tasks</div>
-                  <div class="text-sm font-bold">{{ session.tasks_count }}</div>
+                  <div class="text-[10px] uppercase opacity-50 font-bold font-header">Tasks</div>
+                  <div class="text-sm font-bold font-header">{{ session.tasks_count }}</div>
                 </div>
                 <div class="bg-base-200/50 rounded p-2 text-center">
-                  <div class="text-[10px] uppercase opacity-50 font-bold">Messages</div>
-                  <div class="text-sm font-bold">{{ session.messages_count }}</div>
+                  <div class="text-[10px] uppercase opacity-50 font-bold font-header">Messages</div>
+                  <div class="text-sm font-bold font-header">{{ session.messages_count }}</div>
                 </div>
                 <div class="rounded p-2 text-center" [class.bg-error/10]="session.errors_count > 0" [class.text-error]="session.errors_count > 0" [class.bg-base-200/50]="session.errors_count === 0">
-                  <div class="text-[10px] uppercase opacity-50 font-bold">Errors</div>
-                  <div class="text-sm font-bold">{{ session.errors_count }}</div>
+                  <div class="text-[10px] uppercase opacity-50 font-bold font-header">Errors</div>
+                  <div class="text-sm font-bold font-header">{{ session.errors_count }}</div>
                 </div>
               </div>
 
@@ -128,21 +128,21 @@
                 <div class="space-y-2">
                   @if (session.first_message) {
                     <div class="text-sm flex gap-2">
-                      <span class="font-bold text-primary/70 shrink-0">Start:</span>
-                      <p class="italic opacity-70 line-clamp-1">{{ session.first_message }}</p>
+                      <span class="font-bold text-primary/70 shrink-0 font-header">Start:</span>
+                      <p class="italic opacity-70 line-clamp-1 font-body">{{ session.first_message }}</p>
                     </div>
                   }
                   @if (session.last_message) {
                     <div class="text-sm flex gap-2">
-                      <span class="font-bold text-accent/70 shrink-0">Latest:</span>
-                      <p class="font-medium line-clamp-2">{{ session.last_message }}</p>
+                      <span class="font-bold text-accent/70 shrink-0 font-header">Latest:</span>
+                      <p class="font-medium line-clamp-2 font-body">{{ session.last_message }}</p>
                     </div>
                   }
                 </div>
               }
 
               <div class="card-actions justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div class="text-xs text-primary font-bold flex items-center gap-1">
+                <div class="text-xs text-primary font-bold flex items-center gap-1 font-header">
                   View details <i class="fas fa-chevron-right text-[10px]"></i>
                 </div>
               </div>
