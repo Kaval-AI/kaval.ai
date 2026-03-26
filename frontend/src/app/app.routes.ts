@@ -15,6 +15,7 @@ limitations under the License.
 */
 import { Routes } from '@angular/router';
 import { ConversationsPage } from './components/conversations-page/conversations-page';
+import { WorkflowsPage } from './components/workflows-page/workflows-page';
 import { TestsPage } from './components/tests-page/tests-page';
 import { MetricsPage } from './components/metrics-page/metrics-page';
 import { LlmCallStatsPage } from './components/llm-call-stats-page/llm-call-stats-page';
@@ -34,6 +35,7 @@ export const routes: Routes = [
   { path: '', component: ProjectsPage, data: { title: 'Projects', isProjectRoute: false } },
 
   { path: 'agents', component: AgentsPage, data: { title: 'Agents' } },
+  { path: 'workflows', component: WorkflowsPage, data: { title: 'Workflows' } },
   { path: 'users', component: UsersPage, data: { title: 'Users', isProjectRoute: false } },
   { path: 'project-edit/:id', component: ProjectEditPage, data: { title: 'Edit Project', isProjectRoute: false } },
   { path: 'user-edit/:id', component: UserEditPage, data: { title: 'Edit User', isProjectRoute: false } },
