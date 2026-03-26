@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { Component, inject, OnInit } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, ActivatedRoute, NavigationEnd } from '@angular/router';
+import { Router, RouterLink, ActivatedRoute, NavigationEnd } from '@angular/router';
 import { UserInfo } from '../user-info/user-info';
 import { HeaderDropdown } from './header-dropdown/header-dropdown';
 import { NavigationService } from '../../services/navigation-service';
@@ -27,7 +27,7 @@ import { filter, map, mergeMap } from 'rxjs/operators';
 @Component({
   selector: 'app-header',
   standalone: true,
-  imports: [UserInfo, HeaderDropdown, CommonModule, RouterLink, RouterLinkActive],
+  imports: [UserInfo, HeaderDropdown, CommonModule, RouterLink],
   templateUrl: './header.html',
   styleUrl: './header.css',
 })

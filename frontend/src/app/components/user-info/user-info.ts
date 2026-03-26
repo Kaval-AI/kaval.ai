@@ -15,7 +15,6 @@ limitations under the License.
 */
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, ViewChild, ElementRef } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
 import { UserDetails } from '../../models/user-details';
 import { UserService } from '../../services/user-service';
 import { Router } from '@angular/router';
@@ -23,7 +22,7 @@ import { Router } from '@angular/router';
 @Component({
   selector: 'app-user-info',
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterLinkActive],
+  imports: [CommonModule],
   templateUrl: './user-info.html',
   styleUrls: ['./user-info.css'],
 })

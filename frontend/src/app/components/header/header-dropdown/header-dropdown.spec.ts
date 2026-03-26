@@ -109,8 +109,9 @@ describe('HeaderDropdown', () => {
     const agentsMenu = menus[1].querySelectorAll('li');
     expect(agentsMenu[0].querySelector('.menu-title').textContent).toBe('Agents');
     expect(agentsMenu[1].querySelector('a').getAttribute('routerLink')).toBe('/agents');
-    expect(agentsMenu[2].querySelector('a').getAttribute('routerLink')).toBe('/conversations');
-    expect(agentsMenu[3].querySelector('a').getAttribute('routerLink')).toBe('/llm-call-stats');
+    expect(agentsMenu[2].querySelector('a').getAttribute('routerLink')).toBe('/workflows');
+    expect(agentsMenu[3].querySelector('a').getAttribute('routerLink')).toBe('/conversations');
+    expect(agentsMenu[4].querySelector('a').getAttribute('routerLink')).toBe('/llm-call-stats');
 
     // RAG section (3rd column)
     const ragMenu = menus[2].querySelectorAll('li');

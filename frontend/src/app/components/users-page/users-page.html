@@ -35,7 +35,7 @@
                         @if (user.picture) {
                           <img [src]="user.picture" [alt]="user.name" />
                         } @else {
-                          <span>{{ user.name?.charAt(0) || user.email?.charAt(0) }}</span>
+                          <span>{{ user.name.charAt(0) || user.email.charAt(0) }}</span>
                         }
                       </div>
                     </div>
