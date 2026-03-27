@@ -197,7 +197,11 @@ def test_run_agent_server_workflow_access(mock_workflow_path):
 async def test_stream_agent_endpoint(
     monkeypatch, streaming_workflow, agents_session_maker
 ):
-    app = create_agent_app(streaming_workflow, session_provider=agents_session_maker)
+    app = create_agent_app(
+        streaming_workflow,
+        session_provider=agents_session_maker,
+        auth_dependency=lambda: None,
+    )
 
     async def mock_chat_completions(
         model, response_model, messages, streamer=None, **kwargs
