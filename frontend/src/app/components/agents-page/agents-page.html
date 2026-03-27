@@ -1,90 +1,210 @@
-<div class="agents-container">
+<div class="p-6 max-w-6xl mx-auto space-y-6">
   @if (loading) {
-    <div class="loading">Loading agents...</div>
+    <div class="flex items-center justify-center min-h-[50vh]">
+      <span class="loading loading-spinner loading-lg text-primary"></span>
+    </div>
   }
   @if (error) {
-    <div class="error">{{ error }}</div>
+    <div class="alert alert-error shadow-lg">
+      <i class="fas fa-exclamation-circle"></i>
+      <span>{{ error }}</span>
+    </div>
   }
 
   @if (!loading && !error) {
     @if (agents.length === 0) {
-      <div class="no-agents">
-        No agents found for this project.
+      <div class="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4">
+        <div class="text-6xl text-base-content/20"><i class="fas fa-robot"></i></div>
+        <h2 class="text-2xl font-bold">No Agents Found</h2>
+        <p class="text-base-content/60">No agents have been created for this project yet.</p>
       </div>
     }
 
     @if (agents.length > 0) {
-      <div class="agents-content">
-        <div class="agents-list">
-          <h3>Agents List</h3>
-          <table class="common-table clickable">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Created At</th>
-                <th>Updated At</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (agent of agents; track agent.id) {
-                <tr (click)="selectAgent(agent)" [class.selected]="selectedAgent?.id === agent.id">
-                  <td>{{ agent.name }}</td>
-                  <td>{{ agent.description }}</td>
-                  <td>{{ agent.created_at | date:'dd-MM-yyyy HH:mm' }}</td>
-                  <td>{{ agent.updated_at | date:'dd-MM-yyyy HH:mm' }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Agents List Card -->
+        <div class="card bg-base-100 shadow-xl border border-base-200 lg:col-span-1">
+          <div class="card-body p-0">
+            <div class="p-4 border-b border-base-200">
+              <h3 class="card-title text-lg">
+                <i class="fas fa-list text-primary"></i>
+                Agents
+              </h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="table table-zebra w-full">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th class="hidden sm:table-cell">Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (agent of agents; track agent.id) {
+                    <tr (click)="selectAgent(agent)"
+                        class="cursor-pointer hover:bg-base-200 transition-colors"
+                        [class.bg-base-300]="selectedAgent?.id === agent.id"
+                        [class.font-bold]="selectedAgent?.id === agent.id">
+                      <td>
+                        <div class="flex flex-col">
+                          <span>{{ agent.name }}</span>
+                          <span class="text-xs opacity-50 truncate max-w-[150px]">{{ agent.description }}</span>
+                        </div>
+                      </td>
+                      <td class="hidden sm:table-cell text-xs opacity-50">
+                        {{ agent.updated_at | date:'dd-MM HH:mm' }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
+        <!-- Agent Details & Workflow Card -->
         @if (selectedAgent) {
-          <div class="agent-details">
-            <h3>Agent Workflow: {{ selectedAgent.name }}</h3>
-            <div class="agent-actions">
-              <button class="btn-action" (click)="openModal('workflow')">Workflow</button>
-              <button class="btn-action" (click)="openModal('input')">Input Schema</button>
-              <button class="btn-action" (click)="openModal('output')">Output Schema</button>
+          <div class="lg:col-span-2 space-y-6">
+            <div class="card bg-base-100 shadow-xl border border-base-200">
+              <div class="card-body">
+                <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
+                  <div>
+                    <h2 class="card-title text-2xl font-bold">{{ selectedAgent.name }}</h2>
+                    <p class="text-base-content/70">{{ selectedAgent.description }}</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button class="btn btn-sm btn-outline btn-primary" (click)="openModal('workflow')">
+                      <i class="fas fa-code"></i> Workflow
+                    </button>
+                    <button class="btn btn-sm btn-outline btn-info" (click)="openModal('input')">
+                      <i class="fas fa-sign-in-alt"></i> Input
+                    </button>
+                    <button class="btn btn-sm btn-outline btn-accent" (click)="openModal('output')">
+                      <i class="fas fa-sign-out-alt"></i> Output
+                    </button>
+                  </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="bg-base-200 rounded-box p-4 flex justify-center overflow-hidden">
+                  <img [src]="getSvgUrl(selectedAgent.id)"
+                       [alt]="selectedAgent.name + ' workflow'"
+                       class="max-w-full h-auto object-contain" />
+                </div>
+              </div>
             </div>
 
-            <div class="workflow-chart">
-              <img [src]="getSvgUrl(selectedAgent.id)" [alt]="selectedAgent.name + ' workflow'" />
-            </div>
+            <!-- Stats Overview -->
+            @if (summaryStats) {
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-4">
+                  <div class="stat-title text-xs font-bold uppercase">Total Sessions</div>
+                  <div class="stat-value text-primary text-2xl">{{ summaryStats.total_sessions }}</div>
+                </div>
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-4">
+                  <div class="stat-title text-xs font-bold uppercase">Total Messages</div>
+                  <div class="stat-value text-accent text-2xl">{{ summaryStats.total_messages }}</div>
+                </div>
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-4">
+                  <div class="stat-title text-xs font-bold uppercase">Total Runs</div>
+                  <div class="stat-value text-info text-2xl">{{ summaryStats.total_runs || 0 }}</div>
+                </div>
+                <div class="stat bg-base-100 border border-base-200 rounded-box shadow-sm p-4">
+                  <div class="stat-title text-xs font-bold uppercase">Total Tasks</div>
+                  <div class="stat-value text-secondary text-2xl">{{ summaryStats.total_tasks }}</div>
+                </div>
+              </div>
+
+              <!-- Charts -->
+              @if (dailyStats) {
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <!-- Activity Chart -->
+                  <div class="card bg-base-100 border border-base-200 shadow-sm h-[350px]">
+                    <div class="card-body p-4">
+                      <h3 class="text-sm font-bold opacity-70 mb-2 uppercase">Activity (Last 7 Days)</h3>
+                      <div class="flex-1 min-h-0">
+                        <canvas baseChart
+                          [data]="activityChartData"
+                          [options]="chartOptions"
+                          [type]="'line'">
+                        </canvas>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Tokens Chart -->
+                  <div class="card bg-base-100 border border-base-200 shadow-sm h-[350px]">
+                    <div class="card-body p-4">
+                      <h3 class="text-sm font-bold opacity-70 mb-2 uppercase">Tokens</h3>
+                      <div class="flex-1 min-h-0">
+                        <canvas baseChart
+                          [data]="tokensChartData"
+                          [options]="chartOptions"
+                          [type]="'line'">
+                        </canvas>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Durations Chart -->
+                  <div class="card bg-base-100 border border-base-200 shadow-sm h-[350px]">
+                    <div class="card-body p-4">
+                      <h3 class="text-sm font-bold opacity-70 mb-2 uppercase">Avg Durations (s)</h3>
+                      <div class="flex-1 min-h-0">
+                        <canvas baseChart
+                          [data]="durationsChartData"
+                          [options]="chartOptions"
+                          [type]="'line'">
+                        </canvas>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Workflow Runtimes Chart -->
+                  <div class="card bg-base-100 border border-base-200 shadow-sm h-[350px]">
+                    <div class="card-body p-4">
+                      <h3 class="text-sm font-bold opacity-70 mb-2 uppercase">Workflow Runtimes (s)</h3>
+                      <div class="flex-1 min-h-0">
+                        <canvas baseChart
+                          [data]="runtimesChartData"
+                          [options]="chartOptions"
+                          [type]="'line'">
+                        </canvas>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+
+              <div class="flex justify-end pt-4">
+                <button class="btn btn-primary" (click)="goToConversations()">
+                  <i class="fas fa-comments"></i> View Conversations
+                </button>
+              </div>
+            }
           </div>
         }
       </div>
     }
+  }
 
-    @if (showModal) {
-      <div class="modal-backdrop" (click)="closeModal()">
-        <div class="modal-content" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <h3>{{ modalTitle }}</h3>
-            <button class="close-btn" (click)="closeModal()">&times;</button>
-          </div>
-          <div class="modal-body">
-            <app-json-tree [data]="modalData" [isExpanded]="true"></app-json-tree>
-          </div>
+  <!-- JSON Modal -->
+  @if (showModal) {
+    <div class="modal modal-open">
+      <div class="modal-box w-full max-w-lg md:max-w-4xl">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-lg">{{ modalTitle }}</h3>
+          <button class="btn btn-sm btn-circle btn-ghost" (click)="closeModal()">✕</button>
+        </div>
+        <div class="max-h-[60vh] overflow-auto bg-base-200 rounded-box p-4">
+          <app-json-tree [data]="modalData" [isExpanded]="true"></app-json-tree>
+        </div>
+        <div class="modal-action">
+          <button class="btn" (click)="closeModal()">Close</button>
         </div>
       </div>
-    }
-
-    @if (selectedAgent && stats) {
-      <div class="stats-overview">
-        <h3>Agent Statistics: {{ selectedAgent.name }} (Last 7 Days)</h3>
-        <div class="chart-container">
-          <canvas baseChart
-            [data]="lineChartData"
-            [options]="lineChartOptions"
-            [legend]="lineChartLegend"
-            [type]="'line'">
-          </canvas>
-        </div>
-        <div class="stats-actions">
-          <button class="btn-conversations" (click)="goToConversations()">Conversations ...</button>
-        </div>
-      </div>
-    }
+      <div class="modal-backdrop" (click)="closeModal()"></div>
+    </div>
   }
 </div>

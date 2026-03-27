@@ -14,18 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { Component, inject, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink, ActivatedRoute, NavigationEnd } from '@angular/router';
 import { UserInfo } from '../user-info/user-info';
+import { HeaderDropdown } from './header-dropdown/header-dropdown';
 import { NavigationService } from '../../services/navigation-service';
 import { ProjectService } from '../../services/project-service';
 import { UserService } from '../../services/user-service';
 import { Project } from '../../models/project';
 import { CommonModule } from '@angular/common';
+import { filter, map, mergeMap } from 'rxjs/operators';
 
 @Component({
   selector: 'app-header',
   standalone: true,
-  imports: [UserInfo, CommonModule],
+  imports: [UserInfo, HeaderDropdown, CommonModule, RouterLink],
   templateUrl: './header.html',
   styleUrl: './header.css',
 })
@@ -34,17 +36,41 @@ export class Header implements OnInit {
   private projectService = inject(ProjectService);
   private userService = inject(UserService);
   private router = inject(Router);
+  private activatedRoute = inject(ActivatedRoute);
 
-  title = this.navigationService.title;
+  breadcrumbs = this.navigationService.breadcrumbs;
   projects: Project[] = [];
   activeProjectId: string | null = null;
+  isProjectRoute = true;
 
   ngOnInit(): void {
+    // Listen for route changes to update title from route data
+    this.router.events.pipe(
+      filter(event => event instanceof NavigationEnd),
+      map(() => this.activatedRoute),
+      map(route => {
+        while (route.firstChild) route = route.firstChild;
+        return route;
+      }),
+      mergeMap(route => route.data)
+    ).subscribe(data => {
+      if (data && data['title']) {
+        this.navigationService.setTitle(data['title']);
+      }
+      this.isProjectRoute = data && data['isProjectRoute'] !== false;
+    });
+
     this.userService.userDetails.subscribe(details => {
       if (details) {
         // Set active project first so template can reflect it while projects load
         this.activeProjectId = details.active_project_id && details.active_project_id !== 'None' ? details.active_project_id : null;
-        this.loadProjects();
+        this.projectService.getAll().subscribe((data: Project[]) => {
+          this.projects = data;
+          const activeProjectId = this.userService.getActiveProjectId();
+          if (activeProjectId) {
+            this.activeProjectId = activeProjectId;
+          }
+        });
       } else {
         this.projects = [];
         this.activeProjectId = null;
@@ -52,35 +78,8 @@ export class Header implements OnInit {
     });
   }
 
-  loadProjects(): void {
-    this.projectService.getAll().subscribe((data: Project[]) => {
-      this.projects = data;
-
-      const activeProjectId = this.userService.getActiveProjectId();
-      if (activeProjectId) {
-        // Ensure the select reflects the currently active project from the service
-        this.activeProjectId = activeProjectId;
-      } else if (this.projects.length > 0) {
-        // If none is set, default to the first and update both service and local state
-        const firstId = this.projects[0].id;
-        this.userService.setActiveProject(firstId);
-        this.activeProjectId = firstId;
-      }
-    });
-  }
-
-  onProjectSelect(event: Event): void {
-    const target = event.target as HTMLSelectElement;
-    const projectId = target.value;
-    if (projectId) {
-      this.userService.setActiveProject(projectId);
-      this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
-        this.router.navigate([this.router.url]);
-      });
-    }
-  }
-
-  startNewProject() {
-    this.router.navigate(['/project-edit', 'new']);
+  get activeProjectName(): string | null {
+    if (!this.activeProjectId) return null;
+    return this.projects.find(p => p.id === this.activeProjectId)?.name || null;
   }
 }

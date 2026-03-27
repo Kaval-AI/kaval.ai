@@ -77,6 +77,7 @@ describe('JsonTreeComponent', () => {
 
   it('should toggle expansion', () => {
     component.data = { a: 1 };
+    component.isExpanded = false; // Override default expansion for this test
     component.ngOnInit();
     expect(component.isExpandable).toBeTrue();
     expect(component.isExpanded).toBeFalse();
@@ -90,6 +91,33 @@ describe('JsonTreeComponent', () => {
 
     component.toggleExpand(event);
     expect(component.isExpanded).toBeFalse();
+  });
+
+  it('should default isExpanded to true when depth < 1', () => {
+    component.data = { a: 1 };
+    component.depth = 0;
+    component.ngOnInit();
+    expect(component.isExpanded).toBeTrue();
+  });
+
+  it('should default isExpanded to false when depth >= 1', () => {
+    component.data = { a: 1 };
+    component.depth = 1;
+    component.ngOnInit();
+    expect(component.isExpanded).toBeFalse();
+  });
+
+  it('should respect provided isExpanded value regardless of depth', () => {
+    component.data = { a: 1 };
+    component.depth = 0;
+    component.isExpanded = false;
+    component.ngOnInit();
+    expect(component.isExpanded).toBeFalse();
+
+    component.isExpanded = true;
+    component.depth = 1;
+    component.ngOnInit();
+    expect(component.isExpanded).toBeTrue();
   });
 
   it('should render children when expanded', () => {

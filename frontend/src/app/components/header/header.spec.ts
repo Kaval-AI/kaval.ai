@@ -17,7 +17,7 @@ limitations under the License.
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { Router } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { of, BehaviorSubject } from 'rxjs';
 
 import { Header } from './header';
@@ -36,8 +36,8 @@ describe('Header', () => {
 
   beforeEach(async () => {
     projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getAll']);
-    userServiceSpy = jasmine.createSpyObj('UserService', ['getActiveProjectId', 'setActiveProject', 'updateUserDetails'], { userDetails: of({ id: 'u1' }) });
-    navigationServiceSpy = jasmine.createSpyObj('NavigationService', ['setTitle'], { title: () => 'Test Title' });
+    userServiceSpy = jasmine.createSpyObj('UserService', ['getActiveProjectId', 'setActiveProject', 'updateUserDetails', 'getIsAdmin'], { userDetails: of({ id: 'u1' }) });
+    navigationServiceSpy = jasmine.createSpyObj('NavigationService', ['setTitle'], { breadcrumbs: () => [{ label: 'Test Title' }] });
     routerSpy = jasmine.createSpyObj('Router', ['navigate', 'navigateByUrl'], { url: '/test' });
 
     projectServiceSpy.getAll.and.returnValue(of([]));
@@ -50,15 +50,18 @@ describe('Header', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: UserService, useValue: userServiceSpy },
         { provide: NavigationService, useValue: navigationServiceSpy },
-        { provide: Router, useValue: routerSpy },
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(Header);
     component = fixture.componentInstance;
+    routerSpy = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+    spyOn(routerSpy, 'navigateByUrl').and.returnValue(Promise.resolve(true));
+    spyOn(routerSpy, 'navigate').and.returnValue(Promise.resolve(true));
     fixture.detectChanges();
   });
 
@@ -66,49 +69,59 @@ describe('Header', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should load projects on init', () => {
-    const mockProjects: Project[] = [{ id: '1', name: 'Project 1' } as Project];
-    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
-
-    component.ngOnInit();
-
-    expect(projectServiceSpy.getAll).toHaveBeenCalled();
-    expect(component.projects).toEqual(mockProjects);
-  });
-
-  it('should set active project if none selected and projects exist', () => {
-    const mockProjects: Project[] = [{ id: '1', name: 'Project 1' } as Project];
-    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
-    userServiceSpy.getActiveProjectId.and.returnValue(null);
-
-    component.loadProjects();
-
-    expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('1');
-  });
-
-  it('should handle project selection and refresh current component', () => {
-    const event = { target: { value: '2' } } as any;
-    component.onProjectSelect(event);
-    expect(userServiceSpy.setActiveProject).toHaveBeenCalledWith('2');
-    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/', { skipLocationChange: true });
-  });
-
-  it('should show active project in the select element', async () => {
+  it('should show breadcrumbs with page title and active project name', async () => {
     const mockProjects: Project[] = [
-      { id: '1', name: 'Project 1' } as Project,
-      { id: '2', name: 'Project 2' } as Project
+      { id: '1', name: 'Project 1' } as Project
     ];
     projectServiceSpy.getAll.and.returnValue(of(mockProjects));
-    userServiceSpy.getActiveProjectId.and.returnValue('2');
-    // Simulate user details update with active project id '2'
-    const userDetailsSubject = new BehaviorSubject<any>({ id: 'u1', active_project_id: '2' });
-    Object.defineProperty(userServiceSpy, 'userDetails', { get: () => userDetailsSubject.asObservable() });
+    userServiceSpy.getActiveProjectId.and.returnValue('1');
 
     component.ngOnInit();
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const select: HTMLSelectElement = fixture.nativeElement.querySelector('select');
-    expect(select.value).toBe('2');
+    const breadcrumbs = fixture.nativeElement.querySelectorAll('.breadcrumbs li');
+    expect(breadcrumbs.length).toBe(2);
+    expect(breadcrumbs[0].textContent).toContain('Project 1');
+    expect(breadcrumbs[1].textContent).toContain('Test Title');
+
+    // Check for icons
+    const icons = fixture.nativeElement.querySelectorAll('.breadcrumbs li svg');
+    expect(icons.length).toBe(2);
+  });
+
+  it('should have routerLink="/" on logo and active project breadcrumb', async () => {
+    const mockProjects: Project[] = [
+      { id: '1', name: 'Project 1' } as Project
+    ];
+    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
+    userServiceSpy.getActiveProjectId.and.returnValue('1');
+
+    component.ngOnInit();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const logoLink = fixture.nativeElement.querySelector('a[routerLink="/"] img.logo');
+    expect(logoLink).toBeTruthy();
+
+    const breadcrumbs = fixture.nativeElement.querySelectorAll('.breadcrumbs li');
+    const projectLink = breadcrumbs[0].querySelector('a[routerLink="/"]');
+    expect(projectLink).toBeTruthy();
+    expect(projectLink.textContent).toContain('Project 1');
+  });
+
+  it('should hide project breadcrumb if isProjectRoute is false', async () => {
+    const mockProjects: Project[] = [{ id: '1', name: 'Project 1' } as Project];
+    projectServiceSpy.getAll.and.returnValue(of(mockProjects));
+    userServiceSpy.getActiveProjectId.and.returnValue('1');
+    component.isProjectRoute = false;
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const breadcrumbs = fixture.nativeElement.querySelectorAll('.breadcrumbs li');
+    expect(breadcrumbs.length).toBe(1);
+    expect(breadcrumbs[0].textContent).toContain('Test Title');
+    expect(breadcrumbs[0].textContent).not.toContain('Project 1');
   });
 });

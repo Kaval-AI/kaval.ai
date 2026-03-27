@@ -1,6 +1,12 @@
+.dropdown-content {
+  background-color: var(--color-base-200);
+  color: var(--color-base-content);
+}
+
 .user-details {
   display: flex;
   align-items: center;
+  text-transform: none;
 }
 
 .user-name {

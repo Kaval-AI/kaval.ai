@@ -1,32 +1,50 @@
-<div class="run-tasks-container">
-  <div class="header">
-    <button class="back-button" (click)="goBack()">
-      <span class="icon">←</span> Back to Agent Run
+<div class="p-6 max-w-7xl mx-auto space-y-6">
+  <!-- Header with Back Button and Run Info -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <button class="btn btn-sm btn-ghost gap-2" (click)="goBack()">
+      <i class="fas fa-arrow-left"></i> Back to Agent Run
     </button>
-
     @if (sessionId && runId) {
-      <div class="info">
-        <span class="label">Session:</span>
-        <span class="value">{{ sessionId }}</span>
-        <span class="sep">|</span>
-        <span class="label">Run:</span>
-        <span class="value">{{ runId }}</span>
+      <div class="flex flex-wrap gap-2">
+        <a [routerLink]="['/conversations', sessionId]" class="badge badge-outline gap-2 p-3 font-mono text-[10px] hover:bg-base-200 cursor-pointer transition-colors no-underline">
+          <span class="opacity-50">Session:</span> {{ sessionId }}
+        </a>
+        <a [routerLink]="['/conversations', sessionId]" class="badge badge-outline badge-accent gap-2 p-3 font-mono text-[10px] hover:bg-accent/10 cursor-pointer transition-colors no-underline">
+          <span class="opacity-50 text-base-content">Run:</span> {{ runId }}
+        </a>
       </div>
     }
   </div>
 
-  <div class="content">
-    @if (loading) {
-      <div class="loading-state">Loading tasks...</div>
-    } @else if (error) {
-      <div class="error-state">{{ error }}</div>
-    } @else if (tasks.length === 0) {
-      <div class="empty-state">No tasks found for this run.</div>
-    } @else {
-      <app-tasks-list
-        [tasks]="tasks"
-        [runId]="runId || ''"
-        (backToRun)="goBack()"></app-tasks-list>
-    }
+  <!-- Content Area -->
+  <div class="card bg-base-100 shadow-xl border border-base-200">
+    <div class="card-body p-4 sm:p-6">
+      @if (loading) {
+        <div class="flex flex-col items-center justify-center min-h-[30vh] space-y-4">
+          <span class="loading loading-spinner loading-lg text-primary"></span>
+          <p class="text-base-content/60 font-medium">Loading tasks...</p>
+        </div>
+      } @else if (error) {
+        <div class="alert alert-error shadow-lg">
+          <i class="fas fa-exclamation-circle"></i>
+          <span>{{ error }}</span>
+        </div>
+      } @else if (tasks.length === 0) {
+        <div class="flex flex-col items-center justify-center min-h-[30vh] text-center space-y-4 p-12">
+          <div class="text-6xl text-base-content/10"><i class="fas fa-tasks"></i></div>
+          <h3 class="text-xl font-bold">No Tasks Found</h3>
+          <p class="text-base-content/60">No tasks were executed in this run.</p>
+        </div>
+      } @else {
+        <div class="mb-8">
+          <h2 class="text-lg font-bold mb-4">Task Execution Timeline</h2>
+          <app-task-timeline-chart [tasks]="tasks"></app-task-timeline-chart>
+        </div>
+
+        <app-tasks-list
+          [tasks]="tasks"
+          [runId]="runId || ''"></app-tasks-list>
+      }
+    </div>
   </div>
 </div>

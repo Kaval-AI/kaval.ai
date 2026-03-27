@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -21,6 +21,7 @@ import { AgentService } from '../../services/agent-service';
 import { UserService } from '../../services/user-service';
 import { SessionSummary } from '../../models/session';
 import { Agent } from '../../models/agent';
+import { NavigationService } from '../../services/navigation-service';
 
 @Component({
   selector: 'app-conversations-page',
@@ -30,6 +31,12 @@ import { Agent } from '../../models/agent';
   styleUrl: './conversations-page.css',
 })
 export class ConversationsPage implements OnInit {
+  private agentService = inject(AgentService);
+  private userService = inject(UserService);
+  private navigationService = inject(NavigationService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
   sessions: SessionSummary[] = [];
   agents: Agent[] = [];
   loading: boolean = false;
@@ -46,12 +53,7 @@ export class ConversationsPage implements OnInit {
   offset: number = 0;
   hasMore: boolean = true;
 
-  constructor(
-    private agentService: AgentService,
-    private userService: UserService,
-    private route: ActivatedRoute,
-    private router: Router
-  ) {
+  constructor() {
     // Default to last 7 days
     const now = new Date();
     const sevenDaysAgo = new Date();
@@ -71,6 +73,7 @@ export class ConversationsPage implements OnInit {
   }
 
   ngOnInit(): void {
+    this.navigationService.setBreadcrumbs([{ label: 'Conversations' }]);
     this.route.queryParams.subscribe(params => {
       if (params['agentId']) {
         this.selectedAgentId = params['agentId'];

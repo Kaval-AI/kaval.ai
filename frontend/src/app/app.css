@@ -1,3 +1,6 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
 .app-container {
   display: flex;
   flex-direction: column;
@@ -11,7 +14,6 @@
 }
 
 app-header {
-  height: var(--header-height);
   flex-shrink: 0;
 }
 

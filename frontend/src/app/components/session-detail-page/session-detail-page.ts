@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { AgentService } from '../../services/agent-service';
@@ -22,22 +22,27 @@ import { ChatMessage } from '../../models/chat-message';
 import { Run } from '../../models/run';
 import { Task } from '../../models/task';
 import { JsonTreeComponent } from '../json-tree/json-tree';
-import { TasksList } from '../tasks-list/tasks-list';
+import { NavigationService } from '../../services/navigation-service';
 
 interface RunBlock {
   run: Run;
-  messages: ChatMessage[];
-  tasks: Task[];
+  timeline: (ChatMessage | Task)[];
 }
 
 @Component({
   selector: 'app-session-detail-page',
   standalone: true,
-  imports: [CommonModule, RouterModule, JsonTreeComponent, TasksList],
+  imports: [CommonModule, RouterModule, JsonTreeComponent],
   templateUrl: './session-detail-page.html',
   styleUrl: './session-detail-page.css',
 })
 export class SessionDetailPage implements OnInit {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private agentService = inject(AgentService);
+  private userService = inject(UserService);
+  private navigationService = inject(NavigationService);
+
   sessionId: string | null = null;
   projectId: string | null = null;
   runBlocks: RunBlock[] = [];
@@ -52,16 +57,13 @@ export class SessionDetailPage implements OnInit {
   modalType: 'json' | 'tasks' = 'json';
   modalRunId: string = '';
 
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private agentService: AgentService,
-    private userService: UserService
-  ) {}
-
   ngOnInit(): void {
     this.route.paramMap.subscribe((params) => {
       this.sessionId = params.get('sessionId');
+      this.navigationService.setBreadcrumbs([
+        { label: 'Conversations', link: '/conversations' },
+        { label: this.sessionId || 'Session Details' }
+      ]);
     });
 
     this.userService.userDetails.subscribe((user) => {
@@ -88,15 +90,15 @@ export class SessionDetailPage implements OnInit {
 
     this.agentService.getSessionDetails(this.projectId, this.sessionId).subscribe({
       next: (details) => {
-        const runMap = new Map<string, RunBlock>();
+        const runMap = new Map<string, { run: Run; timeline: (ChatMessage | Task)[] }>();
         details.runs.forEach((run) => {
-          runMap.set(run.id, { run, messages: [], tasks: [] });
+          runMap.set(run.id, { run, timeline: [] });
         });
 
         this.unassignedMessages = [];
         details.messages.forEach((msg) => {
           if (msg.run_id && runMap.has(msg.run_id)) {
-            runMap.get(msg.run_id)!.messages.push(msg);
+            runMap.get(msg.run_id)!.timeline.push(msg);
           } else {
             this.unassignedMessages.push(msg);
           }
@@ -104,8 +106,17 @@ export class SessionDetailPage implements OnInit {
 
         details.tasks.forEach((task) => {
           if (runMap.has(task.run_id)) {
-            runMap.get(task.run_id)!.tasks.push(task);
+            runMap.get(task.run_id)!.timeline.push(task);
           }
+        });
+
+        // Sort timeline items by created_at
+        runMap.forEach((block) => {
+          block.timeline.sort((a, b) => {
+            const timeA = new Date(a.created_at).getTime();
+            const timeB = new Date(b.created_at).getTime();
+            return timeA - timeB;
+          });
         });
 
         this.runBlocks = Array.from(runMap.values());
@@ -117,6 +128,22 @@ export class SessionDetailPage implements OnInit {
         this.loading = false;
       },
     });
+  }
+
+  isChatMessage(item: ChatMessage | Task): item is ChatMessage {
+    return (item as ChatMessage).role !== undefined;
+  }
+
+  isTask(item: ChatMessage | Task): item is Task {
+    return (item as Task).run_id !== undefined && (item as Task).agent_id !== undefined;
+  }
+
+  getTaskName(task: Task): string {
+    return task.name || 'Task';
+  }
+
+  getTaskErrorsCount(task: Task): number {
+    return task.errors ? task.errors.length : 0;
   }
 
   openJsonModal(title: string, data: any): void {
@@ -141,8 +168,9 @@ export class SessionDetailPage implements OnInit {
     return date.toLocaleString();
   }
 
-  getTaskNames(tasks: Task[]): string {
-    return tasks
+  getTaskNames(block: RunBlock): string {
+    return block.timeline
+      .filter(this.isTask)
       .map((t) => t.name || t.id)
       .filter((name, index, self) => self.indexOf(name) === index)
       .join(', ');

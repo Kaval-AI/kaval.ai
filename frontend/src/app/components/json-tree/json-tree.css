@@ -1,8 +1,8 @@
 :host {
   display: block;
-  font-family: 'JetBrains Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-family: var(--font-family-accent);
   font-size: 13px;
-  color: #abb2bf;
+  color: var(--color-base-content);
 }
 
 .json-node {
@@ -18,7 +18,7 @@
 }
 
 .json-line.expandable:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--color-base-200);
   cursor: pointer;
 }
 
@@ -29,7 +29,7 @@
   font-size: 10px;
   margin-right: 4px;
   margin-top: 4px;
-  color: #61afef;
+  color: var(--color-info);
   flex-shrink: 0;
 }
 
@@ -40,13 +40,13 @@
 }
 
 .json-key {
-  color: #e06c75;
+  color: var(--color-secondary);
   margin-right: 4px;
   flex-shrink: 0;
 }
 
 .json-value {
-  color: #98c379;
+  color: var(--color-success);
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -60,9 +60,9 @@
 }
 
 .control-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #abb2bf;
+  background: var(--color-base-200);
+  border: none;
+  color: var(--color-base-content);
   border-radius: 4px;
   padding: 2px 6px;
   font-size: 11px;
@@ -73,9 +73,23 @@
   transition: all 0.2s;
 }
 
+.control-btn:focus {
+  outline: none;
+}
+
 .control-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--color-base-300);
+  color: var(--color-base-content);
+}
+
+.control-btn.btn-secondary {
+  background-color: var(--color-secondary);
+  border-color: var(--color-secondary);
+  color: var(--color-secondary-content);
+}
+
+.control-btn.btn-secondary:hover {
+  filter: brightness(0.9);
 }
 
 .control-btn i {
@@ -83,33 +97,33 @@
 }
 
 .control-btn.success {
-  background-color: rgba(152, 195, 121, 0.2);
-  border-color: #98c379;
-  color: #98c379;
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: var(--color-success-content);
 }
 
 .json-value.type-string {
-  color: #98c379;
+  color: var(--color-success);
 }
 
 .json-value.type-number {
-  color: #d19a66;
+  color: var(--color-warning);
 }
 
 .json-value.type-boolean {
-  color: #56b6c2;
+  color: var(--color-accent);
 }
 
 .json-value.type-null {
-  color: #c678dd;
+  color: var(--color-error);
   font-style: italic;
 }
 
 .json-value.type-object {
-  color: #abb2bf;
+  color: var(--color-base-content);
 }
 
 .json-children {
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid var(--color-base-300);
   margin-left: 7px;
 }

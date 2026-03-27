@@ -1,3 +1,5 @@
-@import './styles/reset.css';
-@import './styles/common.css';
-@import './styles/dropdown-menu.css';
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=Space+Grotesk:wght@300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import "tailwindcss";
+@plugin "daisyui";
+
+@import './styles/theme.css';

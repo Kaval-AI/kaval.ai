@@ -16,13 +16,13 @@ limitations under the License.
 import { Component, OnInit } from '@angular/core';
 import { Header } from './components/header/header';
 import { LoginPage } from './components/login-page/login-page';
+import { Toast } from './components/toast/toast';
 import { UserService } from './services/user-service';
-import { SidebarMenu } from './components/sidebar-menu/sidebar-menu';
 import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
-  imports: [LoginPage, SidebarMenu, Header, RouterOutlet],
+  imports: [LoginPage, Header, RouterOutlet, Toast],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })

@@ -52,6 +52,14 @@ export class AgentService {
     return this.http.get<any>(url);
   }
 
+  getDailyStats(projectId: string, days: number = 7, agentId?: string): Observable<any> {
+    let url = `/api/agents/stats/${projectId}?days=${days}`;
+    if (agentId) {
+      url += `&agent_id=${agentId}`;
+    }
+    return this.http.get<any>(url);
+  }
+
   getSessions(
     projectId: string,
     agentId?: string,

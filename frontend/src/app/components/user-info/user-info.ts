@@ -14,27 +14,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
-import { DropdownMenuTriggerDirective } from '../dropdown-menu/dropdown-menu';
+import { Component, OnInit, inject, ViewChild, ElementRef } from '@angular/core';
 import { UserDetails } from '../../models/user-details';
 import { UserService } from '../../services/user-service';
 import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-user-info',
+  standalone: true,
+  imports: [CommonModule],
   templateUrl: './user-info.html',
   styleUrls: ['./user-info.css'],
-  imports: [CommonModule, DropdownMenuTriggerDirective],
 })
 export class UserInfo implements OnInit {
+  @ViewChild('dropdownButton') dropdownButton!: ElementRef<HTMLElement>;
+
   private userService = inject(UserService);
   private router = inject(Router);
 
   userDetails: UserDetails | null = null;
+  isMenuOpen = false;
 
   ngOnInit(): void {
     this.userService.userDetails.subscribe((details: UserDetails | null) => {
-      console.log(details);
       this.userDetails = details;
     });
     this.userService.updateUserDetails();
@@ -48,5 +50,19 @@ export class UserInfo implements OnInit {
     if (this.userDetails?.id) {
       this.router.navigate(['/user-edit', this.userDetails.id]);
     }
+  }
+
+  openMenu(): void {
+    this.isMenuOpen = true;
+  }
+
+  closeMenu(): void {
+    setTimeout(() => {
+      this.isMenuOpen = false;
+    }, 200);
+  }
+
+  onMenuClick(): void {
+    this.closeMenu();
   }
 }

@@ -21,7 +21,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `docs/`: Sphinx documentation.
 - `examples/`: Runnable example scripts for users.
 - `backoffice/`: API and logic for the management UI.
-- `frontend/`: Angular-based project for the backoffice UI.
+- `frontend/`: Angular-based project for the backoffice UI. Use tailwindcss and DaisyUI for styling.
 - `kavalai/functionkernel.py`: Manages tool registration and execution (REST, MCP, Python), providing a unified interface for agent components. It ensures no name conflicts exist between registered tools and servers by raising a `WorkflowException` on duplicates. It can generate unified tool descriptions for LLM prompts using strictly the `protocol://[name|module].function_name(args: type) -> return_type` format. Supports `register_rest_tool` to register individual REST endpoints with specific HTTP methods, input/output models, and descriptions. `get_tool_descriptions()` provides clear instructions, an example `ToolCall`, and concise input/output JSON schemas (recursively expanding nested Pydantic models using `model_json_schema()`) for all registered tools to help LLMs correctly format `ToolCall` arguments. Python functions used as tools must be decorated with `@kavalai.pythontool` and explicitly registered via `register_python_tool` to be called, enhancing security. Only docstrings (parsed using `inspect.getdoc()`) are used for Python tool descriptions.
 - `tests/`: Comprehensive backend test suite. `tests/test_functionkernel.py` provides 96%+ unit test coverage for `kavalai/functionkernel.py` without using broad mocks, covering REST, MCP, and Python tool registration and execution. It uses a robust wait-for-server mechanism for SSE tests to avoid flaky connection timeouts. Mock MCP servers used in tests are located in `tests/helpers/`.
 - `kavalai/agents/`: SDK and agent runtime logic.
@@ -84,18 +84,22 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `agent-service.ts`: Handles agent-related API calls (including RAG).
         - `user-service.ts`: Manages user authentication and profiles.
         - `project-service.ts`: Manages project context and memberships.
-        - `navigation-service.ts`: Manages the current page title displayed in the header.
+        - `navigation-service.ts`: Manages the current page breadcrumbs displayed in the header.
     - `public/assets/images/`: Public assets including logos and icons.
     - `src/app/components/`: UI components organized by feature.
-        - `agents-page/`, `projects-page/`, `users-page/`: CRUD interfaces for main entities.
-        - `conversations-page/`, `session-detail-page/`: Agent session monitoring and debugging.
-        - `run-tasks-page/`: Full-page view for tasks of a specific run, navigated from session detail. Route: `/conversations/:sessionId/runs/:runId/tasks`.
+        - `agents-page/`, `projects-page/`, `users-page/`, `login-page/`: CRUD interfaces and authentication. `projects-page/` includes a collapsible dashboard with project details, database configuration, and unified statistics charts (Activity, Tokens, Average Durations, and Workflow Runtimes). It also features a project users table with avatar images and role management. `users-page/` uses DaisyUI modals for user creation, editing, deletion confirmations, and error reporting. `login-page/` is modernized with Tailwind CSS and DaisyUI, featuring a responsive layout, theme-consistent styling, a full-screen background image (`/assets/images/login-background.png`), and a minimalist header.
+        - `conversations-page/`, `session-detail-page/`: Agent session monitoring and debugging. `session-detail-page/` displays chat messages and executed tasks in a unified chronological timeline per run, using Tailwind CSS and DaisyUI with chat-style bubbles and integrated task detail modals. Task items are centered and aligned within a max-width container to ensure readability on large screens.
+        - `run-tasks-page/`: Full-page view for tasks of a specific run, navigated from session detail. Route: `/conversations/:sessionId/runs/:runId/tasks`. Updated to use Tailwind CSS and DaisyUI with theme fonts.
         - `configs-page/`: LLM profile and provider configuration.
         - `llm-call-stats-page/`: Detailed list of LLM calls with request/response data (paginated).
         - `rag-page/`: RAG-related configuration and testing.
-        - `sidebar-menu/`, `header/`, `dropdown-menu/`: Layout and navigation components.
-        - `json-tree/`: Tree-like component for displaying nested JSON data (IDE-style).
+        - `task-timeline-chart/`: Chart component for visualizing task execution timeline using start times and durations.
+        - `workflows-page/`: Workflow monitoring page inspired by Airflow, visualizing agent runs and task statuses on a chronological timeline. Features include task-level visualization within run groups, multi-lane (row) layout for overlapping sessions, and a task overview modal for quick inspection.
+        - `theme-page/`: Testbed for DaisyUI and Tailwind CSS components and styling.
+        - `sidebar-menu/`, `header/`, `header-dropdown/`, `dropdown-menu/`, `user-info/`: Layout and navigation components. `header/` now uses a DaisyUI navbar with an integrated megamenu (via `header-dropdown/` component, background color `#4D5C65`) and breadcrumbs with icons (aligned to the left) for the active project and current page. The dropdown menu font color is `--color-base-content`, submenu headers use `--color-info`, and the background color is `#9999A1`. The dropdown menu is configured to close when an item is clicked via its `closeMenu()` method, which uses a 200ms delay to ensure navigation events are processed before the menu is hidden. It uses `isMenuOpen` state synchronized with focus to manage visibility and a high `z-50` index to ensure it stays above other content. `user-info/` displays the current user's name and avatar and includes a dropdown for profile editing and logout, styled to match the main megamenu.
+        - `json-tree/`: Tree-like component for displaying nested JSON data (IDE-style). Uses `--font-family-accent` for mono/code content.
     - `src/styles/`: Global CSS styles and theme definitions.
+        - `theme.css`: Custom DaisyUI and Tailwind CSS theme definitions using CSS variables.
 - `tests/`: Comprehensive backend test suite.
     - `agents/`: Tests for core SDK, workflow execution, and agent database.
     - `backoffice/`: Tests for management API, project isolation, and memberships.

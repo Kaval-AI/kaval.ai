@@ -1,116 +1,166 @@
-<div class="rag-container">
+<div class="p-6 max-w-6xl mx-auto space-y-6">
   @if (ragStats) {
-    <div class="stats-overview mb-4">
-      <div class="stats-grid">
-        <div class="stat-card card">
-          <div class="stat-value">{{ ragStats.total_collections }}</div>
-          <div class="stat-label">Collections</div>
-        </div>
-        <div class="stat-card card">
-          <div class="stat-value">{{ ragStats.total_entries }}</div>
-          <div class="stat-label">Total Entries</div>
-        </div>
+    <div class="stats stats-vertical lg:stats-horizontal shadow bg-base-100 border border-base-200 w-full">
+      <div class="stat">
+        <div class="stat-title uppercase text-xs font-bold">Collections</div>
+        <div class="stat-value text-primary">{{ ragStats.total_collections }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title uppercase text-xs font-bold">Total Entries</div>
+        <div class="stat-value text-secondary">{{ ragStats.total_entries }}</div>
       </div>
     </div>
   }
 
-  <div class="query-form card">
-    <div class="form-group mb-3">
-      <label for="queryText">Query Text (Ctrl+Enter to submit)</label>
-      <textarea id="queryText" [(ngModel)]="queryText" placeholder="Enter your query here..." rows="3" class="form-control" (keydown.control.enter)="onQuery()"></textarea>
-    </div>
+  <div class="card bg-base-100 shadow-xl border border-base-200">
+    <div class="card-body">
+      <h2 class="card-title mb-4">
+        <i class="fas fa-search text-primary"></i>
+        RAG Query
+      </h2>
 
-    <div class="form-row">
-      <div class="form-group col-profile">
-        <label for="embeddingProfile">Embedding Model</label>
-        <input type="text" id="embeddingProfile" [(ngModel)]="selectedModel" class="form-control" placeholder="e.g. text-embedding-3-small">
-      </div>
-
-      <div class="form-group col-collection">
-        <label for="collectionName">Collection</label>
-        <select id="collectionName" [(ngModel)]="collectionName" class="form-control">
-          <option value="">All Collections</option>
-          @for (col of ragStats?.collections; track col) {
-            <option [value]="col">
-              {{ col }}
-            </option>
-          }
-        </select>
-      </div>
-
-      <div class="form-group col-source-ids">
-        <label for="sourceIds">Source IDs (comma separated)</label>
-        <input type="text" id="sourceIds" [(ngModel)]="sourceIdsInput" class="form-control" placeholder="id1, id2...">
-      </div>
-
-      <div class="form-group col-topk">
-        <label for="topK">Top K</label>
-        <input type="number" id="topK" [(ngModel)]="topK" min="1" max="100" class="form-control">
-      </div>
-
-      <div class="form-group col-keep-best">
-        <label class="checkbox-container">
-          <input type="checkbox" [(ngModel)]="keepBest">
-          <span>Keep Best Only</span>
+      <div class="form-control w-full mb-4">
+        <label class="label">
+          <span class="label-text font-bold text-base-content/70">Query Text (Enter to submit)</span>
         </label>
+        <input type="text" id="queryText" [(ngModel)]="queryText" placeholder="Enter your query here..."
+                  class="input input-bordered w-full"
+                  (keydown.enter)="onQuery()">
       </div>
-    </div>
 
-    <div class="form-group mt-3">
-      <label for="normalizerYaml">Normalizer YAML (optional)</label>
-      <textarea id="normalizerYaml" [(ngModel)]="normalizerYaml" placeholder="l1: false&#10;l2: true&#10;center: false&#10;center_vector: [0.1, 0.2, ...]" rows="3" class="form-control font-monospace"></textarea>
-    </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-bold text-base-content/70">Embedding Model</span>
+          </label>
+          <input type="text" id="embeddingProfile" [(ngModel)]="selectedModel"
+                 class="input input-bordered w-full" placeholder="e.g. text-embedding-3-small">
+        </div>
 
-    <div class="form-actions mt-3">
-      <button class="btn-primary" (click)="onQuery()" [disabled]="loading || !queryText || !selectedModel">
-        @if (!loading) {
-          <span>Query</span>
-        } @else {
-          <span>Querying...</span>
-        }
-      </button>
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-bold text-base-content/70">Collection</span>
+          </label>
+          <select id="collectionName" [(ngModel)]="collectionName" class="select select-bordered w-full">
+            <option value="">All Collections</option>
+            @for (col of ragStats?.collections; track col) {
+              <option [value]="col">
+                {{ col }}
+              </option>
+            }
+          </select>
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-bold text-base-content/70">Source IDs</span>
+          </label>
+          <input type="text" id="sourceIds" [(ngModel)]="sourceIdsInput"
+                 class="input input-bordered w-full" placeholder="id1, id2...">
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-bold text-base-content/70">Top K</span>
+          </label>
+          <input type="number" id="topK" [(ngModel)]="topK" min="1" max="100"
+                 class="input input-bordered w-full">
+        </div>
+
+        <div class="form-control">
+          <label class="label cursor-pointer flex justify-start gap-4 h-full pt-8">
+            <input type="checkbox" [(ngModel)]="keepBest" class="toggle toggle-primary">
+            <span class="label-text font-bold text-base-content/70">Keep Best Only</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="collapse collapse-arrow bg-base-200 mt-4 border border-base-300">
+        <input type="checkbox" />
+        <div class="collapse-title font-bold text-base-content/70">
+          Normalizer YAML (optional)
+        </div>
+        <div class="collapse-content">
+          <div class="form-control w-full">
+            <textarea id="normalizerYaml" [(ngModel)]="normalizerYaml"
+                      placeholder="l1: false&#10;l2: true&#10;center: false&#10;center_vector: [0.1, 0.2, ...]"
+                      class="textarea textarea-bordered h-24 font-mono text-sm bg-base-100"
+                      rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-actions justify-end mt-6">
+        <button class="btn btn-primary" (click)="onQuery()" [disabled]="loading || !queryText || !selectedModel">
+          @if (loading) {
+            <span class="loading loading-spinner"></span>
+            Querying...
+          } @else {
+            <i class="fas fa-play"></i>
+            Query
+          }
+        </button>
+      </div>
     </div>
   </div>
 
   @if (error) {
-    <div class="alert-error mt-3">
-      {{ error }}
+    <div class="alert alert-error shadow-lg">
+      <i class="fas fa-exclamation-circle text-xl"></i>
+      <span>{{ error }}</span>
     </div>
   }
 
   @if (results.length > 0) {
-    <div class="results-section mt-4">
-      <h3>Results ({{ results.length }})</h3>
-      <table class="common-table">
-        <thead>
-          <tr>
-            <th>Similarity</th>
-            <th>Source ID</th>
-            <th>Content</th>
-            <th>Collection</th>
-            <th class="metadata-col">Metadata</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (result of results; track $index) {
-            <tr>
-              <td class="similarity-cell">{{ result.similarity | percent:'1.2-2' }}</td>
-              <td><code class="source-id">{{ result.source_id }}</code></td>
-              <td class="content-cell">{{ result.content }}</td>
-              <td>{{ result.collection_name }}</td>
-              <td>
-                <pre class="metadata-pre">{{ result.rag_metadata | json }}</pre>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+    <div class="card bg-base-100 shadow-xl border border-base-200">
+      <div class="card-body p-0">
+        <div class="p-6 border-b border-base-200">
+          <h3 class="card-title">Results ({{ results.length }})</h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table table-zebra w-full">
+            <thead>
+              <tr class="bg-base-200/50">
+                <th class="w-24">Similarity</th>
+                <th class="w-32">Source ID</th>
+                <th>Content</th>
+                <th class="w-32">Collection</th>
+                <th class="w-64">Metadata</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (result of results; track $index) {
+                <tr class="hover">
+                  <td class="font-bold text-success">{{ result.similarity | percent:'1.2-2' }}</td>
+                  <td>
+                    <div class="badge badge-outline badge-info font-mono text-xs whitespace-nowrap">
+                      {{ result.source_id }}
+                    </div>
+                  </td>
+                  <td class="max-w-md">
+                    <div class="line-clamp-3 hover:line-clamp-none transition-all duration-300">
+                      {{ result.content }}
+                    </div>
+                  </td>
+                  <td class="text-xs opacity-70">{{ result.collection_name }}</td>
+                  <td class="p-2">
+                    <div class="bg-base-200 rounded p-2 text-[10px] font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">
+                      {{ result.rag_metadata | json }}
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   }
 
   @if (!loading && results.length === 0 && !error) {
-    <div class="mt-4 text-muted">
-      Execute a query to see results.
+    <div class="flex flex-col items-center justify-center py-12 text-center space-y-4 opacity-40">
+      <div class="text-6xl"><i class="fas fa-search"></i></div>
+      <p class="text-lg italic">Execute a query to see results.</p>
     </div>
   }
 </div>

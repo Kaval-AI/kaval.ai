@@ -109,10 +109,4 @@ describe('TasksList', () => {
     expect(taskItem.nativeElement.classList).toContain('has-errors');
   });
 
-  it('should emit backToRun when back button is clicked', () => {
-    spyOn(component.backToRun, 'emit');
-    const backButton = fixture.debugElement.query(By.css('.back-button'));
-    backButton.triggerEventHandler('click', null);
-    expect(component.backToRun.emit).toHaveBeenCalled();
-  });
 });

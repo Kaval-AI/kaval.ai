@@ -33,7 +33,7 @@ export class JsonTreeComponent implements OnInit {
     return this._data;
   }
   @Input() key: string | number | null = null;
-  @Input() isExpanded: boolean = false;
+  @Input() isExpanded: boolean | null = null;
   @Input() depth: number = 0;
 
   @ViewChildren(JsonTreeComponent) childComponents!: QueryList<JsonTreeComponent>;
@@ -48,6 +48,9 @@ export class JsonTreeComponent implements OnInit {
   children: { key: string | number, value: any }[] = [];
 
   ngOnInit() {
+    if (this.isExpanded === null) {
+      this.isExpanded = this.depth < 1;
+    }
     this.processData();
   }
 

@@ -1,27 +1,71 @@
-<div class="user-edit-container">
-  <form [formGroup]="userForm" (ngSubmit)="saveUser()">
-    <div class="form-group">
-      <label for="email">Email</label>
-      <input type="email" id="email" formControlName="email" class="form-control" />
+<div class="p-6 max-w-2xl mx-auto">
+  <div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl font-bold mb-6 flex items-center gap-2">
+        <i class="fas fa-user-edit text-primary"></i>
+        Edit User Profile
+      </h2>
+
+      <form [formGroup]="userForm" (ngSubmit)="saveUser()" class="space-y-6">
+        <div class="form-control w-full">
+          <label class="label pb-1">
+            <span class="label-text opacity-70 font-bold text-xs uppercase">Email Address</span>
+          </label>
+          <input type="email" formControlName="email" class="input input-bordered w-full" placeholder="user@example.com" />
+          @if (userForm.get('email')?.invalid && userForm.get('email')?.touched) {
+            <label class="label">
+              <span class="label-text-alt text-error">Valid email is required</span>
+            </label>
+          }
+        </div>
+
+        <div class="form-control w-full">
+          <label class="label pb-1">
+            <span class="label-text opacity-70 font-bold text-xs uppercase">Full Name</span>
+          </label>
+          <input type="text" formControlName="name" class="input input-bordered w-full" placeholder="John Doe" />
+          @if (userForm.get('name')?.invalid && userForm.get('name')?.touched) {
+            <label class="label">
+              <span class="label-text-alt text-error">Name is required</span>
+            </label>
+          }
+        </div>
+
+        <div class="form-control w-full">
+          <label class="label pb-1">
+            <span class="label-text opacity-70 font-bold text-xs uppercase">Picture URL</span>
+          </label>
+          <div class="flex gap-4 items-center">
+            <div class="avatar">
+              <div class="w-12 h-12 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2 overflow-hidden bg-base-200">
+                <img [src]="userForm.get('picture')?.value || 'assets/images/squarelogo.png'" alt="Preview" />
+              </div>
+            </div>
+            <input type="text" formControlName="picture" class="input input-bordered flex-1" placeholder="https://example.com/photo.jpg" />
+          </div>
+        </div>
+
+        @if (isAdmin) {
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-4">
+              <input type="checkbox" formControlName="is_admin" class="checkbox checkbox-primary" />
+              <span class="label-text font-bold text-xs uppercase opacity-70">Administrator Privileges</span>
+            </label>
+            <div class="text-xs opacity-50 ml-10">Admins can manage projects, users, and system-wide configurations.</div>
+          </div>
+        }
+
+        <div class="card-actions justify-end pt-6 border-t border-base-content/10 mt-6">
+          <button type="button" class="btn btn-ghost" (click)="cancel()">
+            <i class="fas fa-times"></i>
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary" [disabled]="userForm.invalid">
+            <i class="fas fa-save"></i>
+            Save Changes
+          </button>
+        </div>
+      </form>
     </div>
-    <div class="form-group">
-      <label for="name">Name</label>
-      <input type="text" id="name" formControlName="name" class="form-control" />
-    </div>
-    <div class="form-group">
-      <label for="picture">Picture URL</label>
-      <input type="text" id="picture" formControlName="picture" class="form-control" />
-    </div>
-    @if (isAdmin) {
-      <div class="form-group checkbox">
-        <label>
-          <input type="checkbox" formControlName="is_admin" /> Is Admin
-        </label>
-      </div>
-    }
-    <div class="form-actions">
-      <button type="button" class="btn" (click)="cancel()">Cancel</button>
-      <button type="submit" class="btn btn-primary" [disabled]="userForm.invalid">Save</button>
-    </div>
-  </form>
+  </div>
 </div>
