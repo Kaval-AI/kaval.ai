@@ -36,7 +36,12 @@ def to_plain(obj):
         for k, v in obj.items():
             try:
                 sk = clean_text(str(k))
-                if sk.startswith("_") or sk == "metadata":
+                if (
+                    sk.startswith("_")
+                    or sk == "metadata"
+                    or sk == "__line__"
+                    or sk == "__file_path__"
+                ):
                     continue
                 res[sk] = to_plain(v)
             except Exception:

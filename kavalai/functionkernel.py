@@ -183,6 +183,13 @@ class FunctionKernel:
         Format: protocol://[name|module].function_name
         Example: python://kavalai.mytool.myfunc or rest://myrestserver.restfunction
         """
+        # Strip metadata from arguments
+        arguments = {
+            k: v
+            for k, v in arguments.items()
+            if k not in ("__line__", "__file_path__")
+        }
+
         if "://" not in tool_uri:
             raise FunctionKernelException(
                 f"Invalid tool URI format: '{tool_uri}'. Expected protocol://[name|module].function_name"
