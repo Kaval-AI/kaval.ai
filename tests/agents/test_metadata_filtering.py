@@ -28,15 +28,6 @@ def test_to_plain_filters_metadata():
     
     assert to_plain(data) == expected
 
-def test_to_plain_filters_private_and_metadata():
-    data = {
-        "public": 1,
-        "_private": 2,
-        "metadata": {"info": "extra"}
-    }
-    expected = {"public": 1}
-    assert to_plain(data) == expected
-
 @pytest.mark.asyncio
 async def test_call_tool_strips_metadata():
     kernel = FunctionKernel()

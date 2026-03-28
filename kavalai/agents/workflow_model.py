@@ -31,21 +31,12 @@ def to_plain(obj):
     if isinstance(obj, (datetime, UUID)):
         return str(obj)
     if isinstance(obj, dict):
-        # Filter out internal attributes that might not be serializable or cause issues
         res = {}
         for k, v in obj.items():
-            try:
-                sk = clean_text(str(k))
-                if (
-                    sk.startswith("_")
-                    or sk == "metadata"
-                    or sk == "__line__"
-                    or sk == "__file_path__"
-                ):
-                    continue
-                res[sk] = to_plain(v)
-            except Exception:
-                continue
+            k = clean_text(str(k))
+            # Filters potential internal attributes that might not be serializable or cause issues.
+            if not k.startswith("_"):
+                res[k] = to_plain(v)
         return res
     if isinstance(obj, (list, tuple)):
         return [to_plain(v) for v in obj]
