@@ -85,6 +85,7 @@ async def test_prepare_tool_inputs():
             "ctx": ArgumentInfo(type="context", value="val"),
             "implicit": ArgumentInfo(type="context"),  # should use name "implicit"
         },
+        output="output",
     )
     # Patch implicit context to match data
     rc.data["implicit"] = "implicit_val"
@@ -101,6 +102,7 @@ async def test_prepare_tool_inputs_with_pydantic_model():
         name="test_task",
         python_tool="test_tool",
         inputs={"mod": ArgumentInfo(type="literal", value=model_instance)},
+        output="output",
     )
 
     inputs = await rc.prepare_tool_inputs(task)
