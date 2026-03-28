@@ -45,7 +45,7 @@ class RunContext(BaseModel):
     async def resolve_history_value(self, path: str):
         """Resolve a value from session history."""
         if not self.agent_service or not self.session_id:
-            logger.warning(
+            logger.error(
                 f"Cannot load from history for {path}: agent_service or session_id not set"
             )
             return None
@@ -111,7 +111,7 @@ class RunContext(BaseModel):
         if info.type == "history":
             path = info.value or info.name
             if not self.agent_service or not self.session_id:
-                logger.warning(
+                logger.error(
                     f"Cannot load from history for {path}: agent_service or session_id not set"
                 )
                 return None

@@ -18,6 +18,7 @@ async def test_run_planning_agent_streamer_init_stream_output():
             {
                 "name": "agent_task",
                 "type": "agent",
+                "prompt": "test prompt",
                 "output": "output",
                 "stream_output": True,
             }
@@ -52,6 +53,7 @@ async def test_run_planning_agent_streamer_init_stream_persisted():
             {
                 "name": "agent_task",
                 "type": "agent",
+                "prompt": "test prompt",
                 "output": "output",
                 "stream_persisted": True,
             }
@@ -82,6 +84,7 @@ async def test_run_planning_agent_streamer_init_stream_updates():
             {
                 "name": "agent_task",
                 "type": "agent",
+                "prompt": "test prompt",
                 "output": "output",
                 "stream_updates": True,
             }
@@ -112,6 +115,7 @@ async def test_run_planning_agent_streamer_no_init():
             {
                 "name": "agent_task",
                 "type": "agent",
+                "prompt": "test prompt",
                 "output": "output",
                 "stream_output": False,
                 "stream_updates": False,
@@ -143,6 +147,7 @@ async def test_run_planning_agent_streamer_no_queue():
             {
                 "name": "agent_task",
                 "type": "agent",
+                "prompt": "test prompt",
                 "output": "output",
                 "stream_output": True,
             }

@@ -195,11 +195,11 @@ def test_generate_workflow_svg_complex_paths():
             {
                 "name": "Task 2",
                 "type": "combine",
-                "inputs": {"data": {"value": "intermediate", "type": "context"}},
-                "output": {
+                "inputs": {
                     "result": {"value": "Task 1.output", "type": "context"},
                     "final": {"value": "something.else", "type": "context"},
                 },
+                "output": "output",
             },
         ],
     }

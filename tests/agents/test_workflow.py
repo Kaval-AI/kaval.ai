@@ -415,8 +415,9 @@ data_types:
 tasks:
   - name: Combine
     type: combine
-    output:
+    inputs:
       final_msg: { value: input.msg, type: context }
+    output: output
 """
         w = Workflow.from_yaml(yaml_content)
         w.agent_service = None
@@ -449,8 +450,9 @@ tasks:
     output: intermediate
   - name: Final Output
     type: combine
-    output:
+    inputs:
       final_msg: { value: intermediate.text, type: context }
+    output: output
 """
         w = Workflow.from_yaml(yaml_content)
         w.agent_service = None
@@ -483,47 +485,50 @@ tasks:
     when:
       eq: [ { type: context, value: input.run_task }, true ]
     inputs:
-      val:
-        type: context
-        value: input.value
-    output:
       result:
         type: literal
         value: "Task executed"
+    output: output
   - name: GT Task
     type: combine
     when:
       gt: [ { type: context, value: input.value }, 10 ]
-    output:
+    inputs:
       result:
         type: literal
         value: "Value is large"
+    output: output
   - name: All Task
     type: combine
     when:
       all:
         - eq: [ { type: context, value: input.run_task }, true ]
         - gt: [ { type: context, value: input.value }, 5 ]
-    output:
+    inputs:
       result:
         type: literal
         value: "All conditions met"
+    output: output
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 
         # Case 1: run_task=False, value=5 -> No tasks should run, output should be empty/None
+        workflow = Workflow.from_yaml(workflow_yaml)
         result1 = await workflow.run({"run_task": False, "value": 5})
         assert result1.data is None
 
         # Case 2: run_task=True, value=5 -> Only "Conditional Task" should run
+        workflow = Workflow.from_yaml(workflow_yaml)
         result2 = await workflow.run({"run_task": True, "value": 5})
         assert result2.data.result == "Task executed"
 
         # Case 3: run_task=False, value=15 -> Only "GT Task" should run
+        workflow = Workflow.from_yaml(workflow_yaml)
         result3 = await workflow.run({"run_task": False, "value": 15})
         assert result3.data.result == "Value is large"
 
         # Case 4: run_task=True, value=15 -> All tasks run, last one wins for "result"
+        workflow = Workflow.from_yaml(workflow_yaml)
         result4 = await workflow.run({"run_task": True, "value": 15})
         assert result4.data.result == "All conditions met"
 
@@ -549,31 +554,36 @@ tasks:
       any:
         - eq: [ { type: context, value: input.val }, 1 ]
         - eq: [ { type: context, value: input.val }, 2 ]
-    output:
+    inputs:
       result:
         type: literal
         value: "One or Two"
+    output: output
   - name: Not Task
     type: combine
     when:
       not:
         eq: [ { type: context, value: input.val }, 1 ]
-    output:
+    inputs:
       result:
         type: literal
         value: "Not One"
+    output: output
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 
         # val=1 -> "Any Task" runs, "Not Task" does not. Result: "One or Two"
+        workflow = Workflow.from_yaml(workflow_yaml)
         result1 = await workflow.run({"val": 1})
         assert result1.data.result == "One or Two"
 
         # val=2 -> "Any Task" runs, "Not Task" runs. Result: "Not One"
+        workflow = Workflow.from_yaml(workflow_yaml)
         result2 = await workflow.run({"val": 2})
         assert result2.data.result == "Not One"
 
         # val=3 -> "Any Task" does not run, "Not Task" runs. Result: "Not One"
+        workflow = Workflow.from_yaml(workflow_yaml)
         result3 = await workflow.run({"val": 3})
         assert result3.data.result == "Not One"
 
@@ -602,10 +612,11 @@ tasks:
     type: combine
     when:
       gt: [ { type: context, value: "input.criteria.keywords.length" }, 0 ]
-    output:
+    inputs:
       result:
         type: literal
         value: "Found keywords"
+    output: output
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 
@@ -639,10 +650,11 @@ tasks:
     type: combine
     when:
       contains: [ { type: context, value: "input.tags" }, "vip" ]
-    output:
+    inputs:
       result:
         type: literal
         value: "VIP Customer"
+    output: output
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 
@@ -674,10 +686,11 @@ tasks:
     type: combine
     when:
       eq: [ { type: context, value: input.val }, 1 , 2]
-    output:
+    inputs:
       result:
         type: literal
         value: "Should fail"
+    output: output
 """
         # The error now happens during Workflow.from_yaml (initialization) due to Pydantic validator
         with pytest.raises(
@@ -705,38 +718,44 @@ tasks:
     type: combine
     when:
       gte: [ { type: context, value: input.val }, 10 ]
-    output:
+    inputs:
       result:
         type: literal
         value: "GTE 10"
+    output: output
   - name: LT Task
     type: combine
     when:
       lt: [ { type: context, value: input.val }, 5 ]
-    output:
+    inputs:
       result:
         type: literal
         value: "LT 5"
+    output: output
   - name: NotEQ Task
     type: combine
     when:
       not_eq: [ { type: context, value: input.val }, 7 ]
-    output:
+    inputs:
       result:
         type: literal
         value: "Not 7"
+    output: output
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 
         # val=12 -> GTE runs, NotEQ runs. Result: "Not 7"
+        workflow = Workflow.from_yaml(workflow_yaml)
         result1 = await workflow.run({"val": 12})
         assert result1.data.result == "Not 7"
 
         # val=7 -> GTE (false), LT (false), NotEQ (false). Result: None
+        workflow = Workflow.from_yaml(workflow_yaml)
         result3 = await workflow.run({"val": 7})
         assert result3.data is None
 
         # val=10 -> GTE runs, NotEQ runs. Result: "Not 7"
+        workflow = Workflow.from_yaml(workflow_yaml)
         result4 = await workflow.run({"val": 10})
         assert result4.data.result == "Not 7"
 
@@ -764,18 +783,20 @@ tasks:
     type: combine
     when:
       is_true: { type: context, value: input.is_active }
-    output:
+    inputs:
       status:
         type: literal
         value: "Active"
+    output: output
   - name: Length Check
     type: combine
     when:
       len: [ { type: context, value: input.tags }, 3 ]
-    output:
+    inputs:
       status:
         type: literal
         value: "Has 3 tags"
+    output: output
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 
@@ -815,8 +836,7 @@ tasks:
     type: combine
     inputs:
       search_results: { type: literal, value: "initial results" }
-    output:
-      search_results: { type: literal, value: "initial results" }
+    output: output
 """
         wf1 = Workflow.from_yaml(yaml_1)
         wf1.agent_service = service
@@ -847,9 +867,7 @@ tasks:
     inputs:
       prev_results: { type: history, value: search_results }
       current_msg: { type: context, value: input.user_message }
-    output:
-      prev_results: { type: history, value: search_results }
-      current_msg: { type: context, value: input.user_message }
+    output: output
 """
         wf2 = Workflow.from_yaml(yaml_2)
         wf2.agent_service = service
@@ -875,7 +893,7 @@ tasks:
   - name: t1
     type: combine
     inputs: { status: { type: literal, value: "completed" } }
-    output: { status: { type: literal, value: "completed" } }
+    output: output
 """
         wf1 = Workflow.from_yaml(yaml_1)
         wf1.agent_service = service
@@ -897,7 +915,7 @@ tasks:
         - "completed"
     inputs:
       result: { type: literal, value: "it worked" }
-    output: { result: { type: literal, value: "it worked" } }
+    output: output
 """
         wf2 = Workflow.from_yaml(yaml_2)
         wf2.agent_service = service
@@ -921,7 +939,7 @@ tasks:
         - "failed"
     inputs:
       result: { type: literal, value: "should not happen" }
-    output: { result: { type: literal, value: "should not happen" } }
+    output: output
 """
         wf3 = Workflow.from_yaml(yaml_3)
         wf3.agent_service = service
@@ -955,16 +973,18 @@ tasks:
   - name: Task 1
     type: combine
     stop: true
-    output:
+    inputs:
       task1_run:
         type: literal
         value: true
+    output: output
   - name: Task 2
     type: combine
-    output:
+    inputs:
       task2_run:
         type: literal
         value: true
+    output: output
 """
         workflow = Workflow.from_yaml(workflow_yaml)
 

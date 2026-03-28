@@ -98,8 +98,7 @@ tasks:
     type: combine
     inputs:
       reply: { type: literal, value: "hello" }
-    output:
-      reply: { type: literal, value: "hello" }
+    output: output
 """
     wf = Workflow.from_yaml(yaml_content)
     wf.agent_service = service

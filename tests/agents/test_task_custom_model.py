@@ -65,7 +65,10 @@ async def test_agent_task_custom_model():
     """Test that AgentTask can specify its own llm_model."""
     # This will fail until llm_model is added to AgentTask
     task = AgentTask(
-        name="custom_agent_task", output="output_type", llm_model="custom/agent-model"
+        name="custom_agent_task",
+        prompt="hello agent",
+        output="output_type",
+        llm_model="custom/agent-model",
     )
 
     model = WorkflowModel(
@@ -153,6 +156,7 @@ async def test_agent_task_llm_kwargs_merging():
     """Test that llm_kwargs from agent task are merged with workflow llm_kwargs."""
     task = AgentTask(
         name="agent_kwargs_task",
+        prompt="hello agent",
         output="output_type",
         llm_kwargs={"task_param": "task_val"},
     )

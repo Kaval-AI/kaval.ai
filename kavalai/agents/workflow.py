@@ -97,9 +97,9 @@ class Workflow:
         self.env = Env()
         self.env.read_env()
         validate_rest_server_env_vars(self.workflow_model)
-        self.run_context = RunContext(agent_service=agent_service)
+        self.run_context = RunContext(agent_service=self.agent_service)
         self.task_logger = TaskLogger(
-            agent_service=agent_service, run_context=self.run_context
+            agent_service=self.agent_service, run_context=self.run_context
         )
 
         # Initialize FunctionKernel and register all servers
@@ -528,7 +528,6 @@ class Workflow:
         *,
         session_id: Optional[UUID] = None,
         external_id: Optional[str] = None,
-        run_context: RunContext,
         agent_service: AgentService,
         input_data: dict,
     ):
@@ -540,7 +539,7 @@ class Workflow:
             output_schema=self.workflow_model.data_types.get("output"),
             workflow=self.workflow_model.model_dump(),
         )
-        run_context.agent_id = agent.id
+        self.run_context.agent_id = agent.id
 
         # Get or create session (using UUID or string external_id).
         # Not to be confused with sqlalchemy sessions.
@@ -550,19 +549,18 @@ class Workflow:
             )
             if not session:
                 raise WorkflowException(f"Session with ID {session_id} not found")
-            run_context.session_id = session.id
+            self.run_context.session_id = session.id
         else:
             session = await agent_service.get_or_create_session(
                 agent_id=agent.id, session_id=None, external_id=external_id
             )
-            run_context.session_id = session.id
+            self.run_context.session_id = session.id
 
         # Creates the specific Run record for this execution
         run = await agent_service.create_run(
-            session_id=run_context.session_id, input_data=input_data
+            session_id=self.run_context.session_id, input_data=input_data
         )
-        run_context.run_id = run.id
-        return run
+        self.run_context.run_id = run.id
 
     async def _execute_task(
         self,
@@ -604,8 +602,7 @@ class Workflow:
             else:
                 logger.warning(f"Unknown task type: {type(task)}")
         except Exception as e:
-            raise WorkflowException(e)
-
+            raise WorkflowException(e) from e
         return task.stop
 
     async def run(
@@ -623,10 +620,9 @@ class Workflow:
 
         # Initialize DB data if agent_service is given.
         if agent_service:
-            self._initialize_agent_session(
+            await self._initialize_agent_session(
                 session_id=session_id,
                 external_id=external_id,
-                run_context=run_context,
                 input_data=input_data,
                 agent_service=agent_service,
             )
