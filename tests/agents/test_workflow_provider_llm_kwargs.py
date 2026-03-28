@@ -171,7 +171,7 @@ async def test_workflow_agent_llm_kwargs_passing():
         wf.models = {"output_type": MockOutput}
 
         run_context = RunContext()
-        await wf.run_planning_agent(task, run_context, None)
+        await wf.run_agent_task(task, run_context, None)
 
         # Verify PlanningAgent was initialized with the merged llm_kwargs
         args, kwargs = MockPlanningAgent.call_args

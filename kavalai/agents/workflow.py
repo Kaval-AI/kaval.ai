@@ -15,7 +15,7 @@ limitations under the License.
 """
 
 from loguru import logger
-from typing import Dict, Type, Optional, Any
+from typing import Dict, Type, Optional
 from uuid import UUID
 
 import yaml
@@ -35,7 +35,9 @@ from kavalai.agents.workflow_model import (
     RagQueryTask,
     WorkflowRunResult,
     WorkflowException,
+    Task,
 )
+from kavalai.llm_clients.common import StreamContent
 from kavalai.agents.utils import to_plain
 from kavalai.agents.planning_agent import PlanningAgent
 from kavalai.agents.agent_service import AgentService
@@ -49,89 +51,9 @@ from kavalai.agents.task_logger import TaskLogger
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.llm_clients.common import Streamer
 from kavalai.agents.run_context import RunContext
-from kavalai.functionkernel import FunctionKernel
+from kavalai.functionkernel import FunctionKernel, pythontool
 import asyncio
 import importlib
-
-
-class LineLoader(yaml.SafeLoader):
-    def construct_mapping(self, node, deep=False):
-        mapping = super().construct_mapping(node, deep=deep)
-        mapping["__line__"] = node.start_mark.line + 1
-        return mapping
-
-
-def inject_metadata(data: Any, file_path: Optional[str] = None) -> Any:
-    """Recursively inject __file_path__ into dictionaries that have __line__."""
-    if isinstance(data, dict):
-        # We must NOT inject metadata into dictionaries that are validated
-        # by Pydantic as having a specific schema that doesn't include these fields.
-        # This includes the root dictionary's keys that are not models.
-        if "__line__" in data and file_path:
-            data["__file_path__"] = file_path
-
-        for k, v in list(data.items()):
-            # We only want to inject metadata into things that will become YamlModel.
-            # These are: WorkflowModel (root), Tasks, Servers, PythonFunctions.
-            # data_types is a dict[str, dict] where values are raw JSON schemas.
-            # inputs/output in tasks are also tricky.
-            if k in ("data_types", "env", "properties", "inputs", "output", "when"):
-                if isinstance(v, dict):
-                    # For these, we remove metadata recursively
-                    remove_metadata(v)
-                continue
-            data[k] = inject_metadata(v, file_path)
-    elif isinstance(data, list):
-        for i in range(len(data)):
-            data[i] = inject_metadata(data[i], file_path)
-    return data
-
-
-def remove_metadata(data: Any) -> Any:
-    if isinstance(data, dict):
-        data.pop("__line__", None)
-        data.pop("__file_path__", None)
-        for v in data.values():
-            remove_metadata(v)
-    elif isinstance(data, list):
-        for item in data:
-            remove_metadata(item)
-    return data
-
-
-def format_yaml_error(
-    message: str,
-    line_number: Optional[int],
-    file_path: Optional[str],
-    yaml_content: Optional[str] = None,
-) -> str:
-    parts = []
-    location = ""
-    if file_path:
-        location = f'File "{file_path}"'
-    if line_number:
-        if location:
-            location += f", line {line_number}"
-        else:
-            location = f"Line {line_number}"
-
-    if location:
-        parts.append(f"Error at {location}:")
-
-    parts.append(message)
-
-    if line_number and yaml_content:
-        lines = yaml_content.splitlines()
-        start = max(0, line_number - 3)
-        end = min(len(lines), line_number + 2)
-        snippet = []
-        for i in range(start, end):
-            l_num = i + 1
-            prefix = "--> " if l_num == line_number else "    "
-            snippet.append(f"{prefix}{l_num:4} | {lines[i]}")
-        parts.append("\n" + "\n".join(snippet))
-
-    return "\n".join(parts)
 
 
 def make_prompt(prompt: str, input_data: dict) -> str:
@@ -146,6 +68,19 @@ def make_prompt(prompt: str, input_data: dict) -> str:
 
 
 class Workflow:
+    """Workflow represents the central element in the agent orchestration.
+    It manages running the tasks, storing the results and streaming the results of the agent run.
+
+    Parameters
+    ==========
+    workflow_model: WorkflowModel
+        The workflow model that defines the structure and behavior of the workflow.
+    agent_service: Optional[AgentService]
+        The agent service for storing results in a DB.
+    yaml_content: Optional[str]
+        The YAML content associated with the workflow (if given, we can give more accurate exceptions).
+    """
+
     def __init__(
         self,
         workflow_model: WorkflowModel,
@@ -162,6 +97,7 @@ class Workflow:
         self.env = Env()
         self.env.read_env()
         validate_rest_server_env_vars(self.workflow_model)
+        self.task_logger = TaskLogger(agent_service)
 
         # Initialize FunctionKernel and register all servers
         self.kernel = FunctionKernel()
@@ -177,8 +113,6 @@ class Workflow:
             func = getattr(module, func_name)
             # Ensure it's marked as a kavalai tool
             if not getattr(func, "_is_kavalai_tool", False):
-                from kavalai.functionkernel import pythontool
-
                 func = pythontool(func)
 
             self.kernel.register_python_tool(func_config.name, func)
@@ -201,25 +135,32 @@ class Workflow:
     def from_yaml_path(
         cls, yaml_path: str, agent_service: Optional[AgentService] = None
     ):
+        """Initiates a workflow instance from workflow model YAML file.
+
+        Parameters
+        ==========
+        yaml_path: str
+            The path to the YAML file containing the workflow model.
+        agent_service: Optional[AgentService]
+            The agent service for storing results in a DB.
+        """
         with open(yaml_path, "r") as f:
             yaml_string = f.read()
-            try:
-                data = yaml.load(yaml_string, Loader=LineLoader)  # nosec B506
-                inject_metadata(data, file_path=yaml_path)
-                workflow_model = WorkflowModel(**data)
-                return cls(
-                    workflow_model,
-                    agent_service=agent_service,
-                    yaml_content=yaml_string,
-                )
-            except ValidationError as e:
-                raise WorkflowException(f"Workflow validation failed: {e}") from e
+            return cls.from_yaml(yaml_string, agent_service=agent_service)
 
     @classmethod
     def from_yaml(cls, yaml_string: str, agent_service: Optional[AgentService] = None):
+        """Initiates a workflow instance from workflow model YAML string.
+
+        Parameters
+        ==========
+        yaml_string: str
+            The YAML string containing the workflow model.
+        agent_service: Optional[AgentService]
+            The agent service for storing results in a DB.
+        """
         try:
-            data = yaml.load(yaml_string, Loader=LineLoader)  # nosec B506
-            inject_metadata(data)
+            data = yaml.load(yaml_string)  # nosec B506
             workflow_model = WorkflowModel(**data)
             return cls(
                 workflow_model, agent_service=agent_service, yaml_content=yaml_string
@@ -228,7 +169,7 @@ class Workflow:
             raise WorkflowException(f"Workflow validation failed: {e}") from e
 
     def get_data_type(self, name: str) -> Type[BaseModel]:
-        """Retrieve a generated Pydantic model by name."""
+        """Retrieve a a real instance of a Pydantic model that was defined in the YAML file."""
         if name not in self.models:
             raise KeyError(f"Data type '{name}' was not defined in YAML datatypes.")
         return self.models[name]
@@ -239,34 +180,21 @@ class Workflow:
         run_context: RunContext,
         queue: asyncio.Queue | None,
     ):
-        input_data = {}
-        for name, info in task.inputs.items():
-            if info.value is None and info.name is None:
-                info = info.model_copy(update={"value": name})
-            input_data[name] = await run_context.resolve_input_info(info)
+        input_data = await run_context.prepare_tool_inputs(task)
 
-        # Render prompt with templates and context
-        try:
-            rendered_prompt = await run_context.render_prompt(task.prompt)
-        except ValueError as e:
-            raise WorkflowException(
-                format_yaml_error(
-                    str(e),
-                    task.line_number,
-                    task.file_path,
-                    self.yaml_content,
-                )
-            ) from e
+        # Render prompt with templates and context and construct message history
+        rendered_prompt = await run_context.render_prompt(task.prompt)
         input_text = make_prompt(rendered_prompt, input_data)
-
         system_message = dict(role="system", content=input_text)
-        messages = [system_message]
+        message_history = [system_message]
 
+        # Retrieve message history and append them to messages.
         if task.use_history and self.agent_service and run_context.session_id:
             history = await self.agent_service.get_chat_history(run_context.session_id)
             for msg in history:
-                messages.append(dict(role=msg.role, content=msg.content))
+                message_history.append(dict(role=msg.role, content=msg.content))
 
+        # Retrive the LLM model
         llm_model = (
             task.llm_model
             if task.llm_model
@@ -276,9 +204,11 @@ class Workflow:
             )
         )
 
+        # Prepare LLM model keyword arguments.
         llm_kwargs = self.workflow_model.llm_kwargs.copy()
         llm_kwargs.update(task.llm_kwargs)
 
+        # Define streamer for sending back results from the LLM call.
         streamer = None
         if task.stream_output and queue is not None:
             streamer = Streamer(task.output, queue)
@@ -287,30 +217,32 @@ class Workflow:
         start_time = time.perf_counter()
         response, stats = await client.chat_completions(
             response_model=self.get_data_type(task.output),
-            messages=messages,
+            messages=message_history,
             streamer=streamer,
             **llm_kwargs,
         )
-        duration = time.perf_counter() - start_time
+        llm_call_duration = time.perf_counter() - start_time
+
+        # Save the LLM call stats if agent_service is defined.
         if self.agent_service:
             await self.agent_service.add_model_call_stats(
                 stats=stats, agent_id=run_context.agent_id
             )
 
+        # We store the result in specified output variable.
         logger.info(f"Setting {task.output} = {response}")
         run_context.data[task.output] = response
 
-        if self.agent_service and run_context.run_id:
-            task_logger = TaskLogger(self.agent_service, run_context)
-            await task_logger.log_llm_task(
-                task_name=task.name,
-                prompt=input_text,
-                input_data=input_data,
-                output=response.model_dump()
-                if isinstance(response, BaseModel)
-                else {"result": response},
-                duration=duration,
-            )
+        # Log the task info in DB.
+        await self.task_logger.log_llm_task(
+            task_name=task.name,
+            prompt=input_text,
+            input_data=input_data,
+            output=response.model_dump()
+            if isinstance(response, BaseModel)
+            else {"result": response},
+            duration=llm_call_duration,
+        )
 
     async def run_rest_tool(
         self,
@@ -333,30 +265,19 @@ class Workflow:
         )
         duration = time.perf_counter() - start_time
 
+        # Store the output data
         debug_data = str(result)[:50]
         logger.info(f"Setting {task.output} = {debug_data}")
         run_context.data[task.output] = result
 
-        # Publish to stream
-        if task.stream_output and queue is not None:
-            streamer = Streamer(task.output, queue)
-            stream_value = (
-                result.model_dump_json()
-                if isinstance(result, BaseModel)
-                else str(result)
-            )
-            await streamer.stream_complete(stream_value)
-
         # Store the tool run info.
-        if self.agent_service and run_context.run_id:
-            task_logger = TaskLogger(self.agent_service, run_context)
-            tool_uri = f"rest://{task.rest_server}.{task.tool}"
-            await task_logger.log_tool_call(
-                tool_uri=tool_uri,
-                arguments=inputs,
-                output=result.model_dump() if isinstance(result, BaseModel) else result,
-                duration=duration,
-            )
+        tool_uri = f"rest://{task.rest_server}.{task.tool}"
+        await self.task_logger.log_tool_call(
+            tool_uri=tool_uri,
+            arguments=inputs,
+            output=result.model_dump() if isinstance(result, BaseModel) else result,
+            duration=duration,
+        )
 
     async def run_mcp_tool(
         self, task: McpTask, run_context: RunContext, queue: asyncio.Queue | None
@@ -379,26 +300,14 @@ class Workflow:
         logger.info(f"Setting {task.output} = {debug_data}")
         run_context.data[task.output] = result
 
-        # Publish to stream
-        if task.stream_output and queue is not None:
-            streamer = Streamer(task.output, queue)
-            stream_value = (
-                result.model_dump_json()
-                if isinstance(result, BaseModel)
-                else str(result)
-            )
-            await streamer.stream_complete(stream_value)
-
         # Store the tool run info.
-        if self.agent_service and run_context.run_id:
-            task_logger = TaskLogger(self.agent_service, run_context)
-            tool_uri = f"mcp://{task.mcp_server}.{task.tool}"
-            await task_logger.log_tool_call(
-                tool_uri=tool_uri,
-                arguments=inputs,
-                output=result.model_dump() if isinstance(result, BaseModel) else result,
-                duration=duration,
-            )
+        tool_uri = f"mcp://{task.mcp_server}.{task.tool}"
+        await self.task_logger.log_tool_call(
+            tool_uri=tool_uri,
+            arguments=inputs,
+            output=result.model_dump() if isinstance(result, BaseModel) else result,
+            duration=duration,
+        )
 
     async def run_python_tool(
         self, task: PythonTask, run_context: RunContext, queue: asyncio.Queue | None
@@ -444,59 +353,41 @@ class Workflow:
                 duration=duration,
             )
 
-    async def run_combine(
+    async def run_assign(
         self, task: AssignTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
-        """Combine context values into an output dict (no LLM or tool call)."""
+        """Assigns a variable by combining various inputs."""
+        # If output is a string, it means we are combining inputs into a named data type
         result = {}
-        if isinstance(task.output, dict):
-            for field_name, info in task.output.items():
-                if info.value is None and info.name is None:
-                    info = info.model_copy(update={"value": field_name})
-                val = await run_context.resolve_input_info(info)
-                result[field_name] = to_plain(val)
-            # Store as 'output' in context (standard output key for final result)
-            output_type = self.get_data_type("output")
-            model_instance = output_type(**result)
-            run_context.data["output"] = model_instance
-            logger.info(f"Combined output with fields: {list(result.keys())}")
-            if task.stream_output and queue is not None:
-                streamer = Streamer("output", queue)
-                await streamer.stream_complete(model_instance.model_dump_json())
-        elif isinstance(task.output, str):
-            # If output is a string, it means we are combining inputs into a named data type
-            for input_name, info in task.inputs.items():
-                if info.value is None and info.name is None:
-                    info = info.model_copy(update={"value": input_name})
-                val = await run_context.resolve_input_info(info)
-                result[input_name] = to_plain(val)
-            output_type = self.get_data_type(task.output)
-            run_context.data[task.output] = output_type(**result)
-            if task.stream_output and queue is not None:
-                streamer = Streamer(task.output, queue)
-                await streamer.stream_complete(
-                    run_context.data[task.output].model_dump_json()
-                )
-            logger.info(f"Combined inputs into {task.output}")
+        for input_name, info in task.inputs.items():
+            if info.value is None and info.name is None:
+                info = info.model_copy(update={"value": input_name})
+            val = await run_context.resolve_input_info(info)
+            result[input_name] = to_plain(val)
+        output_type = self.get_data_type(task.output)
+        run_context.data[task.output] = output_type(**result)
+        if task.stream_output and queue is not None:
+            streamer = Streamer(task.output, queue)
+            await streamer.stream_complete(
+                run_context.data[task.output].model_dump_json()
+            )
+        logger.info(f"Assign {task.output}")
 
-    async def run_planning_agent(
+    async def run_agent_task(
         self, task: AgentTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         """Invoke the PlanningAgent for complex multi-step tasks."""
-        # 1. Prepare tool inputs
+        # Prepares input data.
         input_data = await run_context.prepare_tool_inputs(task)
-
-        # 2. Get response model
         response_model = self.get_data_type(task.output)
 
-        # 3. Setup streamer
+        # LLM-Task specific output streamer.
         streamer = None
         if (
             task.stream_output or task.stream_persisted or task.stream_updates
         ) and queue is not None:
             streamer = Streamer(task.output, queue)
 
-        # 4. LLM client
         llm_model = (
             task.llm_model
             if task.llm_model
@@ -507,12 +398,11 @@ class Workflow:
         )
         llm_client = LLMClient(model=llm_model)
 
+        # Update llm kwargs
         llm_kwargs = self.workflow_model.llm_kwargs.copy()
         llm_kwargs.update(task.llm_kwargs)
 
-        task_logger = (
-            TaskLogger(self.agent_service, run_context) if self.agent_service else None
-        )
+        # Define task
         planning_agent = PlanningAgent(
             kernel=self.kernel,
             run_context=run_context,
@@ -520,7 +410,7 @@ class Workflow:
             input_data=input_data,
             response_model=response_model,
             agent_service=self.agent_service,
-            task_logger=task_logger,
+            task_logger=self.task_logger,
             streamer=streamer,
             stream_updates=task.stream_updates,
             stream_output=task.stream_output,
@@ -529,28 +419,15 @@ class Workflow:
             llm_kwargs=llm_kwargs,
         )
 
-        # 6. Fetch chat history
+        # Set up chat message history.
         chat_history = []
         if task.use_history and self.agent_service and run_context.session_id:
             history = await self.agent_service.get_chat_history(run_context.session_id)
             for msg in history:
                 chat_history.append({"role": msg.role, "content": msg.content})
 
-        # 7. Run PlanningAgent
-        rendered_prompt = None
-        if task.prompt:
-            try:
-                rendered_prompt = await run_context.render_prompt(task.prompt)
-            except ValueError as e:
-                raise WorkflowException(
-                    format_yaml_error(
-                        str(e),
-                        task.line_number,
-                        task.file_path,
-                        self.yaml_content,
-                    )
-                ) from e
-
+        # Render the prompt.
+        rendered_prompt = await run_context.render_prompt(task.prompt)
         result = await planning_agent.run(
             task_name=task.name,
             task=rendered_prompt,
@@ -558,11 +435,8 @@ class Workflow:
             max_iterations=task.max_steps,
         )
 
-        # 8. Store results
         run_context.data[task.name] = result
         run_context.data[task.output] = result
-
-        # Note: Logging is handled inside PlanningAgent.run() to capture the full system prompt
 
     async def run_rag_task(
         self,
@@ -624,8 +498,6 @@ class Workflow:
 
         # 5. Handle streaming (optional for RAG, usually just one completion event)
         if task.stream_output and queue:
-            from kavalai.llm_clients.common import StreamContent
-
             await queue.put(
                 StreamContent(
                     role="assistant",
@@ -648,6 +520,91 @@ class Workflow:
                 duration=duration,
             )
 
+    async def _initialize_agent_session(
+        self,
+        *,
+        session_id: Optional[UUID] = None,
+        external_id: Optional[str] = None,
+        run_context: RunContext,
+        agent_service: AgentService,
+        input_data: dict,
+    ):
+        # Get or create the agent definition
+        agent = await agent_service.get_or_create_agent(
+            name=self.workflow_model.name,
+            description=self.workflow_model.description,
+            input_schema=self.workflow_model.data_types.get("input"),
+            output_schema=self.workflow_model.data_types.get("output"),
+            workflow=self.workflow_model.model_dump(),
+        )
+        run_context.agent_id = agent.id
+
+        # Get or create session (using UUID or string external_id).
+        # Not to be confused with sqlalchemy sessions.
+        if session_id:
+            session = await agent_service.get_or_create_session(
+                agent_id=agent.id, session_id=session_id
+            )
+            if not session:
+                raise WorkflowException(f"Session with ID {session_id} not found")
+            run_context.session_id = session.id
+        else:
+            session = await agent_service.get_or_create_session(
+                agent_id=agent.id, session_id=None, external_id=external_id
+            )
+            run_context.session_id = session.id
+
+        # Creates the specific Run record for this execution
+        run = await agent_service.create_run(
+            session_id=run_context.session_id, input_data=input_data
+        )
+        run_context.run_id = run.id
+        return run
+
+    async def _execute_task(
+        self,
+        streamer: Streamer | None,
+        task: Task,
+        run_context: RunContext,
+        queue: asyncio.Queue,
+    ) -> bool:
+        """Executes a single task in the workflow.
+
+        Returns True if the task should be stopped.
+        """
+        # Stream the current runnig task.
+        if streamer and task.stream_updates:
+            await streamer.stream_complete(task.name, name="running_task")
+
+        # Decide if we should skip this task
+        if task.when:
+            if not await run_context.evaluate_condition(task.when):
+                logger.info(f"Skipping task <{task.name}> due to condition")
+                return
+
+        logger.info(f"Running task {task.name}")
+        try:
+            if isinstance(task, AgentTask):
+                await self.run_agent_task(task, run_context, queue)
+            elif isinstance(task, LLMTask):
+                await self.run_llm_task(task, run_context, queue)
+            elif isinstance(task, McpTask):
+                await self.run_mcp_tool(task, run_context, queue)
+            elif isinstance(task, PythonTask):
+                await self.run_python_tool(task, run_context, queue)
+            elif isinstance(task, RestTask):
+                await self.run_rest_tool(task, run_context, queue)
+            elif isinstance(task, AssignTask):
+                await self.run_assign(task, run_context, queue)
+            elif isinstance(task, RagQueryTask):
+                await self.run_rag_task(task, run_context, queue)
+            else:
+                logger.warning(f"Unknown task type: {type(task)}")
+        except Exception as e:
+            raise WorkflowException(e)
+
+        return task.stop
+
     async def run(
         self,
         input_data: dict,
@@ -656,59 +613,21 @@ class Workflow:
         queue: asyncio.Queue | None = None,
     ) -> WorkflowRunResult:
         agent_service = self.agent_service
-        # 1. Parse Input
-        try:
-            parsed_input = self.get_data_type("input")(**input_data)
-        except ValidationError as e:
-            input_info = self.workflow_model.data_types.get("input", {})
-            line_number = input_info.get("__line__")
-            file_path = input_info.get("__file_path__")
-            raise WorkflowException(
-                format_yaml_error(
-                    f"Validation error for 'input' data type: {e}",
-                    line_number,
-                    file_path,
-                    self.yaml_content,
-                )
-            ) from e
-
+        parsed_input = self.get_data_type("input")(**input_data)
         run_context = RunContext(agent_service=agent_service)
         run_context.data["input"] = parsed_input
         run_context.templates = {t.name: t.value for t in self.workflow_model.templates}
 
-        # 2. Initialize DB Context (Agent -> Session -> Run)
+        # Initialize DB data if agent_service is given.
         if agent_service:
-            # Get or create the agent definition
-            agent = await agent_service.get_or_create_agent(
-                name=self.workflow_model.name,
-                description=self.workflow_model.description,
-                input_schema=self.workflow_model.data_types.get("input"),
-                output_schema=self.workflow_model.data_types.get("output"),
-                workflow=self.workflow_model.model_dump(),
+            self._initialize_agent_session(
+                session_id=session_id,
+                external_id=external_id,
+                run_context=run_context,
+                input_data=input_data,
+                agent_service=agent_service,
             )
-            run_context.agent_id = agent.id
-
-            # Get or create session (using UUID or string external_id)
-            if session_id:
-                session = await agent_service.get_or_create_session(
-                    agent_id=agent.id, session_id=session_id
-                )
-                if not session:
-                    raise WorkflowException(f"Session with ID {session_id} not found")
-                run_context.session_id = session.id
-            else:
-                session = await agent_service.get_or_create_session(
-                    agent_id=agent.id, session_id=None, external_id=external_id
-                )
-                run_context.session_id = session.id
-
-            # Create the specific Run record for this execution
-            run = await agent_service.create_run(
-                session_id=run_context.session_id, input_data=input_data
-            )
-            run_context.run_id = run.id
-
-            # Log the initial user message
+            # Store the user message in agent_service.
             user_msg = getattr(parsed_input, "user_message", str(input_data))
             await agent_service.add_chat_message(
                 agent_id=run_context.agent_id,
@@ -717,59 +636,29 @@ class Workflow:
                 role="user",
                 content=user_msg,
             )
-
-        # 3. Execute Workflow Steps
+        # Executes the workflow steps
         try:
-            streamer = Streamer(name="workflow", queue=queue) if queue else None
             for task in self.workflow_model.tasks:
-                if streamer and task.stream_updates:
-                    await streamer.stream_complete(task.name, name="running_task")
-
-                if task.when:
-                    if not await run_context.evaluate_condition(task.when):
-                        logger.info(f"Skipping task <{task.name}> due to condition")
-                        continue
-
-                logger.info(f"Running task {task.name}")
-                try:
-                    if isinstance(task, AgentTask):
-                        await self.run_planning_agent(task, run_context, queue)
-                    elif isinstance(task, LLMTask):
-                        await self.run_llm_task(task, run_context, queue)
-                    elif isinstance(task, McpTask):
-                        await self.run_mcp_tool(task, run_context, queue)
-                    elif isinstance(task, PythonTask):
-                        await self.run_python_tool(task, run_context, queue)
-                    elif isinstance(task, RestTask):
-                        await self.run_rest_tool(task, run_context, queue)
-                    elif isinstance(task, AssignTask):
-                        await self.run_combine(task, run_context, queue)
-                    elif isinstance(task, RagQueryTask):
-                        await self.run_rag_task(task, run_context, queue)
-                    else:
-                        logger.warning(f"Unknown task type: {type(task)}")
-                except Exception as e:
-                    if isinstance(e, WorkflowException):
-                        raise e
-                    raise WorkflowException(
-                        format_yaml_error(
-                            f"Error in task '{task.name}': {e}",
-                            task.line_number,
-                            task.file_path,
-                            self.yaml_content,
-                        )
-                    ) from e
-
-                if task.stop:
+                streamer = Streamer(name=task.output, queue=queue) if queue else None
+                # Execute the step and stop the execution if the signals so.
+                if await self._execute_task(
+                    streamer=streamer, task=task, run_context=run_context, queue=queue
+                ):
                     logger.info(
                         f"Stopping workflow after task <{task.name}> due to stop: True"
                     )
                     break
+                # Stream the final output
+                if task.stream_output and streamer:
+                    streamer.stream_complete(
+                        run_context.data[task.output].model_dump_json(),
+                        name=task.output,
+                    )
         finally:
             # Cleanup MCP sessions/clients using FunctionKernel
             await self.kernel.close()
 
-        # 4. Finalize and Log Response
+        # Update database
         output_model = run_context.data.get("output")
         if agent_service:
             # Persist final output_data and full execution context into the Run

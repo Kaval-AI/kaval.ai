@@ -43,7 +43,6 @@ class TaskLogger:
         """Log an LLM task with full prompt."""
         if not self.agent_service or not self.run_context.run_id:
             return
-
         try:
             await self.agent_service.add_task(
                 agent_id=self.run_context.agent_id,
@@ -71,7 +70,6 @@ class TaskLogger:
         """Log an agent task with full system prompt."""
         if not self.agent_service or not self.run_context.run_id:
             return
-
         try:
             await self.agent_service.add_task(
                 agent_id=self.run_context.agent_id,

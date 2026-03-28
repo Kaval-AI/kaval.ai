@@ -33,7 +33,7 @@ async def test_run_planning_agent_streamer_init_stream_output():
         # We don't want to actually run the agent, just check if it was initialized with a streamer
         MockPlanningAgent.return_value.run = AsyncMock(return_value={})
 
-        await workflow.run_planning_agent(task, run_context, queue)
+        await workflow.run_agent_task(task, run_context, queue)
 
         # Check that PlanningAgent was called and the streamer argument was not None
         args, kwargs = MockPlanningAgent.call_args
@@ -65,7 +65,7 @@ async def test_run_planning_agent_streamer_init_stream_persisted():
 
     with patch("kavalai.agents.workflow.PlanningAgent") as MockPlanningAgent:
         MockPlanningAgent.return_value.run = AsyncMock(return_value={})
-        await workflow.run_planning_agent(task, run_context, queue)
+        await workflow.run_agent_task(task, run_context, queue)
 
         args, kwargs = MockPlanningAgent.call_args
         assert kwargs["streamer"] is not None
@@ -95,7 +95,7 @@ async def test_run_planning_agent_streamer_init_stream_updates():
 
     with patch("kavalai.agents.workflow.PlanningAgent") as MockPlanningAgent:
         MockPlanningAgent.return_value.run = AsyncMock(return_value={})
-        await workflow.run_planning_agent(task, run_context, queue)
+        await workflow.run_agent_task(task, run_context, queue)
 
         args, kwargs = MockPlanningAgent.call_args
         assert kwargs["streamer"] is not None
@@ -127,7 +127,7 @@ async def test_run_planning_agent_streamer_no_init():
 
     with patch("kavalai.agents.workflow.PlanningAgent") as MockPlanningAgent:
         MockPlanningAgent.return_value.run = AsyncMock(return_value={})
-        await workflow.run_planning_agent(task, run_context, queue)
+        await workflow.run_agent_task(task, run_context, queue)
 
         args, kwargs = MockPlanningAgent.call_args
         assert kwargs["streamer"] is None
@@ -156,7 +156,7 @@ async def test_run_planning_agent_streamer_no_queue():
 
     with patch("kavalai.agents.workflow.PlanningAgent") as MockPlanningAgent:
         MockPlanningAgent.return_value.run = AsyncMock(return_value={})
-        await workflow.run_planning_agent(task, run_context, queue)
+        await workflow.run_agent_task(task, run_context, queue)
 
         args, kwargs = MockPlanningAgent.call_args
         assert kwargs["streamer"] is None

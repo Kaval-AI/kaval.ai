@@ -92,7 +92,7 @@ async def test_agent_task_custom_model():
 
             run_context = RunContext()
             # The execution logic also needs update to prioritize task.llm_model
-            await wf.run_planning_agent(task, run_context, None)
+            await wf.run_agent_task(task, run_context, None)
 
             # Verify LLMClient was initialized with the task-specific model
             MockLLMClient.assert_called_with(model="custom/agent-model")
@@ -181,7 +181,7 @@ async def test_agent_task_llm_kwargs_merging():
             wf.models = {"output_type": MockOutput}
 
             run_context = RunContext()
-            await wf.run_planning_agent(task, run_context, None)
+            await wf.run_agent_task(task, run_context, None)
 
             # Verify PlanningAgent was initialized with the merged llm_kwargs
             _, kwargs = MockPlanningAgent.call_args

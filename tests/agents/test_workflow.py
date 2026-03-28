@@ -1389,7 +1389,7 @@ class TestWorkflowPlanningAgent:
             run_context.agent_id = uuid4()
             run_context.session_id = uuid4()
 
-            await workflow.run_planning_agent(task, run_context, None)
+            await workflow.run_agent_task(task, run_context, None)
 
             # 5. Assertions
             assert run_context.data["planner_task"] == final_output
@@ -1460,7 +1460,7 @@ class TestWorkflowPlanningAgent:
             )
 
             # 4. Run the planning agent task
-            await workflow.run_planning_agent(task, run_context, queue)
+            await workflow.run_agent_task(task, run_context, queue)
 
             # 5. Check queue for streamed updates and output
             streamed_items = []
@@ -1535,7 +1535,7 @@ class TestWorkflowPlanningAgent:
             )
 
             # 4. Run the planning agent task
-            await workflow.run_planning_agent(task, run_context, queue)
+            await workflow.run_agent_task(task, run_context, queue)
 
             # 5. Check queue (should be empty because streaming is disabled for this task)
             assert queue.empty()
@@ -1609,7 +1609,7 @@ class TestWorkflowPlanningAgent:
             workflow.kernel.call_tool = AsyncMock(return_value="tool_result_value")
 
             # 4. Run the planning agent task
-            await workflow.run_planning_agent(task, run_context, queue)
+            await workflow.run_agent_task(task, run_context, queue)
 
             # 5. Check queue for streamed persisted value
             streamed_items = []
@@ -1687,7 +1687,7 @@ class TestWorkflowPlanningAgent:
             )
 
             # 4. Run
-            await workflow.run_planning_agent(task, run_context, None)
+            await workflow.run_agent_task(task, run_context, None)
 
             # 5. Verify history was fetched and passed
             mock_agent_service.get_chat_history.assert_awaited_once_with(session_id)
