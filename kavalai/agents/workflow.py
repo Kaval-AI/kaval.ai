@@ -33,11 +33,10 @@ from kavalai.agents.workflow_model import (
     AgentTask,
     AssignTask,
     RagQueryTask,
-    to_plain,
     WorkflowRunResult,
     WorkflowException,
 )
-
+from kavalai.agents.utils import to_plain
 from kavalai.agents.planning_agent import PlanningAgent
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.schema_parser import SchemaParser

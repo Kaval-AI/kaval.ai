@@ -1,6 +1,6 @@
 import unicodedata
 from pydantic import BaseModel
-from kavalai.agents.workflow_model import to_plain
+from kavalai.agents.utils import to_plain
 from kavalai.agents.utils import clean_text
 
 

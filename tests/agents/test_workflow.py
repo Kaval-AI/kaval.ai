@@ -19,9 +19,8 @@ from kavalai.agents.workflow_model import (
     RestServer,
     RestTask,
     ArgumentInfo,
-    to_plain,
 )
-
+from kavalai.agents.utils import to_plain
 
 def create_workflow_model_with_rest_server(
     username_env: str = None, password_env: str = None, method: str = "get"

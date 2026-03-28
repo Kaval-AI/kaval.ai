@@ -12,7 +12,7 @@ from kavalai.agents.task_logger import TaskLogger
 from kavalai.functionkernel import FunctionKernel
 from kavalai.llm_clients.common import Streamer
 from kavalai.llm_clients.llm_client import LLMClient
-from kavalai.agents.workflow_model import to_plain
+from kavalai.agents.utils import to_plain
 
 
 class ToolCall(BaseModel):

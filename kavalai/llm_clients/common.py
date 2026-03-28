@@ -22,7 +22,7 @@ from partial_json_parser import ensure_json
 from pydantic import BaseModel
 
 from kavalai.agents.db import ModelCallStat
-from kavalai.agents.workflow_model import to_plain
+from kavalai.agents.utils import to_plain
 
 
 def fix_json(data: str) -> Any:

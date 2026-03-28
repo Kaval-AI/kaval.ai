@@ -21,7 +21,7 @@ from sqlalchemy import select, asc
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, ModelCallStat
 from kavalai.agents.resolvers import resolve_path, find_key_recursive
-from kavalai.agents.workflow_model import to_plain
+from kavalai.agents.utils import to_plain
 from kavalai.agents.utils import clean_text
 
 

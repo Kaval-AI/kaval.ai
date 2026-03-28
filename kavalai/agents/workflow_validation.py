@@ -138,12 +138,6 @@ def validate_workflow(workflow_model: "WorkflowModel"):
 
     validate_rest_server_env_vars(workflow_model)
 
-    if not (0.0 <= workflow_model.temperature <= 2.0):
-        raise_error(
-            f"Workflow temperature must be between 0.0 and 2.0, got {workflow_model.temperature}",
-            workflow_model,
-        )
-
     available_data = {"input"}
     for task in workflow_model.tasks:
         if (
