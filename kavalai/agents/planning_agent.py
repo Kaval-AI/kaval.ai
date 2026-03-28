@@ -77,7 +77,6 @@ class PlanningAgent:
         agent_service: Optional[AgentService] = None,
         task_logger: Optional[TaskLogger] = None,
         streamer: Optional[Streamer] = None,
-        temperature: Optional[float] = None,
         stream_updates: bool = False,
         stream_output: bool = False,
         stream_persisted: bool = False,
@@ -92,7 +91,6 @@ class PlanningAgent:
         self._agent_service = agent_service
         self._task_logger = task_logger
         self._streamer = streamer
-        self._temperature = temperature
         self._stream_updates = stream_updates
         self._stream_output = stream_output
         self._stream_persisted = stream_persisted
@@ -259,7 +257,6 @@ class PlanningAgent:
             messages=messages,
             response_model=response_model,
             streamer=self._streamer,
-            temperature=self._temperature,
             **self._llm_kwargs,
         )
 

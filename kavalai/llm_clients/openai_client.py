@@ -83,15 +83,10 @@ class OpenAIClient:
                 msg["content"] = new_content
 
         # Filter out unsupported parameters for the Responses API
-        unsupported_params = {"temperature", "max_tokens", "top_p", "__line__", "__file_path__"}
         call_kwargs = {
             "model": model,
             "input": messages,
-            **{
-                k: v
-                for k, v in kwargs.items()
-                if v is not None and k not in unsupported_params
-            },
+            **{k: v for k, v in kwargs.items() if v is not None},
         }
         if response_model and issubclass(response_model, BaseModel):
             call_kwargs["text_format"] = response_model

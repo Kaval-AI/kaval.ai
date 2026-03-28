@@ -276,12 +276,6 @@ class Workflow:
             )
         )
 
-        temperature = (
-            task.temperature
-            if task.temperature is not None
-            else self.workflow_model.temperature
-        )
-
         llm_kwargs = self.workflow_model.llm_kwargs.copy()
         llm_kwargs.update(task.llm_kwargs)
 
@@ -295,7 +289,6 @@ class Workflow:
             response_model=self.get_data_type(task.output),
             messages=messages,
             streamer=streamer,
-            temperature=temperature,
             **llm_kwargs,
         )
         duration = time.perf_counter() - start_time
@@ -514,13 +507,6 @@ class Workflow:
         )
         llm_client = LLMClient(model=llm_model)
 
-        # 5. Initialize PlanningAgent
-        temperature = (
-            task.temperature
-            if task.temperature is not None
-            else self.workflow_model.temperature
-        )
-
         llm_kwargs = self.workflow_model.llm_kwargs.copy()
         llm_kwargs.update(task.llm_kwargs)
 
@@ -536,7 +522,6 @@ class Workflow:
             agent_service=self.agent_service,
             task_logger=task_logger,
             streamer=streamer,
-            temperature=temperature,
             stream_updates=task.stream_updates,
             stream_output=task.stream_output,
             stream_persisted=task.stream_persisted,

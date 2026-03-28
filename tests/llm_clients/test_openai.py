@@ -229,30 +229,3 @@ async def test_openai_compute_embeddings(openai_client):
 
     assert len(embeddings) == 2  # Assert number of embeddings
     assert len(embeddings[1]) == 1536  # Assert embedding dimension
-
-
-@pytest.mark.asyncio
-async def test_openai_chat_completions_no_temperature_none(openai_client):
-    """Test that temperature=None is not passed to the API."""
-    messages = [{"role": "user", "content": "Say 'Hi'"}]
-
-    # We mock the responses.stream call and check what was passed to it.
-    # Note: responses.stream returns an AsyncContextManager.
-    mock_stream = AsyncMock()
-    mock_stream.__aenter__.return_value = []  # Just an empty iterator for mock.
-
-    with patch.object(
-        openai_client.client.responses, "stream", return_value=mock_stream
-    ) as mock_stream_call:
-        # We wrap in try-except because the empty iterator will likely cause issues later in the function,
-        # but we only care about the call arguments of mock_stream_call.
-        try:
-            await openai_client.chat_completions(
-                model="gpt-4o-mini", messages=messages, temperature=None
-            )
-        except Exception:
-            pass
-
-        # Check call arguments.
-        args, kwargs = mock_stream_call.call_args
-        assert "temperature" not in kwargs
