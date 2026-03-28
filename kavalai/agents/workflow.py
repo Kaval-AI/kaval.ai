@@ -649,7 +649,7 @@ class Workflow:
                     break
                 # Stream the final output
                 if task.stream_output and streamer:
-                    streamer.stream_complete(
+                    await streamer.stream_complete(
                         run_context.data[task.output].model_dump_json(),
                         name=task.output,
                     )

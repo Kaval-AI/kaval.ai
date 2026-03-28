@@ -1011,13 +1011,15 @@ tasks:
     when:
       eq: [ { type: context, value: input.stop_early }, true ]
     stop: true
-    output:
+    output: output
+    inputs:
       step:
         type: literal
         value: "stopped at step 1"
   - name: Step 2
     type: combine
-    output:
+    output: output
+    inputs:
       step:
         type: literal
         value: "reached step 2"
@@ -1098,7 +1100,7 @@ tasks:
 
         result = await task
 
-        assert len(lines) == 4
+        assert len(lines) == 5
 
         running_task = StreamContent.model_validate_json(lines[0])
         assert running_task.type == "complete"
@@ -1115,10 +1117,15 @@ tasks:
         assert partial2.name == "output"
         assert partial2.value == '{"agent_response": "Hello world"}'
 
-        complete = StreamContent.model_validate_json(lines[3])
-        assert complete.type == "complete"
-        assert complete.name == "output"
-        assert complete.value == '{"agent_response": "Hello world"}'
+        complete_llm = StreamContent.model_validate_json(lines[3])
+        assert complete_llm.type == "complete"
+        assert complete_llm.name == "output"
+        assert complete_llm.value == '{"agent_response": "Hello world"}'
+
+        complete_workflow = StreamContent.model_validate_json(lines[4])
+        assert complete_workflow.type == "complete"
+        assert complete_workflow.name == "output"
+        assert complete_workflow.value == '{"agent_response":"Hello world"}'
 
         assert result.data.agent_response == "Hello world"
 
@@ -1190,7 +1197,12 @@ tasks:
         _ = await task
 
         # 4. Verify Stream Content
-        assert len(lines) >= 1
+        assert len(lines) >= 2
+
+        running_task = StreamContent.model_validate_json(lines[0])
+        assert running_task.type == "complete"
+        assert running_task.name == "running_task"
+        assert running_task.value == "tool_call"
 
         complete = StreamContent.model_validate_json(lines[-1])
         assert complete.type == "complete"
@@ -1400,9 +1412,15 @@ class TestWorkflowPlanningAgent:
             # Set up mock agent service to verify add_task call
             mock_agent_service = AsyncMock(spec=AgentService)
             workflow.agent_service = mock_agent_service
-            run_context.run_id = uuid4()
-            run_context.agent_id = uuid4()
-            run_context.session_id = uuid4()
+            workflow.task_logger.agent_service = mock_agent_service
+            # Need to update workflow's run_context because task_logger uses it
+            workflow.run_context.run_id = uuid4()
+            workflow.run_context.agent_id = uuid4()
+            workflow.run_context.session_id = uuid4()
+            # Also update the run_context being passed for consistency
+            run_context.run_id = workflow.run_context.run_id
+            run_context.agent_id = workflow.run_context.agent_id
+            run_context.session_id = workflow.run_context.session_id
 
             await workflow.run_agent_task(task, run_context, None)
 
