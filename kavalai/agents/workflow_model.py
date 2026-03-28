@@ -100,7 +100,7 @@ class LLMTask(BaseLLMTask):
     type: Literal["llm"] = "llm"
 
 
-class AgentTask(BaseTask):
+class AgentTask(BaseLLMTask):
     """AgentTask defines a multi-step agent capable of using various tools.
 
     allowed_tools: list[str] - A list of allowed tools to use in the agent.
@@ -231,10 +231,23 @@ class TemplateModel(BaseModel):
 
 
 class WorkflowModel(BaseModel):
+    """Defines a workflow model.
+
+    name: str - The name of the workflow, use agent name.
+    description: str - A description of the workflow.
+    version: str - The version of the workflow.
+    llm_model: str - Default LLM model for the workflow. Task can override this.
+    llm_kwargs: dict[str, Any] - Default LLM kwargs passed to tasks. Tasks can override this.
+    embedding_model: str - Default embedding model for the workflow.
+    rest_servers: list[RestServer] - List of REST servers.
+    mcp_servers: list[McpServer] - List of MCP servers.
+    python_functions: list[PythonFunction] - List of Python functions.
+    templates: list[TemplateModel] - List of templates that can be used to build prompts from smaller pieces.
+    tasks: list[Task] - List of tasks.
+    """
     name: str
     description: str = ""
     version: str = "1.0"
-    temperature: float = 0.0
     llm_model: Optional[str] = None
     llm_kwargs: dict[str, Any] = Field(default_factory=dict)
     embedding_model: str = "openai/text-embedding-3-small"
