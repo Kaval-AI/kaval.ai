@@ -33,6 +33,7 @@ class ArgumentInfo(BaseModel):
     'history' - retrieve from previous agent run contexts.
 
     """
+
     type: Literal["literal", "context", "history"]
     value: Optional[BaseModel | str | int | float | bool] = None
     name: Optional[str] = None
@@ -51,6 +52,7 @@ class BaseTask(BaseModel):
     stream_updates: bool - whether to send agent status updates to stream.
     stream_output: bool - whether to send the output of this task to stream.
     """
+
     name: str
     inputs: dict[str, ArgumentInfo] = {}
     output: str
@@ -61,10 +63,13 @@ class BaseTask(BaseModel):
 
     @model_validator(mode="after")
     def validate_conditions(self) -> "BaseTask":
-        if not self.when:
-            return self
+        if self.when:
+            self._validate_condition(self.when)
+        return self
+
+    def _validate_condition(self, condition: dict):
         operators = {"eq", "not_eq", "gt", "gte", "lt", "lte", "contains", "len"}
-        for key, val in self.when.items():
+        for key, val in condition.items():
             if key in operators:
                 if not isinstance(val, list) or len(val) != 2:
                     raise ValueError(f"Operator '{key}' requires a list of 2 operands.")
@@ -89,7 +94,8 @@ class BaseTask(BaseModel):
 
 
 class BaseLLMTask(BaseTask):
-    """Common properties of LLM and Agent tasks. """
+    """Common properties of LLM and Agent tasks."""
+
     prompt: str
     use_history: bool = True
     llm_model: Optional[str] = None
@@ -106,6 +112,7 @@ class AgentTask(BaseLLMTask):
     allowed_tools: list[str] - A list of allowed tools to use in the agent.
     max_steps: int - Defines the maximum amount of steps to run the agent.
     """
+
     type: Literal["agent"] = "agent"
     allowed_tools: list[str] = Field(default_factory=list)
     max_steps: int = 1
@@ -115,6 +122,7 @@ class AgentTask(BaseLLMTask):
 
 class RestTask(BaseTask):
     """Defines a REST tool call."""
+
     type: Literal["rest"] = "rest"
     tool: str
     rest_server: str
@@ -122,7 +130,8 @@ class RestTask(BaseTask):
 
 
 class McpTask(BaseTask):
-    """ Defines an MCP tool call task."""
+    """Defines an MCP tool call task."""
+
     type: Literal["mcp"] = "mcp"
     tool: str
     mcp_server: str
@@ -130,19 +139,22 @@ class McpTask(BaseTask):
 
 class PythonTask(BaseTask):
     """Defines a Python tool call task."""
+
     type: Literal["python"] = "python"
     python_tool: str
 
 
 class AssignTask(BaseTask):
-    """ Assign task creates new context variables out of existing ones."""
-    type: Literal["combine"] = "assign"
+    """Assign task creates new context variables out of existing ones."""
+
+    type: Literal["combine"] = "combine"
 
 
 class RagQueryTask(BaseTask):
     """Query RAG and store the results in context.
     TODO: refactor this under system tools.
     """
+
     type: Literal["rag_query"] = "rag_query"
     text: str
     top_k: int = 5
@@ -166,6 +178,7 @@ class RestServer(BaseModel):
 
     Note that url_env can also be read from the env file.
     """
+
     name: str
     url: Optional[str] = None
     url_env: Optional[str] = None
@@ -187,6 +200,7 @@ class RestServer(BaseModel):
 
 class McpServer(BaseModel):
     """Defines an MCP server."""
+
     name: str
     command: Optional[str] = None
     command_env: Optional[str] = None
@@ -245,6 +259,7 @@ class WorkflowModel(BaseModel):
     templates: list[TemplateModel] - List of templates that can be used to build prompts from smaller pieces.
     tasks: list[Task] - List of tasks.
     """
+
     name: str
     description: str = ""
     version: str = "1.0"

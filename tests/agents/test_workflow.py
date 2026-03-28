@@ -838,8 +838,7 @@ tasks:
       search_results: { type: literal, value: "initial results" }
     output: output
 """
-        wf1 = Workflow.from_yaml(yaml_1)
-        wf1.agent_service = service
+        wf1 = Workflow.from_yaml(yaml_1, agent_service=service)
 
         res1 = await wf1.run(
             input_data={"user_message": "hello"}, external_id="session-123"
@@ -869,8 +868,7 @@ tasks:
       current_msg: { type: context, value: input.user_message }
     output: output
 """
-        wf2 = Workflow.from_yaml(yaml_2)
-        wf2.agent_service = service
+        wf2 = Workflow.from_yaml(yaml_2, agent_service=service)
 
         res2 = await wf2.run(input_data={"user_message": "bye"}, session_id=session_id)
 
@@ -895,8 +893,7 @@ tasks:
     inputs: { status: { type: literal, value: "completed" } }
     output: output
 """
-        wf1 = Workflow.from_yaml(yaml_1)
-        wf1.agent_service = service
+        wf1 = Workflow.from_yaml(yaml_1, service)
         res1 = await wf1.run(input_data={"msg": "start"}, external_id="session-456")
         session_id = res1.session_id
 
@@ -917,8 +914,7 @@ tasks:
       result: { type: literal, value: "it worked" }
     output: output
 """
-        wf2 = Workflow.from_yaml(yaml_2)
-        wf2.agent_service = service
+        wf2 = Workflow.from_yaml(yaml_2, service)
         res2 = await wf2.run(input_data={"msg": "next"}, session_id=session_id)
 
         assert res2.data is not None
@@ -941,8 +937,7 @@ tasks:
       result: { type: literal, value: "should not happen" }
     output: output
 """
-        wf3 = Workflow.from_yaml(yaml_3)
-        wf3.agent_service = service
+        wf3 = Workflow.from_yaml(yaml_3, service)
         res3 = await wf3.run(input_data={"msg": "next"}, session_id=session_id)
         assert res3.data is None
 
