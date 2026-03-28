@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from unittest.mock import AsyncMock
 
 from kavalai.agents.run_context import RunContext
-from kavalai.agents.workflow_model import PythonTask, TypeInputInfo
+from kavalai.agents.workflow_model import PythonTask, ArgumentInfo
 
 
 class MockModel(BaseModel):
@@ -23,7 +23,7 @@ async def test_resolve_context_value():
 @pytest.mark.asyncio
 async def test_resolve_input_info_literal():
     rc = RunContext()
-    info = TypeInputInfo(type="literal", value="hello")
+    info = ArgumentInfo(type="literal", value="hello")
     assert await rc.resolve_input_info(info) == "hello"
 
 
@@ -32,15 +32,15 @@ async def test_resolve_input_info_context():
     rc = RunContext(data={"input": {"text": "world"}})
 
     # Using value as path
-    info = TypeInputInfo(type="context", value="input.text")
+    info = ArgumentInfo(type="context", value="input.text")
     assert await rc.resolve_input_info(info) == "world"
 
     # Using name as path
-    info = TypeInputInfo(type="context", name="input.text")
+    info = ArgumentInfo(type="context", name="input.text")
     assert await rc.resolve_input_info(info) == "world"
 
     # Path is None
-    info = TypeInputInfo(type="context")
+    info = ArgumentInfo(type="context")
     assert await rc.resolve_input_info(info) is None
 
 
@@ -53,12 +53,12 @@ async def test_resolve_input_info_history():
     rc = RunContext(session_id=session_id, agent_service=mock_service)
 
     # Using value
-    info = TypeInputInfo(type="history", value="some_key")
+    info = ArgumentInfo(type="history", value="some_key")
     assert await rc.resolve_input_info(info) == "history_val"
     mock_service.get_history_value.assert_called_with(session_id, "some_key")
 
     # Using name
-    info = TypeInputInfo(type="history", name="other_key")
+    info = ArgumentInfo(type="history", name="other_key")
     assert await rc.resolve_input_info(info) == "history_val"
     mock_service.get_history_value.assert_called_with(session_id, "other_key")
 
@@ -66,7 +66,7 @@ async def test_resolve_input_info_history():
 @pytest.mark.asyncio
 async def test_resolve_input_info_history_missing_service(caplog):
     rc = RunContext(session_id=uuid4())
-    info = TypeInputInfo(type="history", value="key")
+    info = ArgumentInfo(type="history", value="key")
     assert await rc.resolve_input_info(info) is None
     assert (
         "Cannot load from history for key: agent_service or session_id not set"
@@ -81,9 +81,9 @@ async def test_prepare_tool_inputs():
         name="test_task",
         python_tool="test_tool",
         inputs={
-            "lit": TypeInputInfo(type="literal", value="fixed"),
-            "ctx": TypeInputInfo(type="context", value="val"),
-            "implicit": TypeInputInfo(type="context"),  # should use name "implicit"
+            "lit": ArgumentInfo(type="literal", value="fixed"),
+            "ctx": ArgumentInfo(type="context", value="val"),
+            "implicit": ArgumentInfo(type="context"),  # should use name "implicit"
         },
     )
     # Patch implicit context to match data
@@ -100,7 +100,7 @@ async def test_prepare_tool_inputs_with_pydantic_model():
     task = PythonTask(
         name="test_task",
         python_tool="test_tool",
-        inputs={"mod": TypeInputInfo(type="literal", value=model_instance)},
+        inputs={"mod": ArgumentInfo(type="literal", value=model_instance)},
     )
 
     inputs = await rc.prepare_tool_inputs(task)

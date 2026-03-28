@@ -23,7 +23,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from kavalai.agents.resolvers import resolve_path
-from kavalai.agents.workflow_model import Task, TypeInputInfo
+from kavalai.agents.workflow_model import Task, ArgumentInfo
 
 
 class RunContext(BaseModel):
@@ -104,7 +104,7 @@ class RunContext(BaseModel):
 
         return "".join(pieces)
 
-    async def resolve_input_info(self, info: TypeInputInfo):
+    async def resolve_input_info(self, info: ArgumentInfo):
         """Resolve a TypeInputInfo to its actual value."""
         if info.type == "literal":
             return info.value
@@ -170,7 +170,7 @@ class RunContext(BaseModel):
                 for operand in val:
                     if isinstance(operand, dict) and "type" in operand:
                         # It's a TypeInputInfo
-                        info = TypeInputInfo(**operand)
+                        info = ArgumentInfo(**operand)
                         operands.append(await self.resolve_input_info(info))
                     else:
                         operands.append(operand)
@@ -180,21 +180,21 @@ class RunContext(BaseModel):
             elif key == "is_null":
                 operand = val
                 if isinstance(operand, dict) and "type" in operand:
-                    info = TypeInputInfo(**operand)
+                    info = ArgumentInfo(**operand)
                     operand = await self.resolve_input_info(info)
                 return operand is None
 
             elif key == "is_not_null":
                 operand = val
                 if isinstance(operand, dict) and "type" in operand:
-                    info = TypeInputInfo(**operand)
+                    info = ArgumentInfo(**operand)
                     operand = await self.resolve_input_info(info)
                 return operand is not None
 
             elif key == "is_true":
                 operand = val
                 if isinstance(operand, dict) and "type" in operand:
-                    info = TypeInputInfo(**operand)
+                    info = ArgumentInfo(**operand)
                     operand = await self.resolve_input_info(info)
                 return bool(operand)
 

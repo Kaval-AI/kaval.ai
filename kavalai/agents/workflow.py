@@ -31,7 +31,7 @@ from kavalai.agents.workflow_model import (
     McpTask,
     PythonTask,
     AgentTask,
-    CombineTask,
+    AssignTask,
     RagQueryTask,
     to_plain,
     WorkflowRunResult,
@@ -453,7 +453,7 @@ class Workflow:
             )
 
     async def run_combine(
-        self, task: CombineTask, run_context: RunContext, queue: asyncio.Queue | None
+        self, task: AssignTask, run_context: RunContext, queue: asyncio.Queue | None
     ):
         """Combine context values into an output dict (no LLM or tool call)."""
         result = {}
@@ -758,7 +758,7 @@ class Workflow:
                         await self.run_python_tool(task, run_context, queue)
                     elif isinstance(task, RestTask):
                         await self.run_rest_tool(task, run_context, queue)
-                    elif isinstance(task, CombineTask):
+                    elif isinstance(task, AssignTask):
                         await self.run_combine(task, run_context, queue)
                     elif isinstance(task, RagQueryTask):
                         await self.run_rag_task(task, run_context, queue)

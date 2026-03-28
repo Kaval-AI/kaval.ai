@@ -5,7 +5,7 @@ from kavalai.agents.workflow import Workflow
 from kavalai.agents.workflow_model import (
     WorkflowModel,
     McpTask,
-    TypeInputInfo,
+    ArgumentInfo,
     McpServer,
 )
 
@@ -89,14 +89,14 @@ async def test_workflow_mcp_session_reuse(monkeypatch):
                 name="call1",
                 tool="echo",
                 mcp_server="demo",
-                inputs={"message": TypeInputInfo(type="context", value="input.msg")},
+                inputs={"message": ArgumentInfo(type="context", value="input.msg")},
                 output="output1",
             ),
             McpTask(
                 name="call2",
                 tool="echo",
                 mcp_server="demo",
-                inputs={"message": TypeInputInfo(type="context", value="input.msg")},
+                inputs={"message": ArgumentInfo(type="context", value="input.msg")},
                 output="output",
             ),
         ],
@@ -146,7 +146,7 @@ async def test_workflow_mcp_http_support(monkeypatch):
                 name="call",
                 tool="echo",
                 mcp_server="demo",
-                inputs={"message": TypeInputInfo(type="context", value="input.msg")},
+                inputs={"message": ArgumentInfo(type="context", value="input.msg")},
                 output="output",
             )
         ],

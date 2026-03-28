@@ -18,7 +18,7 @@ import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from kavalai.agents.workflow_model import WorkflowModel, TypeInputInfo
+    from kavalai.agents.workflow_model import WorkflowModel, ArgumentInfo
 
 
 def validate_rest_server_env_vars(workflow_model: "WorkflowModel"):
@@ -116,7 +116,7 @@ def validate_rest_server_env_vars(workflow_model: "WorkflowModel"):
             )
 
 
-def get_root_context_name(info: "TypeInputInfo", fallback: str) -> str:
+def get_root_context_name(info: "ArgumentInfo", fallback: str) -> str:
     """Extract the root context name from a TypeInputInfo (e.g., 'input' from 'input.user_message')."""
     path = info.value or info.name or fallback
     return str(path).split(".")[0]

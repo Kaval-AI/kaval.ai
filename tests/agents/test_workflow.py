@@ -18,7 +18,7 @@ from kavalai.agents.workflow_model import (
     WorkflowException,
     RestServer,
     RestTask,
-    TypeInputInfo,
+    ArgumentInfo,
     to_plain,
 )
 
@@ -46,7 +46,7 @@ def create_workflow_model_with_rest_server(
         tasks=[
             RestTask(
                 name="test_task",
-                inputs={"query": TypeInputInfo(type="context", name="input")},
+                inputs={"query": ArgumentInfo(type="context", name="input")},
                 output="output",
                 tool="test_tool",
                 rest_server="test_server",
@@ -228,7 +228,7 @@ class TestWorkflowTemperatureValidation:
                     tool="search",
                     rest_server="test_server",
                     method="post",
-                    inputs={"input": TypeInputInfo(type="context", value="input")},
+                    inputs={"input": ArgumentInfo(type="context", value="input")},
                     output="output_model",
                 )
             ],

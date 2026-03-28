@@ -16,94 +16,55 @@ limitations under the License.
 
 from typing import Optional, Literal, Union, Annotated, Any
 from uuid import UUID
-from datetime import datetime
-from pydantic import BaseModel, model_validator, Field, PrivateAttr, ConfigDict
 
-from .utils import clean_text
-
-
-def to_plain(obj):
-    """Recursively convert Pydantic models, dicts, and lists into plain JSON-serializable types."""
-    if isinstance(obj, str):
-        return clean_text(obj)
-    if isinstance(obj, BaseModel):
-        return to_plain(obj.model_dump())
-    if isinstance(obj, (datetime, UUID)):
-        return str(obj)
-    if isinstance(obj, dict):
-        res = {}
-        for k, v in obj.items():
-            k = clean_text(str(k))
-            # Filters potential internal attributes that might not be serializable or cause issues.
-            if not k.startswith("_"):
-                res[k] = to_plain(v)
-        return res
-    if isinstance(obj, (list, tuple)):
-        return [to_plain(v) for v in obj]
-    return obj
+from pydantic import BaseModel, model_validator, Field
 
 
 class WorkflowException(Exception):
     pass
 
 
-class YamlModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", protected_namespaces=())
-    _line_number: Optional[int] = PrivateAttr(default=None)
-    _file_path: Optional[str] = PrivateAttr(default=None)
+class ArgumentInfo(BaseModel):
+    """Describes input arguments in workflow YAML files.
 
-    def __init__(self, **data: Any):
-        line = data.pop("__line__", None)
-        file_path = data.pop("__file_path__", None)
-        super().__init__(**data)
-        self._line_number = line
-        self._file_path = file_path
+    The 'type' field describes where the input argument should be retrieved from.
+    'literal' - use value as specified
+    'context' - retrieve from agent run context
+    'history' - retrieve from previous agent run contexts.
 
-    model_config = ConfigDict(extra="ignore")
-
-    @property
-    def line_number(self) -> Optional[int]:
-        return self._line_number
-
-    @property
-    def file_path(self) -> Optional[str]:
-        return self._file_path
-
-
-class TypeInputInfo(YamlModel):
+    """
     type: Literal["literal", "context", "history"]
     value: Optional[BaseModel | str | int | float | bool] = None
     name: Optional[str] = None
 
 
-class BaseTask(YamlModel):
+class BaseTask(BaseModel):
+    """Common task functionality.
+
+    Parameters
+    ==========
+    name: str - The name of the task.
+    inputs: dict[str, ArgumentInfo] - A dictionary describing where to load
+        the input arguments from.
+    output: str - the name of the output variable.
+    stop: bool - whether to stop the workflow after this task.
+    stream_updates: bool - whether to send agent status updates to stream.
+    stream_output: bool - whether to send the output of this task to stream.
+    """
     name: str
-    inputs: dict[str, TypeInputInfo] = {}
-    output: str | dict[str, TypeInputInfo] = ""
+    inputs: dict[str, ArgumentInfo] = {}
+    output: str
     when: Optional[dict] = None
     stop: bool = False
     stream_updates: bool = False
     stream_output: bool = False
 
-    @model_validator(mode="before")
-    @classmethod
-    def check_deprecated_stream(cls, data: Any) -> Any:
-        if isinstance(data, dict) and "stream" in data:
-            raise ValueError(
-                "The 'stream' field is deprecated and no longer supported. "
-                "Please use 'stream_updates' and/or 'stream_output' instead."
-            )
-        return data
-
     @model_validator(mode="after")
     def validate_conditions(self) -> "BaseTask":
-        if self.when:
-            self._validate_condition(self.when)
-        return self
-
-    def _validate_condition(self, condition: dict):
+        if not self.when:
+            return self
         operators = {"eq", "not_eq", "gt", "gte", "lt", "lte", "contains", "len"}
-        for key, val in condition.items():
+        for key, val in self.when.items():
             if key in operators:
                 if not isinstance(val, list) or len(val) != 2:
                     raise ValueError(f"Operator '{key}' requires a list of 2 operands.")
@@ -124,18 +85,36 @@ class BaseTask(YamlModel):
                 if not isinstance(val, dict):
                     raise ValueError("'not' requires a single condition dictionary.")
                 self._validate_condition(val)
+        return self
 
 
-class LLMTask(BaseTask):
-    type: Literal["llm"] = "llm"
+class BaseLLMTask(BaseTask):
+    """Common properties of LLM and Agent tasks. """
     prompt: str
-    temperature: Optional[float] = None
     use_history: bool = True
     llm_model: Optional[str] = None
     llm_kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
+class LLMTask(BaseLLMTask):
+    type: Literal["llm"] = "llm"
+
+
+class AgentTask(BaseTask):
+    """AgentTask defines a multi-step agent capable of using various tools.
+
+    allowed_tools: list[str] - A list of allowed tools to use in the agent.
+    max_steps: int - Defines the maximum amount of steps to run the agent.
+    """
+    type: Literal["agent"] = "agent"
+    allowed_tools: list[str] = Field(default_factory=list)
+    max_steps: int = 1
+    timeout: Optional[int] = None
+    stream_persisted: bool = False
+
+
 class RestTask(BaseTask):
+    """Defines a REST tool call."""
     type: Literal["rest"] = "rest"
     tool: str
     rest_server: str
@@ -143,34 +122,27 @@ class RestTask(BaseTask):
 
 
 class McpTask(BaseTask):
+    """ Defines an MCP tool call task."""
     type: Literal["mcp"] = "mcp"
     tool: str
     mcp_server: str
 
 
 class PythonTask(BaseTask):
+    """Defines a Python tool call task."""
     type: Literal["python"] = "python"
     python_tool: str
 
 
-class AgentTask(BaseTask):
-    type: Literal["agent"] = "agent"
-    max_steps: int = 1
-    allowed_tools: list[str] = Field(default_factory=list)
-    timeout: Optional[int] = None
-    prompt: Optional[str] = None
-    temperature: Optional[float] = None
-    use_history: bool = False
-    stream_persisted: bool = False
-    llm_model: Optional[str] = None
-    llm_kwargs: dict[str, Any] = Field(default_factory=dict)
-
-
-class CombineTask(BaseTask):
-    type: Literal["combine"] = "combine"
+class AssignTask(BaseTask):
+    """ Assign task creates new context variables out of existing ones."""
+    type: Literal["combine"] = "assign"
 
 
 class RagQueryTask(BaseTask):
+    """Query RAG and store the results in context.
+    TODO: refactor this under system tools.
+    """
     type: Literal["rag_query"] = "rag_query"
     text: str
     top_k: int = 5
@@ -179,13 +151,21 @@ class RagQueryTask(BaseTask):
     keep_best: bool = False
 
 
+# Define combined Task data type using type field as a discriminator.
 Task = Annotated[
-    Union[LLMTask, RestTask, McpTask, PythonTask, AgentTask, CombineTask, RagQueryTask],
+    Union[LLMTask, RestTask, McpTask, PythonTask, AgentTask, AssignTask, RagQueryTask],
     Field(discriminator="type"),
 ]
 
 
-class RestServer(YamlModel):
+class RestServer(BaseModel):
+    """Defines a REST server.
+
+    We also support HTTP Basic Auth for REST server endpoints, which are defined via
+    environment variables username_env and password_env.
+
+    Note that url_env can also be read from the env file.
+    """
     name: str
     url: Optional[str] = None
     url_env: Optional[str] = None
@@ -205,7 +185,8 @@ class RestServer(YamlModel):
         return self
 
 
-class McpServer(YamlModel):
+class McpServer(BaseModel):
+    """Defines an MCP server."""
     name: str
     command: Optional[str] = None
     command_env: Optional[str] = None
@@ -239,17 +220,17 @@ class McpServer(YamlModel):
         return self
 
 
-class PythonFunction(YamlModel):
+class PythonFunction(BaseModel):
     name: str
     path: str
 
 
-class TemplateModel(YamlModel):
+class TemplateModel(BaseModel):
     name: str
     value: str
 
 
-class WorkflowModel(YamlModel):
+class WorkflowModel(BaseModel):
     name: str
     description: str = ""
     version: str = "1.0"
