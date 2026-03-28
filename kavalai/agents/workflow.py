@@ -97,7 +97,10 @@ class Workflow:
         self.env = Env()
         self.env.read_env()
         validate_rest_server_env_vars(self.workflow_model)
-        self.task_logger = TaskLogger(agent_service)
+        self.run_context = RunContext(agent_service=agent_service)
+        self.task_logger = TaskLogger(
+            agent_service=agent_service, run_context=self.run_context
+        )
 
         # Initialize FunctionKernel and register all servers
         self.kernel = FunctionKernel()
@@ -160,7 +163,7 @@ class Workflow:
             The agent service for storing results in a DB.
         """
         try:
-            data = yaml.load(yaml_string)  # nosec B506
+            data = yaml.load(yaml_string, Loader=yaml.SafeLoader)  # nosec B506
             workflow_model = WorkflowModel(**data)
             return cls(
                 workflow_model, agent_service=agent_service, yaml_content=yaml_string
@@ -614,7 +617,7 @@ class Workflow:
     ) -> WorkflowRunResult:
         agent_service = self.agent_service
         parsed_input = self.get_data_type("input")(**input_data)
-        run_context = RunContext(agent_service=agent_service)
+        run_context = self.run_context
         run_context.data["input"] = parsed_input
         run_context.templates = {t.name: t.value for t in self.workflow_model.templates}
 

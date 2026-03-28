@@ -15,104 +15,83 @@ limitations under the License.
 """
 
 import os
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from kavalai.agents.workflow_model import WorkflowModel, ArgumentInfo
+from kavalai.agents.workflow_model import WorkflowException
+from kavalai.agents.workflow_model import WorkflowModel, ArgumentInfo
 
 
-def validate_rest_server_env_vars(workflow_model: "WorkflowModel"):
+def validate_rest_server_env_vars(workflow_model: WorkflowModel):
     """Validate that environment variables for REST server auth are defined."""
-    from kavalai.agents.workflow_model import WorkflowException
-    from kavalai.agents.workflow import format_yaml_error
-
-    def raise_error(message, model):
-        # We don't have yaml_content here easily, but we can still provide line/file
-        raise WorkflowException(
-            format_yaml_error(message, model.line_number, model.file_path)
-        )
 
     for server in workflow_model.rest_servers:
         # 1. URL Configuration validation
         if server.url and server.url_env:
-            raise_error(
-                f"REST server '{server.name}': Only one of 'url' or 'url_env' can be specified.",
-                server,
+            raise WorkflowException(
+                f"REST server '{server.name}': Only one of 'url' or 'url_env' can be specified."
             )
         if not server.url and not server.url_env:
-            raise_error(
-                f"REST server '{server.name}': Either 'url' or 'url_env' must be specified.",
-                server,
+            raise WorkflowException(
+                f"REST server '{server.name}': Either 'url' or 'url_env' must be specified."
             )
 
         # 2. URL Resolution check from environment (no mutation)
         if server.url_env:
             if server.url_env not in os.environ:
-                raise_error(
+                raise WorkflowException(
                     f"Environment variable '{server.url_env}' for REST server "
-                    f"'{server.name}' URL is not defined.",
-                    server,
+                    f"'{server.name}' URL is not defined."
                 )
             url_val = os.environ[server.url_env]
             # Check format of the env var value
             if not (url_val.startswith("http://") or url_val.startswith("https://")):
-                raise_error(
+                raise WorkflowException(
                     f"REST server '{server.name}' has an invalid URL from {server.url_env}: {url_val}. "
                     f"It must start with http:// or https://",
-                    server,
                 )
 
         # 3. URL Format validation for static URL
         if server.url and not (
             server.url.startswith("http://") or server.url.startswith("https://")
         ):
-            raise_error(
+            raise WorkflowException(
                 f"REST server '{server.name}' has an invalid URL: {server.url}. "
                 f"It must start with http:// or https://",
-                server,
             )
 
         # 4. Auth validation
         if server.username_env and server.password_env:
             if server.username_env not in os.environ:
-                raise_error(
+                raise WorkflowException(
                     f"Environment variable '{server.username_env}' for REST server "
                     f"'{server.name}' username is not defined.",
-                    server,
                 )
             if server.password_env not in os.environ:
-                raise_error(
+                raise WorkflowException(
                     f"Environment variable '{server.password_env}' for REST server "
                     f"'{server.name}' password is not defined.",
-                    server,
                 )
         elif server.username_env or server.password_env:
-            # Only one of them is defined - this is an error
-            raise_error(
+            raise WorkflowException(
                 f"REST server '{server.name}' must have both username_env and "
                 f"password_env defined, or neither.",
-                server,
             )
 
     for server in workflow_model.mcp_servers:
         if server.command_env:
             if server.command_env not in os.environ:
-                raise_error(
+                raise WorkflowException(
                     f"Environment variable '{server.command_env}' for MCP server "
                     f"'{server.name}' command is not defined.",
-                    server,
                 )
         elif server.url_env:
             if server.url_env not in os.environ:
-                raise_error(
+                raise WorkflowException(
                     f"Environment variable '{server.url_env}' for MCP server "
                     f"'{server.name}' URL is not defined.",
-                    server,
                 )
         elif not server.command and not server.url:
-            raise_error(
+            raise WorkflowException(
                 f"MCP server '{server.name}' must have either 'command', 'command_env', 'url', or 'url_env'.",
-                server,
             )
 
 
@@ -128,12 +107,6 @@ def validate_workflow(workflow_model: "WorkflowModel"):
         McpTask,
         AgentTask,
     )
-    from kavalai.agents.workflow import format_yaml_error
-
-    def raise_error(message, model):
-        raise WorkflowException(
-            format_yaml_error(message, model.line_number, model.file_path)
-        )
 
     validate_rest_server_env_vars(workflow_model)
 
@@ -142,16 +115,8 @@ def validate_workflow(workflow_model: "WorkflowModel"):
         # Check outputs
         if isinstance(task.output, str) and task.output:
             if task.output not in workflow_model.data_types:
-                raise_error(
-                    f"output '{task.output}' in task '{task.name}' is not defined in data_types.",
-                    task,
-                )
-        elif isinstance(task.output, dict):
-            # For combine task with dict output, we expect it to produce 'output' data type
-            if "output" not in workflow_model.data_types:
-                raise_error(
-                    f"Task '{task.name}' has dict output but 'output' data type is not defined.",
-                    task,
+                raise WorkflowException(
+                    f"output '{task.output}' in task '{task.name}' is not defined in data_types."
                 )
 
         # Check inputs
@@ -159,19 +124,16 @@ def validate_workflow(workflow_model: "WorkflowModel"):
             if input_info.type == "context":
                 root_name = get_root_context_name(input_info, input_name)
                 if root_name not in available_data:
-                    raise_error(
+                    raise WorkflowException(
                         f"input '{root_name}' in task '{task.name}' is not available. "
-                        f"Available context: {sorted(list(available_data))}",
-                        task,
+                        f"Available context: {sorted(list(available_data))}"
                     )
-
         # Check MCP server existence
         if isinstance(task, McpTask):
             mcp_server_names = [s.name for s in workflow_model.mcp_servers]
             if task.mcp_server not in mcp_server_names:
-                raise_error(
-                    f"Task '{task.name}' refers to undefined MCP server '{task.mcp_server}'.",
-                    task,
+                raise WorkflowException(
+                    f"Task '{task.name}' refers to undefined MCP server '{task.mcp_server}'."
                 )
 
         # Check allowed_tools existence
@@ -184,18 +146,16 @@ def validate_workflow(workflow_model: "WorkflowModel"):
                 if tool_uri.startswith("mcp://"):
                     server_name = tool_uri.replace("mcp://", "").split(".")[0]
                     if server_name not in mcp_server_names:
-                        raise_error(
-                            f"Task '{task.name}' refers to undefined allowed MCP server in '{tool_uri}'.",
-                            task,
+                        raise WorkflowException(
+                            f"Task '{task.name}' refers to undefined allowed MCP server in '{tool_uri}'."
                         )
                 elif tool_uri.startswith("rest://"):
                     server_name = tool_uri.replace("rest://", "").split(".")[0]
                     if server_name not in rest_server_names:
-                        raise_error(
-                            f"Task '{task.name}' refers to undefined allowed REST server in '{tool_uri}'.",
-                            task,
+                        raise WorkflowException(
+                            f"Task '{task.name}' refers to undefined allowed REST server in '{tool_uri}'."
                         )
 
-        # After task week, its output is available for next tasks
+        # After task, its output is available for next tasks
         if isinstance(task.output, str) and task.output:
             available_data.add(task.output)
