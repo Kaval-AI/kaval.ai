@@ -528,11 +528,10 @@ class Workflow:
         *,
         session_id: Optional[UUID] = None,
         external_id: Optional[str] = None,
-        agent_service: AgentService,
         input_data: dict,
     ):
         # Get or create the agent definition
-        agent = await agent_service.get_or_create_agent(
+        agent = await self.agent_service.get_or_create_agent(
             name=self.workflow_model.name,
             description=self.workflow_model.description,
             input_schema=self.workflow_model.data_types.get("input"),
@@ -544,20 +543,20 @@ class Workflow:
         # Get or create session (using UUID or string external_id).
         # Not to be confused with sqlalchemy sessions.
         if session_id:
-            session = await agent_service.get_or_create_session(
+            session = await self.agent_service.get_or_create_session(
                 agent_id=agent.id, session_id=session_id
             )
             if not session:
                 raise WorkflowException(f"Session with ID {session_id} not found")
             self.run_context.session_id = session.id
         else:
-            session = await agent_service.get_or_create_session(
+            session = await self.agent_service.get_or_create_session(
                 agent_id=agent.id, session_id=None, external_id=external_id
             )
             self.run_context.session_id = session.id
 
         # Creates the specific Run record for this execution
-        run = await agent_service.create_run(
+        run = await self.agent_service.create_run(
             session_id=self.run_context.session_id, input_data=input_data
         )
         self.run_context.run_id = run.id
@@ -624,7 +623,6 @@ class Workflow:
                 session_id=session_id,
                 external_id=external_id,
                 input_data=input_data,
-                agent_service=agent_service,
             )
             # Store the user message in agent_service.
             user_msg = getattr(parsed_input, "user_message", str(input_data))
@@ -647,23 +645,18 @@ class Workflow:
                         f"Stopping workflow after task <{task.name}> due to stop: True"
                     )
                     break
-                # Stream the final output
-                if task.stream_output and streamer:
-                    await streamer.stream_complete(
-                        run_context.data[task.output].model_dump_json(),
-                        name=task.output,
-                    )
         finally:
             # Cleanup MCP sessions/clients using FunctionKernel
             await self.kernel.close()
 
         # Update database
-        output_model = run_context.data.get("output")
+        output_data = run_context.data.get("output")
+
         if agent_service:
             # Persist final output_data and full execution context into the Run
             serialized_context = to_plain(run_context.data)
             serialized_output = (
-                to_plain(output_model) if output_model is not None else None
+                to_plain(output_data) if output_data is not None else None
             )
 
             await agent_service.update_run(
@@ -673,8 +666,8 @@ class Workflow:
             )
 
             # Also log assistant message if we have a final output with a textual response
-            if output_model is not None:
-                agent_resp = getattr(output_model, "agent_response", "")
+            if output_data is not None:
+                agent_resp = getattr(output_data, "agent_response", "")
                 await agent_service.add_chat_message(
                     agent_id=run_context.agent_id,
                     session_id=run_context.session_id,
@@ -689,6 +682,6 @@ class Workflow:
 
         return WorkflowRunResult(
             session_id=run_context.session_id,
-            data=output_model,
+            data=output_data,
             run_context=run_context,
         )

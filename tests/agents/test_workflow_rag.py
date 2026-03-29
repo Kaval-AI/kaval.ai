@@ -33,7 +33,11 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
 
     # 2. Define Workflow and Task
     task = RagQueryTask(
-        name="rag_task", text="search query", top_k=3, collection_name="test-collection"
+        name="rag_task",
+        text="search query",
+        top_k=3,
+        collection_name="test-collection",
+        output="output",
     )
 
     workflow_model = WorkflowModel(
@@ -100,7 +104,7 @@ async def test_run_rag_task_with_context_resolution(agents_session_maker, monkey
     mock_query = AsyncMock(return_value=mock_results)
     monkeypatch.setattr("kavalai.agents.workflow.RagService.query", mock_query)
 
-    task = RagQueryTask(name="rag_task", text="input.query", top_k=5)
+    task = RagQueryTask(name="rag_task", text="input.query", top_k=5, output="output")
 
     workflow_model = WorkflowModel(
         name="test_workflow",
@@ -126,7 +130,7 @@ async def test_run_rag_task_with_context_resolution(agents_session_maker, monkey
 
 @pytest.mark.asyncio
 async def test_run_rag_task_empty_input(agents_session_maker, monkeypatch):
-    task = RagQueryTask(name="rag_task", text="")
+    task = RagQueryTask(name="rag_task", text="", output="output")
 
     workflow_model = WorkflowModel(
         name="test_workflow",
@@ -151,7 +155,7 @@ async def test_run_rag_task_empty_input(agents_session_maker, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_run_rag_task_resolved_empty_input(agents_session_maker, monkeypatch):
-    task = RagQueryTask(name="rag_task", text="input.query")
+    task = RagQueryTask(name="rag_task", text="input.query", output="output")
 
     workflow_model = WorkflowModel(
         name="test_workflow",
@@ -180,7 +184,7 @@ async def test_workflow_dispatch_to_rag_task(agents_session_maker, monkeypatch):
     mock_run_rag_task = AsyncMock()
     monkeypatch.setattr(Workflow, "run_rag_task", mock_run_rag_task)
 
-    task = RagQueryTask(name="rag_task", text="query")
+    task = RagQueryTask(name="rag_task", text="query", output="output")
 
     workflow_model = WorkflowModel(
         name="test_workflow",
