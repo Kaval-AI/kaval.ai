@@ -1190,17 +1190,12 @@ tasks:
         _ = await task
 
         # 4. Verify Stream Content
-        # assert len(lines) ==1
+        assert len(lines) == 1
 
         running_task = StreamContent.model_validate_json(lines[0])
         assert running_task.type == "complete"
         assert running_task.name == "running_task"
         assert running_task.value == "tool_call"
-
-        complete = StreamContent.model_validate_json(lines[-1])
-        assert complete.type == "complete"
-        assert complete.name == "output"
-        assert complete.value == '{"agent_response":"Tool response"}'
 
     @pytest.mark.asyncio
     async def test_workflow_python_function_registration(self, monkeypatch):
@@ -1208,11 +1203,6 @@ tasks:
         # Use a simple function for testing
         def my_test_concat(a: str, b: str) -> str:
             return a + b
-
-        # Register it in a way that it can be imported or mock it.
-        # Actually we can just use a builtin that is simpler or mock the import.
-        # Let's use os.path.join but match its expected signature if we can figure it out.
-        # Or just use a simple mock function.
 
         import sys
         import types
