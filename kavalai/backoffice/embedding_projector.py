@@ -21,10 +21,11 @@ import json
 import tempfile
 import os
 from typing import Callable, AsyncContextManager, Optional
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sklearn.decomposition import IncrementalPCA
 import numpy as np
+from loguru import logger
 
 from kavalai.agents.db import RagIndex
 from kavalai.backoffice.db import Project, ProjectCache
@@ -35,6 +36,7 @@ async def download_rag_index(
     session_maker: Callable[[], AsyncContextManager[AsyncSession]],
     collection_name: str,
     output_csv_path: str,
+    streamer: Optional[Streamer] = None,
 ):
     """
     Downloads rag index to specified CSV file using a streaming cursor.
@@ -44,8 +46,17 @@ async def download_rag_index(
         session_maker: A callable that returns an async session context manager.
         collection_name: The name of the collection to download.
         output_csv_path: The path where the CSV file will be saved.
+        streamer: Optional streamer for progress reporting.
     """
     async with session_maker() as session:
+        # Get total count
+        count_stmt = (
+            select(func.count())
+            .select_from(RagIndex)
+            .where(RagIndex.collection_name == collection_name)
+        )
+        total_count = await session.scalar(count_stmt) or 0
+
         stmt = (
             select(RagIndex)
             .where(RagIndex.collection_name == collection_name)
@@ -55,14 +66,29 @@ async def download_rag_index(
 
         with open(output_csv_path, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.writer(csvfile)
+            count = 0
             async for item in result:
                 if item.embedding:
                     row = [item.source_id] + list(item.embedding)
                     writer.writerow(row)
+                    count += 1
+                    if count % 100 == 0:
+                        msg = f"Downloaded {count}/{total_count} items..."
+                        logger.info(msg)
+                        if streamer:
+                            await streamer.stream_partial(msg)
+
+            msg = f"Finished downloading {count}/{total_count} items."
+            logger.info(msg)
+            if streamer:
+                await streamer.stream_partial(msg)
 
 
-def compute_pca(
-    csv_path: str, n_components: int = 2, batch_size: int = 100
+async def compute_pca(
+    csv_path: str,
+    n_components: int = 2,
+    batch_size: int = 100,
+    streamer: Optional[Streamer] = None,
 ) -> IncrementalPCA:
     """
     Given the CSV file, computes PCA model from the dataset using scikit-learn's IncrementalPCA.
@@ -72,6 +98,7 @@ def compute_pca(
         csv_path: Path to the CSV file containing labels and embeddings.
         n_components: Number of principal components to compute.
         batch_size: The number of rows to process at once for incremental training.
+        streamer: Optional streamer for progress reporting.
 
     Returns:
         IncrementalPCA: The fitted PCA model.
@@ -80,6 +107,8 @@ def compute_pca(
     ipca = IncrementalPCA(n_components=n_components)
     batch = []
     has_data = False
+    row_count = 0
+    batch_count = 0
 
     with open(csv_path, "r", encoding="utf-8") as csvfile:
         reader = csv.reader(csvfile)
@@ -88,13 +117,24 @@ def compute_pca(
                 continue
             has_data = True
             batch.append([float(x) for x in row[1:]])
+            row_count += 1
             if len(batch) >= batch_size:
                 ipca.partial_fit(np.array(batch))
                 batch = []
+                batch_count += 1
+                if batch_count % 5 == 0:
+                    msg = f"Processed {row_count} rows for PCA..."
+                    logger.info(msg)
+                    if streamer:
+                        await streamer.stream_partial(msg)
 
         # Final partial_fit for remaining rows (if any)
         if batch and len(batch) >= n_components:
             ipca.partial_fit(np.array(batch))
+            msg = f"Processed final {row_count} rows for PCA."
+            logger.info(msg)
+            if streamer:
+                await streamer.stream_partial(msg)
         elif batch:
             pass
 
@@ -122,11 +162,10 @@ async def train_pca(
         streamer: Optional streamer for progress reporting.
     """
 
-    async def report(status: str):
-        if streamer:
-            await streamer.stream_partial(status)
-
-    await report(f"Starting PCA training for collection: {collection_name}")
+    if streamer:
+        await streamer.stream_partial(
+            f"Starting PCA training for collection: {collection_name}"
+        )
 
     # 1. Find project_id by project_name
     async with bo_session_maker() as bo_session:
@@ -142,17 +181,28 @@ async def train_pca(
         tmp_csv_path = tmp.name
 
     try:
-        await report("Downloading embeddings...")
+        if streamer:
+            await streamer.stream_partial("Downloading embeddings...")
         await download_rag_index(
-            agents_session_maker, collection_name, output_csv_path=tmp_csv_path
+            agents_session_maker,
+            collection_name,
+            output_csv_path=tmp_csv_path,
+            streamer=streamer,
         )
 
         # 3. Fit PCA model
-        await report("Computing PCA model...")
-        ipca = compute_pca(tmp_csv_path, n_components=2, batch_size=100)
+        if streamer:
+            await streamer.stream_partial("Computing PCA model...")
+        ipca = await compute_pca(
+            tmp_csv_path,
+            n_components=2,
+            batch_size=100,
+            streamer=streamer,
+        )
 
         # 4. Transform a sample of 500 points
-        await report("Generating sample points...")
+        if streamer:
+            await streamer.stream_partial("Generating sample points...")
         sample_points = []
         with open(tmp_csv_path, "r", encoding="utf-8") as csvfile:
             reader = csv.reader(csvfile)
@@ -180,7 +230,8 @@ async def train_pca(
                     )
 
         # 5. Store both the model and example points in project_cache table
-        await report("Storing results in cache...")
+        if streamer:
+            await streamer.stream_partial("Storing results in cache...")
         model_data = base64.b64encode(pickle.dumps(ipca)).decode("utf-8")
         sample_data = json.dumps(sample_points)
 
@@ -218,10 +269,11 @@ async def train_pca(
                         project_id=project_id, name=sample_cache_name, value=sample_data
                     )
                 )
-
             await bo_session.commit()
 
-        await report("PCA training completed successfully.")
+        if streamer:
+            await streamer.stream_partial("PCA training completed successfully.")
+        logger.info(f"PCA training completed for collection {collection_name}")
 
     finally:
         if os.path.exists(tmp_csv_path):

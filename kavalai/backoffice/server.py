@@ -36,6 +36,9 @@ from kavalai.agents.workflow_model import WorkflowModel
 from kavalai.backoffice.svg import generate_workflow_svg
 from fastapi.responses import Response
 from kavalai.agents.rag_service import RagService
+from kavalai.llm_clients.common import Streamer
+from kavalai.backoffice.embedding_projector import train_pca
+from sse_starlette.sse import EventSourceResponse
 from contextlib import asynccontextmanager
 
 # Set up the app logger
@@ -569,6 +572,61 @@ async def projects_rag_stats(project_id: UUID, request: Request):
             "total_collections": total_collections,
             "collections": collections,
         }
+
+
+@app.get("/projects/{project_id}/rag/train-pca")
+async def projects_train_pca(project_id: UUID, collection_name: str, request: Request):
+    """Trigger PCA training for a specific project and collection."""
+    assert_logged_in(request)
+    project = await get_project_and_assert_access(request, project_id)
+
+    import asyncio
+
+    queue = asyncio.Queue()
+    streamer = Streamer("pca_streamer", queue)
+
+    async def event_generator():
+        try:
+            # Run train_pca in a task so we can stream from the queue
+            pca_task = asyncio.create_task(
+                train_pca(
+                    bo_session_maker=get_backoffice_session,
+                    agents_session_maker=lambda: get_project_session(project),
+                    project_name=project.name,
+                    collection_name=collection_name,
+                    streamer=streamer,
+                )
+            )
+
+            while not (pca_task.done() and queue.empty()):
+                try:
+                    # Wait for a message with a timeout to check if the task is done
+                    msg = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield {"data": msg}
+                except asyncio.TimeoutError:
+                    if pca_task.done():
+                        # Check if task failed
+                        if pca_task.exception():
+                            logger.error(f"PCA training failed: {pca_task.exception()}")
+                            import json
+
+                            yield {
+                                "data": json.dumps(
+                                    {
+                                        "status": "error",
+                                        "value": str(pca_task.exception()),
+                                    }
+                                )
+                            }
+                        break
+                    continue
+        except Exception as e:
+            logger.error(f"Error in PCA event generator: {e}")
+            import json
+
+            yield {"data": json.dumps({"status": "error", "value": str(e)})}
+
+    return EventSourceResponse(event_generator())
 
 
 @app.post("/projects/test-connection/{project_id}")

@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RagService } from '../../services/rag-service';
@@ -41,11 +41,16 @@ export class RagPage implements OnInit {
   normalizerYaml: string = '';
 
   loading: boolean = false;
+  trainingPca: boolean = false;
+  pcaMessages: string[] = [];
+  showPcaModal: boolean = false;
   error: string | null = null;
+  private pcaSubscription: any = null;
 
   constructor(
     private ragService: RagService,
-    private userService: UserService
+    private userService: UserService,
+    private ngZone: NgZone
   ) {}
 
   ngOnInit(): void {
@@ -104,5 +109,52 @@ export class RagPage implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  onComputePca(): void {
+    if (!this.projectId || !this.collectionName) {
+      this.error = 'Please select a collection to compute PCA.';
+      return;
+    }
+
+    this.trainingPca = true;
+    this.pcaMessages = [];
+    this.showPcaModal = true;
+    this.error = null;
+
+    this.pcaSubscription = this.ragService.trainPca(this.projectId, this.collectionName).subscribe({
+      next: (data) => {
+        this.ngZone.run(() => {
+          try {
+            const msg = JSON.parse(data);
+            this.pcaMessages.push(msg.value);
+            if (msg.status === 'error') {
+              this.trainingPca = false;
+            }
+            if (msg.value && msg.value.includes('completed successfully')) {
+              this.trainingPca = false;
+            }
+          } catch (e) {
+            this.pcaMessages.push(data);
+          }
+        });
+      },
+      error: (err) => {
+        this.ngZone.run(() => {
+          console.error('Error training PCA', err);
+          this.pcaMessages.push('Error: Failed to connect to server.');
+          this.trainingPca = false;
+        });
+      }
+    });
+  }
+
+  stopPca(): void {
+    if (this.pcaSubscription) {
+      this.pcaSubscription.unsubscribe();
+      this.pcaSubscription = null;
+    }
+    this.trainingPca = false;
+    this.showPcaModal = false;
   }
 }

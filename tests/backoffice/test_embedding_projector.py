@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sklearn.decomposition import IncrementalPCA
 from kavalai.agents.db import RagIndex
 from kavalai.backoffice.embedding_projector import download_rag_index, compute_pca
+from kavalai.llm_clients.common import Streamer
 
 
 @pytest.mark.asyncio
@@ -60,9 +61,15 @@ async def test_download_rag_index(
     await agents_db.commit()
 
     csv_path = tmp_path / "rag_index.csv"
+    import asyncio
+
+    queue = asyncio.Queue()
+    streamer = Streamer(name="test", queue=queue)
 
     # Execute
-    await download_rag_index(agents_session_maker, collection, str(csv_path))
+    await download_rag_index(
+        agents_session_maker, collection, str(csv_path), streamer=streamer
+    )
 
     # Verify
     assert os.path.exists(csv_path)
@@ -75,7 +82,8 @@ async def test_download_rag_index(
         assert [float(x) for x in rows[0][1:]] == [1.0, 0.0, 0.0]
 
 
-def test_compute_pca(tmp_path):
+@pytest.mark.asyncio
+async def test_compute_pca(tmp_path):
     # Setup: Create a CSV file with embeddings
     csv_path = tmp_path / "pca_input.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
@@ -88,7 +96,13 @@ def test_compute_pca(tmp_path):
         writer.writerow(["p4", -0.9, -1.1, -0.02])
 
     # Execute
-    ipca = compute_pca(str(csv_path), n_components=2, batch_size=2)
+    import asyncio
+
+    queue = asyncio.Queue()
+    streamer = Streamer(name="test", queue=queue)
+    ipca = await compute_pca(
+        str(csv_path), n_components=2, batch_size=2, streamer=streamer
+    )
 
     # Verify
     assert isinstance(ipca, IncrementalPCA)
@@ -106,10 +120,11 @@ def test_compute_pca(tmp_path):
     assert np.any(np.abs(transformed) > 0.1)
 
 
-def test_compute_pca_empty(tmp_path):
+@pytest.mark.asyncio
+async def test_compute_pca_empty(tmp_path):
     csv_path = tmp_path / "empty.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as _:
         pass
 
     with pytest.raises(ValueError, match="No data found in CSV for PCA computation."):
-        compute_pca(str(csv_path))
+        await compute_pca(str(csv_path))

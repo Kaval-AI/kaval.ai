@@ -91,6 +91,15 @@
       </div>
 
       <div class="card-actions justify-end mt-6">
+        <button class="btn btn-secondary" (click)="onComputePca()" [disabled]="trainingPca || !collectionName">
+          @if (trainingPca) {
+            <span class="loading loading-spinner"></span>
+            Training...
+          } @else {
+            <i class="fas fa-microchip"></i>
+            Compute PCA
+          }
+        </button>
         <button class="btn btn-primary" (click)="onQuery()" [disabled]="loading || !queryText || !selectedModel">
           @if (loading) {
             <span class="loading loading-spinner"></span>
@@ -161,6 +170,32 @@
     <div class="flex flex-col items-center justify-center py-12 text-center space-y-4 opacity-40">
       <div class="text-6xl"><i class="fas fa-search"></i></div>
       <p class="text-lg italic">Execute a query to see results.</p>
+    </div>
+  }
+
+  <!-- PCA Modal -->
+  @if (showPcaModal) {
+    <div class="modal modal-open">
+      <div class="modal-box max-w-2xl">
+        <h3 class="font-bold text-lg mb-4">Training PCA</h3>
+
+        <div class="bg-base-200 rounded-lg p-4 font-mono text-sm h-64 overflow-y-auto mb-4 flex flex-col-reverse">
+          <div class="flex flex-col">
+            @for (msg of pcaMessages; track $index) {
+              <div class="py-1 border-b border-base-300 last:border-0">
+                <span class="text-primary">></span> {{ msg }}
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="modal-action">
+          <button class="btn btn-error" (click)="stopPca()">
+            {{ trainingPca ? 'Stop' : 'Close' }}
+          </button>
+        </div>
+      </div>
+      <div class="modal-backdrop" (click)="stopPca()"></div>
     </div>
   }
 </div>

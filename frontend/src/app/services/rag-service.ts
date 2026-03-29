@@ -40,4 +40,23 @@ export class RagService {
   getRagStats(projectId: string): Observable<RagStats> {
     return this.http.get<RagStats>(`/api/projects/${projectId}/rag/stats`);
   }
+
+  trainPca(projectId: string, collectionName: string): Observable<string> {
+    return new Observable<string>(observer => {
+      const eventSource = new EventSource(`/api/projects/${projectId}/rag/train-pca?collection_name=${encodeURIComponent(collectionName)}`);
+
+      eventSource.onmessage = (event) => {
+        observer.next(event.data);
+      };
+
+      eventSource.onerror = (error) => {
+        observer.error(error);
+        eventSource.close();
+      };
+
+      return () => {
+        eventSource.close();
+      };
+    });
+  }
 }

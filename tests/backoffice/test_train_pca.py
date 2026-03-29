@@ -131,7 +131,7 @@ async def test_train_pca(
     assert any("Computing PCA model" in m for m in messages)
     assert any("Generating sample points" in m for m in messages)
     assert any("Storing results in cache" in m for m in messages)
-    assert any("completed successfully" in m for m in messages)
+    assert any("Finished downloading 10/10 items" in m for m in messages)
 
 
 @pytest.mark.asyncio
@@ -158,3 +158,95 @@ async def test_train_pca_project_not_found(
             project_name="non_existent",
             collection_name="test",
         )
+
+
+@pytest.mark.asyncio
+async def test_train_pca_endpoint(
+    backoffice_db: AsyncSession,
+    agents_db: AsyncSession,
+    agents_session_maker,
+    postgres_container,
+    monkeypatch,
+):
+    from kavalai.backoffice import server
+    from kavalai.backoffice.server import app
+    from httpx import AsyncClient, ASGITransport
+
+    # Setup project and data
+    project = Project(name="test_project_endpoint")
+    backoffice_db.add(project)
+    await backoffice_db.commit()
+    await backoffice_db.refresh(project)
+
+    collection = "test_collection_endpoint"
+    items = [
+        RagIndex(
+            model="test_model",
+            collection_name=collection,
+            source_id=f"label{i}",
+            content=f"content{i}",
+            embedding_size=3,
+            embedding=[float(i), 1.0, 0.5],
+        )
+        for i in range(10)
+    ]
+    agents_db.add_all(items)
+    await agents_db.commit()
+
+    # Mock authentication and project access
+    monkeypatch.setattr(server, "assert_logged_in", lambda r: None)
+
+    async def mock_get_project_and_assert_access(request, project_id):
+        return project
+
+    monkeypatch.setattr(
+        server, "get_project_and_assert_access", mock_get_project_and_assert_access
+    )
+
+    # Mock get_backoffice_session and get_project_session
+    class MockSessionMaker:
+        def __init__(self, session):
+            self.session = session
+
+        def __call__(self):
+            return self
+
+        async def __aenter__(self):
+            return self.session
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    monkeypatch.setattr(
+        server, "get_backoffice_session", lambda: MockSessionMaker(backoffice_db)
+    )
+    monkeypatch.setattr(
+        server, "get_project_session", lambda p: MockSessionMaker(agents_db)
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Use a timeout to avoid hanging if SSE fails
+        response = await ac.get(
+            f"/projects/{project.id}/rag/train-pca?collection_name={collection}",
+            timeout=10,
+        )
+
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers["content-type"]
+
+    # Verify that messages were streamed
+    lines = response.text.splitlines()
+    data_lines = [line[5:] for line in lines if line.startswith("data:")]
+    messages = [json.loads(line) for line in data_lines]
+
+    assert any("Starting PCA training" in m["value"] for m in messages)
+    assert any("Finished downloading 10/10 items" in m["value"] for m in messages)
+    assert any("Processed final" in m["value"] for m in messages)
+    assert any("completed successfully" in m["value"] for m in messages)
+
+    # Verify project cache
+    stmt = select(ProjectCache).where(ProjectCache.project_id == project.id)
+    result = await backoffice_db.execute(stmt)
+    cache_entries = result.scalars().all()
+    assert len(cache_entries) == 2
