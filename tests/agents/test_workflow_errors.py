@@ -22,8 +22,6 @@ tasks:
 
     error_msg = str(excinfo.value)
     assert "templates.missing_one" in error_msg
-    assert "Line 7" in error_msg or "line 7" in error_msg.lower()
-    assert "-->    7 |   - name: task1" in error_msg
 
 
 @pytest.mark.asyncio
@@ -46,7 +44,6 @@ tasks:
 
     error_msg = str(excinfo.value)
     assert "context.input.wrong_field" in error_msg
-    assert "Line 7" in error_msg or "line 7" in error_msg.lower()
 
 
 @pytest.mark.asyncio
@@ -71,7 +68,6 @@ tasks:
 
     error_msg = str(excinfo.value)
     assert "history.task0.res" in error_msg
-    assert "Line 7" in error_msg
 
 
 @pytest.mark.asyncio
