@@ -74,7 +74,6 @@ async def download_rag_index(
                     count += 1
                     if count % 100 == 0:
                         msg = f"Downloaded {count}/{total_count} items..."
-                        logger.info(msg)
                         if streamer:
                             await streamer.stream_partial(msg)
 
@@ -124,7 +123,6 @@ async def compute_pca(
                 batch_count += 1
                 if batch_count % 5 == 0:
                     msg = f"Processed {row_count} rows for PCA..."
-                    logger.info(msg)
                     if streamer:
                         await streamer.stream_partial(msg)
 
