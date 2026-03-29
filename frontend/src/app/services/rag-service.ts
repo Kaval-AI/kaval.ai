@@ -17,7 +17,7 @@ limitations under the License.
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { RagResult, RagStats } from '../models/rag';
+import { RagResult, RagStats, RagQueryResponse } from '../models/rag';
 
 @Injectable({
   providedIn: 'root'
@@ -33,8 +33,8 @@ export class RagService {
     source_ids?: string[],
     keep_best?: boolean,
     normalizer_yaml?: string
-  }): Observable<RagResult[]> {
-    return this.http.post<RagResult[]>(`/api/projects/${projectId}/rag/query`, queryData);
+  }): Observable<RagQueryResponse> {
+    return this.http.post<RagQueryResponse>(`/api/projects/${projectId}/rag/query`, queryData);
   }
 
   getRagStats(projectId: string): Observable<RagStats> {

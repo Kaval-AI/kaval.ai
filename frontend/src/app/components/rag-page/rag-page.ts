@@ -18,7 +18,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RagService } from '../../services/rag-service';
 import { UserService } from '../../services/user-service';
-import { RagResult, RagStats } from '../../models/rag';
+import { RagResult, RagStats, PcaData, PcaPoint } from '../../models/rag';
 
 @Component({
   selector: 'app-rag-page',
@@ -30,6 +30,7 @@ import { RagResult, RagStats } from '../../models/rag';
 export class RagPage implements OnInit {
   projectId: string | null = null;
   results: RagResult[] = [];
+  pcaData: PcaData | null = null;
   ragStats: RagStats | null = null;
 
   queryText: string = '';
@@ -46,6 +47,10 @@ export class RagPage implements OnInit {
   showPcaModal: boolean = false;
   error: string | null = null;
   private pcaSubscription: any = null;
+
+  hoveredPoint: PcaPoint | null = null;
+  tooltipPos = { x: 0, y: 0 };
+  isPcaExpanded: boolean = true;
 
   constructor(
     private ragService: RagService,
@@ -99,8 +104,9 @@ export class RagPage implements OnInit {
       keep_best: this.keepBest,
       normalizer_yaml: this.normalizerYaml || undefined
     }).subscribe({
-      next: (results) => {
-        this.results = results;
+      next: (response) => {
+        this.results = response.results;
+        this.pcaData = response.pca_data;
         this.loading = false;
       },
       error: (err) => {
@@ -128,11 +134,15 @@ export class RagPage implements OnInit {
           try {
             const msg = JSON.parse(data);
             this.pcaMessages.push(msg.value);
-            if (msg.status === 'error') {
+            if (msg.status === 'error' || msg.type === 'error') {
               this.trainingPca = false;
             }
-            if (msg.value && msg.value.includes('completed successfully')) {
+            if (msg.type === 'complete' || (msg.value && msg.value.includes('completed successfully'))) {
               this.trainingPca = false;
+              if (this.pcaSubscription) {
+                this.pcaSubscription.unsubscribe();
+                this.pcaSubscription = null;
+              }
             }
           } catch (e) {
             this.pcaMessages.push(data);
@@ -141,9 +151,11 @@ export class RagPage implements OnInit {
       },
       error: (err) => {
         this.ngZone.run(() => {
-          console.error('Error training PCA', err);
-          this.pcaMessages.push('Error: Failed to connect to server.');
-          this.trainingPca = false;
+          if (this.trainingPca) {
+            console.error('Error training PCA', err);
+            this.pcaMessages.push('Error: Failed to connect to server.');
+            this.trainingPca = false;
+          }
         });
       }
     });
@@ -156,5 +168,57 @@ export class RagPage implements OnInit {
     }
     this.trainingPca = false;
     this.showPcaModal = false;
+  }
+
+  get allPoints(): PcaPoint[] {
+    if (!this.pcaData) return [];
+    return [this.pcaData.query, ...this.pcaData.results, ...this.pcaData.samples];
+  }
+
+  get minX(): number {
+    const pts = this.allPoints;
+    return pts.length ? Math.min(...pts.map(p => p.x)) : 0;
+  }
+
+  get maxX(): number {
+    const pts = this.allPoints;
+    return pts.length ? Math.max(...pts.map(p => p.x)) : 1;
+  }
+
+  get minY(): number {
+    const pts = this.allPoints;
+    return pts.length ? Math.min(...pts.map(p => p.y)) : 0;
+  }
+
+  get maxY(): number {
+    const pts = this.allPoints;
+    return pts.length ? Math.max(...pts.map(p => p.y)) : 1;
+  }
+
+  getScaleX(val: number): number {
+    const range = this.maxX - this.minX || 1;
+    return 50 + ((val - this.minX) / range) * 500;
+  }
+
+  getScaleY(val: number): number {
+    const range = this.maxY - this.minY || 1;
+    return 350 - ((val - this.minY) / range) * 300;
+  }
+
+  onPointHover(point: PcaPoint, event: MouseEvent): void {
+    this.hoveredPoint = point;
+    this.updateTooltipPos(event);
+  }
+
+  onPointMove(event: MouseEvent): void {
+    this.updateTooltipPos(event);
+  }
+
+  onPointLeave(): void {
+    this.hoveredPoint = null;
+  }
+
+  private updateTooltipPos(event: MouseEvent): void {
+    this.tooltipPos = { x: event.clientX + 10, y: event.clientY + 10 };
   }
 }

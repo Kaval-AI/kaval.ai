@@ -536,7 +536,98 @@ async def projects_rag_query(
             source_ids=source_ids,
             keep_best=keep_best,
         )
-        return results
+
+        # Check for precomputed PCA model
+        pca_data = None
+        if collection_name:
+            from kavalai.backoffice.db import ProjectCache
+            import pickle
+            import base64
+            import json
+            import numpy as np
+
+            model_cache_name = f"pca_model_{collection_name}"
+            stmt = select(ProjectCache).where(
+                ProjectCache.project_id == project_id,
+                ProjectCache.name == model_cache_name,
+            )
+            async with get_backoffice_session() as bo_session:
+                res = await bo_session.execute(stmt)
+                cache_entry = res.scalar_one_or_none()
+
+                if cache_entry:
+                    try:
+                        ipca = pickle.loads(base64.b64decode(cache_entry.value))  # nosec B301
+
+                        # Get query embedding
+                        embeddings, _ = await rag_service.llm_client.compute_embeddings(
+                            texts=[text], normalizer=normalizer
+                        )
+                        query_point = ipca.transform(np.array(embeddings))[0]
+                        query_point = [float(x) for x in query_point]
+
+                        # Get result embeddings (already fetched during query)
+                        # We need to fetch actual embeddings for results as RagServiceResult doesn't include them
+                        # Let's modify RagService or fetch them here.
+                        # Actually, RagServiceResult doesn't have embeddings. Let's fetch them.
+                        result_ids = [r.id for r in results]
+                        logger.debug(
+                            f"Fetching embeddings for result IDs: {result_ids}"
+                        )
+                        from kavalai.agents.db import RagIndex
+
+                        stmt_embeddings = select(RagIndex.id, RagIndex.embedding).where(
+                            RagIndex.id.in_(result_ids)
+                        )
+                        res_embeddings = await session.execute(stmt_embeddings)
+                        id_to_embedding = {
+                            row[0]: row[1] for row in res_embeddings.all()
+                        }
+                        logger.debug(f"Found {len(id_to_embedding)} embeddings")
+
+                        result_points = []
+                        for r in results:
+                            emb = id_to_embedding.get(r.id)
+                            if emb is not None:
+                                try:
+                                    pt = ipca.transform(np.array([emb]))[0]
+                                    result_points.append(
+                                        {
+                                            "label": r.content[:100],
+                                            "x": float(pt[0]),
+                                            "y": float(pt[1]),
+                                        }
+                                    )
+                                except Exception as e:
+                                    logger.error(
+                                        f"Failed to transform embedding for result {r.id}: {e}"
+                                    )
+
+                        # Get sample points
+                        sample_cache_name = f"pca_sample_train_data_{collection_name}"
+                        stmt_sample = select(ProjectCache).where(
+                            ProjectCache.project_id == project_id,
+                            ProjectCache.name == sample_cache_name,
+                        )
+                        res_sample = await bo_session.execute(stmt_sample)
+                        sample_entry = res_sample.scalar_one_or_none()
+                        sample_points = (
+                            json.loads(sample_entry.value) if sample_entry else []
+                        )
+
+                        pca_data = {
+                            "query": {
+                                "label": text,
+                                "x": query_point[0],
+                                "y": query_point[1],
+                            },
+                            "results": result_points,
+                            "samples": sample_points,
+                        }
+                    except Exception as e:
+                        logger.error(f"Failed to process PCA data: {e}")
+
+        return {"results": results, "pca_data": pca_data}
 
 
 @app.get("/projects/{project_id}/rag/stats")

@@ -27,6 +27,23 @@ export interface RagResult {
   similarity: number;
 }
 
+export interface PcaPoint {
+  label: string;
+  x: number;
+  y: number;
+}
+
+export interface PcaData {
+  query: PcaPoint;
+  results: PcaPoint[];
+  samples: PcaPoint[];
+}
+
+export interface RagQueryResponse {
+  results: RagResult[];
+  pca_data: PcaData | null;
+}
+
 export interface RagStats {
   total_entries: number;
   total_collections: number;

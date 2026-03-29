@@ -17,7 +17,7 @@ limitations under the License.
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { RagService } from './rag-service';
-import { RagResult, RagStats } from '../models/rag';
+import { RagResult, RagStats, RagQueryResponse } from '../models/rag';
 
 describe('RagService', () => {
   let service: RagService;
@@ -44,23 +44,31 @@ describe('RagService', () => {
     const mockResults: RagResult[] = [
       { content: 'Result 1' } as RagResult
     ];
+    const mockResponse: RagQueryResponse = {
+      results: mockResults,
+      pca_data: null
+    };
     const projectId = 'proj123';
     const queryData = { model: 'text-embedding-3-small', text: 'query' };
 
-    service.queryRag(projectId, queryData).subscribe(results => {
-      expect(results).toEqual(mockResults);
+    service.queryRag(projectId, queryData).subscribe(response => {
+      expect(response).toEqual(mockResponse);
     });
 
     const req = httpMock.expectOne(`/api/projects/${projectId}/rag/query`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual(queryData);
-    req.flush(mockResults);
+    req.flush(mockResponse);
   });
 
   it('should query RAG with source_ids', () => {
     const mockResults: RagResult[] = [
       { content: 'Result 1' } as RagResult
     ];
+    const mockResponse: RagQueryResponse = {
+      results: mockResults,
+      pca_data: null
+    };
     const projectId = 'proj123';
     const queryData = {
       model: 'text-embedding-3-small',
@@ -68,14 +76,14 @@ describe('RagService', () => {
       source_ids: ['id1', 'id2']
     };
 
-    service.queryRag(projectId, queryData).subscribe(results => {
-      expect(results).toEqual(mockResults);
+    service.queryRag(projectId, queryData).subscribe(response => {
+      expect(response).toEqual(mockResponse);
     });
 
     const req = httpMock.expectOne(`/api/projects/${projectId}/rag/query`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual(queryData);
-    req.flush(mockResults);
+    req.flush(mockResponse);
   });
 
   it('should fetch RAG stats', () => {

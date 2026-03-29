@@ -78,7 +78,7 @@ async def test_download_rag_index(
         rows = list(reader)
         assert len(rows) == 3
         # Check first row
-        assert rows[0][0] == "label1"
+        assert rows[0][0] == "content1"
         assert [float(x) for x in rows[0][1:]] == [1.0, 0.0, 0.0]
 
 

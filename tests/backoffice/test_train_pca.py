@@ -121,10 +121,12 @@ async def test_train_pca(
 
     # Verify streamer messages
     messages = []
+    types = []
     while not queue.empty():
         msg_json = await queue.get()
         msg = json.loads(msg_json)
         messages.append(msg["value"])
+        types.append(msg["type"])
 
     assert any("Starting PCA training" in m for m in messages)
     assert any("Downloading embeddings" in m for m in messages)
@@ -132,6 +134,8 @@ async def test_train_pca(
     assert any("Generating sample points" in m for m in messages)
     assert any("Storing results in cache" in m for m in messages)
     assert any("Finished downloading 10/10 items" in m for m in messages)
+    assert "complete" in types
+    assert messages[types.index("complete")] == "PCA training completed successfully."
 
 
 @pytest.mark.asyncio

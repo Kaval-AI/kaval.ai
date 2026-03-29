@@ -69,7 +69,9 @@ async def download_rag_index(
             count = 0
             async for item in result:
                 if item.embedding:
-                    row = [item.source_id] + list(item.embedding)
+                    # Use content as label, fallback to source_id if content is empty
+                    label = item.content or item.source_id
+                    row = [label] + list(item.embedding)
                     writer.writerow(row)
                     count += 1
                     if count % 100 == 0:
@@ -270,7 +272,7 @@ async def train_pca(
             await bo_session.commit()
 
         if streamer:
-            await streamer.stream_partial("PCA training completed successfully.")
+            await streamer.stream_complete("PCA training completed successfully.")
         logger.info(f"PCA training completed for collection {collection_name}")
 
     finally:

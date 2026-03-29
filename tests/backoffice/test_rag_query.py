@@ -39,10 +39,16 @@ async def test_projects_rag_query_with_source_ids(client):
         "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
     ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm, patch(
         "kavalai.backoffice.server.RagService"
-    ) as mock_rag_service_class:
+    ) as mock_rag_service_class, patch(
+        "kavalai.backoffice.server.get_backoffice_session"
+    ) as mock_get_bo_session:
         mock_session = AsyncMock()
         mock_sm.return_value = MagicMock(return_value=mock_session)
         mock_session.__aenter__.return_value = mock_session
+
+        mock_bo_session = AsyncMock()
+        mock_get_bo_session.return_value.__aenter__.return_value = mock_bo_session
+        mock_bo_session.execute.return_value.scalar_one_or_none.return_value = None
 
         mock_rag_service_instance = AsyncMock()
         mock_rag_service_class.return_value = mock_rag_service_instance
@@ -53,7 +59,7 @@ async def test_projects_rag_query_with_source_ids(client):
         )
 
         assert response.status_code == 200
-        assert response.json() == [{"content": "result"}]
+        assert response.json() == {"results": [{"content": "result"}], "pca_data": None}
 
         mock_rag_service_instance.query.assert_called_once_with(
             text="test query",

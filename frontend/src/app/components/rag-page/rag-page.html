@@ -120,6 +120,70 @@
     </div>
   }
 
+  @if (pcaData) {
+    <div class="card bg-base-100 shadow-xl border border-base-200 overflow-hidden">
+      <div class="collapse collapse-arrow">
+        <input type="checkbox" [checked]="isPcaExpanded" (change)="isPcaExpanded = !isPcaExpanded" />
+        <div class="collapse-title p-0">
+          <div class="p-6 border-b border-base-200">
+            <h3 class="card-title">Embedding Projection (PCA)</h3>
+          </div>
+        </div>
+        <div class="collapse-content p-0">
+          <div class="card-body p-0">
+            <div class="p-6 flex flex-col items-center">
+              <svg viewBox="0 0 600 400" class="w-full max-w-2xl bg-base-200 rounded-lg shadow-inner">
+                <!-- Sample points (gray) -->
+                @for (p of pcaData.samples; track $index) {
+                  <circle [attr.cx]="getScaleX(p.x)" [attr.cy]="getScaleY(p.y)" r="3" fill="#9ca3af" opacity="0.5"
+                          (mouseenter)="onPointHover(p, $event)" (mousemove)="onPointMove($event)" (mouseleave)="onPointLeave()">
+                    <title>{{ p.label }}</title>
+                  </circle>
+                }
+                <!-- Result points (blue) -->
+                @for (p of pcaData.results; track $index) {
+                  <circle [attr.cx]="getScaleX(p.x)" [attr.cy]="getScaleY(p.y)" r="5" fill="#3b82f6"
+                          (mouseenter)="onPointHover(p, $event)" (mousemove)="onPointMove($event)" (mouseleave)="onPointLeave()">
+                    <title>{{ p.label }}</title>
+                  </circle>
+                }
+                <!-- Query point (red) -->
+                <circle [attr.cx]="getScaleX(pcaData.query.x)" [attr.cy]="getScaleY(pcaData.query.y)" r="7" fill="#ef4444"
+                        (mouseenter)="onPointHover(pcaData.query, $event)" (mousemove)="onPointMove($event)" (mouseleave)="onPointLeave()">
+                  <title>Query: {{ pcaData.query.label }}</title>
+                </circle>
+              </svg>
+              <div class="flex gap-6 mt-4 text-sm font-medium">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-red-500"></span> Query
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-blue-500"></span> Closest Matches
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-gray-400 opacity-50"></span> Training Samples
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  } @else if (!loading && results.length > 0) {
+    <div class="alert alert-info shadow-lg">
+      <i class="fas fa-info-circle text-xl"></i>
+      <span>No PCA model computed for this collection.</span>
+    </div>
+  }
+
+  @if (hoveredPoint) {
+    <div class="fixed z-[100] bg-base-300 text-base-content text-xs p-2 rounded shadow-lg pointer-events-none border border-base-content/20 max-w-xs break-words"
+         [style.left.px]="tooltipPos.x"
+         [style.top.px]="tooltipPos.y">
+      {{ hoveredPoint.label }}
+    </div>
+  }
+
   @if (results.length > 0) {
     <div class="card bg-base-100 shadow-xl border border-base-200">
       <div class="card-body p-0">

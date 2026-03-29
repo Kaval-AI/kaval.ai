@@ -59,10 +59,20 @@ async def test_projects_rag_query_with_normalizer(client, mock_user_session):
             "normalizer_yaml": "l1: false\nl2: true",
         }
 
-        response = client.post(f"/projects/{project_id}/rag/query", json=query_data)
+        with patch(
+            "kavalai.backoffice.server.get_backoffice_session"
+        ) as mock_get_bo_session:
+            mock_bo_session = AsyncMock()
+            mock_get_bo_session.return_value.__aenter__.return_value = mock_bo_session
+            mock_bo_session.execute.return_value.scalar_one_or_none.return_value = None
 
-        assert response.status_code == 200
-        assert response.json() == [{"similarity": 0.9, "content": "test"}]
+            response = client.post(f"/projects/{project_id}/rag/query", json=query_data)
+
+            assert response.status_code == 200
+            assert response.json() == {
+                "results": [{"similarity": 0.9, "content": "test"}],
+                "pca_data": None,
+            }
 
         mock_from_yaml.assert_called_once_with("l1: false\nl2: true")
         MockRagService.assert_called_once()

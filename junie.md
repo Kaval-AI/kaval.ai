@@ -65,7 +65,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `svg.py`: Utility for generating SVG visualizations of workflows using Graphviz. Supports rendering data nodes with schema properties and resolving reference chains.
         - `db.py`: Backoffice-specific DB models (users, projects, memberships). Includes `DatabaseManager` for handling `postgresql+asyncpg` and `KAVALAI_BO_DB_URI`.
         - `project_service.py`: Service for managing project-related data and membership. Initialized with an `async_sessionmaker` to manage backoffice database connections.
-        - `embedding_projector.py`: Utilities for downloading RAG index (using streaming cursors), fitting PCA models (using scikit-learn's IncrementalPCA) for visualization, and training/caching PCA results for projects. `train_pca` fits a model, transforms a sample of 500 points, and stores both in `project_cache` with progress reporting via `Streamer`. Raises `ValueError` if the input CSV is empty.
+        - `embedding_projector.py`: Utilities for downloading RAG index (using streaming cursors), fitting PCA models (using scikit-learn's IncrementalPCA) for visualization, and training/caching PCA results for projects. `train_pca` fits a model, transforms a sample of 500 points, and stores both in `project_cache` with progress reporting via `Streamer`. It uses `stream_complete` for the final success message to provide a clear termination signal for the frontend. Raises `ValueError` if the input CSV is empty.
     - `tools/`: Utility tools.
         - `cli_chat.py`: Command line tool for chatting with agents. Now supports Ctrl+D (EOF) to exit and uses streaming server endpoint for real-time responses.
         - `selenium_browser.py`: Selenium-based browser automation tool (FastAPI). Supports navigate, click, type, and screenshot actions.
@@ -93,7 +93,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `run-tasks-page/`: Full-page view for tasks of a specific run, navigated from session detail. Route: `/conversations/:sessionId/runs/:runId/tasks`. Updated to use Tailwind CSS and DaisyUI with theme fonts.
         - `configs-page/`: LLM profile and provider configuration.
         - `llm-call-stats-page/`: Detailed list of LLM calls with request/response data (paginated).
-        - `rag-page/`: RAG-related configuration and testing.
+        - `rag-page/`: RAG-related configuration and testing. Embedding Projection (PCA) section is collapsible and features interactive tooltips for data points. Training examples now use content as labels instead of source IDs.
         - `task-timeline-chart/`: Chart component for visualizing task execution timeline using start times and durations.
         - `workflows-page/`: Workflow monitoring page inspired by Airflow, visualizing agent runs and task statuses on a chronological timeline. Features include task-level visualization within run groups, multi-lane (row) layout for overlapping sessions, and a task overview modal for quick inspection.
         - `theme-page/`: Testbed for DaisyUI and Tailwind CSS components and styling.
