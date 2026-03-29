@@ -84,10 +84,9 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
         keep_best=False,
     )
 
-    # Verify AgentService.add_task was NOT called (yet)
-    # We will need to mock add_task to check if it's called
-    mock_add_task = AsyncMock()
-    monkeypatch.setattr(agent_service, "add_task", mock_add_task)
+    # Verify TaskLogger.log_rag_query was called
+    mock_log_rag_query = AsyncMock()
+    monkeypatch.setattr(workflow.task_logger, "log_rag_query", mock_log_rag_query)
 
     # Rerunning with the mock
     run_context.run_id = "test-run-id"
@@ -95,7 +94,7 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
     run_context.session_id = "test-session-id"
     await workflow.run_rag_task(task, run_context)
 
-    mock_add_task.assert_called_once()
+    mock_log_rag_query.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -121,7 +120,7 @@ async def test_run_rag_task_with_context_resolution(agents_session_maker, monkey
     run_context = RunContext(agent_service=agent_service)
     run_context.data = {"input": {"query": "resolved query"}}
 
-    await workflow.run_rag_task(task, run_context, None)
+    await workflow.run_rag_task(task, run_context)
 
     mock_query.assert_called_once()
     args, kwargs = mock_query.call_args
