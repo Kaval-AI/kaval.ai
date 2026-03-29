@@ -8,6 +8,7 @@ from kavalai.backoffice.db import (
     Project,
     ProjectMembership,
     ProjectRole,
+    ProjectCache,
     is_member,
     is_owner,
     get_user_projects,
@@ -113,3 +114,48 @@ async def test_cascade_delete(backoffice_db: AsyncSession):
     # Check that user still exists
     still_here = await get_one(backoffice_db, User, user.id)
     assert still_here is not None
+
+
+@pytest.mark.asyncio
+async def test_project_cache_relationship(backoffice_db: AsyncSession):
+    """Test the project_cache relationship and cascade delete."""
+    project = await insert(backoffice_db, Project, {"name": "Cache Project"})
+
+    # Add cache entries
+    cache_entry1 = await insert(
+        backoffice_db,
+        ProjectCache,
+        {"project_id": project.id, "name": "test_key", "value": "test_value"},
+    )
+    cache_entry2 = await insert(
+        backoffice_db,
+        ProjectCache,
+        {"project_id": project.id, "name": "another_key", "value": None},
+    )
+
+    assert cache_entry1.id is not None
+    assert cache_entry2.id is not None
+
+    # Fetch project with cache
+    fetched_project = await get_one(backoffice_db, Project, project.id)
+    # Need to load relationship or it might be lazy
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(Project)
+        .where(Project.id == project.id)
+        .options(selectinload(Project.cache))
+    )
+    result = await backoffice_db.execute(stmt)
+    fetched_project = result.scalar_one()
+
+    assert len(fetched_project.cache) == 2
+    names = [c.name for c in fetched_project.cache]
+    assert "test_key" in names
+    assert "another_key" in names
+
+    # Test cascade delete
+    await delete(backoffice_db, Project, project.id)
+    deleted_cache = await get_one(backoffice_db, ProjectCache, cache_entry1.id)
+    assert deleted_cache is None

@@ -116,6 +116,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
     - `backoffice/V000__users__projects.sql`: Initial schema for users, projects, and project memberships.
     - `backoffice/V001__project_details.sql`: Adds database connection details to projects.
     - `backoffice/V002__active_project.sql`: Adds `active_project_id` to users.
+    - `backoffice/V003__project_cache.sql`: Defines `project_cache` table for storing various results.
 - `docs/`: Sphinx documentation.
     - `index.rst`: Main entry point. Updated to include `iconlogo.svg` on the landing page.
     - `conf.py`: Sphinx configuration (includes `autodoc`, `napoleon`, `viewcode`, `todo`, and `sphinx_immaterial`). Updated to use `logo.svg` as the theme logo.

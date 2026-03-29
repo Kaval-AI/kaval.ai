@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import MetaData
 from sqlalchemy import TEXT, Boolean, ForeignKey, DateTime, Integer
-from sqlalchemy import select
+from sqlalchemy import select, Index
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ENUM
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
@@ -103,6 +103,9 @@ class Project(Base):
     members: Mapped[list["ProjectMembership"]] = relationship(
         back_populates="project", cascade="all, delete-orphan", passive_deletes=True
     )
+    cache: Mapped[list["ProjectCache"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class ProjectRole(str, PyEnum):
@@ -132,6 +135,24 @@ class ProjectMembership(Base):
     # Relationship Links
     user: Mapped["User"] = relationship(back_populates="memberships")
     project: Mapped["Project"] = relationship(back_populates="members")
+
+
+class ProjectCache(Base):
+    __tablename__ = "project_cache"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(TEXT, nullable=False)
+    value: Mapped[str | None] = mapped_column(TEXT)
+
+    # Relationships
+    project: Mapped["Project"] = relationship(back_populates="cache")
+
+    __table_args__ = (Index("idx_project_cache_name", "name"),)
 
 
 async def is_member(db: AsyncSession, user_id: UUID, project_id: UUID) -> bool:
