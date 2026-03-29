@@ -65,6 +65,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
         - `svg.py`: Utility for generating SVG visualizations of workflows using Graphviz. Supports rendering data nodes with schema properties and resolving reference chains.
         - `db.py`: Backoffice-specific DB models (users, projects, memberships). Includes `DatabaseManager` for handling `postgresql+asyncpg` and `KAVALAI_BO_DB_URI`.
         - `project_service.py`: Service for managing project-related data and membership. Initialized with an `async_sessionmaker` to manage backoffice database connections.
+        - `embedding_projector.py`: Utilities for downloading RAG index (using streaming cursors) and fitting PCA models (using scikit-learn's IncrementalPCA) for visualization. Raises `ValueError` if the input CSV is empty.
     - `tools/`: Utility tools.
         - `cli_chat.py`: Command line tool for chatting with agents. Now supports Ctrl+D (EOF) to exit and uses streaming server endpoint for real-time responses.
         - `selenium_browser.py`: Selenium-based browser automation tool (FastAPI). Supports navigate, click, type, and screenshot actions.
