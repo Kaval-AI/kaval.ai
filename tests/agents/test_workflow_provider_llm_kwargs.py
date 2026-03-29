@@ -147,6 +147,7 @@ async def test_workflow_agent_llm_kwargs_passing():
     """
     task = AgentTask(
         name="agent_task",
+        prompt="be a good agent",
         output="output_type",
         llm_kwargs={"custom_agent_param": "agent_val"},
     )
