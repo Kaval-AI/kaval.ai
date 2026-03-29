@@ -37,7 +37,6 @@ from kavalai.agents.workflow_model import (
     WorkflowException,
     Task,
 )
-from kavalai.llm_clients.common import StreamContent
 from kavalai.agents.utils import to_plain
 from kavalai.agents.planning_agent import PlanningAgent
 from kavalai.agents.agent_service import AgentService
@@ -247,12 +246,7 @@ class Workflow:
             duration=llm_call_duration,
         )
 
-    async def run_rest_tool(
-        self,
-        task: RestTask,
-        run_context: RunContext,
-        queue: asyncio.Queue | None,
-    ):
+    async def run_rest_tool(self, task: RestTask, run_context: RunContext):
         inputs = await run_context.prepare_tool_inputs(task)
 
         # Use FunctionKernel to call REST tool
@@ -282,9 +276,7 @@ class Workflow:
             duration=duration,
         )
 
-    async def run_mcp_tool(
-        self, task: McpTask, run_context: RunContext, queue: asyncio.Queue | None
-    ):
+    async def run_mcp_tool(self, task: McpTask, run_context: RunContext):
         inputs = await run_context.prepare_tool_inputs(task)
 
         # Use FunctionKernel to call MCP tool
@@ -336,7 +328,6 @@ class Workflow:
 
         if task.output:
             run_context.data[task.output] = result
-
             if task.stream_output and queue is not None:
                 streamer = Streamer(task.output, queue)
                 await streamer.stream_complete(
@@ -346,19 +337,15 @@ class Workflow:
                 )
 
         # Record in DB
-        if self.agent_service and run_context.run_id:
-            task_logger = TaskLogger(self.agent_service, run_context)
-            tool_uri = f"python://{task.python_tool}"
-            await task_logger.log_tool_call(
-                tool_uri=tool_uri,
-                arguments=inputs,
-                output=to_plain(result),
-                duration=duration,
-            )
+        tool_uri = f"python://{task.python_tool}"
+        await self.task_logger.log_tool_call(
+            tool_uri=tool_uri,
+            arguments=inputs,
+            output=to_plain(result),
+            duration=duration,
+        )
 
-    async def run_assign(
-        self, task: AssignTask, run_context: RunContext, queue: asyncio.Queue | None
-    ):
+    async def run_assign(self, task: AssignTask, run_context: RunContext):
         """Assigns a variable by combining various inputs."""
         # If output is a string, it means we are combining inputs into a named data type
         result = {}
@@ -369,11 +356,6 @@ class Workflow:
             result[input_name] = to_plain(val)
         output_type = self.get_data_type(task.output)
         run_context.data[task.output] = output_type(**result)
-        if task.stream_output and queue is not None:
-            streamer = Streamer(task.output, queue)
-            await streamer.stream_complete(
-                run_context.data[task.output].model_dump_json()
-            )
         logger.info(f"Assign {task.output}")
 
     async def run_agent_task(
@@ -441,12 +423,7 @@ class Workflow:
         run_context.data[task.name] = result
         run_context.data[task.output] = result
 
-    async def run_rag_task(
-        self,
-        task: RagQueryTask,
-        run_context: RunContext,
-        queue: asyncio.Queue | None,
-    ):
+    async def run_rag_task(self, task: RagQueryTask, run_context: RunContext):
         """Perform a RAG search and store the results in the run context."""
         if not self.agent_service:
             logger.warning("AgentService not provided, skipping RAG task.")
@@ -467,10 +444,8 @@ class Workflow:
         if not text:
             run_context.data[task.name] = []
         else:
-            # 1. Get embedding model from workflow
             model = self.workflow_model.embedding_model
 
-            # 2. Initialize RagService
             rag_service = RagService.from_session_maker(
                 self.agent_service.session_maker, model
             )
@@ -495,33 +470,18 @@ class Workflow:
                 for r in results
             ]
 
-        # 4. Handle output mapping if defined
-        if task.output:
-            run_context.data[task.output] = run_context.data[task.name]
-
-        # 5. Handle streaming (optional for RAG, usually just one completion event)
-        if task.stream_output and queue:
-            await queue.put(
-                StreamContent(
-                    role="assistant",
-                    content="",
-                    name=task.name,
-                    task_type="rag_query",
-                    complete=True,
-                )
-            )
+        # Handle output mapping if defined
+        run_context.data[task.output] = run_context.data[task.name]
 
         # Store the tool run info.
-        if self.agent_service and run_context.run_id:
-            task_logger = TaskLogger(self.agent_service, run_context)
-            await task_logger.log_rag_query(
-                task_name=task.name,
-                query_text=text,
-                top_k=task.top_k,
-                collection_name=task.collection_name,
-                output=run_context.data[task.name],
-                duration=duration,
-            )
+        await self.task_logger.log_rag_query(
+            task_name=task.name,
+            query_text=text,
+            top_k=task.top_k,
+            collection_name=task.collection_name,
+            output=run_context.data[task.name],
+            duration=duration,
+        )
 
     async def _initialize_agent_session(
         self,
@@ -589,13 +549,13 @@ class Workflow:
             elif isinstance(task, LLMTask):
                 await self.run_llm_task(task, run_context, queue)
             elif isinstance(task, McpTask):
-                await self.run_mcp_tool(task, run_context, queue)
+                await self.run_mcp_tool(task, run_context)
             elif isinstance(task, PythonTask):
                 await self.run_python_tool(task, run_context, queue)
             elif isinstance(task, RestTask):
-                await self.run_rest_tool(task, run_context, queue)
+                await self.run_rest_tool(task, run_context)
             elif isinstance(task, AssignTask):
-                await self.run_assign(task, run_context, queue)
+                await self.run_assign(task, run_context)
             elif isinstance(task, RagQueryTask):
                 await self.run_rag_task(task, run_context, queue)
             else:
@@ -638,9 +598,10 @@ class Workflow:
             for task in self.workflow_model.tasks:
                 streamer = Streamer(name=task.output, queue=queue) if queue else None
                 # Execute the step and stop the execution if the signals so.
-                if await self._execute_task(
+                stop_execution = await self._execute_task(
                     streamer=streamer, task=task, run_context=run_context, queue=queue
-                ):
+                )
+                if stop_execution:
                     logger.info(
                         f"Stopping workflow after task <{task.name}> due to stop: True"
                     )

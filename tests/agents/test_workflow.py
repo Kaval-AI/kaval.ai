@@ -82,7 +82,7 @@ class TestRunToolMethod:
         task = workflow.workflow_model.tasks[0]
         run_context = RunContext()
         run_context.data["input"] = MagicMock()
-        await workflow.run_rest_tool(task, run_context, None)
+        await workflow.run_rest_tool(task, run_context)
 
         assert captured_tool_uri == "rest://test_server.test_tool"
         assert captured_method == "get"
@@ -110,7 +110,7 @@ class TestRunToolMethod:
         task = workflow.workflow_model.tasks[0]
         run_context = RunContext()
         run_context.data["input"] = MagicMock()
-        await workflow.run_rest_tool(task, run_context, None)
+        await workflow.run_rest_tool(task, run_context)
 
         assert captured_tool_uri == "rest://test_server.test_tool"
         assert captured_method == "post"
@@ -163,9 +163,7 @@ class TestRestToolSerialization:
 
         run_context = RunContext()
         run_context.data["input"] = TestModel(name="test_value")
-        await workflow.run_rest_tool(
-            workflow.workflow_model.tasks[0], run_context, None
-        )
+        await workflow.run_rest_tool(workflow.workflow_model.tasks[0], run_context)
 
         # Check that the Pydantic model was converted to a dict
         # After changing prepare_tool_inputs to always return a dict,
@@ -344,7 +342,7 @@ class TestRunRestToolAuth:
         task = workflow.workflow_model.tasks[0]
         run_context = RunContext()
         run_context.data["input"] = MagicMock()
-        await workflow.run_rest_tool(task, run_context, None)
+        await workflow.run_rest_tool(task, run_context)
 
         # Test passes if no exception is raised
 
@@ -368,7 +366,7 @@ class TestRunRestToolAuth:
         task = workflow.workflow_model.tasks[0]
         run_context = RunContext()
         run_context.data["input"] = MagicMock()
-        await workflow.run_rest_tool(task, run_context, None)
+        await workflow.run_rest_tool(task, run_context)
 
         # Test passes if no exception is raised
 
