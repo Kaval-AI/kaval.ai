@@ -251,6 +251,8 @@ async def test_task_logger_rag_query(agent_service, session_maker):
         query_text="What is Kaval AI?",
         top_k=5,
         collection_name="documentation",
+        source_ids=["doc1", "doc2"],
+        keep_best=True,
         output=[
             {"similarity": 0.95, "content": "Kaval AI is...", "source_id": "doc1"},
             {"similarity": 0.89, "content": "Kaval provides...", "source_id": "doc2"},
@@ -273,6 +275,8 @@ async def test_task_logger_rag_query(agent_service, session_maker):
             "text": "What is Kaval AI?",
             "top_k": 5,
             "collection_name": "documentation",
+            "source_ids": ["doc1", "doc2"],
+            "keep_best": True,
         }
         assert len(task.output) == 2
         assert task.output[0]["similarity"] == 0.95

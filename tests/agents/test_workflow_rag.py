@@ -94,7 +94,80 @@ async def test_run_rag_task(agents_session_maker, monkeypatch):
     run_context.session_id = "test-session-id"
     await workflow.run_rag_task(task, run_context)
 
-    mock_log_rag_query.assert_called_once()
+    mock_log_rag_query.assert_called_once_with(
+        task_name=task.name,
+        query_text="search query",
+        top_k=3,
+        collection_name="test-collection",
+        source_ids=None,
+        keep_best=False,
+        output=run_context.data["rag_task"],
+        duration=pytest.approx(0.0, abs=1.0),
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_rag_task_with_filters(agents_session_maker, monkeypatch):
+    # 1. Setup Mock for RagService.query
+    mock_results = [
+        RagServiceResult(
+            id="550e8400-e29b-41d4-a716-446655440000",
+            model="test-model",
+            collection_name="test-collection",
+            source_id="source-1",
+            content="test content",
+            embedding_size=1536,
+            rag_metadata={"key": "value"},
+            similarity=0.9,
+        )
+    ]
+
+    mock_query = AsyncMock(return_value=mock_results)
+    monkeypatch.setattr("kavalai.agents.workflow.RagService.query", mock_query)
+    mock_rag_service = AsyncMock(query=mock_query)
+    mock_from_session_maker = MagicMock(return_value=mock_rag_service)
+    monkeypatch.setattr(
+        "kavalai.agents.workflow.RagService.from_session_maker", mock_from_session_maker
+    )
+
+    # 2. Define Workflow and Task with filters
+    task = RagQueryTask(
+        name="rag_task",
+        text="search query",
+        top_k=3,
+        collection_name="test-collection",
+        source_ids=["source-1", "source-2"],
+        keep_best=True,
+        output="output",
+    )
+
+    workflow_model = WorkflowModel(
+        name="test_workflow",
+        embedding_model="openai/test-embedding-model",
+        data_types={
+            "input": {"type": "object", "properties": {}},
+            "output": {"type": "object", "properties": {}},
+        },
+        tasks=[task],
+    )
+
+    agent_service = AgentService(agents_session_maker)
+    workflow = Workflow(workflow_model, agent_service=agent_service)
+
+    run_context = RunContext(agent_service=agent_service)
+    run_context.data = {"input": {}}
+
+    # 3. Run the task
+    await workflow.run_rag_task(task, run_context)
+
+    # 4. Verify RagService.query was called with correct filters
+    mock_query.assert_called_once_with(
+        text="search query",
+        top_k=3,
+        collection_name="test-collection",
+        source_ids=["source-1", "source-2"],
+        keep_best=True,
+    )
 
 
 @pytest.mark.asyncio

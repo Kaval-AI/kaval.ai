@@ -479,6 +479,8 @@ class Workflow:
             query_text=text,
             top_k=task.top_k,
             collection_name=task.collection_name,
+            source_ids=task.source_ids,
+            keep_best=task.keep_best,
             output=run_context.data[task.name],
             duration=duration,
         )
