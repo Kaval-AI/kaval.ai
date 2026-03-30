@@ -557,7 +557,7 @@ class Workflow:
             elif isinstance(task, AssignTask):
                 await self.run_assign(task, run_context)
             elif isinstance(task, RagQueryTask):
-                await self.run_rag_task(task, run_context, queue)
+                await self.run_rag_task(task, run_context)
             else:
                 logger.warning(f"Unknown task type: {type(task)}")
         except Exception as e:
