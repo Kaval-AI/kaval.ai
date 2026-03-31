@@ -14,12 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import os
 from datetime import datetime
 from typing import Optional, Union, Callable, AsyncContextManager
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import delete, select, func
+from sqlalchemy import delete, select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
@@ -43,6 +44,7 @@ class RagServiceResult(BaseModel):
         similarity (float): The similarity score (1.0 - distance) relative to the query.
         created_at (Optional[datetime]): Timestamp when the item was created.
         updated_at (Optional[datetime]): Timestamp when the item was last updated.
+        query_index (Optional[int]): Index of the query in batch queries (for batch_query results).
     """
 
     id: UUID
@@ -55,6 +57,7 @@ class RagServiceResult(BaseModel):
     similarity: float
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    query_index: Optional[int] = None
 
 
 class RagService:
@@ -181,14 +184,14 @@ class RagService:
             rag_items = []
             dim = len(embeddings[0])
 
-            for i, (text, meta, emb) in enumerate(
+            for i, (content, meta, emb) in enumerate(
                 zip(texts, metadata_list, embeddings)
             ):
                 item_data = {
                     "model": self.model,
                     "collection_name": collection_name,
                     "source_id": source_ids[i] if source_ids else "default",
-                    "content": text,
+                    "content": content,
                     "embedding_size": dim,
                     "embedding": emb,
                     "rag_metadata": meta,
@@ -293,6 +296,156 @@ class RagService:
             rows = result.all()
 
             return [self._map_row_to_result(row[0], row[1]) for row in rows]
+
+    async def batch_query(
+        self,
+        texts: list[str],
+        top_k: int = 5,
+        collection_name: Optional[str] = None,
+        source_ids: Optional[list[str]] = None,
+    ) -> list[list[RagServiceResult]]:
+        """
+        Query the indexed items for similarities to multiple input texts in a single database call.
+
+        This method uses PostgreSQL CROSS JOIN LATERAL to efficiently process multiple queries
+        in a single round trip to the database, significantly improving performance for batch operations.
+
+        Args:
+            texts (list[str]): List of query texts to search for.
+            top_k (int): Number of top results to return per query. Defaults to 5.
+            collection_name (Optional[str]): If provided, filter by collection name.
+            source_ids (Optional[list[str]]): If provided, filter by source identifiers.
+
+        Returns:
+            list[list[RagServiceResult]]: A list of result lists, where each inner list contains
+                                          the top_k results for the corresponding query text.
+        """
+        if not texts:
+            return []
+
+        async with self.session_maker() as session:
+            # Get schema from environment variable if possible, similar to other parts of the system
+            schema = os.getenv("KAVALAI_DB_SCHEMA")
+            if schema:
+                await session.execute(text(f"SET search_path TO {schema}, public"))
+
+            # Compute embeddings for all query texts
+            embeddings, stats = await self.llm_client.compute_embeddings(
+                texts=texts,
+                normalizer=self.normalizer,
+            )
+            session.add(stats)
+
+            # Build the CROSS JOIN LATERAL query
+            query = self._build_batch_query_sql(
+                embeddings=embeddings,
+                top_k=top_k,
+                collection_name=collection_name,
+                source_ids=source_ids,
+            )
+
+            # Execute the query
+            result = await session.execute(query)
+            rows = result.all()
+
+            # Group results by query_index
+            results_by_query: dict[int, list[RagServiceResult]] = {
+                i: [] for i in range(len(texts))
+            }
+
+            for row in rows:
+                rag_result = RagServiceResult(
+                    id=row.id,
+                    model=row.model,
+                    collection_name=row.collection_name,
+                    source_id=row.source_id,
+                    content=row.content,
+                    embedding_size=row.embedding_size,
+                    rag_metadata=row.metadata or {},
+                    similarity=1.0 - float(row.distance)
+                    if row.distance is not None
+                    else 0.0,
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
+                    query_index=int(row.query_idx)
+                    - 1,  # Convert 1-indexed to 0-indexed
+                )
+                results_by_query[int(row.query_idx) - 1].append(rag_result)
+
+            # Return results in order
+            return [results_by_query[i] for i in range(len(texts))]
+
+    def _build_batch_query_sql(
+        self,
+        embeddings: list[list[float]],
+        top_k: int,
+        collection_name: Optional[str] = None,
+        source_ids: Optional[list[str]] = None,
+    ):
+        """
+        Build a CROSS JOIN LATERAL SQL query for batch vector search.
+
+        This uses the technique described in:
+        https://www.murhabazi.com/batch-vector-search-pgvector-postgresql-cross-lateral-joins
+        """
+        # Build the array of vectors for UNNEST
+        vector_array_parts = []
+        params = {}
+
+        for i, embedding in enumerate(embeddings):
+            param_name = f"vector_{i}"
+            params[param_name] = str(embedding)
+            vector_array_parts.append(f"CAST(:{param_name} AS vector)")
+
+        vector_array = f"ARRAY[{', '.join(vector_array_parts)}]"
+
+        # Build WHERE clause filters
+        where_clauses = ["model = :model"]
+        params["model"] = self.model
+
+        if collection_name:
+            where_clauses.append("collection_name = :collection_name")
+            params["collection_name"] = collection_name
+
+        if source_ids:
+            where_clauses.append("source_id = ANY(:source_ids)")
+            params["source_ids"] = source_ids
+
+        where_clause = " AND ".join(where_clauses)
+
+        # Build the complete query
+        query_sql = f"""
+        SELECT
+            results.*,
+            v.query_idx
+        FROM
+            unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
+        CROSS JOIN LATERAL (
+            SELECT
+                id,
+                model,
+                collection_name,
+                source_id,
+                content,
+                embedding_size,
+                metadata,
+                created_at,
+                updated_at,
+                (embedding <=> v.query_vector) as distance
+            FROM
+                rag_index
+            WHERE
+                {where_clause}
+            ORDER BY
+                (embedding <=> v.query_vector) ASC
+            LIMIT :top_k
+        ) AS results
+        ORDER BY v.query_idx ASC, results.distance ASC
+        """
+
+        params["top_k"] = top_k
+
+        return text(query_sql).bindparams(**params)
 
     def _build_query_stmt(
         self,

@@ -395,3 +395,85 @@ async def test_compute_similarity_matrix(
     # avg distance will be average of ("apple" vs "apple") and ("apple" vs "apple pie")
     # So avg similarity should be less than or equal to min similarity
     assert matrix_avg[0][0] <= matrix_min[0][0]
+
+
+@pytest.mark.asyncio
+async def test_rag_service_batch_query(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    # Index some test documents
+    texts = ["apple", "banana", "cherry", "date", "elderberry"]
+    source_ids = ["s1", "s2", "s3", "s4", "s5"]
+    collection = "batch_query_test"
+
+    await service.batch_index(
+        texts=texts,
+        metadata_list=[{}] * len(texts),
+        collection_name=collection,
+        source_ids=source_ids,
+    )
+
+    # 1. Basic batch query with multiple texts
+    queries = ["apple", "banana"]
+    results = await service.batch_query(
+        texts=queries, top_k=1, collection_name=collection
+    )
+
+    assert len(results) == 2
+    assert len(results[0]) == 1
+    assert len(results[1]) == 1
+    assert results[0][0].content == "apple"
+    assert results[1][0].content == "banana"
+
+    # 2. Batch query with collection filtering
+    # Create another collection
+    await service.batch_index(
+        texts=["pineapple"],
+        metadata_list=[{}],
+        collection_name="other_coll",
+        source_ids=["s6"],
+    )
+
+    # Query in original collection, should not find "pineapple"
+    results_filtered = await service.batch_query(
+        texts=["apple", "pineapple"], top_k=1, collection_name=collection
+    )
+    assert len(results_filtered) == 2
+    assert results_filtered[0][0].content == "apple"
+    # For "pineapple", it should find the closest in "batch_query_test" (likely "apple")
+    assert results_filtered[1][0].content != "pineapple"
+
+    # Query in other collection
+    results_other = await service.batch_query(
+        texts=["pineapple"], top_k=1, collection_name="other_coll"
+    )
+    assert results_other[0][0].content == "pineapple"
+
+    # 3. Batch query with source_ids filtering
+    results_sid = await service.batch_query(
+        texts=["apple", "banana"],
+        top_k=5,
+        collection_name=collection,
+        source_ids=["s1", "s3"],
+    )
+    assert len(results_sid) == 2
+    # Result for "apple" should be "apple" (s1)
+    assert results_sid[0][0].content == "apple"
+    assert results_sid[0][0].source_id == "s1"
+    # Result for "banana" should be "cherry" (s3) because "banana" (s2) is filtered out
+    # Actually "apple" might be closer to "banana" than "cherry" depending on the model.
+    # Let's check which one is closer or just use a more distinct query.
+    assert results_sid[1][0].source_id in ["s1", "s3"]
+    assert results_sid[1][0].source_id != "s2"
+
+    # 4. Empty input
+    assert await service.batch_query(texts=[]) == []
+
+    # 5. Verify top_k
+    results_top_k = await service.batch_query(
+        texts=["fruit"], top_k=3, collection_name=collection
+    )
+    assert len(results_top_k) == 1
+    assert len(results_top_k[0]) == 3
