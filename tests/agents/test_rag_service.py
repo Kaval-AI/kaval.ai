@@ -1,9 +1,14 @@
 import pytest
+import uuid
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch, MagicMock
+
+from sqlalchemy import Table, Column, String, Boolean, MetaData, Float, text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from kavalai.agents.rag_service import RagService, RagServiceResult
 from kavalai.normalizer import Normalizer
-from kavalai.agents.db import ModelCallStat
+from kavalai.agents.db import ModelCallStat, db_manager
 
 
 @pytest.fixture
@@ -134,8 +139,6 @@ async def test_rag_service_with_normalizer():
 
         # Initialize RagService with normalizer
         # Pass a session instead of URI to avoid real DB engine creation
-        from contextlib import asynccontextmanager
-
         @asynccontextmanager
         async def session_factory():
             yield mock_session
@@ -188,8 +191,6 @@ async def test_rag_service_without_normalizer():
         )
 
         # Initialize RagService without normalizer
-        from contextlib import asynccontextmanager
-
         @asynccontextmanager
         async def session_factory():
             yield mock_session
@@ -477,3 +478,367 @@ async def test_rag_service_batch_query(
     )
     assert len(results_top_k) == 1
     assert len(results_top_k[0]) == 3
+
+
+@pytest.mark.asyncio
+async def test_rag_service_batch_query_with_join(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test batch_query_with_join with a mock products table."""
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    async with service.session_maker() as session:
+        # Create a mock products table
+        metadata = MetaData()
+        _ = Table(
+            "products",
+            metadata,
+            Column("id", PGUUID(as_uuid=True), primary_key=True),
+            Column("name", String),
+            Column("category", String),
+            Column("price", Float),
+            Column("in_stock", Boolean),
+        )
+
+        # Create the table
+        await session.execute(text("DROP TABLE IF EXISTS products"))
+        await session.commit()
+
+        create_table_sql = """
+            CREATE TABLE products (
+                id UUID PRIMARY KEY,
+                name VARCHAR,
+                category VARCHAR,
+                price FLOAT,
+                in_stock BOOLEAN
+            )
+        """
+        await session.execute(text(create_table_sql))
+        await session.commit()
+
+        # Insert test products
+        product_data = [
+            (
+                uuid.uuid4(),
+                "Wireless Headphones",
+                "electronics",
+                99.99,
+                True,
+            ),
+            (
+                uuid.uuid4(),
+                "Laptop Stand",
+                "electronics",
+                49.99,
+                True,
+            ),
+            (
+                uuid.uuid4(),
+                "Office Chair",
+                "furniture",
+                299.99,
+                True,
+            ),
+            (
+                uuid.uuid4(),
+                "Desk Lamp",
+                "electronics",
+                29.99,
+                False,
+            ),  # Out of stock
+            (
+                uuid.uuid4(),
+                "USB Cable",
+                "electronics",
+                9.99,
+                True,
+            ),
+        ]
+
+        for product_id, name, category, price, in_stock in product_data:
+            await session.execute(
+                text(
+                    """
+                INSERT INTO products (id, name, category, price, in_stock)
+                VALUES (:id, :name, :category, :price, :in_stock)
+            """
+                ),
+                {
+                    "id": product_id,
+                    "name": name,
+                    "category": category,
+                    "price": price,
+                    "in_stock": in_stock,
+                },
+            )
+        await session.commit()
+
+    # Index products in RAG
+    texts = [p[1] for p in product_data]  # Product names
+    source_ids = [str(p[0]) for p in product_data]  # Product IDs
+    collection = "products"
+
+    await service.batch_index(
+        texts=texts,
+        metadata_list=[{}] * len(texts),
+        collection_name=collection,
+        source_ids=source_ids,
+    )
+
+    # Test 1: Query without filters
+    results_no_filter = await service.batch_query_with_join(
+        texts=["headphones"],
+        top_k=5,
+        collection_name=collection,
+        join_table="products p",
+        join_condition="p.id::text = r.source_id",
+        join_columns=["p.name", "p.category", "p.price", "p.in_stock"],
+    )
+
+    assert len(results_no_filter) == 1
+    assert len(results_no_filter[0]) > 0
+    # Should find "Wireless Headphones" as top result
+    assert "Wireless Headphones" in results_no_filter[0][0]["name"]
+
+    # Test 2: Query with category filter
+    results_electronics = await service.batch_query_with_join(
+        texts=["headphones", "chair"],
+        top_k=5,
+        collection_name=collection,
+        join_table="products p",
+        join_condition="p.id::text = r.source_id",
+        join_columns=["p.name", "p.category", "p.price"],
+        additional_where="p.category = 'electronics'",
+    )
+
+    assert len(results_electronics) == 2
+    # First query should find electronics
+    assert all(r["category"] == "electronics" for r in results_electronics[0])
+    # Second query "chair" should find electronics (not the furniture chair)
+    assert all(r["category"] == "electronics" for r in results_electronics[1])
+    # Should NOT find "Office Chair" since it's furniture
+    chair_names = [r["name"] for r in results_electronics[1]]
+    assert "Office Chair" not in chair_names
+
+    # Test 3: Query with in_stock filter
+    results_in_stock = await service.batch_query_with_join(
+        texts=["lamp"],
+        top_k=5,
+        collection_name=collection,
+        join_table="products p",
+        join_condition="p.id::text = r.source_id",
+        join_columns=["p.name", "p.in_stock"],
+        additional_where="p.in_stock = true",
+    )
+
+    assert len(results_in_stock) == 1
+    # Should NOT find "Desk Lamp" (out of stock)
+    lamp_names = [r["name"] for r in results_in_stock[0]]
+    assert "Desk Lamp" not in lamp_names
+
+    # Test 4: Combined filters
+    results_combined = await service.batch_query_with_join(
+        texts=["electronics"],
+        top_k=5,
+        collection_name=collection,
+        join_table="products p",
+        join_condition="p.id::text = r.source_id",
+        join_columns=["p.name", "p.category", "p.price", "p.in_stock"],
+        additional_where="p.category = 'electronics' AND p.in_stock = true AND p.price < 100",
+    )
+
+    assert len(results_combined) == 1
+    for result in results_combined[0]:
+        assert result["category"] == "electronics"
+        assert result["in_stock"] is True
+        assert result["price"] < 100
+
+    # Test 5: Empty results
+    results_empty = await service.batch_query_with_join(
+        texts=["nonexistent product xyz"],
+        top_k=5,
+        collection_name=collection,
+        join_table="products p",
+        join_condition="p.id::text = r.source_id",
+        join_columns=["p.name"],
+        additional_where="p.category = 'nonexistent'",
+    )
+
+    assert len(results_empty) == 1
+    assert len(results_empty[0]) == 0  # No results
+
+    # Cleanup
+    async with service.session_maker() as session:
+        await session.execute(text("DROP TABLE IF EXISTS products"))
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_build_batch_query_cte(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test the build_batch_query_cte method directly."""
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    # Create some embeddings (mock)
+    embeddings = [
+        [0.1] * 1536,  # Query 1
+        [0.2] * 1536,  # Query 2
+    ]
+
+    # Test 1: Basic CTE without filters
+    cte_sql, params = service.build_batch_query_cte(
+        embeddings=embeddings, top_k=5, collection_name="test"
+    )
+
+    assert "rag_results AS" in cte_sql
+    assert "unnest" in cte_sql.lower()
+    assert "CROSS JOIN LATERAL" in cte_sql
+    assert "WITH ORDINALITY" in cte_sql
+    assert params["model"] == embedding_model
+    assert params["collection_name"] == "test"
+    assert params["top_k"] == 5
+    assert "vector_0" in params
+    assert "vector_1" in params
+
+    # Test 2: CTE with source filter
+    cte_sql_filtered, params_filtered = service.build_batch_query_cte(
+        embeddings=embeddings,
+        top_k=10,
+        collection_name="test",
+        source_filter_sql="EXISTS (SELECT 1 FROM products p WHERE p.id::text = rag_index.source_id)",
+    )
+
+    assert "EXISTS" in cte_sql_filtered
+    assert "products p" in cte_sql_filtered
+    assert params_filtered["top_k"] == 10
+
+
+@pytest.mark.asyncio
+async def test_batch_query_with_join_empty_input(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test batch_query_with_join with empty texts."""
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    results = await service.batch_query_with_join(
+        texts=[],
+        top_k=5,
+        collection_name="products",
+    )
+
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_rag_service_from_session_maker(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test creating RagService from session maker."""
+    session_maker = db_manager.get_sessionmaker(uri=agents_db_config["uri"])
+    service = RagService.from_session_maker(session_maker, embedding_model)
+    assert isinstance(service, RagService)
+    assert service.model == embedding_model
+    assert service.session_maker == session_maker
+
+
+@pytest.mark.asyncio
+async def test_rag_service_batch_index_edge_cases(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test batch_index edge cases for coverage."""
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    # Empty texts
+    assert (
+        await service.batch_index(texts=[], metadata_list=[], collection_name="test")
+        == []
+    )
+
+    # Mismatched texts and metadata
+    with pytest.raises(
+        ValueError,
+        match="The number of texts and metadata dictionaries must be the same.",
+    ):
+        await service.batch_index(texts=["a"], metadata_list=[], collection_name="test")
+
+    # Mismatched texts and source_ids
+    with pytest.raises(
+        ValueError, match="The number of texts and source_ids must be the same."
+    ):
+        await service.batch_index(
+            texts=["a"],
+            metadata_list=[{}],
+            source_ids=["1", "2"],
+            collection_name="test",
+        )
+
+    # Single index (explicitly)
+    item = await service.index(
+        text="test single", source_metadata={"key": "val"}, collection_name="single"
+    )
+    assert item.content == "test single"
+    assert item.rag_metadata == {"key": "val"}
+    assert item.collection_name == "single"
+
+
+@pytest.mark.asyncio
+async def test_rag_service_compute_similarity_matrix_empty(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test compute_similarity_matrix with empty inputs."""
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    # Empty texts
+    res1 = await service.compute_similarity_matrix(texts=[], source_ids=["1"])
+    assert res1 == []
+
+    # Empty source_ids
+    res2 = await service.compute_similarity_matrix(texts=["a"], source_ids=[])
+    assert res2 == [[]]
+
+
+@pytest.mark.asyncio
+async def test_rag_service_batch_query_with_join_no_table(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test batch_query_with_join without join_table to cover the 'else' branch (line 479)."""
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    # Index something
+    await service.index(text="test join", collection_name="join_test", source_id="s1")
+
+    # Query without join_table
+    results = await service.batch_query_with_join(
+        texts=["test join"],
+        top_k=5,
+        collection_name="join_test",
+    )
+
+    assert len(results) == 1
+    assert len(results[0]) == 1
+    assert results[0][0]["content"] == "test join"
+    assert "id" in results[0][0]
+    assert "source_id" in results[0][0]
+    assert "similarity" in results[0][0]
+
+
+@pytest.mark.asyncio
+async def test_rag_service_learn_normalizer(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test learn_normalizer method."""
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    # Add some data to learn from
+    await service.batch_index(
+        texts=["data 1", "data 2", "data 3"],
+        metadata_list=[{}, {}, {}],
+        collection_name="learn_test",
+    )
+
+    # Mock Normalizer.learn_from_rag to avoid actual heavy computation if any,
+    # though it should be fast on small data.
+    # Actually, let's just run it to be sure it works.
+    normalizer = await service.learn_normalizer(collection_name="learn_test")
+    assert isinstance(normalizer, Normalizer)

@@ -375,6 +375,237 @@ class RagService:
             # Return results in order
             return [results_by_query[i] for i in range(len(texts))]
 
+    async def batch_query_with_join(
+        self,
+        texts: list[str],
+        top_k: int = 5,
+        collection_name: Optional[str] = None,
+        join_table: Optional[str] = None,
+        join_condition: Optional[str] = None,
+        join_columns: Optional[list[str]] = None,
+        additional_where: Optional[str] = None,
+    ) -> list[list[dict]]:
+        """
+        Query indexed items and join with another table in a single SQL query using CTE.
+
+        This is useful when you need to filter RAG results by attributes in another table
+        (e.g., product category, price, availability) without passing large lists of IDs.
+
+        Args:
+            texts (list[str]): List of query texts to search for.
+            top_k (int): Number of top results to return per query. Defaults to 5.
+            collection_name (Optional[str]): If provided, filter by collection name.
+            join_table (Optional[str]): Table to join with (e.g., "products p").
+            join_condition (Optional[str]): Join condition (e.g., "p.id::text = r.source_id").
+            join_columns (Optional[list[str]]): Additional columns to select from joined table.
+            additional_where (Optional[str]): Additional WHERE clause for filtering joined table.
+
+        Returns:
+            list[list[dict]]: A list of result lists, where each inner list contains
+                             dictionaries with RAG results + joined table columns.
+
+        Example:
+            results = await service.batch_query_with_join(
+                texts=["wireless headphones", "laptop stand"],
+                top_k=10,
+                collection_name="products",
+                join_table="products p",
+                join_condition="p.id::text = r.source_id",
+                join_columns=["p.name", "p.price", "p.category", "p.in_stock"],
+                additional_where="p.category = 'electronics' AND p.in_stock = true"
+            )
+        """
+        if not texts:
+            return []
+
+        async with self.session_maker() as session:
+            # Set schema if configured
+            schema = os.getenv("KAVALAI_DB_SCHEMA")
+            if schema:
+                await session.execute(text(f"SET search_path TO {schema}, public"))
+
+            # Compute embeddings
+            embeddings, stats = await self.llm_client.compute_embeddings(
+                texts=texts,
+                normalizer=self.normalizer,
+            )
+            session.add(stats)
+
+            # Build source filter for CTE if additional_where is provided
+            source_filter = None
+            if join_table and additional_where:
+                # Extract table alias from join_table (e.g., "products p" -> "p")
+                table_parts = join_table.split()
+                _ = table_parts[-1] if len(table_parts) > 1 else table_parts[0]
+                source_filter = f"""
+                    EXISTS (
+                        SELECT 1 FROM {join_table}
+                        WHERE {join_condition.replace('r.source_id', 'rag_index.source_id')}
+                        AND {additional_where}
+                    )
+                """
+
+            # Build CTE
+            cte_sql, params = self.build_batch_query_cte(
+                embeddings=embeddings,
+                top_k=top_k,
+                collection_name=collection_name,
+                source_filter_sql=source_filter,
+            )
+
+            # Build final query
+            select_columns = [
+                "r.id",
+                "r.source_id",
+                "r.content",
+                "r.similarity",
+                "r.query_idx",
+            ]
+
+            if join_columns:
+                select_columns.extend(join_columns)
+
+            select_clause = ", ".join(select_columns)
+
+            if join_table and join_condition:
+                query_sql = f"""
+                    WITH {cte_sql}
+                    SELECT {select_clause}
+                    FROM rag_results r
+                    JOIN {join_table} ON {join_condition}
+                    ORDER BY r.query_idx, r.similarity DESC
+                """
+            else:
+                query_sql = f"""
+                    WITH {cte_sql}
+                    SELECT {select_clause}
+                    FROM rag_results r
+                    ORDER BY r.query_idx, r.similarity DESC
+                """
+
+            result = await session.execute(text(query_sql).bindparams(**params))
+            rows = result.all()
+
+            # Group results by query_index
+            results_by_query: dict[int, list[dict]] = {i: [] for i in range(len(texts))}
+
+            for row in rows:
+                row_dict = dict(row._mapping)
+                query_idx = row_dict.pop("query_idx") - 1  # Convert to 0-indexed
+                results_by_query[query_idx].append(row_dict)
+
+            return [results_by_query[i] for i in range(len(texts))]
+
+    def build_batch_query_cte(
+        self,
+        embeddings: list[list[float]],
+        top_k: int,
+        collection_name: Optional[str] = None,
+        source_filter_sql: Optional[str] = None,
+    ) -> tuple[str, dict]:
+        """
+        Build a CTE (Common Table Expression) for batch vector search that can be embedded in larger queries.
+
+        This allows you to join RAG results with other tables in a single query.
+
+        Args:
+            embeddings (list[list[float]]): Pre-computed embeddings for the queries.
+            top_k (int): Number of results per query.
+            collection_name (Optional[str]): Filter by collection name.
+            source_filter_sql (Optional[str]): Additional SQL WHERE clause to filter sources.
+                                               Can reference other CTEs or tables.
+                                               Example: "EXISTS (SELECT 1 FROM filtered_hotels fh WHERE fh.id = rag_index.source_id)"
+
+        Returns:
+            tuple[str, dict]: (CTE SQL without WITH keyword, parameter dict)
+
+        Example:
+            embeddings, _ = await llm_client.compute_embeddings(texts)
+            cte_sql, params = service.build_batch_query_cte(embeddings, top_k=10)
+
+            query = text(f'''
+                WITH {cte_sql},
+                hotel_data AS (
+                    SELECT h.*, r.similarity, r.query_idx
+                    FROM rag_results r
+                    JOIN hotels h ON h.id = r.source_id::uuid
+                )
+                SELECT * FROM hotel_data ORDER BY query_idx, similarity DESC
+            ''').bindparams(**params)
+        """
+        params = self._build_cte_params(embeddings, collection_name)
+        vector_array = self._build_vector_array(len(embeddings))
+        where_clause = self._build_cte_where_clause(collection_name, source_filter_sql)
+
+        cte_sql = f"""rag_results AS (
+            SELECT
+                results.id,
+                results.model,
+                results.collection_name,
+                results.source_id,
+                results.content,
+                results.embedding_size,
+                results.metadata,
+                results.created_at,
+                results.updated_at,
+                results.distance,
+                (1.0 - results.distance) as similarity,
+                v.query_idx
+            FROM
+                unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
+            CROSS JOIN LATERAL (
+                SELECT
+                    id,
+                    model,
+                    collection_name,
+                    source_id,
+                    content,
+                    embedding_size,
+                    metadata,
+                    created_at,
+                    updated_at,
+                    (embedding <=> v.query_vector) as distance
+                FROM
+                    rag_index
+                WHERE
+                    {where_clause}
+                ORDER BY
+                    (embedding <=> v.query_vector) ASC
+                LIMIT :top_k
+            ) AS results
+            ORDER BY v.query_idx ASC, results.distance ASC
+        )"""
+
+        params["top_k"] = top_k
+        return cte_sql, params
+
+    def _build_cte_params(
+        self, embeddings: list[list[float]], collection_name: Optional[str]
+    ) -> dict:
+        """Build parameter dictionary for CTE."""
+        params = {"model": self.model}
+        for i, embedding in enumerate(embeddings):
+            params[f"vector_{i}"] = str(embedding)
+        if collection_name:
+            params["collection_name"] = collection_name
+        return params
+
+    def _build_vector_array(self, num_embeddings: int) -> str:
+        """Build the ARRAY[...] expression for vector embeddings."""
+        vector_parts = [f"CAST(:vector_{i} AS vector)" for i in range(num_embeddings)]
+        return f"ARRAY[{', '.join(vector_parts)}]"
+
+    def _build_cte_where_clause(
+        self, collection_name: Optional[str], source_filter_sql: Optional[str]
+    ) -> str:
+        """Build WHERE clause for CTE."""
+        where_clauses = ["model = :model"]
+        if collection_name:
+            where_clauses.append("collection_name = :collection_name")
+        if source_filter_sql:
+            where_clauses.append(f"({source_filter_sql})")
+        return " AND ".join(where_clauses)
+
     def _build_batch_query_sql(
         self,
         embeddings: list[list[float]],
