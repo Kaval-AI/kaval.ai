@@ -121,7 +121,6 @@ class PlanningAgent:
 
         Returns: (tool_call, args, tool_result, duration, errors)
         """
-        duration = 0.0
         errors = []
 
         def parse_json(field_name: str, value: str) -> dict:
@@ -171,7 +170,6 @@ class PlanningAgent:
         args = self._resolve_template(args)
 
         logger.info(f"Calling tool {tool_call.name} with {args}")
-        tool_result = None
         try:
             start_time = time.perf_counter()
             tool_result = await self._kernel.call_tool(
