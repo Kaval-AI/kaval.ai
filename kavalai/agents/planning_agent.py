@@ -338,6 +338,11 @@ class PlanningAgent:
             step_output, stats = await self._get_llm_response(messages, StepOutput)
             self._step_outputs.append(step_output)
 
+            # Make sure all tool calls have ids
+            for idx, tool_call in enumerate(step_output.tool_calls):
+                if tool_call.call_id is None:
+                    tool_call.call_id = f"tool_call_{iter_no}_{idx}"
+
             logger.info(f"Step {iter_no}: {step_output.short_explanation}")
             logger.info(f"Tool calls {iter_no}: {step_output.tool_calls}")
 

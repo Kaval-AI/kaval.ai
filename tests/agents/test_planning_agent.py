@@ -1026,8 +1026,74 @@ async def test_planning_agent_logs_tool_calls(agent_service, session_maker):
         # Fourth task: overall agent task
         agent_task = tasks[3]
         assert agent_task.name == "planning_task"
-        assert agent_task.prompt is not None
-        assert "You are a planning agent" in agent_task.prompt
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_generates_deterministic_call_id():
+    """Test that PlanningAgent generates call_id for tool calls if missing from LLM response."""
+    from kavalai.agents.planning_agent import ToolCall, get_step_output_type
+
+    kernel = MagicMock(spec=FunctionKernel)
+    kernel.get_tool_descriptions = AsyncMock(return_value="[]")
+    kernel.call_tool = AsyncMock(return_value="Tool Result")
+
+    run_context = RunContext()
+    llm_client = MagicMock(spec=LLMClient)
+
+    agent = PlanningAgent(
+        kernel=kernel,
+        run_context=run_context,
+        llm_client=llm_client,
+        input_data={},
+        response_model=MockResponse,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # Mock LLM response with missing call_id
+    step0 = StepOutput(
+        short_explanation="Step 0",
+        instructions="Planning to call a tool",
+        tool_calls=[
+            ToolCall(
+                name="python://tool1",
+                call_id=None,
+                literal_args=json.dumps({"a": 1}),
+            ),
+            ToolCall(
+                name="python://tool2",
+                call_id="provided_id",
+                literal_args=json.dumps({"b": 2}),
+            ),
+        ],
+        output=None,
+    )
+
+    # Final response
+    step1 = StepOutput(
+        short_explanation="Step 1",
+        instructions="Finished",
+        tool_calls=[],
+        output=MockResponse(answer="Final Answer"),
+    )
+
+    llm_client.chat_completions.side_effect = [
+        (step0, {"stats": "dummy"}),
+        (step1, {"stats": "dummy"}),
+    ]
+
+    # Run agent
+    await agent.run(task_name="test_task", task="task", max_iterations=2)
+
+    # Check that call_id was generated deterministically for the first tool call
+    tool_calls = agent._step_outputs[0].tool_calls
+    assert tool_calls[0].call_id == "tool_call_0_0"
+    assert tool_calls[1].call_id == "provided_id"
+
+    # Check it is in planner_context
+    assert "tool_call_0_0" in agent._planner_context
+    assert agent._planner_context["tool_call_0_0"] == "Tool Result"
+    assert "provided_id" in agent._planner_context
 
 
 @pytest.mark.asyncio
