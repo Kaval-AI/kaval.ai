@@ -30,6 +30,7 @@ from kavalai.normalizer import Normalizer
 from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.openai_client import OpenAIClient
 from kavalai.llm_clients.common import Streamer
+from kavalai.llm_clients.kwargs_mapper import LLMKWargsMapper
 
 
 T = TypeVar("T")
@@ -149,6 +150,9 @@ class LLMClient:
             },
         }
 
+        # Map user-friendly/common kwargs to provider-specific ones
+        mapped_kwargs = LLMKWargsMapper.map(self.provider, self.model_name, kwargs)
+
         content, stats = await with_retry(
             self.client.chat_completions,
             model=self.model_name,
@@ -156,7 +160,7 @@ class LLMClient:
             response_model=response_model,
             streamer=streamer,
             stream_delta=stream_delta,
-            **kwargs,
+            **mapped_kwargs,
         )
 
         stats.request_data = {"requests": [request_info]}
