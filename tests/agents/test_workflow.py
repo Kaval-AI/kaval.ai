@@ -1409,11 +1409,17 @@ class TestWorkflowPlanningAgent:
             assert run_context.data["planner_task"] == final_output
             assert run_context.data["output"] == final_output
 
-            # Verify add_task was called with the correct name
-            mock_agent_service.add_task.assert_called_once()
-            _, kwargs = mock_agent_service.add_task.call_args
-            assert kwargs["name"] == "planner_task"
-            assert kwargs["output"] == to_plain(final_output)
+            # Verify add_task was called for both the step and the overall task
+            assert mock_agent_service.add_task.call_count == 2
+
+            # Check the first call (step 0)
+            args0, kwargs0 = mock_agent_service.add_task.call_args_list[0]
+            assert kwargs0["name"] == "planner_task_step_0"
+
+            # Check the second call (overall task)
+            args1, kwargs1 = mock_agent_service.add_task.call_args_list[1]
+            assert kwargs1["name"] == "planner_task"
+            assert kwargs1["output"] == to_plain(final_output)
 
             # Verify LLMClient was initialized with the correct model
             MockLLMClient.assert_called_once_with(model="openai/test-model")

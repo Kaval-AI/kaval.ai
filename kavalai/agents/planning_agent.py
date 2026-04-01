@@ -316,6 +316,7 @@ class PlanningAgent:
         initial_system_prompt = None  # Capture the first system prompt for logging
 
         for iter_no in range(max_iterations):
+            step_start_time = time.perf_counter()
             system_prompt = await self._build_system_prompt(
                 task, iter_no, max_iterations
             )
@@ -342,6 +343,16 @@ class PlanningAgent:
 
             if step_output.tool_calls:
                 await self._process_tool_calls(step_output.tool_calls)
+
+            # Log the step
+            if self._task_logger:
+                await self._task_logger.log_agent_task(
+                    task_name=f"{task_name}_step_{iter_no}",
+                    system_prompt=system_prompt,
+                    input_data=self._input_data,
+                    output=to_plain(step_output),
+                    duration=time.perf_counter() - step_start_time,
+                )
 
             if step_output.output is not None:
                 final_output = step_output.output

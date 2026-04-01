@@ -895,8 +895,13 @@ async def test_planning_agent_logs_agent_task(agent_service, session_maker):
         result = await db_session.execute(select(Task).where(Task.run_id == run.id))
         tasks = result.scalars().all()
 
-        assert len(tasks) == 1
-        task_db = tasks[0]
+        assert len(tasks) == 2
+        # First task: step 0
+        step_task = tasks[0]
+        assert step_task.name == "planning_task_step_0"
+
+        # Second task: overall agent task
+        task_db = tasks[1]
         assert task_db.name == "planning_task"
         assert task_db.prompt is not None
         assert "You are a planning agent" in task_db.prompt
@@ -1001,17 +1006,25 @@ async def test_planning_agent_logs_tool_calls(agent_service, session_maker):
         )
         tasks = result.scalars().all()
 
-        # Should have 2 tasks: 1 tool call + 1 agent task
-        assert len(tasks) == 2
+        # Should have 4 tasks: tool call, step_0, step_1, agent task
+        assert len(tasks) == 4
 
-        # First task: tool call
+        # First task: tool call (from step 0 processing)
         tool_task = tasks[0]
         assert tool_task.name == "python://test_tool"
         assert tool_task.inputs == {"arguments": {"query": "search term"}}
         assert "Result for search term" in str(tool_task.output)
 
-        # Second task: overall agent task
-        agent_task = tasks[1]
+        # Second task: step 0
+        step0_task = tasks[1]
+        assert step0_task.name == "planning_task_step_0"
+
+        # Third task: step 1
+        step1_task = tasks[2]
+        assert step1_task.name == "planning_task_step_1"
+
+        # Fourth task: overall agent task
+        agent_task = tasks[3]
         assert agent_task.name == "planning_task"
         assert agent_task.prompt is not None
         assert "You are a planning agent" in agent_task.prompt
@@ -1158,8 +1171,8 @@ async def test_planning_agent_logs_tool_call_errors(agent_service, session_maker
         )
         tasks = result.scalars().all()
 
-        # Should have 2 tasks: 1 failed tool call + 1 overall agent task
-        assert len(tasks) == 2
+        # Should have 4 tasks: failed tool call, step_0, step_1, overall agent task
+        assert len(tasks) == 4
 
         # First task: failed tool call
         tool_task = tasks[0]
@@ -1167,6 +1180,14 @@ async def test_planning_agent_logs_tool_call_errors(agent_service, session_maker
         assert tool_task.errors == ["ValidationError: Missing required field"]
         assert "Error:" in str(tool_task.output)
 
-        # Second task: overall agent task
-        agent_task = tasks[1]
+        # Second task: step 0
+        step0_task = tasks[1]
+        assert step0_task.name == "planning_task_step_0"
+
+        # Third task: step 1
+        step1_task = tasks[2]
+        assert step1_task.name == "planning_task_step_1"
+
+        # Fourth task: overall agent task
+        agent_task = tasks[3]
         assert agent_task.name == "planning_task"
