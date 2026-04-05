@@ -151,7 +151,7 @@ class PlanningAgent:
             for arg_name, input_key in input_keys.items()
         }
 
-        # Check for duplicate keys
+        # Check for duplicate keys and log error
         all_keys = (
             list(literal_args.keys())
             + list(planner_args.keys())
@@ -159,12 +159,12 @@ class PlanningAgent:
         )
         duplicates = {k for k in all_keys if all_keys.count(k) > 1}
         if duplicates:
-            error_msg = f"Duplicate argument names found in ToolCall: {duplicates}"
+            error_msg = f"Duplicate argument names found in ToolCall: {duplicates}. Using precedence: literal_args > planner_context_args > input_args"
             logger.error(error_msg)
             errors.append(error_msg)
-            return tool_call, {}, f"Error: {error_msg}", 0.0, errors
 
-        args = {**literal_args, **planner_args, **input_args}
+        # Merge with precedence: literal_args > planner_context_args > input_args
+        args = {**input_args, **planner_args, **literal_args}
 
         # Still resolve templates in literal_args if any (backward compatibility or flexible usage)
         args = self._resolve_template(args)
@@ -192,10 +192,10 @@ class PlanningAgent:
         prompt_parts = [
             "You are a planning agent. Your goal is to achieve the following task:",
             task.strip(),
-            "# Tool calling instructions:",
+            "[TOOL CALLING INSTRUCTIONS]",
             "Use tools to fulfill the task.",
             "To call a tool, provide its name and arguments categorized by their source:",
-            "- `literal_args`: A JSON string of literal values for the tool.",
+            "- `literal_args`: A JSON string of literal values for the tool (e.g., constant values, empty arrays).",
             "- `planner_context_args`: A JSON string mapping tool argument names to keys in `planner_context` (results of previous tool calls).",
             "- `input_args`: A JSON object mapping tool argument names to keys in the provided # Inputs.",
             "",
@@ -210,19 +210,26 @@ class PlanningAgent:
             "{",
             '  "name": "python://data.process",',
             '  "planner_context_args": "{\\"raw_data\\": \\"search_result\\"}",',
-            '  "input_args": {"user_id": "current_user_id"},',
+            '  "input_args": "{\\"user_id\\": \\"current_user_id\\"}",',
             '  "literal_args": "{\\"mode\\": \\"fast\\"}"',
             "}",
             "",
-            "IMPORTANT: An argument name must only appear in ONE of the categories. Duplicates will cause an error.",
+            "CRITICAL RULE: Each parameter name MUST appear in ONLY ONE of literal_args, planner_context_args, or input_args.",
+            '- Use literal_args for constant values (e.g., {"countries": []})',
+            "- Use planner_context_args for references to previous tool results",
+            "- Use input_args for references to input data",
+            "- NEVER specify the same parameter in multiple categories",
+            "",
+            "Argument Precedence (when merging): literal_args > planner_context_args > input_args",
+            "While duplicates are merged with this precedence, they indicate an error in your planning and will be logged.",
             "",
             "You can still use template strings in `literal_args` if needed:",
             "- {{context.key}}: Reference a result from a previous tool call via call_id.",
             "- {{input.key}}: Reference data from the provided # Inputs section.",
             "",
-            "# Available tools:",
+            "[AVAILABLE TOOLS]",
             await self._kernel.get_tool_descriptions(self._allowed_tools),
-            "# Inputs:",
+            "[INPUTS]",
             json.dumps(self._input_data, indent=2),
             "Planner Context (tool results from previous steps, accessible via call_id):",
             json.dumps(
@@ -233,11 +240,11 @@ class PlanningAgent:
                 indent=2,
             ),
             "",
-            "Planning data",
+            "[PLANNING DATA]",
             f"current_step={iter_no}",
             f"max_steps={max_iterations}",
             "",
-            "Step Outputs (previous steps):",
+            "[STEP OUTPUTS (PREVIOUS STEPS)]",
             json.dumps(
                 [
                     so.model_dump() if hasattr(so, "model_dump") else so
