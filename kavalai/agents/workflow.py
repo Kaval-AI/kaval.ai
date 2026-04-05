@@ -492,35 +492,21 @@ class Workflow:
         external_id: Optional[str] = None,
         input_data: dict,
     ):
-        # Get or create the agent definition
-        agent = await self.agent_service.get_or_create_agent(
-            name=self.workflow_model.name,
-            description=self.workflow_model.description,
+        # Batch initialization: creates agent, session, and run in a single DB transaction
+        # This reduces 3 DB roundtrips to 1, improving performance for remote databases
+        agent, session, run = await self.agent_service.initialize_workflow_run(
+            agent_name=self.workflow_model.name,
+            agent_description=self.workflow_model.description,
             input_schema=self.workflow_model.data_types.get("input"),
             output_schema=self.workflow_model.data_types.get("output"),
             workflow=self.workflow_model.model_dump(),
+            session_id=session_id,
+            external_id=external_id,
+            input_data=input_data,
         )
+
         self.run_context.agent_id = agent.id
-
-        # Get or create session (using UUID or string external_id).
-        # Not to be confused with sqlalchemy sessions.
-        if session_id:
-            session = await self.agent_service.get_or_create_session(
-                agent_id=agent.id, session_id=session_id
-            )
-            if not session:
-                raise WorkflowException(f"Session with ID {session_id} not found")
-            self.run_context.session_id = session.id
-        else:
-            session = await self.agent_service.get_or_create_session(
-                agent_id=agent.id, session_id=None, external_id=external_id
-            )
-            self.run_context.session_id = session.id
-
-        # Creates the specific Run record for this execution
-        run = await self.agent_service.create_run(
-            session_id=self.run_context.session_id, input_data=input_data
-        )
+        self.run_context.session_id = session.id
         self.run_context.run_id = run.id
 
     async def _execute_task(

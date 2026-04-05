@@ -113,6 +113,83 @@ class AgentService:
             await session.refresh(run)
             return run
 
+    async def initialize_workflow_run(
+        self,
+        agent_name: str,
+        agent_description: Optional[str] = None,
+        input_schema: Optional[Dict] = None,
+        output_schema: Optional[Dict] = None,
+        workflow: Optional[Dict] = None,
+        session_id: Optional[UUID] = None,
+        external_id: Optional[str] = None,
+        input_data: Optional[Dict] = None,
+    ) -> tuple[Agent, Session, Run]:
+        """Initialize agent, session, and run in a single database transaction.
+
+        This is an optimized batch operation that reduces 3 DB roundtrips to 1,
+        improving performance especially for remote databases.
+
+        Returns:
+            tuple of (agent, session, run)
+        """
+        async with self.session_maker() as db_session:
+            # 1. Get or create agent
+            stmt = select(Agent).where(Agent.name == agent_name)
+            result = await db_session.execute(stmt)
+            agent = result.scalar_one_or_none()
+
+            if not agent:
+                agent = Agent(
+                    name=agent_name,
+                    description=agent_description,
+                    input_schema=input_schema,
+                    output_schema=output_schema,
+                    workflow=workflow,
+                )
+                db_session.add(agent)
+                await db_session.flush()  # Get agent.id for session creation
+            else:
+                # Update existing agent if schemas or workflow have changed
+                updates = {
+                    "description": agent_description,
+                    "input_schema": input_schema,
+                    "output_schema": output_schema,
+                    "workflow": workflow,
+                }
+                for field, value in updates.items():
+                    if value is not None and getattr(agent, field) != value:
+                        setattr(agent, field, value)
+
+            # 2. Get or create session
+            if session_id:
+                stmt = select(Session).where(Session.id == session_id)
+                result = await db_session.execute(stmt)
+                session_obj = result.scalar_one_or_none()
+                if not session_obj:
+                    raise ValueError(f"Session with ID {session_id} not found")
+            else:
+                session_obj = Session(agent_id=agent.id, external_id=external_id)
+                db_session.add(session_obj)
+                await db_session.flush()  # Get session_obj.id for run creation
+
+            # 3. Create run
+            run = Run(
+                session_id=session_obj.id,
+                input_data=to_plain(input_data),
+                context=None,
+            )
+            db_session.add(run)
+
+            # Single commit for all operations
+            await db_session.commit()
+
+            # Refresh to get created_at timestamps
+            await db_session.refresh(agent)
+            await db_session.refresh(session_obj)
+            await db_session.refresh(run)
+
+            return (agent, session_obj, run)
+
     async def update_run(
         self,
         run_id: UUID,

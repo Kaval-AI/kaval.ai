@@ -162,3 +162,111 @@ class TestAgentService:
         # Test non-existent key
         val_none = await service.get_history_value(session.id, "non_existent")
         assert val_none is None
+
+    async def test_initialize_workflow_run_new_agent(self, agents_session_maker):
+        """Test batch initialization creates new agent, session, and run."""
+        service = AgentService(agents_session_maker)
+
+        input_data = {"user_query": "test query"}
+        agent, session, run = await service.initialize_workflow_run(
+            agent_name="TestWorkflowAgent",
+            agent_description="Test description",
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+            workflow={"tasks": []},
+            input_data=input_data,
+        )
+
+        # Verify agent was created
+        assert agent.id is not None
+        assert agent.name == "TestWorkflowAgent"
+        assert agent.description == "Test description"
+        assert agent.workflow == {"tasks": []}
+
+        # Verify session was created
+        assert session.id is not None
+        assert session.agent_id == agent.id
+
+        # Verify run was created
+        assert run.id is not None
+        assert run.session_id == session.id
+        assert run.input_data == input_data
+
+    async def test_initialize_workflow_run_existing_agent(self, agents_session_maker):
+        """Test batch initialization reuses existing agent."""
+        service = AgentService(agents_session_maker)
+
+        # Create agent first
+        existing_agent = await service.get_or_create_agent(
+            name="ExistingAgent",
+            description="Original description",
+            workflow={"v": 1},
+        )
+
+        # Initialize workflow with same agent name
+        agent, session, run = await service.initialize_workflow_run(
+            agent_name="ExistingAgent",
+            agent_description="Updated description",
+            workflow={"v": 2},
+            input_data={"query": "test"},
+        )
+
+        # Should reuse same agent
+        assert agent.id == existing_agent.id
+        # Should update description and workflow
+        assert agent.description == "Updated description"
+        assert agent.workflow == {"v": 2}
+
+        # Should create new session and run
+        assert session.id is not None
+        assert session.agent_id == agent.id
+        assert run.id is not None
+        assert run.session_id == session.id
+
+    async def test_initialize_workflow_run_with_existing_session(self, agents_session_maker):
+        """Test batch initialization with existing session_id."""
+        service = AgentService(agents_session_maker)
+
+        # Create agent and session first
+        agent = await service.get_or_create_agent(name="SessionReuseAgent")
+        existing_session = await service.get_or_create_session(agent_id=agent.id)
+
+        # Initialize workflow with existing session_id
+        agent_result, session_result, run = await service.initialize_workflow_run(
+            agent_name="SessionReuseAgent",
+            session_id=existing_session.id,
+            input_data={"query": "test"},
+        )
+
+        # Should reuse same session
+        assert session_result.id == existing_session.id
+        assert session_result.agent_id == agent.id
+
+        # Should create new run
+        assert run.id is not None
+        assert run.session_id == existing_session.id
+
+    async def test_initialize_workflow_run_with_external_id(self, agents_session_maker):
+        """Test batch initialization with external_id for session."""
+        service = AgentService(agents_session_maker)
+
+        agent, session, run = await service.initialize_workflow_run(
+            agent_name="ExternalIdAgent",
+            external_id="user-123-session",
+            input_data={"query": "test"},
+        )
+
+        # Verify session has external_id
+        assert session.external_id == "user-123-session"
+        assert session.agent_id == agent.id
+
+    async def test_initialize_workflow_run_invalid_session_id(self, agents_session_maker):
+        """Test batch initialization with non-existent session_id raises error."""
+        service = AgentService(agents_session_maker)
+
+        with pytest.raises(ValueError, match="Session with ID .* not found"):
+            await service.initialize_workflow_run(
+                agent_name="InvalidSessionAgent",
+                session_id=uuid4(),  # Non-existent session
+                input_data={"query": "test"},
+            )
