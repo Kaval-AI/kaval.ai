@@ -567,11 +567,15 @@ class Workflow:
 
         # Initialize DB data if agent_service is given.
         if agent_service:
-            await self._initialize_agent_session(
-                session_id=session_id,
-                external_id=external_id,
-                input_data=input_data,
-            )
+            try:
+                await self._initialize_agent_session(
+                    session_id=session_id,
+                    external_id=external_id,
+                    input_data=input_data,
+                )
+            except ValueError as e:
+                raise WorkflowException(e) from e
+
             # Store the user message in agent_service.
             user_msg = getattr(parsed_input, "user_message", str(input_data))
             await agent_service.add_chat_message(
