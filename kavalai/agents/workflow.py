@@ -235,8 +235,8 @@ class Workflow:
         logger.info(f"Setting {task.output} = {response}")
         run_context.data[task.output] = response
 
-        # Log the task info in DB.
-        await self.task_logger.log_llm_task(
+        # Log the task info in DB (fire-and-forget).
+        self.task_logger.log_llm_task(
             task_name=task.name,
             prompt=input_text,
             input_data=input_data,
@@ -267,9 +267,9 @@ class Workflow:
         logger.info(f"Setting {task.output} = {debug_data}")
         run_context.data[task.output] = result
 
-        # Store the tool run info.
+        # Store the tool run info (fire-and-forget).
         tool_uri = f"rest://{task.rest_server}.{task.tool}"
-        await self.task_logger.log_tool_call(
+        self.task_logger.log_tool_call(
             tool_uri=tool_uri,
             arguments=inputs,
             output=result.model_dump() if isinstance(result, BaseModel) else result,
@@ -295,9 +295,9 @@ class Workflow:
         logger.info(f"Setting {task.output} = {debug_data}")
         run_context.data[task.output] = result
 
-        # Store the tool run info.
+        # Store the tool run info (fire-and-forget).
         tool_uri = f"mcp://{task.mcp_server}.{task.tool}"
-        await self.task_logger.log_tool_call(
+        self.task_logger.log_tool_call(
             tool_uri=tool_uri,
             arguments=inputs,
             output=result.model_dump() if isinstance(result, BaseModel) else result,
@@ -336,9 +336,9 @@ class Workflow:
                     else str(result)
                 )
 
-        # Record in DB
+        # Record in DB (fire-and-forget)
         tool_uri = f"python://{task.python_tool}"
-        await self.task_logger.log_tool_call(
+        self.task_logger.log_tool_call(
             tool_uri=tool_uri,
             arguments=inputs,
             output=to_plain(result),
@@ -473,8 +473,8 @@ class Workflow:
         # Handle output mapping if defined
         run_context.data[task.output] = run_context.data[task.name]
 
-        # Store the tool run info.
-        await self.task_logger.log_rag_query(
+        # Store the tool run info (fire-and-forget).
+        self.task_logger.log_rag_query(
             task_name=task.name,
             query_text=text,
             top_k=task.top_k,

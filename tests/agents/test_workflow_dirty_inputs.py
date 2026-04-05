@@ -1,7 +1,14 @@
 import pytest
+import asyncio
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.task_logger import TaskLogger
 from kavalai.agents.run_context import RunContext
+
+
+async def wait_for_background_tasks(task_logger: TaskLogger):
+    """Helper to wait for all background logging tasks to complete."""
+    if task_logger._background_tasks:
+        await asyncio.gather(*task_logger._background_tasks, return_exceptions=True)
 
 
 @pytest.mark.asyncio
@@ -26,7 +33,7 @@ async def test_reproduce_null_char_issue(agents_session_maker):
 
     # Try to log an agent task with the problematic string in various fields,
     # including a null character in a dictionary key.
-    await task_logger.log_agent_task(
+    task_logger.log_agent_task(
         task_name="Analyzing\u0000Task",
         system_prompt=problematic_string,
         input_data={
@@ -40,6 +47,7 @@ async def test_reproduce_null_char_issue(agents_session_maker):
         duration=1.0,
         errors=["Error with null\u0000"],
     )
+    await wait_for_background_tasks(task_logger)
 
     # If we reach here without an exception, the immediate crash is avoided.
     # Now check if the data was actually saved (and cleaned).

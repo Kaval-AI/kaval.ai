@@ -15,10 +15,17 @@ limitations under the License.
 """
 
 import pytest
+import asyncio
 
 from kavalai.agents.task_logger import TaskLogger
 from kavalai.agents.run_context import RunContext
 from kavalai.agents.agent_service import AgentService
+
+
+async def wait_for_background_tasks(task_logger: TaskLogger):
+    """Helper to wait for all background logging tasks to complete."""
+    if task_logger._background_tasks:
+        await asyncio.gather(*task_logger._background_tasks, return_exceptions=True)
 
 
 @pytest.fixture
@@ -53,13 +60,14 @@ async def test_task_logger_llm_task(agent_service, session_maker):
 
     # Create task logger and log an LLM task
     task_logger = TaskLogger(agent_service, run_context)
-    await task_logger.log_llm_task(
+    task_logger.log_llm_task(
         task_name="test_llm_task",
         prompt="You are a helpful assistant. Answer: {{input.question}}",
         input_data={"question": "What is 2+2?"},
         output={"answer": "4"},
         duration=1.5,
     )
+    await wait_for_background_tasks(task_logger)
 
     # Verify the task was logged
     async with session_maker() as db_session:
@@ -101,7 +109,7 @@ async def test_task_logger_llm_task_with_errors(agent_service, session_maker):
 
     # Create task logger and log an LLM task with errors
     task_logger = TaskLogger(agent_service, run_context)
-    await task_logger.log_llm_task(
+    task_logger.log_llm_task(
         task_name="test_llm_task_error",
         prompt="Test prompt",
         input_data={},
@@ -109,6 +117,7 @@ async def test_task_logger_llm_task_with_errors(agent_service, session_maker):
         duration=0.5,
         errors=["Validation error", "Timeout error"],
     )
+    await wait_for_background_tasks(task_logger)
 
     # Verify the task was logged with errors
     async with session_maker() as db_session:
@@ -154,13 +163,14 @@ async def test_task_logger_agent_task(agent_service, session_maker):
 # Inputs:
 {"query": "test"}
 """
-    await task_logger.log_agent_task(
+    task_logger.log_agent_task(
         task_name="planning_agent_task",
         system_prompt=system_prompt,
         input_data={"query": "test"},
         output={"result": "success"},
         duration=5.2,
     )
+    await wait_for_background_tasks(task_logger)
 
     # Verify the task was logged with system prompt
     async with session_maker() as db_session:
@@ -201,12 +211,13 @@ async def test_task_logger_tool_call(agent_service, session_maker):
 
     # Create task logger and log a tool call
     task_logger = TaskLogger(agent_service, run_context)
-    await task_logger.log_tool_call(
+    task_logger.log_tool_call(
         tool_uri="python://websearch.serper_web_search",
         arguments={"query": "Kaval AI"},
         output={"results": ["result1", "result2"]},
         duration=2.1,
     )
+    await wait_for_background_tasks(task_logger)
 
     # Verify the tool call was logged
     async with session_maker() as db_session:
@@ -246,7 +257,7 @@ async def test_task_logger_rag_query(agent_service, session_maker):
 
     # Create task logger and log a RAG query
     task_logger = TaskLogger(agent_service, run_context)
-    await task_logger.log_rag_query(
+    task_logger.log_rag_query(
         task_name="search_docs",
         query_text="What is Kaval AI?",
         top_k=5,
@@ -259,6 +270,7 @@ async def test_task_logger_rag_query(agent_service, session_maker):
         ],
         duration=0.3,
     )
+    await wait_for_background_tasks(task_logger)
 
     # Verify the RAG query was logged
     async with session_maker() as db_session:
@@ -293,7 +305,7 @@ async def test_task_logger_without_agent_service():
     task_logger = TaskLogger(None, run_context)
 
     # Should not raise an error, just silently skip logging
-    await task_logger.log_llm_task(
+    task_logger.log_llm_task(
         task_name="test_task",
         prompt="test",
         input_data={},
@@ -301,12 +313,13 @@ async def test_task_logger_without_agent_service():
         duration=1.0,
     )
 
-    await task_logger.log_tool_call(
+    task_logger.log_tool_call(
         tool_uri="test://tool",
         arguments={},
         output={},
         duration=1.0,
     )
+    await wait_for_background_tasks(task_logger)
 
 
 @pytest.mark.asyncio
@@ -331,13 +344,14 @@ async def test_task_logger_tool_call_with_errors(agent_service, session_maker):
 
     # Create task logger and log a tool call with errors
     task_logger = TaskLogger(agent_service, run_context)
-    await task_logger.log_tool_call(
+    task_logger.log_tool_call(
         tool_uri="python://failing_tool",
         arguments={"param": "value"},
         output="Error: Tool execution failed",
         duration=0.5,
         errors=["ValidationError: Missing required field", "Timeout after 30s"],
     )
+    await wait_for_background_tasks(task_logger)
 
     # Verify the tool call was logged with errors
     async with session_maker() as db_session:
@@ -393,17 +407,17 @@ async def test_task_logger_handles_logging_exceptions(
 
     # Should not raise an exception, but log the error
     with caplog.at_level(logging.ERROR):
-        await task_logger.log_tool_call(
+        task_logger.log_tool_call(
             tool_uri="python://test_tool",
             arguments={},
             output={},
             duration=1.0,
         )
+        await wait_for_background_tasks(task_logger)
 
     # Verify error was logged
     assert any(
-        "Failed to log tool call" in record.message
-        and "python://test_tool" in record.message
+        "Background task logging failed" in record.message
         for record in caplog.records
     )
 

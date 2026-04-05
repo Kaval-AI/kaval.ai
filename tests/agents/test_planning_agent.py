@@ -13,6 +13,12 @@ from kavalai.llm_clients.common import Streamer
 from kavalai.agents.agent_service import AgentService
 
 
+async def wait_for_background_tasks(task_logger: TaskLogger):
+    """Helper to wait for all background logging tasks to complete."""
+    if task_logger._background_tasks:
+        await asyncio.gather(*task_logger._background_tasks, return_exceptions=True)
+
+
 @pytest.fixture
 def session_maker(agents_session_maker):
     return agents_session_maker
@@ -887,6 +893,9 @@ async def test_planning_agent_logs_agent_task(agent_service, session_maker):
     # Verify result
     assert result == final_output
 
+    # Wait for background logging tasks to complete
+    await wait_for_background_tasks(task_logger)
+
     # Verify the agent task was logged with system prompt
     async with session_maker() as db_session:
         from kavalai.agents.db import Task
@@ -996,36 +1005,41 @@ async def test_planning_agent_logs_tool_calls(agent_service, session_maker):
     # Verify result
     assert result.answer == "Final Answer"
 
+    # Wait for background logging tasks to complete
+    await wait_for_background_tasks(task_logger)
+
     # Verify both the agent task and tool call were logged
     async with session_maker() as db_session:
         from kavalai.agents.db import Task
         from sqlalchemy import select
 
         result = await db_session.execute(
-            select(Task).where(Task.run_id == run.id).order_by(Task.created_at)
+            select(Task).where(Task.run_id == run.id)
         )
         tasks = result.scalars().all()
 
         # Should have 4 tasks: tool call, step_0, step_1, agent task
         assert len(tasks) == 4
 
-        # First task: tool call (from step 0 processing)
-        tool_task = tasks[0]
-        assert tool_task.name == "python://test_tool"
+        # Find tasks by name (order may vary with fire-and-forget)
+        tasks_by_name = {t.name: t for t in tasks}
+
+        # Tool call task (from step 0 processing)
+        tool_task = tasks_by_name["python://test_tool"]
         assert tool_task.inputs == {"arguments": {"query": "search term"}}
         assert "Result for search term" in str(tool_task.output)
 
-        # Second task: step 0
-        step0_task = tasks[1]
-        assert step0_task.name == "planning_task_step_0"
+        # Step 0 task
+        step0_task = tasks_by_name["planning_task_step_0"]
+        assert step0_task is not None
 
-        # Third task: step 1
-        step1_task = tasks[2]
-        assert step1_task.name == "planning_task_step_1"
+        # Step 1 task
+        step1_task = tasks_by_name["planning_task_step_1"]
+        assert step1_task is not None
 
-        # Fourth task: overall agent task
-        agent_task = tasks[3]
-        assert agent_task.name == "planning_task"
+        # Overall agent task
+        agent_task = tasks_by_name["planning_task"]
+        assert agent_task is not None
 
 
 @pytest.mark.asyncio
@@ -1227,33 +1241,38 @@ async def test_planning_agent_logs_tool_call_errors(agent_service, session_maker
     # Verify result
     assert result.answer == "Error handled"
 
+    # Wait for background logging tasks to complete
+    await wait_for_background_tasks(task_logger)
+
     # Verify the tool call was logged with errors
     async with session_maker() as db_session:
         from kavalai.agents.db import Task
         from sqlalchemy import select
 
         result = await db_session.execute(
-            select(Task).where(Task.run_id == run.id).order_by(Task.created_at)
+            select(Task).where(Task.run_id == run.id)
         )
         tasks = result.scalars().all()
 
         # Should have 4 tasks: failed tool call, step_0, step_1, overall agent task
         assert len(tasks) == 4
 
-        # First task: failed tool call
-        tool_task = tasks[0]
-        assert tool_task.name == "python://failing_tool"
+        # Find tasks by name (order may vary with fire-and-forget)
+        tasks_by_name = {t.name: t for t in tasks}
+
+        # Failed tool call task
+        tool_task = tasks_by_name["python://failing_tool"]
         assert tool_task.errors == ["ValidationError: Missing required field"]
         assert "Error:" in str(tool_task.output)
 
-        # Second task: step 0
-        step0_task = tasks[1]
-        assert step0_task.name == "planning_task_step_0"
+        # Step 0 task
+        step0_task = tasks_by_name["planning_task_step_0"]
+        assert step0_task is not None
 
-        # Third task: step 1
-        step1_task = tasks[2]
-        assert step1_task.name == "planning_task_step_1"
+        # Step 1 task
+        step1_task = tasks_by_name["planning_task_step_1"]
+        assert step1_task is not None
 
-        # Fourth task: overall agent task
-        agent_task = tasks[3]
-        assert agent_task.name == "planning_task"
+        # Overall agent task
+        agent_task = tasks_by_name["planning_task"]
+        assert agent_task is not None

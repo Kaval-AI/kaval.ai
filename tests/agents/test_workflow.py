@@ -12,6 +12,7 @@ from kavalai.agents.workflow import Workflow
 from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.agents.run_context import RunContext
 from kavalai.agents.agent_service import AgentService
+from kavalai.agents.task_logger import TaskLogger
 from kavalai.llm_clients.common import StreamContent
 from kavalai.agents.workflow_model import (
     WorkflowModel,
@@ -21,6 +22,12 @@ from kavalai.agents.workflow_model import (
     ArgumentInfo,
 )
 from kavalai.agents.utils import to_plain
+
+
+async def wait_for_background_tasks(task_logger: TaskLogger):
+    """Helper to wait for all background logging tasks to complete."""
+    if task_logger._background_tasks:
+        await asyncio.gather(*task_logger._background_tasks, return_exceptions=True)
 
 
 def create_workflow_model_with_rest_server(
@@ -1404,6 +1411,9 @@ class TestWorkflowPlanningAgent:
             run_context.session_id = workflow.run_context.session_id
 
             await workflow.run_agent_task(task, run_context, None)
+
+            # Wait for background logging tasks to complete
+            await wait_for_background_tasks(workflow.task_logger)
 
             # 5. Assertions
             assert run_context.data["planner_task"] == final_output

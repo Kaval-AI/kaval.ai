@@ -292,7 +292,7 @@ class PlanningAgent:
                     )
 
             if self._task_logger:
-                await self._task_logger.log_tool_call(
+                self._task_logger.log_tool_call(
                     tool_uri=tool_call.name,
                     arguments=args,
                     output=tool_result,
@@ -349,9 +349,9 @@ class PlanningAgent:
             if step_output.tool_calls:
                 await self._process_tool_calls(step_output.tool_calls)
 
-            # Log the step
+            # Log the step (fire-and-forget)
             if self._task_logger:
-                await self._task_logger.log_agent_task(
+                self._task_logger.log_agent_task(
                     task_name=f"{task_name}_step_{iter_no}",
                     system_prompt=system_prompt,
                     input_data=self._input_data,
@@ -364,10 +364,10 @@ class PlanningAgent:
                 if not step_output.tool_calls:
                     break
 
-        # Log the overall agent task with the initial system prompt
+        # Log the overall agent task with the initial system prompt (fire-and-forget)
         duration = time.perf_counter() - start_time
         if self._task_logger and initial_system_prompt:
-            await self._task_logger.log_agent_task(
+            self._task_logger.log_agent_task(
                 task_name=task_name,
                 system_prompt=initial_system_prompt,
                 input_data=self._input_data,
