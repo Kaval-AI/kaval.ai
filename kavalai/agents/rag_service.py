@@ -384,6 +384,7 @@ class RagService:
         join_condition: Optional[str] = None,
         join_columns: Optional[list[str]] = None,
         additional_where: Optional[str] = None,
+        keep_best: bool = False,
     ) -> list[list[dict]]:
         """
         Query indexed items and join with another table in a single SQL query using CTE.
@@ -399,6 +400,7 @@ class RagService:
             join_condition (Optional[str]): Join condition (e.g., "p.id::text = r.source_id").
             join_columns (Optional[list[str]]): Additional columns to select from joined table.
             additional_where (Optional[str]): Additional WHERE clause for filtering joined table.
+            keep_best (bool): If True, only the best result per source_id is returned for each query.
 
         Returns:
             list[list[dict]]: A list of result lists, where each inner list contains
@@ -451,6 +453,7 @@ class RagService:
                 top_k=top_k,
                 collection_name=collection_name,
                 source_filter_sql=source_filter,
+                keep_best=keep_best,
             )
 
             # Build final query
@@ -502,6 +505,7 @@ class RagService:
         top_k: int,
         collection_name: Optional[str] = None,
         source_filter_sql: Optional[str] = None,
+        keep_best: bool = False,
     ) -> tuple[str, dict]:
         """
         Build a CTE (Common Table Expression) for batch vector search that can be embedded in larger queries.
@@ -515,6 +519,8 @@ class RagService:
             source_filter_sql (Optional[str]): Additional SQL WHERE clause to filter sources.
                                                Can reference other CTEs or tables.
                                                Example: "EXISTS (SELECT 1 FROM filtered_hotels fh WHERE fh.id = rag_index.source_id)"
+            keep_best (bool): If True, only the best result per source_id is returned for each query.
+                             Useful when a single source is split into multiple indexed items.
 
         Returns:
             tuple[str, dict]: (CTE SQL without WITH keyword, parameter dict)
@@ -537,44 +543,85 @@ class RagService:
         vector_array = self._build_vector_array(len(embeddings))
         where_clause = self._build_cte_where_clause(collection_name, source_filter_sql)
 
-        cte_sql = f"""rag_results AS (
-            SELECT
-                results.id,
-                results.model,
-                results.collection_name,
-                results.source_id,
-                results.content,
-                results.embedding_size,
-                results.metadata,
-                results.created_at,
-                results.updated_at,
-                results.distance,
-                (1.0 - results.distance) as similarity,
-                v.query_idx
-            FROM
-                unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
-            CROSS JOIN LATERAL (
-                SELECT
-                    id,
-                    model,
-                    collection_name,
-                    source_id,
-                    content,
-                    embedding_size,
-                    metadata,
-                    created_at,
-                    updated_at,
-                    (embedding <=> v.query_vector) as distance
+        if keep_best:
+            # Use DISTINCT ON to get only the best result per source_id for each query
+            cte_sql = f"""rag_results AS (
+                SELECT DISTINCT ON (v.query_idx, results.source_id)
+                    results.id,
+                    results.model,
+                    results.collection_name,
+                    results.source_id,
+                    results.content,
+                    results.embedding_size,
+                    results.metadata,
+                    results.created_at,
+                    results.updated_at,
+                    results.distance,
+                    (1.0 - results.distance) as similarity,
+                    v.query_idx
                 FROM
-                    rag_index
-                WHERE
-                    {where_clause}
-                ORDER BY
-                    (embedding <=> v.query_vector) ASC
+                    unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
+                CROSS JOIN LATERAL (
+                    SELECT
+                        id,
+                        model,
+                        collection_name,
+                        source_id,
+                        content,
+                        embedding_size,
+                        metadata,
+                        created_at,
+                        updated_at,
+                        (embedding <=> v.query_vector) as distance
+                    FROM
+                        rag_index
+                    WHERE
+                        {where_clause}
+                    ORDER BY
+                        (embedding <=> v.query_vector) ASC
+                ) AS results
+                ORDER BY v.query_idx ASC, results.source_id, results.distance ASC
                 LIMIT :top_k
-            ) AS results
-            ORDER BY v.query_idx ASC, results.distance ASC
-        )"""
+            )"""
+        else:
+            cte_sql = f"""rag_results AS (
+                SELECT
+                    results.id,
+                    results.model,
+                    results.collection_name,
+                    results.source_id,
+                    results.content,
+                    results.embedding_size,
+                    results.metadata,
+                    results.created_at,
+                    results.updated_at,
+                    results.distance,
+                    (1.0 - results.distance) as similarity,
+                    v.query_idx
+                FROM
+                    unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
+                CROSS JOIN LATERAL (
+                    SELECT
+                        id,
+                        model,
+                        collection_name,
+                        source_id,
+                        content,
+                        embedding_size,
+                        metadata,
+                        created_at,
+                        updated_at,
+                        (embedding <=> v.query_vector) as distance
+                    FROM
+                        rag_index
+                    WHERE
+                        {where_clause}
+                    ORDER BY
+                        (embedding <=> v.query_vector) ASC
+                    LIMIT :top_k
+                ) AS results
+                ORDER BY v.query_idx ASC, results.distance ASC
+            )"""
 
         params["top_k"] = top_k
         return cte_sql, params

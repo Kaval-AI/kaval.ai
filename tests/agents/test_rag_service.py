@@ -713,6 +713,21 @@ async def test_build_batch_query_cte(
     assert "products p" in cte_sql_filtered
     assert params_filtered["top_k"] == 10
 
+    # Test 3: CTE with keep_best
+    cte_sql_keep_best, params_keep_best = service.build_batch_query_cte(
+        embeddings=embeddings,
+        top_k=5,
+        collection_name="test",
+        keep_best=True,
+    )
+
+    assert "DISTINCT ON (v.query_idx, results.source_id)" in cte_sql_keep_best
+    assert (
+        "ORDER BY v.query_idx ASC, results.source_id, results.distance ASC"
+        in cte_sql_keep_best
+    )
+    assert params_keep_best["top_k"] == 5
+
 
 @pytest.mark.asyncio
 async def test_batch_query_with_join_empty_input(
@@ -728,6 +743,56 @@ async def test_batch_query_with_join_empty_input(
     )
 
     assert results == []
+
+
+@pytest.mark.asyncio
+async def test_batch_query_with_join_keep_best(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test batch_query_with_join with keep_best parameter."""
+    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    collection = "test_keep_best_join"
+
+    # Index some items for the same source
+    texts = ["part 1 of doc", "part 2 of doc", "different doc"]
+    metadata = [{"key": "1"}, {"key": "2"}, {"key": "3"}]
+    source_ids = ["source_1", "source_1", "source_2"]
+
+    await service.batch_index(
+        texts=texts,
+        metadata_list=metadata,
+        source_ids=source_ids,
+        collection_name=collection,
+    )
+
+    # Query with keep_best=True
+    # Using patch to avoid real LLM calls if possible, but the fixture embedding_model is used.
+    # Actually, batch_query_with_join calls llm_client.compute_embeddings.
+    # In test_rag_service_batch_query_with_join, it seems it uses real or mocked embeddings.
+
+    with patch.object(service.llm_client, "compute_embeddings") as mock_compute:
+        stats = ModelCallStat(
+            model=embedding_model,
+            prompt_tokens=10,
+            completion_tokens=0,
+            total_tokens=10,
+            call_type="embedding",
+        )
+        mock_compute.return_value = ([[0.1] * 1536], stats)
+
+        results = await service.batch_query_with_join(
+            texts=["doc"], top_k=5, collection_name=collection, keep_best=True
+        )
+
+    # Should only have one result for source_1 even though both parts might match
+    assert len(results) == 1
+    # Check that we only have unique source_ids in the results for the query
+    seen_sources = set()
+    for res in results[0]:
+        assert res["source_id"] not in seen_sources
+        seen_sources.add(res["source_id"])
+
+    assert "source_1" in seen_sources
 
 
 @pytest.mark.asyncio
