@@ -545,6 +545,8 @@ class RagService:
 
         if keep_best:
             # Use DISTINCT ON to get only the best result per source_id for each query
+            # Apply LIMIT inside LATERAL to control how many RAG entries we scan per keyword
+            # Then DISTINCT ON deduplicates to get one per (query_idx, source_id)
             cte_sql = f"""rag_results AS (
                 SELECT DISTINCT ON (v.query_idx, results.source_id)
                     results.id,
@@ -579,9 +581,9 @@ class RagService:
                         {where_clause}
                     ORDER BY
                         (embedding <=> v.query_vector) ASC
+                    LIMIT :top_k
                 ) AS results
                 ORDER BY v.query_idx ASC, results.source_id, results.distance ASC
-                LIMIT :top_k
             )"""
         else:
             cte_sql = f"""rag_results AS (

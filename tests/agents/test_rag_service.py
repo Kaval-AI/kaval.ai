@@ -780,19 +780,33 @@ async def test_batch_query_with_join_keep_best(
         )
         mock_compute.return_value = ([[0.1] * 1536], stats)
 
+        # Test case for the bug fix: LIMIT should be per query, but inside LATERAL
+        # If we have 2 sources, each with multiple matches, we want to see both if top_k=2
+        # source_1: "part 1 of doc", "part 2 of doc"
+        # source_2: "different doc"
         results = await service.batch_query_with_join(
-            texts=["doc"], top_k=5, collection_name=collection, keep_best=True
+            texts=["doc"], top_k=2, collection_name=collection, keep_best=True
         )
 
-    # Should only have one result for source_1 even though both parts might match
+    # We asked for top_k=2, so we should get 1 list of results for 1 query text
     assert len(results) == 1
-    # Check that we only have unique source_ids in the results for the query
-    seen_sources = set()
-    for res in results[0]:
-        assert res["source_id"] not in seen_sources
-        seen_sources.add(res["source_id"])
-
+    # For that query, we should have 2 unique sources because both source_1 and source_2 match "doc"
+    # Even though source_1 has two matches, keep_best=True only keeps the best one,
+    # and then the LIMIT :top_k (applied inside LATERAL in the fixed version)
+    # allows us to get the next source.
+    assert len(results[0]) == 2
+    seen_sources = [res["source_id"] for res in results[0]]
     assert "source_1" in seen_sources
+    assert "source_2" in seen_sources
+
+    # Test the previous buggy behavior: if LIMIT was outside, top_k=1 would only return 1 source
+    # (which is correct for top_k=1, but the problem was when top_k was larger than the number of matches for one source)
+    with patch.object(service.llm_client, "compute_embeddings") as mock_compute:
+        mock_compute.return_value = ([[0.1] * 1536], stats)
+        results_top1 = await service.batch_query_with_join(
+            texts=["doc"], top_k=1, collection_name=collection, keep_best=True
+        )
+    assert len(results_top1[0]) == 1
 
 
 @pytest.mark.asyncio
