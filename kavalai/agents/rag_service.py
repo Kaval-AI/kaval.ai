@@ -760,10 +760,9 @@ class RagService:
             )
 
             sub = distinct_stmt.subquery()
-            # Select RagIndex columns from the subquery
-            stmt = select(aliased(RagIndex, sub), sub.c.distance).order_by(
-                sub.c.distance
-            )
+            # Create an alias of RagIndex mapped to the subquery
+            RagIndexAlias = aliased(RagIndex, sub)
+            stmt = select(RagIndexAlias, sub.c.distance).order_by(sub.c.distance)
         else:
             stmt = select(RagIndex, distance_col).where(RagIndex.model == self.model)
 
