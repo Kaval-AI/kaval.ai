@@ -177,3 +177,91 @@ async def test_workflow_agent_llm_kwargs_passing():
         # Verify PlanningAgent was initialized with the merged llm_kwargs
         args, kwargs = MockPlanningAgent.call_args
         assert kwargs["llm_kwargs"]["custom_agent_param"] == "agent_val"
+
+
+@pytest.mark.asyncio
+async def test_workflow_gemini_thinking_level_from_workflow_llm_kwargs():
+    """
+    Verify that a thinking_level defined on the workflow (llm_kwargs) is correctly
+    propagated and used by the real Gemini model.
+    """
+    import os
+    if not os.getenv("GEMINI_API_KEY"):
+        pytest.skip("GEMINI_API_KEY not found in environment")
+
+    task = LLMTask(
+        name="gemini_thinking_task",
+        prompt=(
+            "Given two input strings 'apple' and 'pineapple', compute the longest common substring and "
+            "return it in the field 'result'."
+        ),
+        output="output_type",
+        llm_kwargs={},
+    )
+
+    model = WorkflowModel(
+        name="gemini_thinking_wf",
+        data_types={
+            "output_type": {
+                "type": "object",
+                "properties": {"result": {"type": "string"}},
+            }
+        },
+        tasks=[task],
+        llm_model="gemini/gemini-3-pro-preview",
+        llm_kwargs={"thinking_level": "low"},
+    )
+
+    wf = Workflow(model)
+    wf.models = {"output_type": MockOutput}
+
+    run_context = RunContext()
+    await wf.run_llm_task(task, run_context, None)
+
+    result = run_context.data["output_type"]
+    assert isinstance(result, MockOutput)
+    assert result.result == "apple"
+
+
+@pytest.mark.asyncio
+async def test_workflow_gemini_thinking_budget_from_workflow_llm_kwargs():
+    """
+    Verify that a thinking_budget defined on the workflow (llm_kwargs) is correctly
+    propagated and used by the real Gemini model.
+    """
+    import os
+    if not os.getenv("GEMINI_API_KEY"):
+        pytest.skip("GEMINI_API_KEY not found in environment")
+
+    task = LLMTask(
+        name="gemini_thinking_task",
+        prompt=(
+            "Given two input strings 'apple' and 'pineapple', compute the longest common substring and "
+            "return it in the field 'result'."
+        ),
+        output="output_type",
+        llm_kwargs={},
+    )
+
+    model = WorkflowModel(
+        name="gemini_thinking_wf",
+        data_types={
+            "output_type": {
+                "type": "object",
+                "properties": {"result": {"type": "string"}},
+            }
+        },
+        tasks=[task],
+        llm_model="gemini/gemini-3-pro-preview",
+        llm_kwargs={"thinking_budget": 16384},
+    )
+
+    wf = Workflow(model)
+    wf.models = {"output_type": MockOutput}
+
+    run_context = RunContext()
+    await wf.run_llm_task(task, run_context, None)
+
+    result = run_context.data["output_type"]
+    assert isinstance(result, MockOutput)
+    assert result.result == "apple"

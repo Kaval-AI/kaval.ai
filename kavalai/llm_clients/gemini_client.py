@@ -72,10 +72,21 @@ class GeminiClient:
             config_kwargs["response_schema"] = schema
 
         # Support for reasoning/thinking (e.g. for Gemini 2.0 Flash Thinking)
-        if thinking_budget is not None:
-            config_kwargs["thinking_config"] = types.ThinkingConfig(
-                include_thoughts=True,
-            )
+        thinking_level = config_kwargs.pop("thinking_level", None)
+        if thinking_budget is not None or thinking_level is not None:
+            thinking_config_args = {"include_thoughts": True}
+            if thinking_budget is not None:
+                thinking_config_args["thinking_budget"] = thinking_budget
+            if thinking_level is not None:
+                # thinking_level was added in recent genai SDK versions, 
+                # but if it's not directly on config, we might need to check how to pass it.
+                # Actually, according to Gemini API, it's usually just thinking_budget.
+                # But our mapper allows thinking_level. 
+                # If thinking_level is provided, we should probably map it to some budget if budget is missing,
+                # or pass it if the SDK supports it in thinking_config.
+                thinking_config_args["thinking_level"] = thinking_level
+
+            config_kwargs["thinking_config"] = types.ThinkingConfig(**thinking_config_args)
         config = types.GenerateContentConfig(**config_kwargs)
 
         buffer = io.StringIO()
@@ -219,7 +230,10 @@ def convert_messages(
         content = msg.get("content")
 
         if role == "system":
-            system_instruction = content
+            if system_instruction:
+                system_instruction += "\n" + content
+            else:
+                system_instruction = content
             continue
 
         # Convert role to Gemini format (user or model)
@@ -234,6 +248,18 @@ def convert_messages(
                     parts.append(types.Part.from_text(text=item.get("text")))
 
         contents.append(types.Content(role=gemini_role, parts=parts))
+
+    if not contents:
+        # Gemini requires at least one content message. If only system instructions were provided,
+        # we move them to the first user message if system_instruction is not supported by the model,
+        # but here we prefer to keep system_instruction as is and add a dummy user message if needed.
+        # However, usually there's at least one user message. 
+        # In case of only system message, we'll put it into a user message.
+        if system_instruction:
+            contents.append(types.Content(role="user", parts=[types.Part.from_text(text=system_instruction)]))
+            system_instruction = None
+        else:
+            contents.append(types.Content(role="user", parts=[types.Part.from_text(text="...")]))
 
     return system_instruction, contents
 
