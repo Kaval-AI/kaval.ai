@@ -22,7 +22,8 @@ from kavalai import LLMClient
 from loguru import logger
 
 # Constants
-MODEL_NAME = "ollama/llama3.2:1b"
+# MODEL_NAME = "ollama/llama3.2:1b"
+MODEL_NAME = "fastembed/nomic-ai/nomic-embed-text-v1.5-Q"
 BENCHMARK_DURATION_SECONDS = 10
 TEST_TEXT = "The quick brown fox jumps over the lazy dog. "  # ~90-100 tokens
 
@@ -45,12 +46,12 @@ async def run_benchmark():
         try:
             # We use a single text for each call to measure per-call latency
             _, stats = await client.compute_embeddings(
-                model=MODEL_NAME, texts=[TEST_TEXT]
+                model=MODEL_NAME, texts=[TEST_TEXT] * 10
             )
             call_duration = time.perf_counter() - call_start
             latencies.append(call_duration)
             total_embeddings += 1
-            total_tokens += stats.total_tokens
+            total_tokens += stats.total_tokens or 0
         except Exception as e:
             logger.error(f"Error during embedding call: {e}")
             await asyncio.sleep(1)  # Brief pause on error

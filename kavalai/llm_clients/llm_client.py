@@ -30,6 +30,7 @@ from kavalai.normalizer import Normalizer
 from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.openai_client import OpenAIClient
 from kavalai.llm_clients.ollama_client import OllamaClient
+from kavalai.llm_clients.fastembed_client import FastEmbedClient
 from kavalai.llm_clients.common import Streamer
 from kavalai.llm_clients.kwargs_mapper import LLMKWargsMapper
 
@@ -103,10 +104,12 @@ class LLMClient:
 
     def __init__(self, model: str):
         self.full_model = model
-        self.provider, self.model_name = model.split("/")
+        self.provider, self.model_name = model.split("/", maxsplit=1)
         self.client = self._get_underlying_client()
 
-    def _get_underlying_client(self) -> OpenAIClient | GeminiClient | OllamaClient:
+    def _get_underlying_client(
+        self,
+    ) -> OpenAIClient | GeminiClient | OllamaClient | FastEmbedClient:
         """
         Factory method to get the appropriate LLM client.
         """
@@ -126,6 +129,13 @@ class LLMClient:
             return OllamaClient(
                 host=os.environ.get("OLLAMA_HOST"),
                 timeout=timeout,
+            )
+        elif self.provider == "fastembed":
+            return FastEmbedClient(
+                cache_dir=os.environ.get("FASTEMBED_CACHE_DIR"),
+                threads=int(os.environ.get("FASTEMBED_THREADS"))
+                if os.environ.get("FASTEMBED_THREADS")
+                else None,
             )
         else:
             raise ValueError(f"Invalid provider: {self.provider}")
