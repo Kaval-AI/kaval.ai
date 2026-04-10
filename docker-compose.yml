@@ -60,6 +60,17 @@ services:
       - kavalai
 
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./local_data/ollama:/root/.ollama
+    networks:
+      - kavalai
+
+
   torproxy:
     image: dperson/torproxy
     restart: always

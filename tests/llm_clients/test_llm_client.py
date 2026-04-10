@@ -388,3 +388,59 @@ async def test_compute_embeddings_with_normalizer(monkeypatch):
     assert (
         mock_underlying_client.compute_embeddings.call_args.kwargs["normalize"] is True
     )
+
+
+@pytest.mark.asyncio
+async def test_compute_embeddings_with_model_in_kwargs(monkeypatch):
+    """Test that model in kwargs doesn't cause error in compute_embeddings."""
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
+    client = LLMClient("ollama/llama3.2:1b")
+
+    async def mock_compute_embeddings(*args, **kwargs):
+        from kavalai.llm_clients.common import create_model_call_stat
+
+        return [[0.1]], create_model_call_stat(
+            call_type="embedding",
+            model="ollama/llama3.2:1b",
+            duration_sections=0.1,
+            batch_size=1,
+            total_tokens=1,
+            cost=None,
+        )
+
+    with patch.object(
+        client.client, "compute_embeddings", side_effect=mock_compute_embeddings
+    ):
+        # Passing 'model' in kwargs should not fail with 'multiple values for keyword argument'
+        embeddings, stats = await client.compute_embeddings(
+            texts=["test"], model="some-other-model"
+        )
+        assert embeddings == [[0.1]]
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_with_model_in_kwargs(monkeypatch):
+    """Test that model in kwargs doesn't cause error in chat_completions."""
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
+    client = LLMClient("ollama/llama3.2:1b")
+
+    async def mock_chat_completions(*args, **kwargs):
+        from kavalai.llm_clients.common import create_model_call_stat
+
+        return "hello", create_model_call_stat(
+            call_type="llm",
+            model="ollama/llama3.2:1b",
+            duration_sections=0.1,
+            prompt_tokens=1,
+            completion_tokens=1,
+            cost=None,
+        )
+
+    with patch.object(
+        client.client, "chat_completions", side_effect=mock_chat_completions
+    ):
+        # Passing 'model' in kwargs should not fail with 'multiple values for keyword argument'
+        content, stats = await client.chat_completions(
+            messages=[{"role": "user", "content": "hi"}], model="some-other-model"
+        )
+        assert content == "hello"

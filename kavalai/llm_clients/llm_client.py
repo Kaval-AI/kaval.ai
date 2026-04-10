@@ -29,6 +29,7 @@ from kavalai.agents.db import ModelCallStat
 from kavalai.normalizer import Normalizer
 from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.openai_client import OpenAIClient
+from kavalai.llm_clients.ollama_client import OllamaClient
 from kavalai.llm_clients.common import Streamer
 from kavalai.llm_clients.kwargs_mapper import LLMKWargsMapper
 
@@ -105,7 +106,7 @@ class LLMClient:
         self.provider, self.model_name = model.split("/")
         self.client = self._get_underlying_client()
 
-    def _get_underlying_client(self) -> OpenAIClient | GeminiClient:
+    def _get_underlying_client(self) -> OpenAIClient | GeminiClient | OllamaClient:
         """
         Factory method to get the appropriate LLM client.
         """
@@ -119,6 +120,11 @@ class LLMClient:
         elif self.provider == "gemini":
             return GeminiClient(
                 api_key=os.environ["GEMINI_API_KEY"],
+                timeout=timeout,
+            )
+        elif self.provider == "ollama":
+            return OllamaClient(
+                host=os.environ.get("OLLAMA_HOST"),
                 timeout=timeout,
             )
         else:
@@ -152,6 +158,9 @@ class LLMClient:
 
         # Map user-friendly/common kwargs to provider-specific ones
         mapped_kwargs = LLMKWargsMapper.map(self.provider, self.model_name, kwargs)
+
+        # Ensure 'model' is not twice in kwargs
+        mapped_kwargs.pop("model", None)
 
         content, stats = await with_retry(
             self.client.chat_completions,
@@ -189,6 +198,9 @@ class LLMClient:
                 **kwargs,
             },
         }
+
+        # Ensure 'model' is not twice in kwargs
+        kwargs.pop("model", None)
 
         embeddings, stats = await with_retry(
             self.client.compute_embeddings,

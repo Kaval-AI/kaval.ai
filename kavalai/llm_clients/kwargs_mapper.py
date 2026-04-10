@@ -63,6 +63,19 @@ class LLMKWargsMapper:
         "system_instruction",
     }
 
+    _OLLAMA_KEYS: set[str] = {
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_output_tokens",
+        "stop",
+        "num_ctx",
+        "num_predict",
+        "repeat_penalty",
+        "seed",
+        "format",
+    }
+
     @staticmethod
     def _pop_any(d: Dict[str, Any], keys: Iterable[str]) -> Any | None:
         for k in keys:
@@ -83,6 +96,8 @@ class LLMKWargsMapper:
             return cls._map_openai(out)
         elif provider == "gemini":
             return cls._map_gemini(out)
+        elif provider == "ollama":
+            return cls._map_ollama(out)
         else:
             # Unknown provider: return original kwargs
             return out
@@ -169,5 +184,38 @@ class LLMKWargsMapper:
             k: v
             for k, v in out.items()
             if k in cls._GEMINI_KEYS or k.startswith("x_") or k in ("stream_delta",)
+        }
+        return filtered or out
+
+    @classmethod
+    def _map_ollama(cls, out: Dict[str, Any]) -> Dict[str, Any]:
+        # Convert stop_sequences -> stop
+        if "stop" not in out and "stop_sequences" in out:
+            out["stop"] = out.pop("stop_sequences")
+
+        # Convert max_output_tokens -> num_predict
+        if "num_predict" not in out and "max_output_tokens" in out:
+            out["num_predict"] = out.pop("max_output_tokens")
+
+        # Remove OpenAI/Gemini-specific keys
+        for k in [
+            "presence_penalty",
+            "frequency_penalty",
+            "logit_bias",
+            "reasoning_effort",
+            "thinking_budget",
+            "thinking_level",
+            "response_mime_type",
+            "response_schema",
+            "system_instruction",
+            "candidate_count",
+        ]:
+            out.pop(k, None)
+
+        # Filter to allowed keys (keep x_* custom as above)
+        filtered = {
+            k: v
+            for k, v in out.items()
+            if k in cls._OLLAMA_KEYS or k.startswith("x_") or k in ("stream_delta",)
         }
         return filtered or out

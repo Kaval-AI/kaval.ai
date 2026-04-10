@@ -25,6 +25,7 @@ dependencies = [
     "loguru",
     "mcp",
     "numpy",
+    "ollama",
     "openai",
     "partial-json-parser",
     "psycopg2-binary",
