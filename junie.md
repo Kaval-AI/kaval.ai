@@ -106,7 +106,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `tests/`: Comprehensive backend test suite.
     - `agents/`: Tests for core SDK, workflow execution, and agent database.
     - `backoffice/`: Tests for management API, project isolation, and memberships.
-    - `llm_clients/`: Integration and unit tests for LLM providers (OpenAI, Gemini, Ollama) and embeddings.
+    - `llm_clients/`: Integration and unit tests for LLM providers (OpenAI, Gemini, Ollama) and embeddings. `tests/llm_clients/test_ollama_integration.py` contains integration tests for Ollama that are only executed if `OLLAMA_HOST` is set and the service is reachable.
     - `prices/`: Tests for pricing models and cost calculations.
     - `tools/`: Tests for utility tools (RSS, OpenAPI parser, CSV indexer).
     - `test_persona_simulator.py`: Tests for the persona simulation logic.
