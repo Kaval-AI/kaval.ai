@@ -57,7 +57,7 @@ async def test_ollama_chat_completions_integration(model_name):
     if not any(model_name in m for m in models):
         pytest.skip(f"Model {model_name} not pulled in Ollama")
 
-    messages = [{"role": "user", "content": "Say 'pong'"}]
+    messages = [{"role": "user", "content": "I say 'ping', you say ...?"}]
     content, stats = await client.chat_completions(messages=messages)
 
     assert isinstance(content, str)
