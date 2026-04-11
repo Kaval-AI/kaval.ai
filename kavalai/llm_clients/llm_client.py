@@ -152,6 +152,12 @@ class LLMClient:
         """
         Execute a chat completion with native clients and return result and stats.
         """
+        # Ensure explicitly provided named params also flow through kwargs mapping
+        # so provider-specific clients can receive them.
+        if thinking_budget is not None:
+            kwargs = dict(kwargs)
+            kwargs["thinking_budget"] = thinking_budget
+
         # We want to keep track of the request for stats
         request_info = {
             "timestamp": datetime.now(timezone.utc).isoformat(),

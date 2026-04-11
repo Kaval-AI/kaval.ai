@@ -107,7 +107,7 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `tests/`: Comprehensive backend test suite.
     - `agents/`: Tests for core SDK, workflow execution, and agent database.
     - `backoffice/`: Tests for management API, project isolation, and memberships.
-    - `llm_clients/`: Integration and unit tests for LLM providers (OpenAI, Gemini, Ollama) and embeddings. `tests/llm_clients/test_ollama_integration.py` contains integration tests for Ollama that are only executed if `OLLAMA_HOST` is set and the service is reachable.
+    - `llm_clients/`: Integration and unit tests for LLM providers (OpenAI, Gemini) and embeddings.
     - `prices/`: Tests for pricing models and cost calculations.
     - `tools/`: Tests for utility tools (RSS, OpenAPI parser, CSV indexer).
     - `test_persona_simulator.py`: Tests for the persona simulation logic.
@@ -130,7 +130,6 @@ Kaval.AI is an AI agent writing framework where agent steps are defined using YA
 - `kavalai/llm_profiles/`: Example YAML configurations for different LLM providers (OpenAI, Gemini, Anthropic, Azure, Ollama).
 - `kavalai/embedding_profiles/`: Example YAML configurations for different embedding providers (OpenAI, Gemini).
 - `scripts/`: Utility scripts.
-    - `benchmark_ollama_embeddings.py`: Measures embedding throughput and latency for Ollama models (default: `nomic-embed-text-v2-moe`) over a specified duration (default: 60s).
     - `migrate_db.py`: Database migration tool. It supports `app` and `backoffice` migration types and uses environment variables (`KAVALAI_DB_URI`, `KAVALAI_DB_SCHEMA` for agents and `KAVALAI_BO_DB_URI`, `KAVALAI_BO_DB_SCHEMA` for backoffice) for database connections by default. It prints the masked connection URI before starting. It tracks applied migrations in `kavalai_migrations` table with checksum verification and applies them in a single transaction. Now supports `--skip-create-schema` flag to bypass schema creation while still ensuring the tracking table exists.
 - `kavalai/demo_agents/`, `kavalai/demo_tasks/`, `kavalai/demo_personas/`: Sample configurations and data. Now includes `socrates.yaml` example.
 
