@@ -23,7 +23,7 @@ from loguru import logger
 
 # Constants
 # MODEL_NAME = "ollama/llama3.2:1b"
-MODEL_NAME = "fastembed/nomic-ai/nomic-embed-text-v1.5-Q"
+MODEL_NAME = "fastembed/jinaai/jina-embeddings-v2-base-code"
 BENCHMARK_DURATION_SECONDS = 10
 TEST_TEXT = "The quick brown fox jumps over the lazy dog. "  # ~90-100 tokens
 
