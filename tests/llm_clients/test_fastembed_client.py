@@ -30,6 +30,7 @@ async def test_fastembed_compute_embeddings_unit():
         )
 
         assert len(embeddings) == 2
+        assert isinstance(embeddings[0][0], float)
         assert embeddings[0] == [0.1] * 384
         assert embeddings[1] == [0.2] * 384
         assert stats.call_type == "embedding"

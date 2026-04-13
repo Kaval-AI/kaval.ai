@@ -65,7 +65,7 @@ class FastEmbedClient:
 
         # FastEmbed's embed returns an iterator of numpy arrays
         embeddings_iter = embedding_model.embed(texts, **kwargs)
-        embeddings = [list(e) for e in embeddings_iter]
+        embeddings = [e.tolist() for e in embeddings_iter]
 
         if normalize:
             if normalizer is None:
