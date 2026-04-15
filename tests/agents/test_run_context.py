@@ -191,6 +191,122 @@ async def test_evaluate_condition_basic_operators():
     )
     assert await rc.evaluate_condition({"len": [None, 0]}) is False
 
+    # Combination: size (using .length in path) greater than length of an array
+    rc.data["arr"] = [1, 2, 3, 4, 5]
+    rc.data["limit"] = 3
+    assert (
+        await rc.evaluate_condition(
+            {"gt": [{"type": "context", "value": "arr.length"}, 3]}
+        )
+        is True
+    )
+    assert (
+        await rc.evaluate_condition(
+            {
+                "gt": [
+                    {"type": "context", "value": "arr.length"},
+                    {"type": "context", "value": "limit"},
+                ]
+            }
+        )
+        is True
+    )
+
+    # Combination: size less than length
+    assert (
+        await rc.evaluate_condition(
+            {"lt": [{"type": "context", "value": "arr.length"}, 10]}
+        )
+        is True
+    )
+    assert (
+        await rc.evaluate_condition(
+            {"lt": [{"type": "context", "value": "arr.length"}, 3]}
+        )
+        is False
+    )
+
+    # Complex combination with all/any
+    assert (
+        await rc.evaluate_condition(
+            {
+                "all": [
+                    {"gt": [{"type": "context", "value": "arr.length"}, 2]},
+                    {"contains": [{"type": "context", "value": "s"}, "hello"]},
+                ]
+            }
+        )
+        is True
+    )
+
+    # Nested path with length
+    rc.data["user"] = {"items": ["a", "b"]}
+    assert (
+        await rc.evaluate_condition(
+            {"eq": [{"type": "context", "value": "user.items.length"}, 2]}
+        )
+        is True
+    )
+    assert (
+        await rc.evaluate_condition(
+            {"gte": [{"type": "context", "value": "user.items.length"}, 2]}
+        )
+        is True
+    )
+
+    # Complex nested logical: NOT (ANY (ALL(...), ALL(...)))
+    # (a > 5 AND s contains "foo") OR (b == 20 AND arr.length < 3)
+    # We want NOT of that.
+    rc.data["a"] = 10
+    rc.data["s"] = "hello world"  # does NOT contain "foo"
+    rc.data["b"] = 10  # is NOT 20
+    rc.data["arr"] = [1, 2, 3, 4, 5]  # length 5 is NOT < 3
+    # Inner ALL 1: False
+    # Inner ALL 2: False
+    # ANY: False
+    # NOT ANY: True
+    cond = {
+        "not": {
+            "any": [
+                {
+                    "all": [
+                        {"gt": [{"type": "context", "value": "a"}, 5]},
+                        {"contains": [{"type": "context", "value": "s"}, "foo"]},
+                    ]
+                },
+                {
+                    "all": [
+                        {"eq": [{"type": "context", "value": "b"}, 20]},
+                        {"lt": [{"type": "context", "value": "arr.length"}, 3]},
+                    ]
+                },
+            ]
+        }
+    }
+    assert await rc.evaluate_condition(cond) is True
+
+    # Now make it False by making one of the inner ALLs True
+    rc.data["s"] = "foo bar"
+    # Inner ALL 1: (10 > 5 AND "foo bar" contains "foo") -> True
+    # ANY: True
+    # NOT ANY: False
+    assert await rc.evaluate_condition(cond) is False
+
+    # Check contains with list context
+    rc.data["allowed_users"] = ["alice", "bob"]
+    assert (
+        await rc.evaluate_condition(
+            {"contains": [{"type": "context", "value": "allowed_users"}, "alice"]}
+        )
+        is True
+    )
+    assert (
+        await rc.evaluate_condition(
+            {"contains": [{"type": "context", "value": "allowed_users"}, "charlie"]}
+        )
+        is False
+    )
+
 
 @pytest.mark.asyncio
 async def test_evaluate_condition_logical():
