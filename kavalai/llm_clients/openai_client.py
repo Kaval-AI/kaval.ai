@@ -92,8 +92,11 @@ class OpenAIClient:
             call_kwargs["text_format"] = response_model
         elif response_model:
             raise ValueError("response_model must be a pydantic BaseModel")
-        if self.service_tier:
+
+        # service_tier from kwargs (mapped from priority) takes precedence
+        if "service_tier" not in call_kwargs and self.service_tier:
             call_kwargs["service_tier"] = self.service_tier
+
         buffer = io.StringIO()
         async with self.client.responses.stream(**call_kwargs) as stream:
             async for event in stream:

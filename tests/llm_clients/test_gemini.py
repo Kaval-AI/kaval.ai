@@ -288,3 +288,46 @@ def test_remove_additional_properties_pydantic_schema():
 
     # Check that no additionalProperties exists anywhere in the schema
     assert "additionalProperties" not in str(schema)
+
+
+@pytest.mark.asyncio
+async def test_gemini_service_tier_unit():
+    """Unit test for service_tier handling in GeminiClient."""
+    from unittest.mock import AsyncMock, patch, MagicMock
+    from google.genai import types
+
+    messages = [{"role": "user", "content": "test"}]
+
+    # Mock the SDK client
+    with patch("google.genai.Client") as mock_genai_client:
+        mock_instance = mock_genai_client.return_value
+        mock_instance.aio.models.generate_content_stream = AsyncMock()
+        # Mocking a chunk with usage metadata so the loop finishes and returns stats
+        mock_chunk = MagicMock()
+        mock_chunk.candidates = []
+        mock_chunk.usage_metadata.prompt_token_count = 10
+        mock_chunk.usage_metadata.candidates_token_count = 5
+
+        async def mock_gen():
+            yield mock_chunk
+
+        mock_instance.aio.models.generate_content_stream.return_value = mock_gen()
+
+        client = GeminiClient(api_key="fake")
+
+        # 1. Test priority mapping via LLMClient
+        from kavalai.llm_clients.llm_client import LLMClient
+
+        llm_client = LLMClient("gemini/gemini-2.0-flash")
+        llm_client.client = client
+
+        # This should work without Pydantic validation error
+        # GeminiClient maps priority to service_tier enum
+        await llm_client.chat_completions(messages=messages, priority="high")
+
+        # Verify that service_tier was passed as ServiceTier enum
+        args, kwargs = mock_instance.aio.models.generate_content_stream.call_args
+        config = kwargs.get("config")
+        assert isinstance(config, types.GenerateContentConfig)
+        # Check that service_tier is set to the correct enum value
+        assert config.service_tier == types.ServiceTier.PRIORITY

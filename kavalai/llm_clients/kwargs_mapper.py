@@ -43,6 +43,8 @@ class LLMKWargsMapper:
         "seed",
         # Reasoning
         "reasoning_effort",
+        # Service Tier
+        "service_tier",
         # Streaming/structured handled by clients; we won't filter them here if present
         "response_format",
     }
@@ -57,6 +59,7 @@ class LLMKWargsMapper:
         # Reasoning/thinking
         "thinking_budget",
         "thinking_level",
+        "service_tier",
         # Structured output/system
         "response_mime_type",
         "response_schema",
@@ -108,6 +111,19 @@ class LLMKWargsMapper:
         if "stop" not in out and "stop_sequences" in out:
             out["stop"] = out.pop("stop_sequences")
 
+        # Convert priority -> service_tier
+        # priority: high -> service_tier: priority (priority processing)
+        # priority: normal -> service_tier: default (default processing)
+        # priority: low -> service_tier: flex (slow/flex processing)
+        if "service_tier" not in out and "priority" in out:
+            val = out.pop("priority")
+            if val == "high":
+                out["service_tier"] = "priority"
+            elif val == "low":
+                out["service_tier"] = "flex"
+            elif val == "normal":
+                out["service_tier"] = "default"
+
         # Convert reasoning -> reasoning_effort
         if "reasoning_effort" not in out and "reasoning" in out:
             val = out.pop("reasoning")
@@ -150,6 +166,18 @@ class LLMKWargsMapper:
                 out["stop_sequences"] = [stop]
             else:
                 out["stop_sequences"] = stop
+
+        # Convert priority -> service_tier
+        # priority: high -> service_tier: priority (priority processing)
+        # priority: normal -> no service_tier set (default processing)
+        # priority: low -> service_tier: flex (slow/flex processing)
+        if "service_tier" not in out and "priority" in out:
+            val = out.pop("priority")
+            if val == "high":
+                out["service_tier"] = "priority"
+            elif val == "low":
+                out["service_tier"] = "flex"
+            # For "normal", we don't set service_tier (None = default)
 
         # Convert reasoning -> thinking_level/thinking_budget
         if "reasoning" in out and "thinking_budget" not in out:

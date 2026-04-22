@@ -20,6 +20,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional, Type, Tuple
 
+from loguru import logger
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
@@ -61,6 +62,19 @@ class GeminiClient:
         system_instruction, contents = convert_messages(messages)
 
         config_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        # Map service_tier string to ServiceTier enum
+        service_tier = config_kwargs.pop("service_tier", None)
+        if service_tier:
+            # Map string values to ServiceTier enum
+            tier_map = {
+                "priority": types.ServiceTier.PRIORITY,
+                "standard": types.ServiceTier.STANDARD,
+                "flex": types.ServiceTier.FLEX,
+            }
+            if service_tier.lower() in tier_map:
+                config_kwargs["service_tier"] = tier_map[service_tier.lower()]
+                logger.info(f"Gemini Service Tier: {service_tier.upper()}")
+
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
 

@@ -50,3 +50,43 @@ def test_passthrough_existing_specific_keys():
     ge_kwargs = {"thinking_budget": 500}
     ge_mapped = LLMKWargsMapper.map("gemini", "gemini-2.0-flash-thinking", ge_kwargs)
     assert ge_mapped.get("thinking_budget") == 500
+
+
+def test_priority_mapping():
+    # OpenAI
+    assert (
+        LLMKWargsMapper.map("openai", "gpt-4o", {"priority": "high"}).get(
+            "service_tier"
+        )
+        == "priority"
+    )
+    assert (
+        LLMKWargsMapper.map("openai", "gpt-4o", {"priority": "low"}).get("service_tier")
+        == "flex"
+    )
+    assert (
+        LLMKWargsMapper.map("openai", "gpt-4o", {"priority": "normal"}).get(
+            "service_tier"
+        )
+        == "default"
+    )
+
+    # Gemini
+    assert (
+        LLMKWargsMapper.map("gemini", "gemini-2.0-flash", {"priority": "high"}).get(
+            "service_tier"
+        )
+        == "priority"
+    )
+    assert (
+        LLMKWargsMapper.map("gemini", "gemini-2.0-flash", {"priority": "low"}).get(
+            "service_tier"
+        )
+        == "flex"
+    )
+    assert (
+        LLMKWargsMapper.map("gemini", "gemini-2.0-flash", {"priority": "normal"}).get(
+            "service_tier"
+        )
+        is None
+    )  # default for gemini is None

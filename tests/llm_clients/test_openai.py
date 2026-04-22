@@ -229,3 +229,69 @@ async def test_openai_compute_embeddings(openai_client):
 
     assert len(embeddings) == 2  # Assert number of embeddings
     assert len(embeddings[1]) == 1536  # Assert embedding dimension
+
+
+@pytest.mark.asyncio
+async def test_openai_service_tier_unit(openai_client):
+    """Unit test for service_tier handling."""
+    from openai.types.responses import (
+        ResponseTextDeltaEvent,
+    )
+
+    messages = [{"role": "user", "content": "test"}]
+    model = "gpt-4o"
+
+    # Mock response
+    mock_event = MagicMock()
+    mock_event.delta = "test"
+    mock_event.type = "text_delta"
+    # To satisfy isinstance(event, ResponseTextDeltaEvent)
+
+    # We use a hack to make isinstance work with MagicMock if needed,
+    # but actually we can just use the real class if we provide all fields,
+    # OR we can mock the isinstance check.
+    # Actually, let's just use a MagicMock and patch isinstance in the test context if possible,
+    # or just use the real class with minimal fields if it allows it.
+    # Since it's Pydantic, let's just use MagicMock and patch where it's used.
+
+    with patch(
+        "kavalai.llm_clients.openai_client.isinstance",
+        side_effect=lambda obj, cls: True
+        if cls == ResponseTextDeltaEvent
+        else isinstance(obj, cls),
+    ):
+        # Mock stream context manager
+        mock_stream = MagicMock()
+        mock_stream.__aenter__.return_value = AsyncMock()
+        mock_stream.__aenter__.return_value.__aiter__.return_value = [mock_event]
+
+        # We need to mock the response usage at the end if we want to avoid the UnboundLocalError
+        # But for this test, we mostly care about the call to the responses.stream method
+        with patch(
+            "openai.resources.responses.AsyncResponses.stream", return_value=mock_stream
+        ) as mock_stream_call:
+            # 1. Test from constructor
+            client_with_tier = OpenAIClient(service_tier="priority")
+            await client_with_tier.chat_completions(model=model, messages=messages)
+
+            _, kwargs = mock_stream_call.call_args
+            assert kwargs.get("service_tier") == "priority"
+
+            # 2. Test from kwargs (overriding constructor)
+            mock_stream_call.reset_mock()
+            await client_with_tier.chat_completions(
+                model=model, messages=messages, service_tier="flex"
+            )
+
+            _, kwargs = mock_stream_call.call_args
+            assert kwargs.get("service_tier") == "flex"
+
+            # 3. Test priority mapping via LLMClient
+            from kavalai.llm_clients.llm_client import LLMClient
+
+            llm_client = LLMClient("openai/gpt-4o")
+            llm_client.client = client_with_tier
+            mock_stream_call.reset_mock()
+            await llm_client.chat_completions(messages=messages, priority="high")
+            _, kwargs = mock_stream_call.call_args
+            assert kwargs.get("service_tier") == "priority"
