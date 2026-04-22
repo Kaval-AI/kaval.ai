@@ -172,7 +172,10 @@ async def test_rag_service_learn_normalizer(agents_db):
     async def session_factory():
         yield agents_db
 
-    rag_service = RagService(session_maker=session_factory, model=model)
+    from unittest.mock import patch
+
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "fake"}):
+        rag_service = RagService(session_maker=session_factory, model=model)
     normalizer = await rag_service.learn_normalizer(collection_name="test")
 
     assert np.allclose(normalizer.center_vector, [2.0, 2.0])

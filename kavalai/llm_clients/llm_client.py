@@ -116,13 +116,13 @@ class LLMClient:
         timeout = float(os.environ.get("KAVALAI_LLM_TIMEOUT", 30.0))
         if self.provider == "openai":
             return OpenAIClient(
-                api_key=os.environ["OPENAI_API_KEY"],
+                api_key=os.environ.get("OPENAI_API_KEY"),
                 service_tier=os.environ.get("KAVALAI_OPENAI_SERVICE_TIER"),
                 timeout=timeout,
             )
         elif self.provider == "gemini":
             return GeminiClient(
-                api_key=os.environ["GEMINI_API_KEY"],
+                api_key=os.environ.get("GEMINI_API_KEY"),
                 timeout=timeout,
             )
         elif self.provider == "ollama":

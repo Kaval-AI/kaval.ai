@@ -16,7 +16,7 @@ class SimpleResponse(BaseModel):
 
 @pytest.fixture
 def openai_client():
-    return OpenAIClient()
+    return OpenAIClient(api_key=os.getenv("OPENAI_API_KEY", "fake"))
 
 
 @pytest.mark.asyncio
@@ -271,7 +271,7 @@ async def test_openai_service_tier_unit(openai_client):
             "openai.resources.responses.AsyncResponses.stream", return_value=mock_stream
         ) as mock_stream_call:
             # 1. Test from constructor
-            client_with_tier = OpenAIClient(service_tier="priority")
+            client_with_tier = OpenAIClient(api_key="fake", service_tier="priority")
             await client_with_tier.chat_completions(model=model, messages=messages)
 
             _, kwargs = mock_stream_call.call_args
@@ -289,7 +289,8 @@ async def test_openai_service_tier_unit(openai_client):
             # 3. Test priority mapping via LLMClient
             from kavalai.llm_clients.llm_client import LLMClient
 
-            llm_client = LLMClient("openai/gpt-4o")
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "fake"}):
+                llm_client = LLMClient("openai/gpt-4o")
             llm_client.client = client_with_tier
             mock_stream_call.reset_mock()
             await llm_client.chat_completions(messages=messages, priority="high")

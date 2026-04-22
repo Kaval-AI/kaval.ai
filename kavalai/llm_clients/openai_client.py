@@ -98,6 +98,8 @@ class OpenAIClient:
             call_kwargs["service_tier"] = self.service_tier
 
         buffer = io.StringIO()
+        input_tokens = 0
+        output_tokens = 0
         async with self.client.responses.stream(**call_kwargs) as stream:
             async for event in stream:
                 if isinstance(event, ResponseTextDeltaEvent):
