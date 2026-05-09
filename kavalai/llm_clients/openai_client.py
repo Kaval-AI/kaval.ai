@@ -32,7 +32,7 @@ from pydantic import BaseModel
 from kavalai.agents.db import ModelCallStat
 from kavalai.llm_clients.common import (
     create_model_call_stat,
-    fix_json,
+    safe_parse_json,
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
@@ -109,7 +109,7 @@ class OpenAIClient:
                             await streamer.stream_partial(event.delta)
                         else:
                             value = (
-                                fix_json(buffer.getvalue())
+                                safe_parse_json(buffer.getvalue())
                                 if response_model
                                 else buffer.getvalue()
                             )
@@ -123,7 +123,7 @@ class OpenAIClient:
                             await streamer.stream_partial(event.delta)
                         else:
                             value = (
-                                fix_json(buffer.getvalue())
+                                safe_parse_json(buffer.getvalue())
                                 if response_model
                                 else buffer.getvalue()
                             )
@@ -145,13 +145,13 @@ class OpenAIClient:
                     )
         # Stream the final complete value.
         if streamer is not None:
-            value = fix_json(buffer.getvalue()) if response_model else buffer.getvalue()
+            value = safe_parse_json(buffer.getvalue()) if response_model else buffer.getvalue()
             if isinstance(value, (dict, list)):
                 value = json.dumps(value)
             await streamer.stream_complete(value)
         result = buffer.getvalue()
         if response_model:
-            result = response_model.model_validate(fix_json(result))
+            result = response_model.model_validate(safe_parse_json(result))
 
         duration = time.perf_counter() - start_time
 

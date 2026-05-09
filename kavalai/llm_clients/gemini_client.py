@@ -29,7 +29,7 @@ from kavalai.agents.db import ModelCallStat
 from kavalai.llm_clients.common import (
     create_model_call_stat,
     get_model_name,
-    fix_json,
+    safe_parse_json,
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
@@ -124,7 +124,7 @@ class GeminiClient:
                                     # to allow the UI to parse it.
                                     buffer.write(part.text)
                                     # fix_json now returns a dict/list, so we convert back to JSON string for streaming
-                                    value = fix_json(buffer.getvalue())
+                                    value = safe_parse_json(buffer.getvalue())
                                     await streamer.stream_partial(json.dumps(value))
                                 else:
                                     await streamer.stream_partial(part.text)
@@ -152,13 +152,13 @@ class GeminiClient:
         thought_text = thought_buffer.getvalue()
 
         if streamer is not None:
-            value = fix_json(result_text) if response_model else result_text
+            value = safe_parse_json(result_text) if response_model else result_text
             if isinstance(value, (dict, list)):
                 value = json.dumps(value)
             await streamer.stream_complete(value)
 
         if response_model:
-            result = response_model.model_validate(fix_json(result_text))
+            result = response_model.model_validate(safe_parse_json(result_text))
         else:
             result = result_text
 
