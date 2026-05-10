@@ -1,15 +1,58 @@
-class BaseClient:
-    """Base class for LLM clients."""
+"""
+Copyright 2026 OÜ KAVAL AI (registry code 17393877)
 
-    def __init__(self):
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
+from typing import Optional, Type
+
+from pydantic import BaseModel
+from kavalai.llm_clients.streamer import Streamer
+
+
+class LlmClientParameters(BaseModel):
+    temperature: Optional[float] = 1.0
+    top_p: Optional[float] = 0.2
+    reasoning_effort: Optional[str] = None
+    service_tier: Optional[str] = None
+    timeout_seconds: Optional[float] = None
+
+
+class ChatMessage(BaseModel):
+    """Standard chat completion message."""
+
+    role: Optional[str] = None
+    type: Optional[str] = None
+    content: Optional[str] = None
+
+
+class ChatHistory(BaseModel):
+    messages: list[ChatMessage]
+
+
+class BaseLlmClient:
+    def __init__(self, llm_client_parameters: Optional[LlmClientParameters] = None):
+        self.parameters = llm_client_parameters
+        self.streamer = None
+
+    async def chat_completions(
+        self,
+        *,
+        chat_history: ChatHistory,
+        response_model: Optional[Type[BaseModel]] = None,
+    ) -> Streamer:
         pass
 
 
-class BaseLlmModel(BaseClient):
-    def __init__(self):
-        super().__init__()
-
-
-class BaseEmbeddingsModel(BaseClient):
-    def __init__(self):
-        super().__init__()
+class BaseEmbeddingClient:
+    pass
