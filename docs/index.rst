@@ -11,7 +11,8 @@
 Welcome to Kaval.AI's documentation!
 ====================================
 
-Kaval.AI is a Python SDK for developing agentic workflows and chatbots.
+Kaval.AI is a Python SDK for developing agentic workflows.
+
 
 
 .. toctree::
@@ -22,7 +23,6 @@ Kaval.AI is a Python SDK for developing agentic workflows and chatbots.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Architecture & Concepts:
 
    architecture/index
 

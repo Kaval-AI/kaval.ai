@@ -1,5 +1,5 @@
-Architecture & Concepts
-=======================
+Architecture
+============
 
 Kaval.AI is designed to be a flexible and modular AI agent framework.
 
@@ -17,3 +17,4 @@ The core components of Kaval.AI are:
 
    high_level
    workflow_engine
+   ../architecture/streamer

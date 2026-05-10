@@ -8,6 +8,9 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
+# Set dummy environment variables for modules that require them during doc build
+os.environ.setdefault("KAVALAI_BO_DB_SCHEMA", "public")
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
