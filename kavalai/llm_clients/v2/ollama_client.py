@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import asyncio
 import os
 from typing import Optional, Type
 
@@ -57,31 +56,6 @@ class OllamaClient(BaseLlmClient):
             self.timeout = self.parameters.timeout_seconds
 
         self.client = ollama.AsyncClient(host=self.host, timeout=self.timeout)
-
-    async def chat_completions(
-        self,
-        *,
-        chat_history: ChatHistory,
-        response_model: Optional[Type[BaseModel]] = None,
-    ) -> Streamer:
-        """
-        Execute a chat completion and return a Streamer.
-
-        Args:
-            chat_history: The history of messages.
-            response_model: Optional Pydantic model for structured output.
-
-        Returns:
-            A Streamer instance that will yield the completion events.
-        """
-        streamer = Streamer(timeout_seconds=self.timeout)
-
-        # Start the completion process in the background
-        asyncio.create_task(
-            self._run_chat_completions(chat_history, response_model, streamer)
-        )
-
-        return streamer
 
     async def _run_chat_completions(
         self,

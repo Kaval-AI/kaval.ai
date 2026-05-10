@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import asyncio
 from typing import Optional, Type
 
 from pydantic import BaseModel
 from kavalai.llm_clients.streamer import Streamer
+from kavalai.llm_clients.with_retry import with_retry
 
 
 class LlmClientParameters(BaseModel):
@@ -51,7 +53,45 @@ class BaseLlmClient:
         chat_history: ChatHistory,
         response_model: Optional[Type[BaseModel]] = None,
     ) -> Streamer:
-        pass
+        """
+        Execute a chat completion and return a Streamer.
+
+        Args:
+            chat_history: The history of messages.
+            response_model: Optional Pydantic model for structured output.
+
+        Returns:
+            A Streamer instance that will yield the completion events.
+        """
+        timeout = 30.0
+        if self.parameters and self.parameters.timeout_seconds:
+            timeout = self.parameters.timeout_seconds
+
+        streamer = Streamer(timeout_seconds=timeout)
+
+        # Start the completion process in the background with retry
+        asyncio.create_task(
+            with_retry(
+                self._run_chat_completions,
+                chat_history=chat_history,
+                response_model=response_model,
+                streamer=streamer,
+            )
+        )
+
+        return streamer
+
+    async def _run_chat_completions(
+        self,
+        chat_history: ChatHistory,
+        response_model: Optional[Type[BaseModel]],
+        streamer: Streamer,
+    ):
+        """
+        Background task to handle the actual LLM API call and stream results.
+        This method must be overridden by subclasses.
+        """
+        raise NotImplementedError("Subclasses must implement _run_chat_completions")
 
 
 class BaseEmbeddingClient:
