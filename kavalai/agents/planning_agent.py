@@ -50,11 +50,9 @@ def get_step_output_type(ResponseModel=Type[BaseModel]):
 
         short_explanation: str = Field(
             description="Human friendly summary of planned steps. Be very concise, maximum 50 characters.",
-            max_length=50,
         )
         instructions: str = Field(
             description="Store very brief instructions for downstream LLM.",
-            max_length=500,
         )
         tool_calls: list[ToolCall] = Field(
             default=[],
