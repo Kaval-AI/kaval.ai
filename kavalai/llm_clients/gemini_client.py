@@ -30,6 +30,7 @@ from kavalai.llm_clients.common import (
     create_model_call_stat,
     get_model_name,
     safe_parse_json,
+    safe_model_validate,
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
@@ -158,7 +159,7 @@ class GeminiClient:
             await streamer.stream_complete(value)
 
         if response_model:
-            result = response_model.model_validate(safe_parse_json(result_text))
+            result = safe_model_validate(response_model, result_text)
         else:
             result = result_text
 

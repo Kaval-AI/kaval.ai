@@ -12,6 +12,7 @@ from kavalai.llm_clients.common import (
     Streamer,
     get_model_name,
     safe_parse_json,
+    safe_model_validate,
 )
 
 
@@ -20,6 +21,7 @@ class SimpleModel(BaseModel):
 
 
 # --- safe_parse_json tests ---
+
 
 def test_safe_parse_json_valid():
     data = '{"a": "hello"}'
@@ -87,7 +89,7 @@ def test_safe_parse_json_extra_data_msg():
         mock_loads.side_effect = [
             json.JSONDecodeError("Extra data", '{"a": 1} {', 8),
             Exception("inner failure"),
-            {"a": 1} # ensure_json result (mocked via json.loads)
+            {"a": 1},  # ensure_json result (mocked via json.loads)
         ]
         assert safe_parse_json('{"a": 1} {') == {"a": 1}
 
@@ -106,7 +108,7 @@ def test_safe_parse_json_ensure_json_twice_fails():
 
 def test_safe_parse_json_fallback_slicing():
     assert safe_parse_json('{"a": 1} ]') == {"a": 1}
-    assert safe_parse_json('[1, 2] }') == [1, 2]
+    assert safe_parse_json("[1, 2] }") == [1, 2]
 
 
 def test_safe_parse_json_fallback_fails_json_loads():
@@ -124,16 +126,16 @@ def test_safe_parse_json_fallback_rfind_exception():
     # Trigger Exception in the rfind loop
     with patch("kavalai.llm_clients.common.ensure_json") as mock_ensure:
         mock_ensure.side_effect = Exception("ensure_json failed")
-        
+
         # We need something where rfind finds a char, but json.loads(subset) fails.
         # And ensure_json also fails.
-        
+
         # Let's mock json.loads to fail inside the fallback loop.
         with patch("json.loads") as mock_loads:
             mock_loads.side_effect = [
-                json.JSONDecodeError("fail", "", 0), # initial load
-                Exception("ensure failed"),          # ensure_json -> json.loads
-                Exception("fallback failed")         # fallback loop -> json.loads
+                json.JSONDecodeError("fail", "", 0),  # initial load
+                Exception("ensure failed"),  # ensure_json -> json.loads
+                Exception("fallback failed"),  # fallback loop -> json.loads
             ]
             assert safe_parse_json('{"a": 1}') == {}
 
@@ -141,10 +143,86 @@ def test_safe_parse_json_fallback_rfind_exception():
 def test_safe_parse_json_really_all_fails():
     with patch("kavalai.llm_clients.common.ensure_json") as mock_ensure:
         mock_ensure.side_effect = Exception("error")
-        assert safe_parse_json('{ no braces here') == {}
+        assert safe_parse_json("{ no braces here") == {}
+
+
+# --- safe_model_validate tests ---
+
+
+class TestModel(BaseModel):
+    field1: str
+    field2: int
+
+
+def test_safe_model_validate_valid_dict():
+    """Test that safe_model_validate works with valid JSON dict."""
+    json_str = '{"field1": "test", "field2": 42}'
+    result = safe_model_validate(TestModel, json_str)
+    assert result.field1 == "test"
+    assert result.field2 == 42
+
+
+def test_safe_model_validate_empty_list():
+    """Test that safe_model_validate converts empty list [] to empty dict {}."""
+    json_str = "[]"
+    # Should convert [] to {} and fail validation with missing field error, not type error
+    with pytest.raises(Exception) as exc_info:
+        safe_model_validate(TestModel, json_str)
+
+    error_str = str(exc_info.value).lower()
+    # Should be a "field required" error, not a "input should be dict" type error
+    assert "required" in error_str or "missing" in error_str
+    assert "input_type=list" not in str(exc_info.value)
+
+
+def test_safe_model_validate_non_empty_list():
+    """Test that safe_model_validate converts non-empty list to empty dict."""
+    json_str = "[1, 2, 3]"
+    # Lists are converted to {} before validation
+    with pytest.raises(Exception) as exc_info:
+        safe_model_validate(TestModel, json_str)
+
+    error_str = str(exc_info.value).lower()
+    assert "required" in error_str or "missing" in error_str
+    assert "input_type=list" not in str(exc_info.value)
+
+
+def test_safe_model_validate_incomplete_json():
+    """Test that safe_model_validate handles incomplete JSON from streaming."""
+    # Simulate what happens during streaming when LLM sends just '['
+    json_str = "["
+    # safe_parse_json will fix this to '[]', then safe_model_validate converts to {}
+    with pytest.raises(Exception) as exc_info:
+        safe_model_validate(TestModel, json_str)
+
+    error_str = str(exc_info.value).lower()
+    assert "required" in error_str or "missing" in error_str
+
+
+def test_safe_model_validate_partial_dict():
+    """Test that safe_model_validate handles partial dict with missing fields."""
+    json_str = '{"field1": "test"}'
+    with pytest.raises(Exception) as exc_info:
+        safe_model_validate(TestModel, json_str)
+
+    error_str = str(exc_info.value).lower()
+    assert "field2" in error_str or "required" in error_str
+
+
+def test_safe_model_validate_malformed_json():
+    """Test that safe_model_validate handles malformed JSON gracefully."""
+    json_str = '{"field1": "test", '
+    # safe_parse_json will fix this to valid JSON
+    with pytest.raises(Exception) as exc_info:
+        safe_model_validate(TestModel, json_str)
+
+    error_str = str(exc_info.value).lower()
+    # Should fail on missing field2, not on JSON parsing
+    assert "field2" in error_str or "required" in error_str
 
 
 # --- StreamContent tests ---
+
 
 def test_stream_content_pydantic():
     sc = StreamContent(type="text", name="chunk", value="hello")
@@ -154,6 +232,7 @@ def test_stream_content_pydantic():
 
 
 # --- Streamer tests ---
+
 
 @pytest.mark.asyncio
 async def test_streamer_partial():
@@ -181,12 +260,14 @@ async def test_streamer_complete():
 
 # --- get_model_name tests ---
 
+
 def test_get_model_name():
     assert get_model_name("openai/gpt-4") == "gpt-4"
     assert get_model_name("gpt-3.5-turbo") == "gpt-3.5-turbo"
 
 
 # --- create_model_call_stat tests ---
+
 
 def test_create_model_call_stat_basic():
     stat = create_model_call_stat(

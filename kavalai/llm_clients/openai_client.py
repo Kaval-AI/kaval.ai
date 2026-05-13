@@ -33,6 +33,7 @@ from kavalai.agents.db import ModelCallStat
 from kavalai.llm_clients.common import (
     create_model_call_stat,
     safe_parse_json,
+    safe_model_validate,
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
@@ -145,13 +146,17 @@ class OpenAIClient:
                     )
         # Stream the final complete value.
         if streamer is not None:
-            value = safe_parse_json(buffer.getvalue()) if response_model else buffer.getvalue()
+            value = (
+                safe_parse_json(buffer.getvalue())
+                if response_model
+                else buffer.getvalue()
+            )
             if isinstance(value, (dict, list)):
                 value = json.dumps(value)
             await streamer.stream_complete(value)
         result = buffer.getvalue()
         if response_model:
-            result = response_model.model_validate(safe_parse_json(result))
+            result = safe_model_validate(response_model, result)
 
         duration = time.perf_counter() - start_time
 

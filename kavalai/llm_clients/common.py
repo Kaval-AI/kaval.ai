@@ -15,12 +15,12 @@ limitations under the License.
 """
 
 import asyncio
-from typing import Any, Optional
+from typing import Any, Optional, Type
 
 import json
 from partial_json_parser import ensure_json
 from pydantic import BaseModel
-
+from loguru import logger
 from kavalai.agents.db import ModelCallStat
 from kavalai.agents.utils import to_plain
 
@@ -97,6 +97,34 @@ def safe_parse_json(data: str) -> Any:
     return {}
 
 
+def safe_model_validate(response_model: Type[BaseModel], json_str: str) -> BaseModel:
+    """
+    Safely validate JSON string against a Pydantic BaseModel.
+
+    Handles the case where LLM returns an empty/invalid list [] instead of a dict,
+    which can happen during streaming failures, timeouts, or model errors.
+
+    Args:
+        response_model: The Pydantic model class to validate against
+        json_str: The JSON string to parse and validate
+
+    Returns:
+        Validated instance of response_model
+
+    Raises:
+        ValidationError: If validation fails with a clear error message
+    """
+    parsed = safe_parse_json(json_str)
+
+    # If we got a list when expecting a BaseModel (dict), convert to empty dict
+    # This happens when LLM returns incomplete/malformed responses like "[]"
+    if isinstance(parsed, list) and not isinstance(parsed, dict):
+        logger.error(f"LLM returned invalid JSON: {json_str}")
+        parsed = {}
+
+    return response_model.model_validate(parsed)
+
+
 class StreamContent(BaseModel):
     """
     Represents a chunk of content streamed from an LLM.
@@ -106,6 +134,7 @@ class StreamContent(BaseModel):
         name: The identifier for the stream source or target.
         value: The actual content string.
     """
+
     type: str
     name: str
     value: str

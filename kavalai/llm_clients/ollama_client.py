@@ -28,6 +28,7 @@ from kavalai.llm_clients.common import (
     create_model_call_stat,
     get_model_name,
     safe_parse_json,
+    safe_model_validate,
     Streamer,
 )
 from kavalai.normalizer import Normalizer, get_default_normalizer
@@ -84,7 +85,9 @@ class OllamaClient:
                         await streamer.stream_partial(delta)
                     else:
                         value = (
-                            safe_parse_json(full_content) if response_model else full_content
+                            safe_parse_json(full_content)
+                            if response_model
+                            else full_content
                         )
                         if isinstance(value, (dict, list)):
                             value = json.dumps(value)
@@ -101,7 +104,7 @@ class OllamaClient:
             await streamer.stream_complete(value)
 
         if response_model:
-            result = response_model.model_validate(safe_parse_json(full_content))
+            result = safe_model_validate(response_model, full_content)
         else:
             result = full_content
 
