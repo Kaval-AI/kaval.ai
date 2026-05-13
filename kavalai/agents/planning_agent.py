@@ -144,10 +144,15 @@ class PlanningAgent:
 
         input_keys = parse_json("input_args", tool_call.input_args)
 
-        input_args = {
-            arg_name: self._input_data.get(input_key)
-            for arg_name, input_key in input_keys.items()
-        }
+        # Validate that input_keys values are strings (keys in input_data)
+        input_args = {}
+        for arg_name, input_key in input_keys.items():
+            if not isinstance(input_key, str):
+                error_msg = f"Invalid input_args for '{arg_name}': expected a string key referencing input_data, but got {type(input_key).__name__}: {input_key}. Use literal_args for direct values."
+                logger.error(error_msg)
+                errors.append(error_msg)
+                continue
+            input_args[arg_name] = self._input_data.get(input_key)
 
         # Check for duplicate keys and log error
         all_keys = (
