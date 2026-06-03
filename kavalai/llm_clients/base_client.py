@@ -100,6 +100,16 @@ class BaseLlmClient:
                 return chunk.value
         return None
 
+    async def stream_prompt(
+        self, system_message: str, response_model: Optional[Type[BaseModel]] = None
+    ) -> Streamer:
+        history = ChatHistory(
+            messages=[ChatMessage(role="system", content=system_message)]
+        )
+        return await self.stream_chat_completions(
+            chat_history=history, response_model=response_model
+        )
+
     async def prompt(
         self, system_message: str, response_model: Optional[Type[BaseModel]] = None
     ):
