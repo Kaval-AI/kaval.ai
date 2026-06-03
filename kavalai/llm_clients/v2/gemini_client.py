@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from kavalai.llm_clients.base_client import (
     BaseLlmClient,
+    LlmClientException,
     ChatHistory,
     LlmClientParameters,
 )
@@ -52,11 +53,12 @@ class GeminiClient(BaseLlmClient):
         super().__init__(llm_client_parameters)
         self.model = model
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.timeout = 30.0
-        if self.parameters and self.parameters.timeout_seconds:
-            self.timeout = self.parameters.timeout_seconds
+        self.timeout = self.parameters.timeout_seconds
 
-        self.client = genai.Client(api_key=self.api_key)
+        try:
+            self.client = genai.Client(api_key=self.api_key)
+        except ValueError as e:
+            raise LlmClientException(str(e)) from e
 
     async def _run_chat_completions(
         self,

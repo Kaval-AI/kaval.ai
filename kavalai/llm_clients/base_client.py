@@ -98,6 +98,7 @@ class BaseLlmClient:
                 if response_model:
                     return response_model.model_validate_json(chunk.value)
                 return chunk.value
+        return None
 
     async def prompt(
         self, system_message: str, response_model: Optional[Type[BaseModel]] = None
