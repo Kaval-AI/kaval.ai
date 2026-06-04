@@ -15,6 +15,8 @@ limitations under the License.
 """
 
 import os
+import time
+import json
 from typing import Optional, Type
 
 from openai import AsyncOpenAI
@@ -22,6 +24,7 @@ from openai.types.responses import (
     ResponseTextDeltaEvent,
     ResponseRefusalDeltaEvent,
     ResponseErrorEvent,
+    ResponseCompletedEvent,
 )
 from pydantic import BaseModel
 
@@ -29,6 +32,8 @@ from kavalai.llm_clients.base_client import (
     BaseLlmClient,
     ChatHistory,
     LlmClientParameters,
+    ModelCallStat,
+    ModelStatsReceiver,
 )
 from kavalai.llm_clients.streamer import Streamer
 
@@ -42,6 +47,7 @@ class OpenAIClient(BaseLlmClient):
         self,
         model: str,
         llm_client_parameters: Optional[LlmClientParameters] = None,
+        model_stats_receiver: Optional[ModelStatsReceiver] = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
     ):
@@ -51,10 +57,11 @@ class OpenAIClient(BaseLlmClient):
         Args:
             model: The OpenAI model name (e.g., 'gpt-4o').
             llm_client_parameters: Optional parameters like temperature, top_p, etc.
+            model_stats_receiver: Optional receiver for model call statistics.
             api_key: Optional API key (falls back to OPENAI_API_KEY env var).
             base_url: Optional base URL for the API.
         """
-        super().__init__(llm_client_parameters)
+        super().__init__(llm_client_parameters, model_stats_receiver)
         self.model = model
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.base_url = base_url
@@ -76,6 +83,7 @@ class OpenAIClient(BaseLlmClient):
         """
         Background task to handle the actual OpenAI API call and stream results.
         """
+        start_time = time.perf_counter()
         value_streamer = streamer.get_value_streamer(
             "response", response_model=response_model
         )
@@ -103,14 +111,37 @@ class OpenAIClient(BaseLlmClient):
         if response_model:
             call_kwargs["text_format"] = response_model
 
+        prompt_tokens = 0
+        completion_tokens = 0
+        full_response = ""
+
         async with self.client.responses.stream(**call_kwargs) as stream:
             async for event in stream:
                 if isinstance(event, ResponseTextDeltaEvent):
+                    full_response += event.delta
                     await value_streamer.stream_partial(event.delta)
                 elif isinstance(event, ResponseRefusalDeltaEvent):
+                    full_response += event.delta
                     await value_streamer.stream_partial(event.delta)
                 elif isinstance(event, ResponseErrorEvent):
                     # We raise here to let the background task fail
                     raise RuntimeError(f"OpenAI Stream Error: {event.error}")
+                elif isinstance(event, ResponseCompletedEvent):
+                    usage = event.response.usage
+                    prompt_tokens = usage.input_tokens
+                    completion_tokens = usage.output_tokens
 
         await value_streamer.stream_complete()
+
+        duration = time.perf_counter() - start_time
+        stats = ModelCallStat(
+            call_type="llm",
+            model=f"openai/{self.model}",
+            request_data=json.dumps(call_kwargs, default=str),
+            response_data=full_response,
+            duration_seconds=duration,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+        )
+        await self._send_model_call_stats(stats)

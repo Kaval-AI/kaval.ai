@@ -20,7 +20,7 @@ from kavalai.agents.db import db_manager
 from kavalai.agents.workflow import Workflow, WorkflowException
 from kavalai.agents.workflow_model import WorkflowModel
 from kavalai.agents.rag_service import RagService
-from kavalai.functionkernel import FunctionKernel, FunctionKernelException
+from kavalai.functionkernel import FunctionKernel, FunctionKernelException, pythontool
 from kavalai.llm_clients.streamer import (
     StreamerTimeoutException,
     Streamer,
@@ -64,6 +64,7 @@ __all__ = [
     # Function kernel
     FunctionKernel,
     FunctionKernelException,
+    pythontool,
     # Streamer
     StreamerTimeoutException,
     Streamer,

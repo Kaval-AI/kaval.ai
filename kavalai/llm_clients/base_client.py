@@ -15,7 +15,7 @@ limitations under the License.
 """
 
 import asyncio
-from typing import Optional, Type
+from typing import Optional, Type, Literal
 
 from pydantic import BaseModel
 
@@ -43,12 +43,35 @@ class ChatHistory(BaseModel):
     messages: list[ChatMessage]
 
 
+class ModelCallStat(BaseModel):
+    call_type: Literal["llm", "embedding"]
+    model: Optional[str] = None
+    request_data: Optional[str] = None
+    response_data: Optional[str] = None
+    response_code: Optional[int] = None
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+    batch_size: Optional[int] = None
+    duration_seconds: Optional[float] = None
+
+
+class ModelStatsReceiver:
+    def receive_model_stats(self, stats: ModelCallStat):
+        raise NotImplementedError("You must implement this in the subclass.")
+
+
 class BaseLlmClient:
-    def __init__(self, llm_client_parameters: Optional[LlmClientParameters] = None):
+    def __init__(
+        self,
+        llm_client_parameters: Optional[LlmClientParameters] = None,
+        model_stats_receiver: Optional[ModelStatsReceiver] = None,
+    ):
         if not llm_client_parameters:
             llm_client_parameters = LlmClientParameters()
         self.parameters = llm_client_parameters
         self.streamer = None
+        self.model_stats_receiver = model_stats_receiver
 
     async def stream_chat_completions(
         self,
@@ -119,6 +142,10 @@ class BaseLlmClient:
         return await self.chat_completions(
             chat_history=history, response_model=response_model
         )
+
+    async def _send_model_call_stats(self, stats: ModelCallStat):
+        if self.model_stats_receiver is not None:
+            self.model_stats_receiver.receive_model_stats(stats)
 
     async def _run_chat_completions(
         self,

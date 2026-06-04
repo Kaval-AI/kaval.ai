@@ -15,6 +15,8 @@ limitations under the License.
 """
 
 import os
+import time
+import json
 from typing import Optional, Type
 
 import ollama
@@ -24,6 +26,8 @@ from kavalai.llm_clients.base_client import (
     BaseLlmClient,
     ChatHistory,
     LlmClientParameters,
+    ModelCallStat,
+    ModelStatsReceiver,
 )
 from kavalai.llm_clients.streamer import Streamer
 
@@ -37,6 +41,7 @@ class OllamaClient(BaseLlmClient):
         self,
         model: str,
         llm_client_parameters: Optional[LlmClientParameters] = None,
+        model_stats_receiver: Optional[ModelStatsReceiver] = None,
         host: Optional[str] = None,
     ):
         """
@@ -45,9 +50,10 @@ class OllamaClient(BaseLlmClient):
         Args:
             model: The Ollama model name (e.g., 'llama3').
             llm_client_parameters: Optional parameters like temperature, top_p, etc.
+            model_stats_receiver: Optional receiver for model call statistics.
             host: Optional Ollama host (falls back to OLLAMA_HOST env var).
         """
-        super().__init__(llm_client_parameters)
+        super().__init__(llm_client_parameters, model_stats_receiver)
         self.model = model
         self.host = host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
@@ -66,6 +72,7 @@ class OllamaClient(BaseLlmClient):
         """
         Background task to handle the actual Ollama API call and stream results.
         """
+        start_time = time.perf_counter()
         value_streamer = streamer.get_value_streamer(
             "response", response_model=response_model
         )
@@ -93,13 +100,35 @@ class OllamaClient(BaseLlmClient):
             # Ollama supports 'format': 'json'
             call_kwargs["format"] = "json"
 
+        prompt_tokens = 0
+        completion_tokens = 0
+        full_response = ""
+
         try:
             async for chunk in await self.client.chat(**call_kwargs):
                 if "message" in chunk and "content" in chunk["message"]:
                     delta = chunk["message"]["content"]
+                    full_response += delta
                     await value_streamer.stream_partial(delta)
 
+                if chunk.get("done"):
+                    prompt_tokens = chunk.get("prompt_eval_count", 0)
+                    completion_tokens = chunk.get("eval_count", 0)
+
             await value_streamer.stream_complete()
+
+            duration = time.perf_counter() - start_time
+            stats = ModelCallStat(
+                call_type="llm",
+                model=f"ollama/{self.model}",
+                request_data=json.dumps(call_kwargs, default=str),
+                response_data=full_response,
+                duration_seconds=duration,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
+            )
+            await self._send_model_call_stats(stats)
         except Exception as e:
             # We follow the OpenAIClient pattern and let the task fail
             raise e

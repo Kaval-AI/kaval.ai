@@ -15,6 +15,8 @@ limitations under the License.
 """
 
 import os
+import time
+import json
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 from google import genai
@@ -27,6 +29,8 @@ from kavalai.llm_clients.base_client import (
     LlmClientException,
     ChatHistory,
     LlmClientParameters,
+    ModelCallStat,
+    ModelStatsReceiver,
 )
 from kavalai.llm_clients.streamer import Streamer
 
@@ -40,6 +44,7 @@ class GeminiClient(BaseLlmClient):
         self,
         model: str,
         llm_client_parameters: Optional[LlmClientParameters] = None,
+        model_stats_receiver: Optional[ModelStatsReceiver] = None,
         api_key: Optional[str] = None,
     ):
         """
@@ -48,9 +53,10 @@ class GeminiClient(BaseLlmClient):
         Args:
             model: The Gemini model name (e.g., 'gemini-1.5-flash').
             llm_client_parameters: Optional parameters like temperature, top_p, etc.
+            model_stats_receiver: Optional receiver for model call statistics.
             api_key: Optional API key (falls back to GEMINI_API_KEY env var).
         """
-        super().__init__(llm_client_parameters)
+        super().__init__(llm_client_parameters, model_stats_receiver)
         self.model = model
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.timeout = self.parameters.timeout_seconds
@@ -69,6 +75,7 @@ class GeminiClient(BaseLlmClient):
         """
         Background task to handle the actual Gemini API call and stream results.
         """
+        start_time = time.perf_counter()
         value_streamer = streamer.get_value_streamer(
             "response", response_model=response_model
         )
@@ -116,6 +123,10 @@ class GeminiClient(BaseLlmClient):
         if config_kwargs.get("thinking_config"):
             thought_streamer = streamer.get_value_streamer("thought")
 
+        prompt_tokens = 0
+        completion_tokens = 0
+        full_response = ""
+
         try:
             async for chunk in await self.client.aio.models.generate_content_stream(
                 model=self.model,
@@ -130,7 +141,11 @@ class GeminiClient(BaseLlmClient):
                                 if thought_streamer:
                                     await thought_streamer.stream_partial(part.text)
                             elif part.text:
+                                full_response += part.text
                                 await value_streamer.stream_partial(part.text)
+                if chunk.usage_metadata:
+                    prompt_tokens = chunk.usage_metadata.prompt_token_count
+                    completion_tokens = chunk.usage_metadata.candidates_token_count
         except Exception as e:
             logger.error(f"Gemini Stream Error: {e}")
             raise
@@ -138,6 +153,24 @@ class GeminiClient(BaseLlmClient):
         await value_streamer.stream_complete()
         if thought_streamer:
             await thought_streamer.stream_complete()
+
+        duration = time.perf_counter() - start_time
+        request_data = {
+            "model": self.model,
+            "contents": [str(c) for c in contents],
+            "config": config_kwargs,
+        }
+        stats = ModelCallStat(
+            call_type="llm",
+            model=f"gemini/{self.model}",
+            request_data=json.dumps(request_data, default=str),
+            response_data=full_response,
+            duration_seconds=duration,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+        )
+        await self._send_model_call_stats(stats)
 
 
 def convert_messages(
