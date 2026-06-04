@@ -187,6 +187,16 @@ class Streamer:
         """Return self as async iterator."""
         return self
 
+    async def stream_error(self, error: Exception):
+        """
+        Push an 'error' chunk to the queue.
+        """
+        await self._queue.put(
+            StreamContent(
+                type="error", name="error", value=str(error)
+            ).model_dump_json()
+        )
+
     async def __anext__(self) -> StreamContent:
         """
         Async iterator protocol: get the next stream chunk from the queue.
@@ -212,6 +222,9 @@ class Streamer:
         else:
             data = await self._queue.get()
         stream_content = StreamContent.model_validate_json(data)
+        if stream_content.type == "error":
+            self._stop_iteration = True
+            raise RuntimeError(stream_content.value)
         if stream_content.type == "complete" and self._active_streamers == 0:
             self._stop_iteration = True
         return stream_content

@@ -95,15 +95,19 @@ class BaseLlmClient:
 
         streamer = Streamer(timeout_seconds=timeout)
 
+        async def _run():
+            try:
+                await with_retry(
+                    self._run_chat_completions,
+                    chat_history=chat_history,
+                    response_model=response_model,
+                    streamer=streamer,
+                )
+            except Exception as e:
+                await streamer.stream_error(e)
+
         # Start the completion process in the background with retry
-        asyncio.create_task(
-            with_retry(
-                self._run_chat_completions,
-                chat_history=chat_history,
-                response_model=response_model,
-                streamer=streamer,
-            )
-        )
+        asyncio.create_task(_run())
 
         return streamer
 
@@ -144,6 +148,7 @@ class BaseLlmClient:
         )
 
     async def _send_model_call_stats(self, stats: ModelCallStat):
+        """Subclasses should use this method to report model stats."""
         if self.model_stats_receiver is not None:
             self.model_stats_receiver.receive_model_stats(stats)
 

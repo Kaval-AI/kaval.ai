@@ -40,7 +40,7 @@ async def test_retry_logic():
     with patch.object(MockClient, "_run_chat_completions", side_effect=side_effect):
         # We need to lower the retry delay for testing
         with patch("kavalai.llm_clients.with_retry.asyncio.sleep", return_value=None):
-            streamer = await client.chat_completions(chat_history=chat_history)
+            streamer = await client.stream_chat_completions(chat_history=chat_history)
 
             contents = []
             async for content in streamer:
@@ -61,11 +61,8 @@ async def test_non_retriable_error():
         raise ValueError("Non-retriable error")
 
     with patch.object(MockClient, "_run_chat_completions", side_effect=side_effect):
-        streamer = await client.chat_completions(chat_history=chat_history)
-
-        # Currently it will timeout because we don't propagate the error
-        with pytest.raises(
-            Exception
-        ):  # Catch any exception, likely StreamerTimeoutException
+        # Should raise RuntimeError from the streamer
+        with pytest.raises(RuntimeError, match="Non-retriable error"):
+            streamer = await client.stream_chat_completions(chat_history=chat_history)
             async for _ in streamer:
                 pass
