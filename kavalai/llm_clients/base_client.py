@@ -18,6 +18,7 @@ import asyncio
 from typing import Optional, Type, Literal
 
 from pydantic import BaseModel
+from loguru import logger
 
 from kavalai.llm_clients.streamer import Streamer
 from kavalai.llm_clients.with_retry import with_retry
@@ -59,6 +60,26 @@ class ModelCallStat(BaseModel):
 class ModelStatsReceiver:
     def receive_model_stats(self, stats: ModelCallStat):
         raise NotImplementedError("You must implement this in the subclass.")
+
+
+class ModelStatsLogger(ModelStatsReceiver):
+    """Logs model call statistics using a configurable format."""
+
+    def __init__(self, format_str: Optional[str] = None):
+        """
+        Initialize the logger.
+
+        Args:
+            format_str: Optional python format string.
+                        Default: "Model stats ({model}): {total_tokens} tokens, {duration_seconds:.2f}s"
+        """
+        self.format_str = (
+            format_str
+            or "Model stats ({model}): {total_tokens} tokens, {duration_seconds:.2f}s"
+        )
+
+    def receive_model_stats(self, stats: ModelCallStat):
+        logger.info(self.format_str.format(**stats.model_dump()))
 
 
 class BaseLlmClient:

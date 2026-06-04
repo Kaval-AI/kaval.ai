@@ -5,6 +5,8 @@ from kavalai.llm_clients.base_client import (
     ChatHistory,
     ChatMessage,
     LlmClientParameters,
+    ModelStatsLogger,
+    ModelCallStat,
 )
 import openai
 
@@ -66,3 +68,23 @@ async def test_non_retriable_error():
             streamer = await client.stream_chat_completions(chat_history=chat_history)
             async for _ in streamer:
                 pass
+
+
+def test_model_stats_logger():
+    with patch("kavalai.llm_clients.base_client.logger") as mock_logger:
+        stats = ModelCallStat(
+            call_type="llm",
+            model="gpt-4",
+            total_tokens=100,
+            duration_seconds=1.5,
+        )
+
+        # Test default format
+        logger_instance = ModelStatsLogger()
+        logger_instance.receive_model_stats(stats)
+        mock_logger.info.assert_called_with("Model stats (gpt-4): 100 tokens, 1.50s")
+
+        # Test custom format
+        logger_instance = ModelStatsLogger(format_str="Custom: {total_tokens}")
+        logger_instance.receive_model_stats(stats)
+        mock_logger.info.assert_called_with("Custom: 100")
