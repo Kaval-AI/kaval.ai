@@ -93,6 +93,8 @@ class BaseLlmClient:
         self.parameters = llm_client_parameters
         self.streamer = None
         self.model_stats_receiver = model_stats_receiver
+        if self.model_stats_receiver is None:
+            self.model_stats_receiver = ModelStatsLogger()
 
     async def stream_chat_completions(
         self,
