@@ -786,7 +786,12 @@ async def test_tool_descriptions():
             # Pre-initialize MCP session to load tools
             await kernel._get_mcp_session("my_mcp")
 
-            desc = await kernel.get_tool_descriptions()
+            allowed_tools = [
+                "python://math.add",
+                "rest://my_rest.*",
+                "mcp://my_mcp.*",
+            ]
+            desc = await kernel.get_tool_descriptions(allowed_tools=allowed_tools)
             tools = json.loads(desc)
 
             tool_names = [t["name"] for t in tools]
@@ -819,7 +824,8 @@ async def test_tool_descriptions():
                     output_model=SimpleModel,
                 )
             }
-            desc = await kernel.get_tool_descriptions()
+            allowed_tools.append("rest://bad_desc.tool [GET]")
+            desc = await kernel.get_tool_descriptions(allowed_tools=allowed_tools)
             tools = json.loads(desc)
             bad_tool = next(t for t in tools if "bad_desc.tool" in t["name"])
             assert bad_tool["name"] == "rest://bad_desc.tool [GET]"
@@ -1022,7 +1028,8 @@ async def test_register_rest_tool(rest_server):
     assert result.value == 100
 
     # Verify descriptions
-    descriptions = await kernel.get_tool_descriptions()
+    allowed_tools = ["rest://test_server.*"]
+    descriptions = await kernel.get_tool_descriptions(allowed_tools=allowed_tools)
     tools = json.loads(descriptions)
 
     get_item = next(
@@ -1067,7 +1074,7 @@ async def test_tool_descriptions_nested():
 
     kernel.register_python_tool("complex_tool", complex_tool)
 
-    desc = await kernel.get_tool_descriptions()
+    desc = await kernel.get_tool_descriptions(allowed_tools=["python://complex_tool"])
     tools = json.loads(desc)
     complex_tool = next(t for t in tools if t["name"] == "python://complex_tool")
 

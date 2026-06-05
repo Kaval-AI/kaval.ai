@@ -89,10 +89,10 @@ class FunctionKernel:
         if server_name not in self.rest_tool_definitions:
             self.rest_tool_definitions[server_name] = {}
 
-        InputModel = self._create_model_from_jsonschema(
+        InputModel = _create_model_from_jsonschema(
             f"{server_name}_{tool_name}_input", input_schema
         )
-        OutputModel = self._create_model_from_jsonschema(
+        OutputModel = _create_model_from_jsonschema(
             f"{server_name}_{tool_name}_output", output_schema
         )
 
@@ -183,19 +183,8 @@ class FunctionKernel:
         Format: protocol://[name|module].function_name
         Example: python://kavalai.mytool.myfunc or rest://myrestserver.restfunction
         """
-        # Strip metadata from arguments
-        arguments = {
-            k: v
-            for k, v in arguments.items()
-            if k not in ("__line__", "__file_path__")
-        }
-
-        if "://" not in tool_uri:
-            raise FunctionKernelException(
-                f"Invalid tool URI format: '{tool_uri}'. Expected protocol://[name|module].function_name"
-            )
-
-        protocol, path = tool_uri.split("://", 1)
+        arguments = _strip_metadata(arguments)
+        protocol, path = _parse_tool_uri(tool_uri)
 
         if protocol == "python":
             return await self._call_python_tool(path, arguments, output_type)
@@ -207,39 +196,51 @@ class FunctionKernel:
                 )
             name_or_module, function_name = path.rsplit(".", 1)
 
-        if protocol == "rest":
-            method = kwargs.get("method", "get")
-            if (
-                name_or_module in self.rest_tool_definitions
-                and function_name in self.rest_tool_definitions[name_or_module]
-            ):
-                definition = self.rest_tool_definitions[name_or_module][function_name]
-                try:
-                    desc_data = json.loads(definition.description)
-                    method = desc_data.get("method", method)
-                except Exception:
-                    pass
-
-                # Validate input
-                validated_args = definition.input_model(**arguments).model_dump()
-                result = await self._call_rest_tool(
-                    name_or_module,
-                    function_name,
-                    validated_args,
-                    method,
-                    output_type or definition.output_model,
+            if protocol == "rest":
+                return await self._handle_rest_call(
+                    name_or_module, function_name, arguments, output_type, **kwargs
                 )
-                return result
+            if protocol == "mcp":
+                return await self._call_mcp_tool(
+                    name_or_module, function_name, arguments, output_type
+                )
 
+        raise FunctionKernelException(f"Unsupported protocol: '{protocol}'")
+
+    async def _handle_rest_call(
+        self,
+        server_name: str,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        output_type: Optional[type] = None,
+        **kwargs,
+    ) -> Any:
+        """Handle REST tool calls with validation if definition exists."""
+        method = kwargs.get("method", "get")
+        if (
+            server_name in self.rest_tool_definitions
+            and tool_name in self.rest_tool_definitions[server_name]
+        ):
+            definition = self.rest_tool_definitions[server_name][tool_name]
+            try:
+                desc_data = json.loads(definition.description)
+                method = desc_data.get("method", method)
+            except Exception:
+                pass
+
+            # Validate input
+            validated_args = definition.input_model(**arguments).model_dump()
             return await self._call_rest_tool(
-                name_or_module, function_name, arguments, method, output_type
+                server_name,
+                tool_name,
+                validated_args,
+                method,
+                output_type or definition.output_model,
             )
-        elif protocol == "mcp":
-            return await self._call_mcp_tool(
-                name_or_module, function_name, arguments, output_type
-            )
-        else:
-            raise FunctionKernelException(f"Unsupported protocol: '{protocol}'")
+
+        return await self._call_rest_tool(
+            server_name, tool_name, arguments, method, output_type
+        )
 
     async def close(self):
         """Cleanup all MCP sessions."""
@@ -370,7 +371,7 @@ class FunctionKernel:
                 # MCP tool input schema is usually a JSON Schema
                 # For now, we store the raw schema and we could dynamically create a Pydantic model
                 # But to stay consistent with the "Pydantic models for everything" requirement:
-                input_model = self._create_model_from_jsonschema(
+                input_model = _create_model_from_jsonschema(
                     f"{server_name}_{tool.name}_input", tool.inputSchema
                 )
                 # MCP doesn't strictly define output schema in tool list, so we use a generic one
@@ -387,31 +388,6 @@ class FunctionKernel:
             self.mcp_tool_definitions[server_name] = definitions
         except Exception as e:
             logger.warning(f"Could not refresh tools for MCP server {server_name}: {e}")
-
-    def _create_model_from_jsonschema(
-        self, name: str, schema: Dict[str, Any]
-    ) -> Type[BaseModel]:
-        """Very basic JSON Schema to Pydantic model conversion."""
-        properties = schema.get("properties", {})
-        required = schema.get("required", [])
-        fields = {}
-
-        type_map = {
-            "string": str,
-            "number": float,
-            "integer": int,
-            "boolean": bool,
-            "object": dict,
-            "array": list,
-        }
-
-        for prop_name, prop_schema in properties.items():
-            prop_type = prop_schema.get("type", "any")
-            python_type = type_map.get(prop_type, Any)
-            default = ... if prop_name in required else None
-            fields[prop_name] = (python_type, default)
-
-        return create_model(name, **fields)
 
     async def _call_mcp_tool(
         self,
@@ -525,28 +501,35 @@ class FunctionKernel:
             )
 
         target_output_type = output_type or definition.output_model
+        return self._cast_result(
+            result, target_output_type, f"Python tool '{python_tool}'"
+        )
 
+    def _cast_result(
+        self, result: Any, target_output_type: Optional[Type], context_info: str
+    ) -> Any:
+        """Cast result to target output type if it's a Pydantic model."""
         if target_output_type and issubclass(target_output_type, BaseModel):
             try:
                 if isinstance(result, dict):
                     return target_output_type(**result)
-                elif isinstance(result, BaseModel):
+                if isinstance(result, BaseModel):
                     if isinstance(result, target_output_type):
                         return result
                     return target_output_type(**result.model_dump())
-                else:
-                    fields = target_output_type.model_fields
-                    if len(fields) == 1:
-                        field_name = list(fields.keys())[0]
-                        return target_output_type(**{field_name: result})
-                    else:
-                        try:
-                            return target_output_type(result)
-                        except Exception:
-                            return result
+
+                fields = target_output_type.model_fields
+                if len(fields) == 1:
+                    field_name = list(fields.keys())[0]
+                    return target_output_type(**{field_name: result})
+
+                try:
+                    return target_output_type(result)
+                except Exception:
+                    return result
             except Exception as e:
                 logger.warning(
-                    f"Python tool '{python_tool}' returned incompatible result for {target_output_type}: {e}"
+                    f"{context_info} returned incompatible result for {target_output_type}: {e}"
                 )
                 return result
         return result
@@ -557,39 +540,14 @@ class FunctionKernel:
         """Returns a string description of all registered tools as a JSON array for prompts."""
         tools_list = []
 
-        def _get_input_schema(model: Type[BaseModel]) -> Dict[str, Any]:
-            schema_dict = model.model_json_schema()
-            # Remove pydantic-specific keys to keep it cleaner for LLM
-            schema_dict.pop("title", None)
-            schema_dict.pop("type", None)
-            return schema_dict
-
-        def _add_tool(name: str, description: str, input_model: Type[BaseModel]):
-            if allowed_tools is not None and len(allowed_tools) > 0:
-                # If we have an allowed list, only add if the tool is in it.
-                # Note: name could be python://tool, rest://server.tool [METHOD], mcp://server.tool
-                # We check for exact match or if it's a prefix for dynamic tools
-                if name not in allowed_tools:
-                    # Also check if it's a dynamic rest/mcp server and if the server is allowed
-                    # e.g. rest://server.* or mcp://server.*
-                    server_prefix = name.split(".")[0] + ".*"
-                    if server_prefix not in allowed_tools:
-                        return
-
-            tools_list.append(
-                {
-                    "name": name,
-                    "description": description,
-                    "inputSchema": _get_input_schema(input_model),
-                }
-            )
-
         # Python tools
         for name, definition in self.python_tool_definitions.items():
-            _add_tool(
+            _add_tool_to_list(
+                tools_list,
                 f"python://{name}",
                 definition.description,
                 definition.input_model,
+                allowed_tools,
             )
 
         # REST tools
@@ -604,41 +562,134 @@ class FunctionKernel:
                 except Exception:
                     pass
 
-                _add_tool(
+                _add_tool_to_list(
+                    tools_list,
                     f"rest://{server_name}.{tool_name} [{method}]",
                     description_text,
                     definition.input_model,
+                    allowed_tools,
                 )
 
         # REST servers - list those without specific tools registered
         for name in self.rest_servers.keys():
             if name not in self.rest_tool_definitions:
-                tools_list.append(
-                    {
-                        "name": f"rest://{name}.<function_name>",
-                        "description": f"Dynamic REST call to {name} server",
-                        "inputSchema": {"type": "object", "properties": {}},
-                    }
-                )
+                tool_uri = f"rest://{name}.<function_name>"
+                if _is_tool_allowed(tool_uri, allowed_tools):
+                    tools_list.append(
+                        {
+                            "name": tool_uri,
+                            "description": f"Dynamic REST call to {name} server",
+                            "inputSchema": {"type": "object", "properties": {}},
+                        }
+                    )
 
         # MCP tools
         for server_name, tools in self.mcp_tool_definitions.items():
             for tool_name, definition in tools.items():
-                _add_tool(
+                _add_tool_to_list(
+                    tools_list,
                     f"mcp://{server_name}.{tool_name}",
                     definition.description or "",
                     definition.input_model,
+                    allowed_tools,
                 )
 
         # Also list servers that might not have tools fetched yet
         for name in self.mcp_servers.keys():
             if name not in self.mcp_tool_definitions:
-                tools_list.append(
-                    {
-                        "name": f"mcp://{name}.<tools_not_yet_loaded>",
-                        "description": f"Dynamic MCP call to {name} server",
-                        "inputSchema": {"type": "object", "properties": {}},
-                    }
-                )
+                tool_uri = f"mcp://{name}.<tools_not_yet_loaded>"
+                if _is_tool_allowed(tool_uri, allowed_tools):
+                    tools_list.append(
+                        {
+                            "name": tool_uri,
+                            "description": f"Dynamic MCP call to {name} server",
+                            "inputSchema": {"type": "object", "properties": {}},
+                        }
+                    )
 
         return json.dumps(tools_list, indent=2)
+
+
+def _strip_metadata(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip metadata from arguments."""
+    return {
+        k: v for k, v in arguments.items() if k not in ("__line__", "__file_path__")
+    }
+
+
+def _parse_tool_uri(tool_uri: str) -> tuple[str, str]:
+    """Parse tool URI into protocol and path."""
+    if "://" not in tool_uri:
+        raise FunctionKernelException(
+            f"Invalid tool URI format: '{tool_uri}'. Expected protocol://[name|module].function_name"
+        )
+    protocol, path = tool_uri.split("://", 1)
+    return protocol, path
+
+
+def _create_model_from_jsonschema(name: str, schema: Dict[str, Any]) -> Type[BaseModel]:
+    """Very basic JSON Schema to Pydantic model conversion."""
+    properties = schema.get("properties", {})
+    required = schema.get("required", [])
+    fields = {}
+
+    type_map = {
+        "string": str,
+        "number": float,
+        "integer": int,
+        "boolean": bool,
+        "object": dict,
+        "array": list,
+    }
+
+    for prop_name, prop_schema in properties.items():
+        prop_type = prop_schema.get("type", "any")
+        python_type = type_map.get(prop_type, Any)
+        default = ... if prop_name in required else None
+        fields[prop_name] = (python_type, default)
+
+    return create_model(name, **fields)
+
+
+def _get_input_schema(model: Type[BaseModel]) -> Dict[str, Any]:
+    schema_dict = model.model_json_schema()
+    # Remove pydantic-specific keys to keep it cleaner for LLM
+    schema_dict.pop("title", None)
+    schema_dict.pop("type", None)
+    return schema_dict
+
+
+def _is_tool_allowed(name: str, allowed_tools: Optional[List[str]]) -> bool:
+    """Check if a tool name is allowed."""
+    if allowed_tools is None:
+        return False
+
+    if name in allowed_tools:
+        return True
+
+    # Checks for dynamic rest/mcp server and if the server is allowed
+    # e.g. rest://server.* or mcp://server.*
+    if "." in name:
+        server_prefix = name.split(".")[0] + ".*"
+        if server_prefix in allowed_tools:
+            return True
+
+    return False
+
+
+def _add_tool_to_list(
+    tools_list: List[Dict[str, Any]],
+    name: str,
+    description: str,
+    input_model: Type[BaseModel],
+    allowed_tools: Optional[List[str]],
+):
+    """Add tool to list if it's allowed."""
+    if _is_tool_allowed(name, allowed_tools):
+        tools_list.append(
+            {
+                "name": name,
+                "description": description,
+                "inputSchema": _get_input_schema(input_model),
+            }
+        )
