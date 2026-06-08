@@ -51,6 +51,24 @@ class ToolDefinition(BaseModel):
     input_model: Type[BaseModel]
     output_model: Type[BaseModel]
 
+    def to_dict(self, name_override: Optional[str] = None) -> Dict[str, Any]:
+        description_text = self.description or ""
+        try:
+            desc_data = json.loads(self.description)
+            description_text = desc_data.get("description", "")
+        except Exception:
+            pass
+
+        return {
+            "name": name_override or self.name,
+            "description": description_text,
+            "inputSchema": _get_schema(self.input_model),
+            "outputSchema": _get_schema(self.output_model),
+        }
+
+    def __str__(self):
+        return json.dumps(self.to_dict(), indent=2)
+
 
 class FunctionKernel:
     """
@@ -122,7 +140,11 @@ class FunctionKernel:
 
         # Normalize name by removing protocol prefix if present
         if "://" in name:
-            _, name = name.split("://", 1)
+            protocol, name = name.split("://", 1)
+            if protocol != "python":
+                raise FunctionKernelException(
+                    f"Invalid protocol '{protocol}' for Python tool '{name}'"
+                )
 
         if name in self.python_tools:
             raise FunctionKernelException(
@@ -174,7 +196,7 @@ class FunctionKernel:
     async def call_tool(
         self,
         tool_uri: str,
-        arguments: Dict[str, Any],
+        arguments: Dict[str, Any] = None,
         output_type: Optional[type] = None,
         **kwargs,
     ) -> Any:
@@ -183,6 +205,8 @@ class FunctionKernel:
         Format: protocol://[name|module].function_name
         Example: python://kavalai.mytool.myfunc or rest://myrestserver.restfunction
         """
+        if arguments is None:
+            arguments = {}
         arguments = _strip_metadata(arguments)
         protocol, path = _parse_tool_uri(tool_uri)
 
@@ -534,6 +558,49 @@ class FunctionKernel:
                 return result
         return result
 
+    def get_tool_definition(self, tool_uri: str) -> ToolDefinition:
+        """Resolve a tool URI to its ToolDefinition.
+
+        Format: protocol://[name|module].function_name
+        Raises FunctionKernelException if the tool is not registered.
+        """
+        protocol, path = _parse_tool_uri(tool_uri)
+
+        if protocol == "python":
+            definition = self.python_tool_definitions.get(path)
+            if definition is None:
+                raise FunctionKernelException(f"Python tool '{path}' not registered.")
+            return definition
+
+        if protocol in ("rest", "mcp"):
+            if "." not in path:
+                raise FunctionKernelException(
+                    f"Invalid tool path format: '{path}'. Expected [name|module].function_name"
+                )
+            server_name, function_name = path.rsplit(".", 1)
+            definitions = (
+                self.rest_tool_definitions
+                if protocol == "rest"
+                else self.mcp_tool_definitions
+            )
+            server_tools = definitions.get(server_name)
+            if not server_tools or function_name not in server_tools:
+                raise FunctionKernelException(
+                    f"{protocol.upper()} tool '{function_name}' on server "
+                    f"'{server_name}' not registered."
+                )
+            return server_tools[function_name]
+
+        raise FunctionKernelException(f"Unsupported protocol: '{protocol}'")
+
+    def get_input_model(self, tool_uri: str) -> Type[BaseModel]:
+        """Return the input Pydantic model for a registered tool."""
+        return self.get_tool_definition(tool_uri).input_model
+
+    def get_output_model(self, tool_uri: str) -> Type[BaseModel]:
+        """Return the output Pydantic model for a registered tool."""
+        return self.get_tool_definition(tool_uri).output_model
+
     async def get_tool_descriptions(
         self, allowed_tools: Optional[List[str]] = None
     ) -> str:
@@ -542,70 +609,30 @@ class FunctionKernel:
 
         # Python tools
         for name, definition in self.python_tool_definitions.items():
-            _add_tool_to_list(
-                tools_list,
-                f"python://{name}",
-                definition.description,
-                definition.input_model,
-                allowed_tools,
-            )
+            tool_uri = f"python://{name}"
+            if _is_tool_allowed(tool_uri, allowed_tools):
+                tools_list.append(definition.to_dict(name_override=tool_uri))
 
         # REST tools
         for server_name, tools in self.rest_tool_definitions.items():
             for tool_name, definition in tools.items():
                 method = "GET"
-                description_text = definition.description or ""
                 try:
                     desc_data = json.loads(definition.description)
                     method = desc_data.get("method", "GET").upper()
-                    description_text = desc_data.get("description", "")
                 except Exception:
                     pass
 
-                _add_tool_to_list(
-                    tools_list,
-                    f"rest://{server_name}.{tool_name} [{method}]",
-                    description_text,
-                    definition.input_model,
-                    allowed_tools,
-                )
-
-        # REST servers - list those without specific tools registered
-        for name in self.rest_servers.keys():
-            if name not in self.rest_tool_definitions:
-                tool_uri = f"rest://{name}.<function_name>"
+                tool_uri = f"rest://{server_name}.{tool_name} [{method}]"
                 if _is_tool_allowed(tool_uri, allowed_tools):
-                    tools_list.append(
-                        {
-                            "name": tool_uri,
-                            "description": f"Dynamic REST call to {name} server",
-                            "inputSchema": {"type": "object", "properties": {}},
-                        }
-                    )
+                    tools_list.append(definition.to_dict(name_override=tool_uri))
 
         # MCP tools
         for server_name, tools in self.mcp_tool_definitions.items():
             for tool_name, definition in tools.items():
-                _add_tool_to_list(
-                    tools_list,
-                    f"mcp://{server_name}.{tool_name}",
-                    definition.description or "",
-                    definition.input_model,
-                    allowed_tools,
-                )
-
-        # Also list servers that might not have tools fetched yet
-        for name in self.mcp_servers.keys():
-            if name not in self.mcp_tool_definitions:
-                tool_uri = f"mcp://{name}.<tools_not_yet_loaded>"
+                tool_uri = f"mcp://{server_name}.{tool_name}"
                 if _is_tool_allowed(tool_uri, allowed_tools):
-                    tools_list.append(
-                        {
-                            "name": tool_uri,
-                            "description": f"Dynamic MCP call to {name} server",
-                            "inputSchema": {"type": "object", "properties": {}},
-                        }
-                    )
+                    tools_list.append(definition.to_dict(name_override=tool_uri))
 
         return json.dumps(tools_list, indent=2)
 
@@ -651,7 +678,7 @@ def _create_model_from_jsonschema(name: str, schema: Dict[str, Any]) -> Type[Bas
     return create_model(name, **fields)
 
 
-def _get_input_schema(model: Type[BaseModel]) -> Dict[str, Any]:
+def _get_schema(model: Type[BaseModel]) -> Dict[str, Any]:
     schema_dict = model.model_json_schema()
     # Remove pydantic-specific keys to keep it cleaner for LLM
     schema_dict.pop("title", None)
@@ -661,8 +688,9 @@ def _get_input_schema(model: Type[BaseModel]) -> Dict[str, Any]:
 
 def _is_tool_allowed(name: str, allowed_tools: Optional[List[str]]) -> bool:
     """Check if a tool name is allowed."""
+    # If allowed_tools is not given, by default we allow calling all tools.
     if allowed_tools is None:
-        return False
+        return True
 
     if name in allowed_tools:
         return True
@@ -690,6 +718,6 @@ def _add_tool_to_list(
             {
                 "name": name,
                 "description": description,
-                "inputSchema": _get_input_schema(input_model),
+                "inputSchema": _get_schema(input_model),
             }
         )

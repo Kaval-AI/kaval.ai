@@ -788,7 +788,6 @@ async def test_tool_descriptions():
 
             allowed_tools = [
                 "python://math.add",
-                "rest://my_rest.*",
                 "mcp://my_mcp.*",
             ]
             desc = await kernel.get_tool_descriptions(allowed_tools=allowed_tools)
@@ -796,7 +795,6 @@ async def test_tool_descriptions():
 
             tool_names = [t["name"] for t in tools]
             assert "python://math.add" in tool_names
-            assert "rest://my_rest.<function_name>" in tool_names
             assert "mcp://my_mcp.list_files" in tool_names
 
             # Find math.add tool
@@ -811,6 +809,15 @@ async def test_tool_descriptions():
             assert (
                 "type" not in math_add["inputSchema"]
             )  # It should be inside properties, but not at root if we popped it
+
+            # Test ToolDefinition.__str__
+            tool_def = kernel.python_tool_definitions["math.add"]
+            str_repr = str(tool_def)
+            parsed_repr = json.loads(str_repr)
+            assert parsed_repr["name"] == "math.add"
+            assert parsed_repr["description"] == "Adds two integers."
+            assert "inputSchema" in parsed_repr
+            assert "a" in parsed_repr["inputSchema"]["properties"]
 
             # REST server descriptions mapping error
             kernel.register_rest_server(
