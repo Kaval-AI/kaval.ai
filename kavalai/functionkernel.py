@@ -70,6 +70,84 @@ class ToolDefinition(BaseModel):
         return json.dumps(self.to_dict(), indent=2)
 
 
+class Validator:
+    """
+    Helps converting and validating tool inputs and outputs.
+    Allows only basic data types and pydantic models.
+    """
+
+    @staticmethod
+    def create_model_from_signature(
+        name: str, sig: inspect.Signature, is_input: bool = True
+    ) -> Type[BaseModel]:
+        if is_input:
+            input_fields = {}
+            for param_name, p in sig.parameters.items():
+                annotation = (
+                    p.annotation if p.annotation != inspect.Parameter.empty else Any
+                )
+                default = p.default if p.default != inspect.Parameter.empty else ...
+                input_fields[param_name] = (annotation, default)
+            return create_model(f"{name}_input", **input_fields)
+        else:
+            output_annotation = (
+                sig.return_annotation
+                if sig.return_annotation != inspect.Signature.empty
+                else Any
+            )
+            if inspect.isclass(output_annotation) and issubclass(
+                output_annotation, BaseModel
+            ):
+                return output_annotation
+            else:
+                return create_model(f"{name}_output", result=(output_annotation, ...))
+
+    @staticmethod
+    def create_model_from_schema(name: str, schema: Dict[str, Any]) -> Type[BaseModel]:
+        return _create_model_from_jsonschema(name, schema)
+
+    @staticmethod
+    def validate_arguments(
+        model: Type[BaseModel], arguments: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        return model(**arguments).model_dump()
+
+    @staticmethod
+    def cast_result(
+        result: Any, target_output_type: Optional[Type], context_info: str = ""
+    ) -> Any:
+        """Cast result to target output type if it's a Pydantic model."""
+        if (
+            target_output_type
+            and inspect.isclass(target_output_type)
+            and issubclass(target_output_type, BaseModel)
+        ):
+            try:
+                if isinstance(result, dict):
+                    return target_output_type(**result)
+                if isinstance(result, BaseModel):
+                    if isinstance(result, target_output_type):
+                        return result
+                    return target_output_type(**result.model_dump())
+
+                fields = target_output_type.model_fields
+                if len(fields) == 1:
+                    field_name = list(fields.keys())[0]
+                    # If result is already of the correct type for the field, or can be cast
+                    return target_output_type(**{field_name: result})
+
+                try:
+                    return target_output_type(result)
+                except Exception:
+                    return result
+            except Exception as e:
+                logger.warning(
+                    f"{context_info} returned incompatible result for {target_output_type}: {e}"
+                )
+                return result
+        return result
+
+
 class FunctionKernel:
     """
     Manages registration and execution of tools (REST, MCP, Python).
@@ -107,10 +185,10 @@ class FunctionKernel:
         if server_name not in self.rest_tool_definitions:
             self.rest_tool_definitions[server_name] = {}
 
-        InputModel = _create_model_from_jsonschema(
+        InputModel = Validator.create_model_from_schema(
             f"{server_name}_{tool_name}_input", input_schema
         )
-        OutputModel = _create_model_from_jsonschema(
+        OutputModel = Validator.create_model_from_schema(
             f"{server_name}_{tool_name}_output", output_schema
         )
 
@@ -160,31 +238,8 @@ class FunctionKernel:
     ) -> ToolDefinition:
         sig = inspect.signature(func)
 
-        # Input Model
-        input_fields = {}
-        for param_name, p in sig.parameters.items():
-            annotation = (
-                p.annotation if p.annotation != inspect.Parameter.empty else Any
-            )
-            default = p.default if p.default != inspect.Parameter.empty else ...
-            input_fields[param_name] = (annotation, default)
-
-        InputModel = create_model(f"{name}_input", **input_fields)
-
-        # Output Model
-        output_annotation = (
-            sig.return_annotation
-            if sig.return_annotation != inspect.Signature.empty
-            else Any
-        )
-        if isinstance(output_annotation, type) and issubclass(
-            output_annotation, BaseModel
-        ):
-            OutputModel = output_annotation
-        else:
-            OutputModel = create_model(
-                f"{name}_output", result=(output_annotation, ...)
-            )
+        InputModel = Validator.create_model_from_signature(name, sig, is_input=True)
+        OutputModel = Validator.create_model_from_signature(name, sig, is_input=False)
 
         return ToolDefinition(
             name=name,
@@ -253,7 +308,9 @@ class FunctionKernel:
                 pass
 
             # Validate input
-            validated_args = definition.input_model(**arguments).model_dump()
+            validated_args = Validator.validate_arguments(
+                definition.input_model, arguments
+            )
             return await self._call_rest_tool(
                 server_name,
                 tool_name,
@@ -323,13 +380,9 @@ class FunctionKernel:
             response.raise_for_status()
             result_data = response.json()
 
-        if (
-            output_type
-            and issubclass(output_type, BaseModel)
-            and isinstance(result_data, dict)
-        ):
-            return output_type(**result_data)
-        return result_data
+            return Validator.cast_result(
+                result_data, output_type, f"REST tool '{server_name}.{tool}'"
+            )
 
     async def _get_mcp_session(self, server_name: str) -> ClientSession:
         if server_name in self.mcp_sessions:
@@ -395,7 +448,7 @@ class FunctionKernel:
                 # MCP tool input schema is usually a JSON Schema
                 # For now, we store the raw schema and we could dynamically create a Pydantic model
                 # But to stay consistent with the "Pydantic models for everything" requirement:
-                input_model = _create_model_from_jsonschema(
+                input_model = Validator.create_model_from_schema(
                     f"{server_name}_{tool.name}_input", tool.inputSchema
                 )
                 # MCP doesn't strictly define output schema in tool list, so we use a generic one
@@ -429,8 +482,9 @@ class FunctionKernel:
         ):
             definition = self.mcp_tool_definitions[server_name][tool]
             try:
-                validated_args = definition.input_model(**arguments).model_dump()
-                arguments = validated_args
+                arguments = Validator.validate_arguments(
+                    definition.input_model, arguments
+                )
             except Exception as e:
                 raise FunctionKernelException(
                     f"MCP tool '{tool}' on server '{server_name}' argument validation failed: {e}"
@@ -461,17 +515,9 @@ class FunctionKernel:
                     tool
                 ].output_model
 
-        if target_output_type and issubclass(target_output_type, BaseModel):
-            if isinstance(result_data, dict):
-                return target_output_type(**result_data)
-            else:
-                # If it's a primitive, try to wrap it if the model has one field
-                fields = target_output_type.model_fields
-                if len(fields) == 1:
-                    field_name = list(fields.keys())[0]
-                    return target_output_type(**{field_name: result_data})
-
-        return result_data
+        return Validator.cast_result(
+            result_data, target_output_type, f"MCP tool '{server_name}.{tool}'"
+        )
 
     async def _call_python_tool(
         self,
@@ -489,8 +535,7 @@ class FunctionKernel:
 
         # Validate arguments using input model
         try:
-            validated_input = definition.input_model(**arguments)
-            call_args = validated_input.model_dump()
+            call_args = Validator.validate_arguments(definition.input_model, arguments)
 
             # Ensure complex Pydantic types are passed as model instances if needed
             for param_name, p in inspect.signature(func).parameters.items():
@@ -525,38 +570,9 @@ class FunctionKernel:
             )
 
         target_output_type = output_type or definition.output_model
-        return self._cast_result(
+        return Validator.cast_result(
             result, target_output_type, f"Python tool '{python_tool}'"
         )
-
-    def _cast_result(
-        self, result: Any, target_output_type: Optional[Type], context_info: str
-    ) -> Any:
-        """Cast result to target output type if it's a Pydantic model."""
-        if target_output_type and issubclass(target_output_type, BaseModel):
-            try:
-                if isinstance(result, dict):
-                    return target_output_type(**result)
-                if isinstance(result, BaseModel):
-                    if isinstance(result, target_output_type):
-                        return result
-                    return target_output_type(**result.model_dump())
-
-                fields = target_output_type.model_fields
-                if len(fields) == 1:
-                    field_name = list(fields.keys())[0]
-                    return target_output_type(**{field_name: result})
-
-                try:
-                    return target_output_type(result)
-                except Exception:
-                    return result
-            except Exception as e:
-                logger.warning(
-                    f"{context_info} returned incompatible result for {target_output_type}: {e}"
-                )
-                return result
-        return result
 
     def get_tool_definition(self, tool_uri: str) -> ToolDefinition:
         """Resolve a tool URI to its ToolDefinition.
