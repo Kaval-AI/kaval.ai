@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 from pydantic import BaseModel
 
@@ -24,7 +23,6 @@ def mock_kernel():
 @pytest.fixture
 def mock_llm_client():
     client = MagicMock(spec=BaseLlmClient)
-    # Using chat_completions directly for non-streaming test
     client.chat_completions = AsyncMock()
     return client
 
@@ -35,122 +33,177 @@ def run_context():
 
 
 @pytest.mark.asyncio
-async def test_agent_run_basic(mock_kernel, mock_llm_client, run_context):
-    input_data = {"user_id": "123"}
+async def test_prompt_tool_call_then_output(mock_kernel, mock_llm_client, run_context):
+    """A tool-calling step followed by a step producing the final output."""
     agent = Agent(
+        llm_client=mock_llm_client,
         kernel=mock_kernel,
         run_context=run_context,
-        llm_client=mock_llm_client,
-        input_data=input_data,
-        response_model=MockResponse,
     )
 
     StepOutput = get_step_output_type(MockResponse)
-
-    # Mock LLM returning a step with a tool call, then a final output
     step1 = StepOutput(
-        short_explanation="Calling tool",
-        instructions="Use tool",
         tool_calls=[
             ToolCall(name="python://test_tool", literal_args='{"val": 1}', call_id="c1")
         ],
     )
-    step2 = StepOutput(
-        short_explanation="Done",
-        instructions="Finish",
-        output=MockResponse(answer="Final answer"),
-    )
-
+    step2 = StepOutput(output=MockResponse(answer="Final answer"))
     mock_llm_client.chat_completions.side_effect = [step1, step2]
 
-    result = await agent.run(task_name="test_task", task="Do something")
+    result = await agent.prompt(
+        "Do something", response_model=MockResponse, max_steps=5
+    )
 
+    assert isinstance(result, MockResponse)
     assert result.answer == "Final answer"
-    assert mock_kernel.call_tool.called
-    assert "c1" in agent._planner_context
-    assert agent._planner_context["c1"] == "Tool result"
+    # The tool was executed with the resolved literal arguments.
+    mock_kernel.call_tool.assert_awaited_once_with(
+        tool_uri="python://test_tool", arguments={"val": 1}
+    )
+    # Only two LLM calls were needed (stopped once output produced).
+    assert mock_llm_client.chat_completions.await_count == 2
 
 
 @pytest.mark.asyncio
-async def test_agent_templater():
-    from kavalai.agents.v2.agent import AgentTemplater
-
-    planner_context = {"c1": "result1"}
-    input_data = {"i1": "input1"}
-    templater = AgentTemplater(planner_context, input_data)
-
-    assert templater.resolve("{{context.c1}}") == "result1"
-    assert templater.resolve("{{input.i1}}") == "input1"
-    assert templater.resolve({"key": "{{context.c1}}"}) == {"key": "result1"}
-    assert templater.resolve(["{{input.i1}}"]) == ["input1"]
-    assert templater.resolve("plain") == "plain"
-
-
-@pytest.mark.asyncio
-async def test_agent_run_streaming_bridge(mock_kernel, mock_llm_client, run_context):
-    from kavalai.llm_clients.streamer import StreamContent as LlmStreamContent
-
-    input_data = {}
-
-    # Mock streamer from common.py
-    from kavalai.llm_clients.common import Streamer as CommonStreamer
-
-    mock_common_queue = asyncio.Queue()
-    common_streamer = CommonStreamer(name="test", queue=mock_common_queue)
-
+async def test_prompt_plain_string_output(mock_kernel, mock_llm_client, run_context):
+    """Without a response_model the agent returns a plain string output."""
     agent = Agent(
+        llm_client=mock_llm_client,
         kernel=mock_kernel,
         run_context=run_context,
+    )
+
+    StepOutput = get_step_output_type(str)
+    mock_llm_client.chat_completions.side_effect = [StepOutput(output="hello there")]
+
+    result = await agent.prompt("Greet the user")
+
+    assert result == "hello there"
+    mock_kernel.call_tool.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_prompt_respects_max_steps(mock_kernel, mock_llm_client, run_context):
+    """The loop stops after max_steps even if no final output is produced."""
+    agent = Agent(
         llm_client=mock_llm_client,
-        input_data=input_data,
-        response_model=MockResponse,
-        streamer=common_streamer,
-        stream_output=True,
+        kernel=mock_kernel,
+        run_context=run_context,
     )
 
     StepOutput = get_step_output_type(MockResponse)
-    _ = StepOutput(
-        short_explanation="Done",
-        instructions="Finish",
-        output=MockResponse(answer="Final answer"),
+    # Always request a tool call, never produce an output.
+    looping_step = StepOutput(tool_calls=[ToolCall(name="python://loop", call_id="c1")])
+    mock_llm_client.chat_completions.side_effect = [looping_step] * 10
+
+    result = await agent.prompt(
+        "Never finish", response_model=MockResponse, max_steps=3
     )
 
-    # Mock stream_chat_completions
-    class AsyncIter:
-        def __init__(self, items):
-            self.items = items
+    assert result is None
+    assert mock_llm_client.chat_completions.await_count == 3
+    assert mock_kernel.call_tool.await_count == 3
 
-        def __aiter__(self):
-            return self
 
-        async def __anext__(self):
-            if not self.items:
-                raise StopAsyncIteration
-            return self.items.pop(0)
+@pytest.mark.asyncio
+async def test_resolve_args_merges_sources(mock_kernel, mock_llm_client):
+    """literal/context/input args merge with literal > context > input precedence."""
+    agent = Agent(
+        llm_client=mock_llm_client,
+        kernel=mock_kernel,
+        run_context=RunContext(data={"user_id": "u-123"}),
+    )
 
-    items = [
-        LlmStreamContent(
-            type="partial",
-            name="response",
-            value='{"short_explanation": "Done", "instructions": "Final answer", "output": {"answer": "Final',
-        ),
-        LlmStreamContent(type="partial", name="response", value=' answer"}}'),
-        LlmStreamContent(
-            type="complete",
-            name="response",
-            value='{"short_explanation": "Done", "instructions": "Final answer", "output": {"answer": "Final answer"}}',
-        ),
+    tool_call = ToolCall(
+        name="python://test",
+        literal_args='{"mode": "fast"}',
+        planner_context_args='{"prev": "c1"}',
+        input_args='{"uid": "user_id"}',
+    )
+    planner_context = {"c1": "previous result"}
+
+    args = agent._resolve_args(tool_call, planner_context)
+
+    assert args == {
+        "uid": "u-123",
+        "prev": "previous result",
+        "mode": "fast",
+    }
+
+
+@pytest.mark.asyncio
+async def test_planner_context_args_resolve_from_planner_context(
+    mock_kernel, mock_llm_client
+):
+    """planner_context_args resolves against the per-invocation planner_context."""
+    agent = Agent(
+        llm_client=mock_llm_client,
+        kernel=mock_kernel,
+        run_context=RunContext(data={"input_key": "input value"}),
+    )
+
+    tool_call = ToolCall(
+        name="python://test",
+        planner_context_args='{"a": "c1", "b": "missing"}',
+    )
+    planner_context = {"c1": "tool result"}
+
+    args = agent._resolve_args(tool_call, planner_context)
+
+    # "c1" comes from planner_context; an unknown key resolves to None and
+    # input data is not reachable through planner_context_args.
+    assert args == {"a": "tool result", "b": None}
+
+
+@pytest.mark.asyncio
+async def test_planner_context_isolated_across_invocations(
+    mock_kernel, mock_llm_client, run_context
+):
+    """Tool results in planner_context do not leak into the next invocation."""
+    agent = Agent(
+        llm_client=mock_llm_client,
+        kernel=mock_kernel,
+        run_context=run_context,
+    )
+
+    StepOutput = get_step_output_type(MockResponse)
+
+    # First invocation: produce a tool result under call_id "c1", then finish.
+    mock_llm_client.chat_completions.side_effect = [
+        StepOutput(tool_calls=[ToolCall(name="python://t", call_id="c1")]),
+        StepOutput(output=MockResponse(answer="first")),
     ]
-    mock_llm_client.stream_chat_completions.return_value = AsyncIter(items)
+    await agent.prompt("first", response_model=MockResponse)
 
-    result = await agent.run(task_name="test_task", task="Do something")
+    # Second invocation references "c1" which belonged to the previous run.
+    second_call = ToolCall(
+        name="python://t",
+        planner_context_args='{"x": "c1"}',
+        call_id="c2",
+    )
+    mock_llm_client.chat_completions.side_effect = [
+        StepOutput(tool_calls=[second_call]),
+        StepOutput(output=MockResponse(answer="second")),
+    ]
+    mock_kernel.call_tool.reset_mock()
+    await agent.prompt("second", response_model=MockResponse)
 
-    assert result.answer == "Final answer"
+    # The reference to the prior invocation's call_id resolves to None.
+    first_args = mock_kernel.call_tool.await_args_list[0].kwargs["arguments"]
+    assert first_args == {"x": None}
 
-    # Check if common streamer received partials
-    streamed_items = []
-    while not mock_common_queue.empty():
-        streamed_items.append(await mock_common_queue.get())
 
-    assert any("Final" in item for item in streamed_items)
-    assert any("answer" in item for item in streamed_items)
+@pytest.mark.asyncio
+async def test_tool_error_is_captured(mock_kernel, mock_llm_client, run_context):
+    """A failing tool call is captured as a result string instead of raising."""
+    agent = Agent(
+        llm_client=mock_llm_client,
+        kernel=mock_kernel,
+        run_context=run_context,
+    )
+    mock_kernel.call_tool.side_effect = RuntimeError("boom")
+
+    tool_call = ToolCall(name="python://broken", call_id="c1")
+    _, _, result = await agent._call_tool(tool_call, {})
+
+    assert result == "Error: boom"
