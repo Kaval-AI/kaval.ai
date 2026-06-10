@@ -274,6 +274,9 @@ class FunctionKernel:
                     f"Invalid tool path format: '{path}'. Expected [name|module].function_name"
                 )
             name_or_module, function_name = path.rsplit(".", 1)
+            # Strip HTTP method annotation if present, e.g. "forecast [GET]" → "forecast"
+            if " [" in function_name:
+                function_name = function_name[: function_name.index(" [")].strip()
 
             if protocol == "rest":
                 return await self._handle_rest_call(

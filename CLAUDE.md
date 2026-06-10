@@ -8,6 +8,10 @@ Kaval.AI is a YAML-based AI agent framework with two main components:
 
 Uses `loguru` for all logging and prefers f-strings for formatting.
 
+## Running code and tests.
+
+Use the `uv` and `.venv` virtual environments to run code and tests.
+
 ## Key Directories
 
 | Path | Purpose |
