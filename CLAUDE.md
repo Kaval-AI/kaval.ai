@@ -10,7 +10,25 @@ Uses `loguru` for all logging and prefers f-strings for formatting.
 
 ## Running code and tests.
 
-Use the `uv` and `.venv` virtual environments to run code and tests.
+Use the `uv` and `.venv` virtual environments to run code and tests — the
+project `.venv` is the same interpreter PyCharm/Junie use by default
+(`.venv/bin/python -m pytest ...`).
+
+PyCharm/Junie run configurations also load the project `.env` file (via the
+EnvFile/built-in dotenv support), which supplies secrets and config such as
+`OPENAI_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY`, and the `KAVALAI_*` DB
+settings. `conftest.py` does **not** auto-load `.env`, so when running from the
+shell you must load it yourself to match the PyCharm environment — otherwise
+integration tests gated on these keys silently skip:
+
+```bash
+# Load .env, then run tests with the project venv (mirrors PyCharm/Junie)
+set -a && source .env && set +a
+.venv/bin/python -m pytest
+
+# Equivalently, with uv:
+uv run --env-file .env pytest
+```
 
 ## Key Directories
 

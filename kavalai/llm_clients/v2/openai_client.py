@@ -110,7 +110,10 @@ class OpenAIClient(BaseLlmClient):
             if self.parameters.service_tier is not None:
                 call_kwargs["service_tier"] = self.parameters.service_tier
             if self.parameters.reasoning_effort is not None:
-                call_kwargs["reasoning_effort"] = self.parameters.reasoning_effort
+                # The Responses API takes reasoning effort nested under
+                # `reasoning`, not as a top-level `reasoning_effort` kwarg
+                # (that is the Chat Completions form).
+                call_kwargs["reasoning"] = {"effort": self.parameters.reasoning_effort}
 
         if response_model:
             call_kwargs["text_format"] = response_model
