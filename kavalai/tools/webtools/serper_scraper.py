@@ -56,7 +56,7 @@ def serper_scrape_url(
     }
     payload = {"url": url}
 
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=60.0) as client:
         response = client.post(SERPER_SCRAPE_ENDPOINT, json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
