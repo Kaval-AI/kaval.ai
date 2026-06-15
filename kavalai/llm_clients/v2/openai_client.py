@@ -36,6 +36,7 @@ from kavalai.llm_clients.base_client import (
     ModelStatsReceiver,
 )
 from kavalai.llm_clients.streamer import Streamer
+from kavalai.llm_clients.kwargs_mapper import is_openai_reasoning_model
 
 
 class OpenAIClient(BaseLlmClient):
@@ -99,9 +100,12 @@ class OpenAIClient(BaseLlmClient):
         }
 
         if self.parameters:
-            if self.parameters.temperature is not None:
+            # Reasoning models (GPT-5 family, o-series) reject sampling params
+            # such as top_p/temperature on the Responses API.
+            sampling_supported = not is_openai_reasoning_model(self.model)
+            if sampling_supported and self.parameters.temperature is not None:
                 call_kwargs["temperature"] = self.parameters.temperature
-            if self.parameters.top_p is not None:
+            if sampling_supported and self.parameters.top_p is not None:
                 call_kwargs["top_p"] = self.parameters.top_p
             if self.parameters.service_tier is not None:
                 call_kwargs["service_tier"] = self.parameters.service_tier

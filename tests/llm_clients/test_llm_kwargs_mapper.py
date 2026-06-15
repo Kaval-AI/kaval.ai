@@ -18,6 +18,38 @@ def test_openai_reasoning_and_stops_and_max_tokens_mapping():
     assert "max_tokens" not in mapped
 
 
+def test_openai_reasoning_model_strips_sampling_params():
+    # GPT-5 family and o-series reject top_p/temperature on the Responses API.
+    for model in ("gpt-5.5", "gpt-5", "gpt-5-mini", "o1", "o3-mini", "o4-mini"):
+        kwargs = {
+            "top_p": 0.2,
+            "temperature": 0.7,
+            "presence_penalty": 0.1,
+            "frequency_penalty": 0.1,
+            "logit_bias": {"50256": -100},
+            "reasoning": "high",
+            "max_tokens": 100,
+        }
+        mapped = LLMKWargsMapper.map("openai", model, kwargs)
+
+        assert "top_p" not in mapped
+        assert "temperature" not in mapped
+        assert "presence_penalty" not in mapped
+        assert "frequency_penalty" not in mapped
+        assert "logit_bias" not in mapped
+        # Reasoning/other params still map through.
+        assert mapped.get("reasoning_effort") == "high"
+        assert mapped.get("max_output_tokens") == 100
+
+
+def test_openai_non_reasoning_model_keeps_sampling_params():
+    # Standard chat models (e.g. gpt-4o) still accept top_p/temperature.
+    kwargs = {"top_p": 0.2, "temperature": 0.7}
+    mapped = LLMKWargsMapper.map("openai", "gpt-4o", kwargs)
+    assert mapped.get("top_p") == 0.2
+    assert mapped.get("temperature") == 0.7
+
+
 def test_gemini_reasoning_level_and_stops_and_max_tokens_mapping():
     kwargs = {
         "reasoning": "medium",

@@ -149,3 +149,40 @@ async def test_openai_parameters():
         async for content in streamer:
             if content.type == "complete":
                 assert "Hi" in content.value
+
+
+@pytest.mark.asyncio
+async def test_openai_reasoning_model_omits_sampling_params():
+    # GPT-5 family reasoning models reject top_p/temperature on the Responses API.
+    params = LlmClientParameters(temperature=0.0, top_p=1.0)
+    client = OpenAIClient(model="gpt-5.5", llm_client_parameters=params, api_key="fake")
+
+    chat_history = ChatHistory(messages=[ChatMessage(role="user", content="Say 'Hi'")])
+
+    event1 = MagicMock(spec=ResponseTextDeltaEvent)
+    event1.delta = "Hi"
+    event1.type = "response.output_text.delta"
+    event2 = MagicMock(spec=ResponseCompletedEvent)
+    event2.type = "response.done"
+    event2.response = MagicMock()
+    event2.response.usage = MagicMock(input_tokens=10, output_tokens=5)
+
+    async def mock_async_iterator():
+        yield event1
+        yield event2
+
+    mock_stream = AsyncMock()
+    mock_stream.__aenter__.return_value = mock_async_iterator()
+
+    with patch("kavalai.llm_clients.v2.openai_client.AsyncOpenAI") as mock_openai:
+        mock_openai.return_value.responses.stream.return_value = mock_stream
+        client.client = mock_openai.return_value
+
+        streamer = await client.stream_chat_completions(chat_history=chat_history)
+        async for _ in streamer:
+            pass
+
+        call_kwargs = client.client.responses.stream.call_args.kwargs
+        assert "top_p" not in call_kwargs
+        assert "temperature" not in call_kwargs
+        assert call_kwargs["model"] == "gpt-5.5"
