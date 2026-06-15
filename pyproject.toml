@@ -44,6 +44,10 @@ test = [
     "pytest-cov",
     "python-dotenv",
     "testcontainers[postgres]",
+    "pre-commit"
+]
+tools = [
+    "crawl4ai"
 ]
 notebooks = [
     "ipykernel>=7.3.0",
