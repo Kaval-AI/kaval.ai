@@ -32,7 +32,8 @@ dependencies = [
     "rich",
     "sqlalchemy",
     "scikit-learn",
-    "fastembed"
+    "fastembed",
+    "ipykernel>=7.3.0",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +44,10 @@ test = [
     "pytest-cov",
     "python-dotenv",
     "testcontainers[postgres]",
+]
+notebooks = [
+    "ipykernel>=7.3.0",
+    "ipywidgets",
 ]
 docs = [
     "sphinx<9",
