@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 from loguru import logger
-import operator
 import re
 from typing import Optional, Any, Dict
 from uuid import UUID
@@ -23,7 +22,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from kavalai.agents.resolvers import resolve_path
-from kavalai.agents.workflow_model import Task, ArgumentInfo
+from kavalai.agents.workflow_model import ArgumentInfo
 
 
 class RunContext(BaseModel):
@@ -125,7 +124,8 @@ class RunContext(BaseModel):
             return self.resolve_context_value(str(path))
         return None
 
-    async def prepare_tool_inputs(self, task: Task) -> dict:
+    async def prepare_tool_inputs(self, task: Any) -> dict:
+        """Resolve a task/node's ``inputs`` mapping into plain values."""
         inputs = {}
         for name, info in task.inputs.items():
             if info.value is None and info.name is None:
@@ -136,87 +136,3 @@ class RunContext(BaseModel):
             inputs[name] = value
 
         return inputs
-
-    async def evaluate_condition(self, condition: dict) -> bool:
-        """
-        Evaluate a condition dictionary.
-        Supported formats:
-        - { "eq": [val1, val2] }
-        - { "all": [cond1, cond2] }
-        - { "any": [cond1, cond2] }
-        - { "not": cond }
-        Values can be TypeInputInfo (dict) or raw literals.
-        """
-        if not condition:
-            return True
-
-        operators = {
-            "eq": operator.eq,
-            "not_eq": operator.ne,
-            "gt": operator.gt,
-            "gte": operator.ge,
-            "lt": operator.lt,
-            "lte": operator.le,
-            "contains": lambda a, b: b in a if a is not None else False,
-            "len": lambda a, b: len(a) == b if a is not None else False,
-        }
-
-        for key, val in condition.items():
-            if key in operators:
-                if not isinstance(val, list) or len(val) != 2:
-                    raise ValueError(f"Operator '{key}' requires a list of 2 operands.")
-
-                operands = []
-                for operand in val:
-                    if isinstance(operand, dict) and "type" in operand:
-                        # It's a TypeInputInfo
-                        info = ArgumentInfo(**operand)
-                        operands.append(await self.resolve_input_info(info))
-                    else:
-                        operands.append(operand)
-
-                return operators[key](operands[0], operands[1])
-
-            elif key == "is_null":
-                operand = val
-                if isinstance(operand, dict) and "type" in operand:
-                    info = ArgumentInfo(**operand)
-                    operand = await self.resolve_input_info(info)
-                return operand is None
-
-            elif key == "is_not_null":
-                operand = val
-                if isinstance(operand, dict) and "type" in operand:
-                    info = ArgumentInfo(**operand)
-                    operand = await self.resolve_input_info(info)
-                return operand is not None
-
-            elif key == "is_true":
-                operand = val
-                if isinstance(operand, dict) and "type" in operand:
-                    info = ArgumentInfo(**operand)
-                    operand = await self.resolve_input_info(info)
-                return bool(operand)
-
-            elif key == "all":
-                if not isinstance(val, list):
-                    raise ValueError("'all' requires a list of conditions.")
-                for c in val:
-                    if not await self.evaluate_condition(c):
-                        return False
-                return True
-
-            elif key == "any":
-                if not isinstance(val, list):
-                    raise ValueError("'any' requires a list of conditions.")
-                for c in val:
-                    if await self.evaluate_condition(c):
-                        return True
-                return False
-
-            elif key == "not":
-                if not isinstance(val, dict):
-                    raise ValueError("'not' requires a single condition dictionary.")
-                return not await self.evaluate_condition(val)
-
-        return True

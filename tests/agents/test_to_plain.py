@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from kavalai.agents.workflow import to_plain
+from kavalai.agents.utils import to_plain
 
 
 class SimpleModel(BaseModel):

@@ -223,6 +223,7 @@ class AgentService:
         prompt: Optional[str] = None,
         errors: Optional[list[str]] = None,
         duration_seconds: Optional[float] = None,
+        node_type: Optional[str] = None,
     ) -> Task:
         """Records a specific unit of work (Task) performed within a run."""
         async with self.session_maker() as session:
@@ -231,6 +232,7 @@ class AgentService:
                 session_id=session_id,
                 run_id=run_id,
                 name=clean_text(name),
+                node_type=node_type,
                 inputs=to_plain(inputs),
                 output=to_plain(output),
                 prompt=clean_text(prompt),

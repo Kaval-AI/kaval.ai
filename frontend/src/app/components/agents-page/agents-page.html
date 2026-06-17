@@ -87,10 +87,8 @@
 
                 <div class="divider"></div>
 
-                <div class="bg-base-200 rounded-box p-4 flex justify-center overflow-hidden">
-                  <img [src]="getSvgUrl(selectedAgent.id)"
-                       [alt]="selectedAgent.name + ' workflow'"
-                       class="max-w-full h-auto object-contain" />
+                <div class="bg-base-200 rounded-box p-4 overflow-auto">
+                  <app-workflow-graph [workflow]="selectedAgent.workflow"></app-workflow-graph>
                 </div>
               </div>
             </div>

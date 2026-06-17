@@ -14,11 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from kavalai.llm_clients.llm_client import LLMClient
 from kavalai.normalizer import Normalizer
 from kavalai.agents.db import db_manager
-from kavalai.agents.workflow import Workflow, WorkflowException
-from kavalai.agents.workflow_model import WorkflowModel
+from kavalai.agents.workflow_model import WorkflowException
 from kavalai.agents.rag_service import RagService
 from kavalai.functionkernel import FunctionKernel, FunctionKernelException, pythontool
 from kavalai.llm_clients.streamer import (
@@ -27,6 +25,15 @@ from kavalai.llm_clients.streamer import (
     StreamContent,
     ValueStreamer,
 )
+
+# v2 workflow engine (the only engine after the v1 removal).
+from kavalai.agents.v2.workflow import (
+    WorkflowEngine,
+    WorkflowBuilder,
+    WorkflowState,
+)
+from kavalai.agents.v2.workflow.clients import make_client
+from kavalai.llm_clients.v2.embeddings import make_embedding_client
 
 # Db tables
 from kavalai.agents.db import (
@@ -40,34 +47,32 @@ from kavalai.agents.db import (
 )
 
 __all__ = [
-    # LLM clients
-    LLMClient,
-    Streamer,
-    StreamContent,
-    Normalizer,
+    # v2 LLM / embedding clients
+    "make_client",
+    "make_embedding_client",
+    "Streamer",
+    "StreamContent",
+    "ValueStreamer",
+    "StreamerTimeoutException",
+    "Normalizer",
     # Db tables
-    Agent,
-    ModelCallStat,
-    Session,
-    Run,
-    Task,
-    ChatMessage,
-    RagIndex,
+    "Agent",
+    "ModelCallStat",
+    "Session",
+    "Run",
+    "Task",
+    "ChatMessage",
+    "RagIndex",
     # Db connection manager.
-    db_manager,
-    # Workflow
-    Workflow,
-    WorkflowModel,
-    RagService,
-    Workflow,
-    WorkflowException,
+    "db_manager",
+    # v2 workflow
+    "WorkflowEngine",
+    "WorkflowBuilder",
+    "WorkflowState",
+    "WorkflowException",
+    "RagService",
     # Function kernel
-    FunctionKernel,
-    FunctionKernelException,
-    pythontool,
-    # Streamer
-    StreamerTimeoutException,
-    Streamer,
-    StreamContent,
-    ValueStreamer,
+    "FunctionKernel",
+    "FunctionKernelException",
+    "pythontool",
 ]

@@ -30,7 +30,7 @@ describe('AgentsPage', () => {
   let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
-    agentServiceSpy = jasmine.createSpyObj('AgentService', ['getAgentsByProject', 'getAgentSvgUrl', 'getSummaryStats', 'getDailyStats']);
+    agentServiceSpy = jasmine.createSpyObj('AgentService', ['getAgentsByProject', 'getSummaryStats', 'getDailyStats']);
     userServiceSpy = {
       userDetails: new BehaviorSubject<any>({ active_project_id: null }),
       getActiveProjectId: jasmine.createSpy('getActiveProjectId')

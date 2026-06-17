@@ -18,7 +18,7 @@ import asyncio
 import time
 from typing import List
 
-from kavalai import LLMClient
+from kavalai import make_embedding_client
 from loguru import logger
 
 # Constants
@@ -29,7 +29,7 @@ TEST_TEXT = "The quick brown fox jumps over the lazy dog. "  # ~90-100 tokens
 
 
 async def run_benchmark():
-    client = LLMClient(MODEL_NAME)
+    client = make_embedding_client(MODEL_NAME)
     logger.info(f"Starting benchmark for model: {MODEL_NAME}")
     logger.info(f"Target duration: {BENCHMARK_DURATION_SECONDS} seconds")
     start_time = time.perf_counter()
@@ -45,9 +45,7 @@ async def run_benchmark():
         call_start = time.perf_counter()
         try:
             # We use a single text for each call to measure per-call latency
-            _, stats = await client.compute_embeddings(
-                model=MODEL_NAME, texts=[TEST_TEXT] * 10
-            )
+            _, stats = await client.compute_embeddings(texts=[TEST_TEXT] * 10)
             call_duration = time.perf_counter() - call_start
             latencies.append(call_duration)
             total_embeddings += 1

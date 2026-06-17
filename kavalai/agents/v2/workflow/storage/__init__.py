@@ -16,5 +16,12 @@ limitations under the License.
 
 from kavalai.agents.v2.workflow.storage.base import DataStorage, RunHandle, ChatMsg
 from kavalai.agents.v2.workflow.storage.memory import SqliteDataStorage
+from kavalai.agents.v2.workflow.storage.postgres import PostgresDataStorage
 
-__all__ = ["DataStorage", "RunHandle", "ChatMsg", "SqliteDataStorage"]
+__all__ = [
+    "DataStorage",
+    "RunHandle",
+    "ChatMsg",
+    "SqliteDataStorage",
+    "PostgresDataStorage",
+]

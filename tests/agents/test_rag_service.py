@@ -130,7 +130,9 @@ async def test_rag_service_with_normalizer():
     normalizer = Normalizer(l2=True)
 
     # We need to mock LLMClient's compute_embeddings in RagService
-    with patch("kavalai.agents.rag_service.LLMClient") as mock_llm_client_cls:
+    with patch(
+        "kavalai.agents.rag_service.make_embedding_client"
+    ) as mock_llm_client_cls:
         mock_llm_client = mock_llm_client_cls.return_value
         mock_stats = MagicMock(spec=ModelCallStat)
         mock_llm_client.compute_embeddings = AsyncMock(
@@ -183,7 +185,9 @@ async def test_rag_service_without_normalizer():
 
     model = "openai/text-embedding-3-small"
 
-    with patch("kavalai.agents.rag_service.LLMClient") as mock_llm_client_cls:
+    with patch(
+        "kavalai.agents.rag_service.make_embedding_client"
+    ) as mock_llm_client_cls:
         mock_llm_client = mock_llm_client_cls.return_value
         mock_stats = MagicMock(spec=ModelCallStat)
         mock_llm_client.compute_embeddings = AsyncMock(
@@ -770,7 +774,7 @@ async def test_batch_query_with_join_keep_best(
     # Actually, batch_query_with_join calls llm_client.compute_embeddings.
     # In test_rag_service_batch_query_with_join, it seems it uses real or mocked embeddings.
 
-    with patch.object(service.llm_client, "compute_embeddings") as mock_compute:
+    with patch.object(service.embedding_client, "compute_embeddings") as mock_compute:
         stats = ModelCallStat(
             model=embedding_model,
             prompt_tokens=10,
@@ -801,7 +805,7 @@ async def test_batch_query_with_join_keep_best(
 
     # Test the previous buggy behavior: if LIMIT was outside, top_k=1 would only return 1 source
     # (which is correct for top_k=1, but the problem was when top_k was larger than the number of matches for one source)
-    with patch.object(service.llm_client, "compute_embeddings") as mock_compute:
+    with patch.object(service.embedding_client, "compute_embeddings") as mock_compute:
         mock_compute.return_value = ([[0.1] * 1536], stats)
         results_top1 = await service.batch_query_with_join(
             texts=["doc"], top_k=1, collection_name=collection, keep_best=True

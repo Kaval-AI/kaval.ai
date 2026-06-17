@@ -22,6 +22,7 @@ import { Agent } from '../../models/agent';
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions, Chart, registerables } from 'chart.js';
 import { JsonTreeComponent } from '../json-tree/json-tree';
+import { WorkflowGraphComponent } from '../workflow-graph/workflow-graph';
 import { NavigationService } from '../../services/navigation-service';
 
 Chart.register(...registerables);
@@ -29,7 +30,12 @@ Chart.register(...registerables);
 @Component({
   selector: 'app-agents-page',
   standalone: true,
-  imports: [CommonModule, BaseChartDirective, JsonTreeComponent],
+  imports: [
+    CommonModule,
+    BaseChartDirective,
+    JsonTreeComponent,
+    WorkflowGraphComponent,
+  ],
   templateUrl: './agents-page.html',
   styleUrl: './agents-page.css'
 })
@@ -372,11 +378,6 @@ export class AgentsPage implements OnInit {
   selectAgent(agent: Agent): void {
     this.selectedAgent = agent;
     this.loadStats(agent.id);
-  }
-
-  getSvgUrl(agentId: string): string {
-    if (!this.activeProjectId) return '';
-    return this.agentService.getAgentSvgUrl(this.activeProjectId, agentId);
   }
 
   goToConversations(): void {

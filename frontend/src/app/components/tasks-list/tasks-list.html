@@ -7,6 +7,9 @@
         <div class="task-item" [class.has-errors]="task.errors && task.errors.length > 0">
           <div class="task-item-header">
             <span class="task-name">{{ task.name || 'Unnamed Task' }}</span>
+            @if (task.node_type) {
+              <span class="badge badge-sm badge-outline">{{ task.node_type }}</span>
+            }
             <span class="task-time">{{ formatDate(task.created_at) }}</span>
             @if (task.duration_seconds) {
               <span class="task-duration">({{ task.duration_seconds.toFixed(2) }}s)</span>

@@ -163,53 +163,6 @@ async def test_agents_get_all(client, backoffice_db):
 
 
 @pytest.mark.asyncio
-async def test_agents_get_svg_success(client, backoffice_db):
-    project_id = uuid.uuid4()
-    agent_id = uuid.uuid4()
-    project = db.Project(
-        id=project_id,
-        name="P1",
-        db_user="u",
-        db_password="p",
-        db_host="h",
-        db_port=5432,
-        db_name="d",
-    )
-    backoffice_db.add(project)
-    await backoffice_db.commit()
-
-    agent = MagicMock()
-    agent.id = agent_id
-    agent.workflow = {
-        "name": "Test Workflow",
-        "description": "A test workflow",
-        "llm_profile_name": "openai",
-        "llm_model": "gpt-4",
-        "data_types": {},
-        "tasks": [],
-    }
-
-    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
-        "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
-    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm:
-        mock_session = AsyncMock()
-        mock_sm.return_value = MagicMock(return_value=mock_session)
-        mock_session.__aenter__.return_value = mock_session
-
-        with patch("kavalai.backoffice.server.get_one", return_value=agent):
-            with patch(
-                "kavalai.backoffice.server.generate_workflow_svg",
-                return_value="<svg>mocked</svg>",
-            ) as mock_gen_svg:
-                response = await client.get(f"/agents/svg/{project_id}/{agent_id}")
-
-                assert response.status_code == 200
-                assert response.content == b"<svg>mocked</svg>"
-                assert response.headers["content-type"] == "image/svg+xml"
-                mock_gen_svg.assert_called_once()
-
-
-@pytest.mark.asyncio
 async def test_agents_get_stats(client, backoffice_db):
     project_id = uuid.uuid4()
     project = db.Project(

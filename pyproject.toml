@@ -18,7 +18,6 @@ dependencies = [
     "fastapi[standard]",
     "feedparser",
     "google-genai",
-    "graphviz",
     "httpx",
     "itsdangerous",
     "json-schema-to-pydantic",

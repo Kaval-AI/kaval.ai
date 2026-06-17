@@ -14,7 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from kavalai.agents.v2.workflow.tasklog.base import TaskLogger, StatsBridge
+from kavalai.agents.v2.workflow.tasklog.base import (
+    TaskLogger,
+    StatsBridge,
+    TokenAccumulator,
+)
 from kavalai.agents.v2.workflow.tasklog.sqlite import SqliteTaskLogger
+from kavalai.agents.v2.workflow.tasklog.postgres import PostgresTaskLogger
 
-__all__ = ["TaskLogger", "StatsBridge", "SqliteTaskLogger"]
+__all__ = [
+    "TaskLogger",
+    "StatsBridge",
+    "TokenAccumulator",
+    "SqliteTaskLogger",
+    "PostgresTaskLogger",
+]

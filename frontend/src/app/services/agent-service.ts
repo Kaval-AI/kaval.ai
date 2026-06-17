@@ -32,10 +32,6 @@ export class AgentService {
     return this.http.get<Agent[]>(`/api/agents/all/${projectId}`);
   }
 
-  getAgentSvgUrl(projectId: string, agentId: string): string {
-    return `/api/agents/svg/${projectId}/${agentId}`;
-  }
-
   getAgentStats(projectId: string, agentId?: string): Observable<any> {
     let url = `/api/agents/stats/${projectId}`;
     if (agentId) {

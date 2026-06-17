@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
 from kavalai.agents.db import RagIndex, Agent, db_manager
-from kavalai.llm_clients.llm_client import LLMClient
+from kavalai.llm_clients.v2.embeddings import make_embedding_client
 from kavalai.normalizer import Normalizer
 
 
@@ -92,7 +92,7 @@ class RagService:
         self.model = model
         self.agent = agent
         self.normalizer = normalizer
-        self.llm_client = LLMClient(model)
+        self.embedding_client = make_embedding_client(model)
 
     @classmethod
     def from_uri(
@@ -175,7 +175,7 @@ class RagService:
             raise ValueError("The number of texts and source_ids must be the same.")
 
         async with self.session_maker() as session:
-            embeddings, stats = await self.llm_client.compute_embeddings(
+            embeddings, stats = await self.embedding_client.compute_embeddings(
                 texts=texts,
                 normalizer=self.normalizer,
             )
@@ -277,7 +277,7 @@ class RagService:
             list[RagServiceResult]: List of results with similarity scores.
         """
         async with self.session_maker() as session:
-            embeddings, stats = await self.llm_client.compute_embeddings(
+            embeddings, stats = await self.embedding_client.compute_embeddings(
                 texts=[text],
                 normalizer=self.normalizer,
             )
@@ -330,7 +330,7 @@ class RagService:
                 await session.execute(text(f"SET search_path TO {schema}, public"))
 
             # Compute embeddings for all query texts
-            embeddings, stats = await self.llm_client.compute_embeddings(
+            embeddings, stats = await self.embedding_client.compute_embeddings(
                 texts=texts,
                 normalizer=self.normalizer,
             )
@@ -427,7 +427,7 @@ class RagService:
                 await session.execute(text(f"SET search_path TO {schema}, public"))
 
             # Compute embeddings
-            embeddings, stats = await self.llm_client.compute_embeddings(
+            embeddings, stats = await self.embedding_client.compute_embeddings(
                 texts=texts,
                 normalizer=self.normalizer,
             )
@@ -818,7 +818,7 @@ class RagService:
             return [[0.0 for _ in source_ids] for _ in texts]
 
         async with self.session_maker() as session:
-            embeddings, stats = await self.llm_client.compute_embeddings(
+            embeddings, stats = await self.embedding_client.compute_embeddings(
                 texts=texts,
                 normalizer=self.normalizer,
             )

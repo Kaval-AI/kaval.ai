@@ -32,9 +32,6 @@ from kavalai.agents.agent_service import AgentService
 from kavalai.agents.db import db_manager, Agent
 from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions
-from kavalai.agents.workflow_model import WorkflowModel
-from kavalai.backoffice.svg import generate_workflow_svg
-from fastapi.responses import Response
 from kavalai.agents.rag_service import RagService
 from kavalai.llm_clients.common import Streamer
 from kavalai.backoffice.embedding_projector import train_pca
@@ -432,25 +429,6 @@ async def agents_get_session_details(
 
     async with get_project_session(project) as session:
         return await agent_sessions.get_session_details(session, session_id)
-
-
-@app.get("/agents/svg/{project_id}/{agent_id}")
-async def agents_get_svg(project_id: UUID, agent_id: UUID, request: Request):
-    """Fetch and return the workflow SVG for a specific agent."""
-    assert_logged_in(request)
-    project = await get_project_and_assert_access(request, project_id)
-
-    async with get_project_session(project) as session:
-        agent = await get_one(session, Agent, agent_id)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-
-        if not agent.workflow:
-            raise HTTPException(status_code=400, detail="Agent has no workflow defined")
-
-        model = WorkflowModel(**agent.workflow)
-        svg_content = generate_workflow_svg(model, return_content=True)
-        return Response(content=svg_content, media_type="image/svg+xml")
 
 
 @app.get("/projects/{project_id}/llm-call-stats")

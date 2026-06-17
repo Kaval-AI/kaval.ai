@@ -22,6 +22,7 @@ export interface Task {
   inputs: any | null;
   output: any | null;
   name: string | null;
+  node_type?: string | null;
   prompt: string | null;
   errors: string[] | null;
   duration_seconds: number | null;

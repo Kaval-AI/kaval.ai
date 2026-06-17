@@ -15,7 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import asyncio
 from loguru import logger
 import secrets
 from contextlib import asynccontextmanager
@@ -27,7 +26,6 @@ import uvicorn
 from environs import Env
 from fastapi import Depends
 from fastapi import HTTPException, status, FastAPI, Response, APIRouter
-from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -35,8 +33,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.db import db_manager
-from kavalai.agents.workflow import Workflow
-from kavalai.llm_clients.common import Streamer
+from kavalai.agents.v2.workflow import WorkflowEngine
+from kavalai.agents.v2.workflow.storage.postgres import PostgresDataStorage
+from kavalai.agents.v2.workflow.tasklog.postgres import PostgresTaskLogger
 
 
 security = HTTPBasic(auto_error=False)
@@ -107,7 +106,7 @@ async def session_scope(session_or_factory):
 
 
 async def handle_agent_run(
-    workflow: Workflow,
+    engine: WorkflowEngine,
     session_provider: Union[async_sessionmaker, None],
     input_data: dict,
     session_id: Optional[UUID] = None,
@@ -118,7 +117,7 @@ async def handle_agent_run(
     This is a standalone handler that can be used directly or wrapped in a FastAPI route.
 
     Args:
-        workflow: The Workflow instance to execute.
+        engine: The v2 WorkflowEngine to execute.
         session_provider: An optional SQLAlchemy async_sessionmaker for database sessions (unused, kept for compatibility).
         input_data: The input data for the workflow (already extracted from request).
         session_id: Optional session ID for continuing a previous session.
@@ -127,75 +126,12 @@ async def handle_agent_run(
     Returns:
         A tuple of (session_id, output_data).
     """
-    result = await workflow.run(
+    state = await engine.run(
         input_data=input_data,
-        session_id=session_id,
+        session_id=str(session_id) if session_id else None,
         external_id=external_id,
     )
-    return result.session_id, result.data
-
-
-async def handle_agent_stream(
-    workflow: Workflow,
-    session_provider: Union[async_sessionmaker, None],
-    input_data: dict,
-    session_id: Optional[UUID] = None,
-    external_id: Optional[str] = None,
-    output_streamer_name: str = "run_output",
-):
-    """Execute the agent workflow and yield streaming output.
-
-    This is a standalone async generator that can be used directly or wrapped in a FastAPI route.
-
-    Args:
-        workflow: The Workflow instance to execute.
-        session_provider: An optional SQLAlchemy async_sessionmaker for database sessions (unused, kept for compatibility).
-        input_data: The input data for the workflow (already extracted from request).
-        session_id: Optional session ID for continuing a previous session.
-        external_id: Optional external identifier for tracking.
-        output_streamer_name: Optional name for the output streamer (default: "run_output").
-
-    Yields:
-        Server-Sent Events formatted strings (data: ...\n\n).
-    """
-    queue = asyncio.Queue()
-
-    # Get the dynamic output type from workflow
-    OutputDataType = workflow.get_data_type("output")
-
-    class OutputType(BaseModel):
-        session_id: Optional[UUID]
-        data: OutputDataType
-
-    # Start workflow in a background task
-    task = asyncio.create_task(
-        workflow.run(
-            input_data=input_data,
-            session_id=session_id,
-            external_id=external_id,
-            queue=queue,
-        )
-    )
-
-    while not task.done() or not queue.empty():
-        try:
-            line = await asyncio.wait_for(queue.get(), timeout=0.01)
-            yield f"data: {line}\n\n"
-        except asyncio.TimeoutError:
-            continue
-
-    # Check if the task raised an exception and get the result
-    result = await task
-
-    # Stream final output
-    output = OutputType(session_id=result.session_id, data=result.data)
-    streamer = Streamer(output_streamer_name, queue)
-    await streamer.stream_complete(output.model_dump_json())
-
-    # Yield any remaining items in the queue (including our final output)
-    while not queue.empty():
-        line = await queue.get()
-        yield f"data: {line}\n\n"
+    return state.session_id, state.output_data
 
 
 def create_default_auth_dependency() -> Callable:
@@ -214,7 +150,7 @@ def create_default_auth_dependency() -> Callable:
 
 
 def create_agent_router(
-    workflow: Workflow,
+    engine: WorkflowEngine,
     session_provider: Union[async_sessionmaker, None] = None,
     auth_dependency: Optional[Callable] = None,
 ) -> APIRouter:
@@ -255,8 +191,8 @@ def create_agent_router(
     if auth_dependency is None:
         auth_dependency = create_default_auth_dependency()
 
-    InputDataType = workflow.get_data_type("input")
-    OutputDataType = workflow.get_data_type("output")
+    InputDataType = engine.get_data_type("input")
+    OutputDataType = engine.get_data_type("output")
 
     # Define the request body schema.
     class InputType(BaseModel):
@@ -276,7 +212,7 @@ def create_agent_router(
     ) -> OutputType:
         """Execute the agent workflow with the provided input."""
         session_id, data = await handle_agent_run(
-            workflow=workflow,
+            engine=engine,
             session_provider=session_provider,
             input_data=input_data.data.model_dump(),
             session_id=input_data.session_id,
@@ -284,30 +220,13 @@ def create_agent_router(
         )
         return OutputType(session_id=session_id, data=data)
 
-    @router.post("/stream_agent")
-    async def stream_agent(
-        input_data: InputType,
-        _auth: Annotated[None, Depends(auth_dependency)],
-    ) -> StreamingResponse:
-        """Execute the agent workflow and stream the output."""
-        return StreamingResponse(
-            handle_agent_stream(
-                workflow=workflow,
-                session_provider=session_provider,
-                input_data=input_data.data.model_dump(),
-                session_id=input_data.session_id,
-                external_id=input_data.external_id,
-            ),
-            media_type="text/event-stream",
-        )
-
     @router.get("/workflow")
     async def get_workflow(
         _auth: Annotated[None, Depends(auth_dependency)],
     ):
         """Retrieve the workflow configuration."""
         return Response(
-            content=workflow.workflow_model.model_dump_json(),
+            content=engine.graph.model_dump_json(),
             media_type="application/json",
         )
 
@@ -334,7 +253,7 @@ def create_agent_router(
 
 
 def create_agent_app(
-    workflow: Workflow,
+    engine: WorkflowEngine,
     session_provider: Union[async_sessionmaker, None] = None,
     auth_dependency: Optional[Callable] = None,
 ) -> FastAPI:
@@ -357,15 +276,15 @@ def create_agent_app(
         A FastAPI application instance.
     """
     app = FastAPI(
-        title=workflow.workflow_model.name,
-        description=workflow.workflow_model.description,
-        version=workflow.workflow_model.version,
+        title=engine.graph.name,
+        description=engine.graph.description,
+        version=engine.graph.version,
     )
-    app.state.workflow = workflow
+    app.state.engine = engine
 
     # Use the router factory to create all endpoints
     router = create_agent_router(
-        workflow=workflow,
+        engine=engine,
         session_provider=session_provider,
         auth_dependency=auth_dependency,
     )
@@ -482,14 +401,18 @@ def create_app_from_env_conf(
         max_overflow=max_overflow,
     )
 
-    # Create agent service and workflow with it
+    # Create the shared agent service and the v2 Postgres persistence backends.
     agent_service = AgentService(session_provider)
+    storage = PostgresDataStorage(agent_service)
+    task_logger = PostgresTaskLogger(agent_service)
 
     logger.info(f"Loading workflow from {workflow_path}.")
-    workflow = Workflow.from_yaml_path(workflow_path, agent_service=agent_service)
+    engine = WorkflowEngine.from_yaml_path(
+        workflow_path, storage=storage, task_logger=task_logger
+    )
 
     return create_agent_app(
-        workflow=workflow,
+        engine=engine,
         session_provider=session_provider,
     )
 
@@ -498,7 +421,7 @@ def run_agent_server():
     """Start the Kaval.AI agent server using environment configuration."""
     # Create FastAPI app.
     app = create_app_from_env_conf()
-    logger.info(f"Starting agent <{app.state.workflow.workflow_model.name}>.")
+    logger.info(f"Starting agent <{app.state.engine.graph.name}>.")
     uvicorn.run(
         app,
         host=env.str("KAVALAI_AGENT_HOST", "0.0.0.0"),
