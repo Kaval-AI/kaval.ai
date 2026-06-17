@@ -43,11 +43,15 @@ async def test_prompt_tool_call_then_output(mock_kernel, mock_llm_client, run_co
 
     StepOutput = get_step_output_type(MockResponse)
     step1 = StepOutput(
+        instructions="call the test tool",
         tool_calls=[
             ToolCall(name="python://test_tool", literal_args='{"val": 1}', call_id="c1")
         ],
     )
-    step2 = StepOutput(output=MockResponse(answer="Final answer"))
+    step2 = StepOutput(
+        instructions="return the final answer",
+        output=MockResponse(answer="Final answer"),
+    )
     mock_llm_client.chat_completions.side_effect = [step1, step2]
 
     result = await agent.prompt(
@@ -74,7 +78,9 @@ async def test_prompt_plain_string_output(mock_kernel, mock_llm_client, run_cont
     )
 
     StepOutput = get_step_output_type(str)
-    mock_llm_client.chat_completions.side_effect = [StepOutput(output="hello there")]
+    mock_llm_client.chat_completions.side_effect = [
+        StepOutput(instructions="greet the user", output="hello there")
+    ]
 
     result = await agent.prompt("Greet the user")
 
@@ -93,7 +99,10 @@ async def test_prompt_respects_max_steps(mock_kernel, mock_llm_client, run_conte
 
     StepOutput = get_step_output_type(MockResponse)
     # Always request a tool call, never produce an output.
-    looping_step = StepOutput(tool_calls=[ToolCall(name="python://loop", call_id="c1")])
+    looping_step = StepOutput(
+        instructions="keep looping",
+        tool_calls=[ToolCall(name="python://loop", call_id="c1")],
+    )
     mock_llm_client.chat_completions.side_effect = [looping_step] * 10
 
     result = await agent.prompt(
@@ -170,8 +179,11 @@ async def test_planner_context_isolated_across_invocations(
 
     # First invocation: produce a tool result under call_id "c1", then finish.
     mock_llm_client.chat_completions.side_effect = [
-        StepOutput(tool_calls=[ToolCall(name="python://t", call_id="c1")]),
-        StepOutput(output=MockResponse(answer="first")),
+        StepOutput(
+            instructions="run the tool",
+            tool_calls=[ToolCall(name="python://t", call_id="c1")],
+        ),
+        StepOutput(instructions="finish", output=MockResponse(answer="first")),
     ]
     await agent.prompt("first", response_model=MockResponse)
 
@@ -182,8 +194,8 @@ async def test_planner_context_isolated_across_invocations(
         call_id="c2",
     )
     mock_llm_client.chat_completions.side_effect = [
-        StepOutput(tool_calls=[second_call]),
-        StepOutput(output=MockResponse(answer="second")),
+        StepOutput(instructions="run the tool", tool_calls=[second_call]),
+        StepOutput(instructions="finish", output=MockResponse(answer="second")),
     ]
     mock_kernel.call_tool.reset_mock()
     await agent.prompt("second", response_model=MockResponse)

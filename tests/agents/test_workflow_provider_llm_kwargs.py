@@ -186,6 +186,7 @@ async def test_workflow_gemini_thinking_level_from_workflow_llm_kwargs():
     propagated and used by the real Gemini model.
     """
     import os
+
     if not os.getenv("GEMINI_API_KEY"):
         pytest.skip("GEMINI_API_KEY not found in environment")
 
@@ -208,7 +209,7 @@ async def test_workflow_gemini_thinking_level_from_workflow_llm_kwargs():
             }
         },
         tasks=[task],
-        llm_model="gemini/gemini-3-pro-preview",
+        llm_model="gemini/gemini-3.1-pro-preview",
         llm_kwargs={"thinking_level": "low"},
     )
 
@@ -230,6 +231,7 @@ async def test_workflow_gemini_thinking_budget_from_workflow_llm_kwargs():
     propagated and used by the real Gemini model.
     """
     import os
+
     if not os.getenv("GEMINI_API_KEY"):
         pytest.skip("GEMINI_API_KEY not found in environment")
 
@@ -252,7 +254,7 @@ async def test_workflow_gemini_thinking_budget_from_workflow_llm_kwargs():
             }
         },
         tasks=[task],
-        llm_model="gemini/gemini-3-pro-preview",
+        llm_model="gemini/gemini-3.1-pro-preview",
         llm_kwargs={"thinking_budget": 16384},
     )
 

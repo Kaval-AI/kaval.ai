@@ -1,0 +1,101 @@
+# Example v2 workflow: a DAG / state machine.
+#
+# The user hands an input to the `start` node and reads the result from the
+# `end` node. `if` / `switch` nodes route on simple string expressions
+# evaluated against the run context (e.g. `classification.intent == 'refund'`).
+#
+# Run it with:
+#   from kavalai.agents.v2.workflow import (
+#       WorkflowEngine, SqliteDataStorage, SqliteTaskLogger,
+#   )
+#   engine = WorkflowEngine.from_yaml_path(
+#       "examples/v2_workflow_support_agent.yaml",
+#       storage=SqliteDataStorage(),
+#       task_logger=SqliteTaskLogger(),
+#   )
+#   state = await engine.run({"user_message": "I want a refund"})
+#   print(state.output_data)
+name: Support agent
+description: Routes a support request and produces a tailored response.
+llm_model: openai/gpt-5.4-mini
+
+data_types:
+  input:
+    type: object
+    properties:
+      user_message:
+        type: string
+  classification:
+    type: object
+    properties:
+      intent:
+        type: string
+  output:
+    type: object
+    properties:
+      agent_response:
+        type: string
+
+start: begin
+nodes:
+  - name: begin
+    type: start
+    next: classify
+
+  # LLM node: classify the user's intent into a structured output.
+  - name: classify
+    type: llm
+    prompt: >
+      Classify the user's intent as one of: refund, technical, other.
+      Return it in the `intent` field.
+    inputs:
+      input:
+        type: context
+        value: input
+    output: classification
+    next: route
+
+  # Switch node: branch on a simple string expression.
+  - name: route
+    type: switch
+    expr: classification.intent
+    cases:
+      refund: handle_refund
+      technical: handle_technical
+    default: handle_general
+
+  # Agent node: multi-step tool-using agent for technical questions.
+  - name: handle_technical
+    type: agent
+    prompt: "Help the user resolve their technical problem."
+    inputs:
+      input:
+        type: context
+        value: input
+    output: output
+    max_steps: 5
+    next: finish
+
+  - name: handle_refund
+    type: llm
+    prompt: "Acknowledge the refund request empathetically and explain next steps."
+    inputs:
+      input:
+        type: context
+        value: input
+    output: output
+    next: finish
+
+  - name: handle_general
+    type: llm
+    prompt: "Answer the user's general question."
+    inputs:
+      input:
+        type: context
+        value: input
+    output: output
+    next: finish
+
+  - name: finish
+    type: end
+    output: output
