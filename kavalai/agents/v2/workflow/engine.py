@@ -18,6 +18,7 @@ import importlib
 import os
 import time
 from typing import Any, Callable, Optional
+from uuid import uuid4
 
 import yaml
 from loguru import logger
@@ -41,7 +42,7 @@ from kavalai.agents.v2.workflow.models import (
 )
 from kavalai.agents.v2.workflow.state import WorkflowState
 from kavalai.agents.v2.workflow.storage.base import DataStorage
-from kavalai.agents.v2.workflow.tasklog.base import StatsBridge, TaskLogger
+from kavalai.agents.v2.workflow.tasklog.base import TaskLogger, TokenAccumulator
 from kavalai.agents.workflow_model import WorkflowException
 from kavalai.functionkernel import FunctionKernel, pythontool
 from kavalai.llm_clients.base_client import BaseLlmClient, ChatHistory, ChatMessage
@@ -102,6 +103,8 @@ class WorkflowEngine:
         self.task_logger = task_logger
         self.client_factory = client_factory or client_factory_module.make_client
         self.max_node_visits = max_node_visits
+        # Per-run token aggregator; recreated for each run() so totals don't leak.
+        self._token_stats = TokenAccumulator(task_logger)
 
         self.parser = SchemaParser(graph.data_types)
         self.models = self.parser.parse_all()
@@ -174,10 +177,10 @@ class WorkflowEngine:
         merged = dict(self.graph.llm_kwargs)
         merged.update(llm_kwargs or {})
         parameters = client_factory_module.build_parameters(merged)
-        stats_receiver = (
-            StatsBridge(self.task_logger, agent_id) if self.task_logger else None
-        )
-        return self.client_factory(model, parameters, stats_receiver)
+        # The accumulator tallies tokens for the whole run and forwards each call
+        # to the task logger (when configured).
+        self._token_stats.agent_id = agent_id
+        return self.client_factory(model, parameters, self._token_stats)
 
     # --------------------------------------------------------------------- nodes
     async def _run_llm_node(self, node: LLMNode, run_context: RunContext) -> None:
@@ -322,6 +325,10 @@ class WorkflowEngine:
         external_id: Optional[str] = None,
     ) -> WorkflowState:
         """Execute the workflow for ``input_data`` and return the final state."""
+        invocation_id = uuid4().hex[:8]
+        # Fresh token aggregator so totals never leak between runs.
+        self._token_stats = TokenAccumulator(self.task_logger)
+
         parsed_input = self.get_data_type("input")(**input_data)
         run_context = RunContext()
         run_context.data["input"] = parsed_input
@@ -331,50 +338,70 @@ class WorkflowEngine:
             workflow_name=self.graph.name,
             status="running",
             input_data=to_plain(input_data),
+            invocation_id=invocation_id,
         )
 
-        if self.storage:
-            handle = await self.storage.initialize_run(
-                workflow_name=self.graph.name,
-                description=self.graph.description,
-                input_schema=self.graph.data_types.get("input"),
-                output_schema=self.graph.data_types.get("output"),
-                workflow=self.graph.model_dump(),
-                session_id=session_id,
-                external_id=external_id,
-                input_data=to_plain(input_data),
-            )
-            run_context.agent_id = handle.agent_id
-            run_context.session_id = handle.session_id
-            run_context.run_id = handle.run_id
-            state.agent_id = handle.agent_id
-            state.session_id = handle.session_id
-            state.run_id = handle.run_id
+        # Bind the invocation id onto every log record emitted during the run —
+        # the engine, the agent loop and the LLM clients — so an entire
+        # invocation can be grepped out of the logs by its id.
+        with logger.contextualize(invocation_id=invocation_id):
+            logger.info(f"[{invocation_id}] Starting workflow '{self.graph.name}'")
 
-            user_message = getattr(parsed_input, "user_message", str(input_data))
-            await self.storage.add_chat_message(
-                agent_id=handle.agent_id,
-                session_id=handle.session_id,
-                run_id=handle.run_id,
-                role="user",
-                content=user_message,
-            )
+            if self.storage:
+                handle = await self.storage.initialize_run(
+                    workflow_name=self.graph.name,
+                    description=self.graph.description,
+                    input_schema=self.graph.data_types.get("input"),
+                    output_schema=self.graph.data_types.get("output"),
+                    workflow=self.graph.model_dump(),
+                    session_id=session_id,
+                    external_id=external_id,
+                    input_data=to_plain(input_data),
+                )
+                run_context.agent_id = handle.agent_id
+                run_context.session_id = handle.session_id
+                run_context.run_id = handle.run_id
+                state.agent_id = handle.agent_id
+                state.session_id = handle.session_id
+                state.run_id = handle.run_id
 
-        try:
-            await self._walk(run_context, state)
-        except WorkflowException:
-            raise
-        except Exception as e:
-            state.status = "failed"
-            state.error = str(e)
-            await self._checkpoint(run_context, state)
-            raise WorkflowException(e) from e
-        finally:
-            await self.kernel.close()
-            if self.task_logger:
-                await self.task_logger.flush()
+                user_message = getattr(parsed_input, "user_message", str(input_data))
+                await self.storage.add_chat_message(
+                    agent_id=handle.agent_id,
+                    session_id=handle.session_id,
+                    run_id=handle.run_id,
+                    role="user",
+                    content=user_message,
+                )
+
+            try:
+                await self._walk(run_context, state)
+            except WorkflowException:
+                raise
+            except Exception as e:
+                state.status = "failed"
+                state.error = str(e)
+                raise WorkflowException(e) from e
+            finally:
+                await self.kernel.close()
+                # Record and report token usage, then persist the final state
+                # (including the totals) regardless of success or failure.
+                state.token_usage = self._token_stats.summary()
+                if self.task_logger:
+                    await self.task_logger.flush()
+                await self._checkpoint(run_context, state)
+                self._log_token_usage(invocation_id)
 
         return state
+
+    def _log_token_usage(self, invocation_id: str) -> None:
+        """Log the aggregate model token usage for the run."""
+        s = self._token_stats
+        logger.info(
+            f"[{invocation_id}] Workflow '{self.graph.name}' token usage: "
+            f"{s.model_calls} model call(s), {s.total_tokens} tokens "
+            f"(prompt={s.prompt_tokens}, completion={s.completion_tokens})"
+        )
 
     async def _walk(self, run_context: RunContext, state: WorkflowState) -> None:
         current: Optional[str] = self.graph.start
@@ -431,7 +458,8 @@ class WorkflowEngine:
             )
         await self._checkpoint(run_context, state)
         logger.info(
-            f"Workflow '{self.graph.name}' completed (session={state.session_id})"
+            f"[{state.invocation_id}] Workflow '{self.graph.name}' completed "
+            f"(session={state.session_id})"
         )
 
     async def _checkpoint(self, run_context: RunContext, state: WorkflowState) -> None:

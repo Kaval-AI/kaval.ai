@@ -1,6 +1,6 @@
 import pytest
 
-from kavalai.agents.v2.workflow.tasklog.base import StatsBridge
+from kavalai.agents.v2.workflow.tasklog.base import StatsBridge, TokenAccumulator
 from kavalai.agents.v2.workflow.tasklog.sqlite import SqliteTaskLogger
 from kavalai.llm_clients.base_client import ModelCallStat
 
@@ -91,6 +91,35 @@ async def test_stats_bridge_forwards_to_logger(task_logger):
     )
     assert rows[0]["agent_id"] == "agent-x"
     assert rows[0]["total_tokens"] == 3
+
+
+async def test_token_accumulator_aggregates_and_forwards(task_logger):
+    acc = TokenAccumulator(task_logger, agent_id="a1")
+    acc.receive_model_stats(
+        ModelCallStat(
+            call_type="llm", prompt_tokens=10, completion_tokens=5, total_tokens=15
+        )
+    )
+    acc.receive_model_stats(
+        ModelCallStat(call_type="llm", prompt_tokens=2, total_tokens=2)
+    )  # missing completion_tokens counts as 0
+    assert acc.summary() == {
+        "model_calls": 2,
+        "prompt_tokens": 12,
+        "completion_tokens": 5,
+        "total_tokens": 17,
+    }
+    # Each call was also forwarded to the task logger.
+    await task_logger.flush()
+    rows = await _fetchall(task_logger, "SELECT agent_id FROM model_call_stats")
+    assert len(rows) == 2 and all(r["agent_id"] == "a1" for r in rows)
+
+
+def test_token_accumulator_without_logger():
+    acc = TokenAccumulator()
+    acc.receive_model_stats(ModelCallStat(call_type="llm", total_tokens=9))
+    assert acc.summary()["total_tokens"] == 9
+    assert acc.summary()["model_calls"] == 1
 
 
 async def test_flush_without_tasks_is_safe(task_logger):

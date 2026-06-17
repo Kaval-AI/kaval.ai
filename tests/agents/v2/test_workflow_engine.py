@@ -146,10 +146,21 @@ async def test_linear_llm_workflow_persists_everything():
     assert state.trace == ["s", "answer", "e"]
     assert state.output_data == {"agent_response": "hi there"}
 
-    # Checkpointed state is reloadable and matches.
+    # A short invocation id is assigned and token usage is aggregated.
+    assert state.invocation_id and len(state.invocation_id) == 8
+    assert state.token_usage == {
+        "model_calls": 1,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 1,
+    }
+
+    # Checkpointed state is reloadable and matches (token usage persisted too).
     loaded = await storage.load_state(state.run_id)
     assert loaded.status == "completed"
     assert loaded.output_data == {"agent_response": "hi there"}
+    assert loaded.token_usage == state.token_usage
+    assert loaded.invocation_id == state.invocation_id
 
     # Chat history captured both turns.
     history = await storage.get_chat_history(state.session_id)
@@ -307,6 +318,28 @@ async def test_agent_node():
     state = await engine.run({"user_message": "x"})
     assert state.status == "completed"
     assert state.output_data == {"agent_response": "agent did it"}
+
+
+async def test_invocation_id_is_unique_per_run_and_tokens_aggregate():
+    nodes = [
+        {"name": "s", "type": "start", "next": "a"},
+        {"name": "a", "type": "llm", "prompt": "p", "output": "output", "next": "b"},
+        {"name": "b", "type": "llm", "prompt": "p", "output": "output", "next": "e"},
+        {"name": "e", "type": "end", "output": "output"},
+    ]
+    engine = WorkflowEngine.from_dict(
+        graph_dict(nodes), client_factory=make_factory({"agent_response": "r"})
+    )
+    s1 = await engine.run({"user_message": "x"})
+    s2 = await engine.run({"user_message": "y"})
+
+    # Two llm nodes -> two model calls aggregated per run.
+    assert s1.token_usage["model_calls"] == 2
+    assert s1.token_usage["total_tokens"] == 2
+    # Each run gets its own id.
+    assert s1.invocation_id != s2.invocation_id
+    # Totals do not leak across runs.
+    assert s2.token_usage["model_calls"] == 2
 
 
 async def test_no_storage_or_logger_still_runs():

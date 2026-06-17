@@ -36,6 +36,8 @@ class WorkflowState(BaseModel):
     input_data: the original interaction input.
     output_data: the value of the end node's output variable (when finished).
     error: error message when ``status == 'failed'``.
+    invocation_id: short id shared by every log line of this run (for scanning).
+    token_usage: aggregate model token counts for the run.
     run_id / session_id / agent_id: persistence identifiers (string UUIDs).
     """
 
@@ -47,6 +49,8 @@ class WorkflowState(BaseModel):
     input_data: dict = Field(default_factory=dict)
     output_data: Optional[dict] = None
     error: Optional[str] = None
+    invocation_id: Optional[str] = None
+    token_usage: Optional[dict] = None
     run_id: Optional[str] = None
     session_id: Optional[str] = None
     agent_id: Optional[str] = None

@@ -33,9 +33,14 @@ from kavalai.agents.v2.workflow.expressions import (
 )
 from kavalai.agents.v2.workflow.state import WorkflowState
 from kavalai.agents.v2.workflow.engine import WorkflowEngine
+from kavalai.agents.v2.workflow.builder import WorkflowBuilder
 from kavalai.agents.v2.workflow.storage.base import DataStorage, RunHandle, ChatMsg
 from kavalai.agents.v2.workflow.storage.memory import SqliteDataStorage
-from kavalai.agents.v2.workflow.tasklog.base import TaskLogger, StatsBridge
+from kavalai.agents.v2.workflow.tasklog.base import (
+    TaskLogger,
+    StatsBridge,
+    TokenAccumulator,
+)
 from kavalai.agents.v2.workflow.tasklog.sqlite import SqliteTaskLogger
 
 __all__ = [
@@ -54,11 +59,13 @@ __all__ = [
     "ExpressionError",
     "WorkflowState",
     "WorkflowEngine",
+    "WorkflowBuilder",
     "DataStorage",
     "RunHandle",
     "ChatMsg",
     "SqliteDataStorage",
     "TaskLogger",
     "StatsBridge",
+    "TokenAccumulator",
     "SqliteTaskLogger",
 ]

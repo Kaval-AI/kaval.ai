@@ -130,3 +130,43 @@ class StatsBridge(ModelStatsReceiver):
 
     def receive_model_stats(self, stats: ModelCallStat) -> None:
         self.task_logger.log_model_call(stats, self.agent_id)
+
+
+class TokenAccumulator(ModelStatsReceiver):
+    """Aggregates token usage across a workflow run and optionally forwards each
+    ``ModelCallStat`` to a :class:`TaskLogger`.
+
+    The engine wires one accumulator into every LLM client built during a run so
+    that, when the run ends, it can report the total token spend. When a
+    ``task_logger`` is supplied each individual call is still logged through it,
+    so this fully subsumes :class:`StatsBridge`.
+    """
+
+    def __init__(
+        self,
+        task_logger: Optional[TaskLogger] = None,
+        agent_id: Optional[str] = None,
+    ):
+        self.task_logger = task_logger
+        self.agent_id = agent_id
+        self.model_calls = 0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_tokens = 0
+
+    def receive_model_stats(self, stats: ModelCallStat) -> None:
+        self.model_calls += 1
+        self.prompt_tokens += stats.prompt_tokens or 0
+        self.completion_tokens += stats.completion_tokens or 0
+        self.total_tokens += stats.total_tokens or 0
+        if self.task_logger is not None:
+            self.task_logger.log_model_call(stats, self.agent_id)
+
+    def summary(self) -> dict:
+        """Return the aggregated token counts as a plain dict."""
+        return {
+            "model_calls": self.model_calls,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+        }
