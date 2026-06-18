@@ -1,5 +1,7 @@
 <img src="frontend/public/assets/images/iconlogo.svg" alt="Kaval.AI Logo" width="400" height="100"/>
 
+[![CI](https://github.com/Kaval-AI/kaval.ai/actions/workflows/ci.yml/badge.svg)](https://github.com/Kaval-AI/kaval.ai/actions/workflows/ci.yml)
+
 Kaval.AI is an open source Python SDK for writing AI agents and workflow automation pipelines.
 Suitable for conversational agents and generic workflow automation.
 
