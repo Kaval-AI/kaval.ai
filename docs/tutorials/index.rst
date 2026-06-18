@@ -20,3 +20,4 @@ under ``notebooks/`` in the repository and run it cell by cell.
    Workflows <workflow>
    Agents & tools <agents>
    Streaming <streamer>
+   RAG <rag>
