@@ -37,13 +37,13 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
+    "aiosqlite",
     "pre-commit",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
     "python-dotenv",
     "testcontainers[postgres]",
-    "pre-commit"
 ]
 tools = [
     "crawl4ai"
