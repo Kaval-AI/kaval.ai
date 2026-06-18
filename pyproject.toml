@@ -46,7 +46,7 @@ test = [
     "testcontainers[postgres]",
 ]
 tools = [
-    "crawl4ai"
+    "crawl4ai",
 ]
 notebooks = [
     "ipykernel>=7.3.0",
