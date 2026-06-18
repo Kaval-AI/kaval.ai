@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
 from kavalai.agents.db import RagIndex, Agent, db_manager
-from kavalai.llm_clients.v2.embeddings import make_embedding_client
+from kavalai.llm_clients.embeddings import make_embedding_client
 from kavalai.normalizer import Normalizer
 
 

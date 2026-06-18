@@ -27,13 +27,13 @@ from kavalai.llm_clients.streamer import (
 )
 
 # v2 workflow engine (the only engine after the v1 removal).
-from kavalai.agents.v2.workflow import (
+from kavalai.workflow import (
     WorkflowEngine,
     WorkflowBuilder,
     WorkflowState,
 )
-from kavalai.agents.v2.workflow.clients import make_client
-from kavalai.llm_clients.v2.embeddings import make_embedding_client
+from kavalai.workflow.clients import make_client
+from kavalai.llm_clients.embeddings import make_embedding_client
 
 # Db tables
 from kavalai.agents.db import (

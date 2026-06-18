@@ -33,9 +33,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from kavalai.agents.agent_service import AgentService
 from kavalai.agents.db import db_manager
-from kavalai.agents.v2.workflow import WorkflowEngine
-from kavalai.agents.v2.workflow.storage.postgres import PostgresDataStorage
-from kavalai.agents.v2.workflow.tasklog.postgres import PostgresTaskLogger
+from kavalai.workflow import WorkflowEngine
+from kavalai.workflow.storage.postgres import PostgresDataStorage
+from kavalai.workflow.tasklog.postgres import PostgresTaskLogger
 
 
 security = HTTPBasic(auto_error=False)

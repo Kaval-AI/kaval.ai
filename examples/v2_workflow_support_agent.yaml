@@ -5,7 +5,7 @@
 # evaluated against the run context (e.g. `classification.intent == 'refund'`).
 #
 # Run it with:
-#   from kavalai.agents.v2.workflow import (
+#   from kavalai.workflow import (
 #       WorkflowEngine, SqliteDataStorage, SqliteTaskLogger,
 #   )
 #   engine = WorkflowEngine.from_yaml_path(

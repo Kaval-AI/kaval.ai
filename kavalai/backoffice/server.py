@@ -22,6 +22,7 @@ from uuid import UUID
 import uvicorn
 from authlib.integrations.starlette_client import OAuth
 from fastapi import FastAPI, Request, HTTPException, status, Body
+from sqlalchemy.exc import SQLAlchemyError
 from kavalai.crud import insert, select, delete, update, get_one, get_all
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
@@ -53,7 +54,11 @@ async def get_backoffice_session():
     try:
         async with db.AsyncBackofficeSession() as session:
             yield session
-    except Exception as e:
+    except HTTPException:
+        # Intentional API errors raised inside the block (e.g. a 403/404 from an
+        # access check) must propagate unchanged, not be masked as a 503.
+        raise
+    except SQLAlchemyError as e:
         logger.error(f"Failed to connect to backoffice database: {e}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -77,7 +82,10 @@ async def get_project_session(project: db.Project):
     try:
         async with sessionmaker() as session:
             yield session
-    except Exception as e:
+    except HTTPException:
+        # Let intentional API errors from inside the block propagate unchanged.
+        raise
+    except SQLAlchemyError as e:
         logger.error(f"Failed to connect to project database for {project.name}: {e}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

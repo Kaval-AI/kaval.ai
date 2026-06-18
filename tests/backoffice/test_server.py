@@ -163,6 +163,31 @@ async def test_agents_get_all(client, backoffice_db):
 
 
 @pytest.mark.asyncio
+async def test_access_denied_propagates_403_not_503(client, backoffice_db):
+    """A 403 raised inside get_backoffice_session must not be masked as a 503.
+
+    Regression: the session context manager used to wrap the whole body in a
+    broad ``except Exception`` and re-raise every error as a 503 "database not
+    connected", hiding intentional access-control errors.
+    """
+    from fastapi import HTTPException
+
+    project_id = uuid.uuid4()
+    with patch("kavalai.backoffice.server.assert_logged_in"), patch(
+        "kavalai.backoffice.server.assert_is_member",
+        new=AsyncMock(
+            side_effect=HTTPException(
+                status_code=403, detail="Must be a member of the project."
+            )
+        ),
+    ):
+        response = await client.get(f"/agents/all/{project_id}")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Must be a member of the project."
+
+
+@pytest.mark.asyncio
 async def test_agents_get_stats(client, backoffice_db):
     project_id = uuid.uuid4()
     project = db.Project(

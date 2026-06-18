@@ -49,7 +49,7 @@ uv run --env-file .env pytest
 
 - `kavalai/agents/workflow.py` — core workflow engine (YAML → execution)
 - `kavalai/agents/planning_agent.py` — multi-step LLM planner with tool calling
-- `kavalai/agents/v2/agent.py` — v2 planning agent (modular, uses v2 LLM clients)
+- `kavalai/agents/agent.py` — modular planning agent (uses the native LLM clients)
 - `kavalai/functionkernel.py` — tool registration and execution (REST, MCP, Python)
 - `kavalai/agents/workflow_model.py` — Pydantic data models for workflows
 - `kavalai/agents/workflow_validation.py` — workflow validation logic

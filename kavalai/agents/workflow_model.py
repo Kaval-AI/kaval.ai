@@ -15,7 +15,7 @@ limitations under the License.
 
 Shared workflow building blocks reused across the codebase (input wiring,
 server/tool declarations and the workflow exception). The v2 workflow engine
-lives in ``kavalai.agents.v2.workflow``.
+lives in ``kavalai.workflow``.
 """
 
 from typing import Optional, Literal

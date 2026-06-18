@@ -10,7 +10,7 @@ from rich.json import JSON
 
 from kavalai import FunctionKernel, make_client
 from kavalai.agents.run_context import RunContext
-from kavalai.agents.v2.agent import Agent
+from kavalai.agents.agent import Agent
 from kavalai.tools.websearch.serper import serper_web_search
 from kavalai.tools.webtools.serper_scraper import serper_scrape_url
 
