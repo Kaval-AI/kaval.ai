@@ -1,29 +1,40 @@
 Agents API
 ==========
 
-Documentation for the `kavalai.agents` module.
+The agent runtime lives in :mod:`kavalai.agents`. The headline class is
+:class:`~kavalai.agents.agent.Agent` — a multi-step reasoning loop that calls
+tools through a :class:`~kavalai.FunctionKernel` until it produces a final,
+optionally structured, answer.
 
-.. automodule:: kavalai.agents.workflow
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Agent
+-----
 
-.. automodule:: kavalai.agents.workflow_model
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodule:: kavalai.agents.agent
 
-.. automodule:: kavalai.agents.agent_service
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Run context
+-----------
 
 .. automodule:: kavalai.agents.run_context
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
-.. automodule:: kavalai.agents.planning_agent
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Workflow configuration models
+-----------------------------
+
+.. automodule:: kavalai.agents.workflow_model
+
+Agent service & persistence
+---------------------------
+
+.. automodule:: kavalai.agents.agent_service
+
+.. automodule:: kavalai.agents.sessions
+
+Remote agent client
+--------------------
+
+.. automodule:: kavalai.agents.client
+
+RAG service
+-----------
+
+.. automodule:: kavalai.agents.rag_service
+   :exclude-members: build_batch_query_cte, batch_query_with_join

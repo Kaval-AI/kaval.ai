@@ -54,7 +54,8 @@ notebooks = [
 ]
 docs = [
     "sphinx<9",
-    "sphinx-immaterial"
+    "sphinx-immaterial",
+    "myst-nb",
 ]
 
 [tool.setuptools.packages.find]

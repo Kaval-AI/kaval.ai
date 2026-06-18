@@ -150,6 +150,14 @@ class Base(DeclarativeBase):
 
 
 class Agent(Base):
+    """A configured agent.
+
+    One row holds an agent's definition: its name, optional description, the
+    JSON input/output schemas it exposes, and the workflow document that drives
+    its execution. Sessions, tasks and chat messages all reference the agent
+    they belong to.
+    """
+
     __tablename__ = "agents"
 
     id: Mapped[UUID] = mapped_column(
@@ -181,6 +189,14 @@ class Agent(Base):
 
 
 class ModelCallStat(Base):
+    """Token usage and timing for a single LLM or embedding call.
+
+    Each row records one model call (``call_type`` distinguishes e.g. chat
+    completion from embedding): the model used, the request/response payloads,
+    prompt/completion/total token counts, batch size, duration and the
+    computed cost. Used to power usage and cost reporting.
+    """
+
     __tablename__ = "model_call_stats"
 
     id: Mapped[UUID] = mapped_column(
@@ -210,6 +226,13 @@ class ModelCallStat(Base):
 
 
 class Session(Base):
+    """A user conversation/session with an agent.
+
+    A session groups together everything exchanged with one agent over a
+    conversation: its runs, tasks and chat messages. ``external_id`` lets a
+    caller correlate the session with an identifier in their own system.
+    """
+
     __tablename__ = "sessions"
 
     id: Mapped[UUID] = mapped_column(
@@ -241,6 +264,13 @@ class Session(Base):
 
 
 class Run(Base):
+    """One workflow run within a session.
+
+    A run captures a single invocation of the agent's workflow: the input it
+    was called with, the output it produced and the resolved run context. Each
+    run belongs to a session and owns the tasks executed during it.
+    """
+
     __tablename__ = "runs"  # Renamed from 'interactions'
 
     id: Mapped[UUID] = mapped_column(
@@ -269,6 +299,14 @@ class Run(Base):
 
 
 class Task(Base):
+    """One workflow-node execution within a run.
+
+    A task records the execution of a single node in the workflow: its name and
+    node type, the inputs it received, the output it produced, the prompt used
+    (if any), any errors raised and how long it took. Tasks belong to a run (and
+    its session) and provide the step-by-step trace of a run.
+    """
+
     __tablename__ = "tasks"
 
     id: Mapped[UUID] = mapped_column(
@@ -305,6 +343,13 @@ class Task(Base):
 
 
 class ChatMessage(Base):
+    """One message in a session's chat history.
+
+    Each row is a single message (``role`` such as ``user`` or ``assistant``
+    with its text ``content``) belonging to a session. It optionally references
+    the run that produced it, forming the ordered conversation transcript.
+    """
+
     __tablename__ = "chat_messages"
 
     id: Mapped[UUID] = mapped_column(
@@ -336,6 +381,14 @@ class ChatMessage(Base):
 
 
 class RagIndex(Base):
+    """One indexed RAG item and its embedding.
+
+    Each row stores a chunk of content together with the embedding vector used
+    for similarity search: the embedding ``model`` and vector size, the
+    ``collection_name`` it belongs to, a caller-supplied ``source_id`` and any
+    associated metadata. Queried for retrieval-augmented generation.
+    """
+
     __tablename__ = "rag_index"
 
     id: Mapped[UUID] = mapped_column(

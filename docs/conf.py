@@ -9,7 +9,11 @@ import sys
 sys.path.insert(0, os.path.abspath(".."))
 
 # Set dummy environment variables for modules that require them during doc build
+# (autodoc imports the real modules, some of which read DB config at import time).
 os.environ.setdefault("KAVALAI_BO_DB_SCHEMA", "public")
+os.environ.setdefault("KAVALAI_BO_DB_URI", "postgresql://user:pass@localhost:5432/db")
+os.environ.setdefault("KAVALAI_DB_SCHEMA", "public")
+os.environ.setdefault("KAVALAI_DB_URI", "postgresql://user:pass@localhost:5432/db")
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -26,14 +30,45 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
     "sphinx.ext.githubpages",
+    "myst_nb",
     "sphinx_immaterial",
 ]
 
 # Napoleon settings
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
+# Render "Attributes:" sections inline as :ivar: fields instead of separate
+# object descriptions — avoids duplicate-object warnings for Pydantic models.
+napoleon_use_ivar = True
+
+# Autodoc settings
+autodoc_member_order = "bysource"
+autodoc_typehints = "signature"
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
+}
+
+# MyST / myst-nb settings. Notebooks are rendered from their stored outputs;
+# they are NOT re-executed at build time (which would require API keys).
+nb_execution_mode = "off"
+myst_enable_extensions = [
+    "colon_fence",
+    "deflist",
+    "fieldlist",
+]
+myst_heading_anchors = 3
+suppress_warnings = ["mystnb.unknown_mime_type"]
+
+# Cross-project references.
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "pydantic": ("https://docs.pydantic.dev/latest/", None),
+}
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

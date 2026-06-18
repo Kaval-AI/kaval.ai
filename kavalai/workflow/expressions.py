@@ -22,7 +22,12 @@ from kavalai.agents.resolvers import resolve_path
 
 
 class ExpressionError(ValueError):
-    """Raised when an expression cannot be parsed or safely evaluated."""
+    """Raised when an expression cannot be parsed or safely evaluated.
+
+    Signals an invalid or empty expression, a syntax error, use of an
+    unsupported/disallowed construct (function calls, comprehensions, imports,
+    etc.) or an error encountered while evaluating the expression.
+    """
 
 
 # Whitelisted binary, comparison, boolean and unary operators. Anything not in

@@ -36,11 +36,29 @@ SSE_CLIENT_TIMEOUT_SECONDS = 30.0
 
 
 class FunctionKernelException(WorkflowException):
-    pass
+    """Raised by :class:`FunctionKernel` when registering or calling a tool fails.
+
+    Covers errors such as unknown protocols, duplicate or unregistered tools,
+    malformed tool URIs, argument validation failures and errors surfaced by
+    the underlying REST/MCP/Python tool call.
+    """
 
 
 def pythontool(func: Callable) -> Callable:
-    """Decorator to mark a function as a kavalai tool."""
+    """Mark a function as a Kaval.AI Python tool.
+
+    Sets an internal flag (``_is_kavalai_tool``) on the function without
+    altering its behaviour, so the decorated function remains directly callable
+    as normal Python. Register it with
+    :meth:`FunctionKernel.register_python_tool` to expose it to workflows, after
+    which it is addressed by the tool URI ``python://<name>``.
+
+    Args:
+        func: The function to mark as a tool.
+
+    Returns:
+        The same function, flagged as a Kaval.AI tool.
+    """
     func._is_kavalai_tool = True
     return func
 

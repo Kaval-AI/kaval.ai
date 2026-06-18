@@ -14,65 +14,155 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from kavalai.normalizer import Normalizer
-from kavalai.agents.db import db_manager
-from kavalai.agents.workflow_model import WorkflowException
-from kavalai.agents.rag_service import RagService
-from kavalai.functionkernel import FunctionKernel, FunctionKernelException, pythontool
-from kavalai.llm_clients.streamer import (
-    StreamerTimeoutException,
-    Streamer,
-    StreamContent,
-    ValueStreamer,
-)
+# Kaval.AI public API.
+#
+# The names below are the supported, stable import surface. Everything a user
+# typically needs is reachable as ``from kavalai import X``. The headline
+# entry points are:
+#
+#   * ``WorkflowEngine`` / ``WorkflowBuilder`` -- define and run workflows.
+#   * ``Agent``                                -- the multi-step tool-calling agent.
+#   * ``FunctionKernel`` / ``pythontool``      -- register and call tools.
+#   * ``OpenAIClient`` / ``GeminiClient`` / ``OllamaClient`` -- LLM backends.
+#   * ``RagService``                           -- index and query embeddings.
+#
+# The persistence-layer ORM table classes (Agent row, Run, Task, ...) live in
+# ``kavalai.agents.db`` to keep the runtime names (``Agent`` the agent,
+# ``ModelCallStat`` the stats model) unambiguous at the top level.
 
-# v2 workflow engine (the only engine after the v1 removal).
+# --- Workflow engine -------------------------------------------------------
 from kavalai.workflow import (
     WorkflowEngine,
     WorkflowBuilder,
     WorkflowState,
+    WorkflowGraph,
+    Node,
+    StartNode,
+    EndNode,
+    LLMNode,
+    AgentNode,
+    FunctionNode,
+    IfNode,
+    SwitchNode,
+    evaluate_expression,
+    evaluate_bool,
+    evaluate_value,
+    ExpressionError,
+    DataStorage,
+    RunHandle,
+    ChatMsg,
+    SqliteDataStorage,
+    TaskLogger,
+    StatsBridge,
+    TokenAccumulator,
+    SqliteTaskLogger,
 )
 from kavalai.workflow.clients import make_client
-from kavalai.llm_clients.embeddings import make_embedding_client
 
-# Db tables
-from kavalai.agents.db import (
-    Agent,
-    ModelCallStat,
-    Session,
-    Run,
-    Task,
-    ChatMessage,
-    RagIndex,
+# --- Agent & tools ---------------------------------------------------------
+from kavalai.agents.agent import Agent, ToolCall
+from kavalai.agents.run_context import RunContext
+from kavalai.agents.workflow_model import (
+    RestServer,
+    McpServer,
+    PythonFunction,
+    TemplateModel,
+    ArgumentInfo,
+    WorkflowException,
+)
+from kavalai.functionkernel import (
+    FunctionKernel,
+    FunctionKernelException,
+    pythontool,
 )
 
+# --- LLM & embedding clients ----------------------------------------------
+from kavalai.llm_clients.base_client import (
+    BaseLlmClient,
+    LlmClientParameters,
+    ChatHistory,
+    ChatMessage,
+    ModelCallStat,
+    ModelStatsReceiver,
+    ModelStatsLogger,
+)
+from kavalai.llm_clients.openai_client import OpenAIClient
+from kavalai.llm_clients.gemini_client import GeminiClient
+from kavalai.llm_clients.ollama_client import OllamaClient
+from kavalai.llm_clients.embeddings import make_embedding_client
+
+# --- Streaming -------------------------------------------------------------
+from kavalai.llm_clients.streamer import (
+    Streamer,
+    StreamContent,
+    ValueStreamer,
+    StreamerTimeoutException,
+)
+
+# --- RAG, normalization, persistence --------------------------------------
+from kavalai.agents.rag_service import RagService
+from kavalai.normalizer import Normalizer
+from kavalai.agents.db import db_manager
+
 __all__ = [
-    # v2 LLM / embedding clients
+    # Workflow engine
+    "WorkflowEngine",
+    "WorkflowBuilder",
+    "WorkflowState",
+    "WorkflowGraph",
+    "Node",
+    "StartNode",
+    "EndNode",
+    "LLMNode",
+    "AgentNode",
+    "FunctionNode",
+    "IfNode",
+    "SwitchNode",
+    "evaluate_expression",
+    "evaluate_bool",
+    "evaluate_value",
+    "ExpressionError",
+    "DataStorage",
+    "RunHandle",
+    "ChatMsg",
+    "SqliteDataStorage",
+    "TaskLogger",
+    "StatsBridge",
+    "TokenAccumulator",
+    "SqliteTaskLogger",
     "make_client",
+    # Agent & tools
+    "Agent",
+    "ToolCall",
+    "RunContext",
+    "RestServer",
+    "McpServer",
+    "PythonFunction",
+    "TemplateModel",
+    "ArgumentInfo",
+    "WorkflowException",
+    "FunctionKernel",
+    "FunctionKernelException",
+    "pythontool",
+    # LLM & embedding clients
+    "BaseLlmClient",
+    "LlmClientParameters",
+    "ChatHistory",
+    "ChatMessage",
+    "ModelCallStat",
+    "ModelStatsReceiver",
+    "ModelStatsLogger",
+    "OpenAIClient",
+    "GeminiClient",
+    "OllamaClient",
     "make_embedding_client",
+    # Streaming
     "Streamer",
     "StreamContent",
     "ValueStreamer",
     "StreamerTimeoutException",
-    "Normalizer",
-    # Db tables
-    "Agent",
-    "ModelCallStat",
-    "Session",
-    "Run",
-    "Task",
-    "ChatMessage",
-    "RagIndex",
-    # Db connection manager.
-    "db_manager",
-    # v2 workflow
-    "WorkflowEngine",
-    "WorkflowBuilder",
-    "WorkflowState",
-    "WorkflowException",
+    # RAG, normalization, persistence
     "RagService",
-    # Function kernel
-    "FunctionKernel",
-    "FunctionKernelException",
-    "pythontool",
+    "Normalizer",
+    "db_manager",
 ]

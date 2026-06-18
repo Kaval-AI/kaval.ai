@@ -1,12 +1,22 @@
 Tutorials
 =========
 
-Best way to learn about Kaval.AI SDK is to start using it right away.
-The tutorials in this section provide many great examples.
+The fastest way to learn Kaval.AI is to run it. Start with **Getting Started**
+to install the SDK and ship your first workflow, then work through the hands-on
+notebooks below. Each notebook is executable — find the matching ``.ipynb``
+under ``notebooks/`` in the repository and run it cell by cell.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
+   :caption: Start here
 
    getting_started
-   llm_clients
-   workflow_tutorial
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Guided notebooks
+
+   LLM clients <llm_clients>
+   Workflows <workflow>
+   Agents & tools <agents>
+   Streaming <streamer>

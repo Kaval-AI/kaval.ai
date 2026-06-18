@@ -1,14 +1,10 @@
 Backoffice API
 ==============
 
-Documentation for the `kavalai.backoffice` module.
+:mod:`kavalai.backoffice` is the FastAPI service behind the management UI. It
+exposes agents, sessions, runs, metrics, model-call statistics and RAG indexes,
+and the project service that scopes them.
 
 .. automodule:: kavalai.backoffice.server
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 .. automodule:: kavalai.backoffice.project_service
-   :members:
-   :undoc-members:
-   :show-inheritance:

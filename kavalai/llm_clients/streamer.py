@@ -25,7 +25,12 @@ from kavalai.llm_clients.common import safe_parse_json
 
 
 class StreamerTimeoutException(Exception):
-    """Exception raised when the streamer times out."""
+    """Raised when no stream chunk arrives within the configured timeout.
+
+    Reported by :class:`Streamer` while waiting on its queue when a
+    ``timeout_seconds`` is set; ``names`` lists the streamers still active when
+    the timeout elapsed.
+    """
 
     def __init__(self, names: list[str], timeout_seconds: float):
         self.names = names
@@ -37,7 +42,7 @@ class StreamerTimeoutException(Exception):
 
 class StreamContent(BaseModel):
     """
-    `StreamContent` represents a streamed message from `Streamer.
+    ``StreamContent`` represents a streamed message from a ``Streamer``.
 
     Attributes:
         type: The type of stream message (e.g., 'partial', 'complete').

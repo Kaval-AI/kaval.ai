@@ -24,6 +24,12 @@ from typing import TypedDict, Any
 
 
 class SessionSummary(BaseModel):
+    """Row-level summary of a session for the Conversations list.
+
+    Aggregates a session's owning agent, its run/task/message and error counts,
+    and a preview of its first and last messages.
+    """
+
     session_id: UUID
     agent_id: UUID
     agent_name: str
@@ -38,6 +44,11 @@ class SessionSummary(BaseModel):
 
 
 class TaskSummary(BaseModel):
+    """Summary of a single task (workflow-node execution) for the Tasks view.
+
+    Exposes the task's inputs, output, name, prompt, any errors and duration.
+    """
+
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     agent_id: UUID | None
@@ -54,6 +65,12 @@ class TaskSummary(BaseModel):
 
 
 class RunSummary(BaseModel):
+    """Summary of a single workflow run for the Runs view.
+
+    Exposes the run's input/output data, resolved context and the number of
+    tasks it executed.
+    """
+
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     session_id: UUID
@@ -66,6 +83,11 @@ class RunSummary(BaseModel):
 
 
 class ChatMessageSummary(BaseModel):
+    """Summary of a single chat message for the conversation transcript.
+
+    Exposes the message's role, content and the run it is associated with.
+    """
+
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     agent_id: UUID
@@ -78,6 +100,12 @@ class ChatMessageSummary(BaseModel):
 
 
 class SessionDetails(BaseModel):
+    """Full detail of one session: its messages, runs and tasks.
+
+    Powers the per-conversation detail view in the backoffice, bundling the
+    session's chat transcript together with all of its runs and tasks.
+    """
+
     session_id: UUID
     messages: list[ChatMessageSummary]
     runs: list[RunSummary]

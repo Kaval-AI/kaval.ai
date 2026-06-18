@@ -24,7 +24,7 @@ from pydantic import BaseModel, model_validator
 
 
 class WorkflowException(Exception):
-    pass
+    """Base exception for errors building, validating or running a workflow."""
 
 
 class ArgumentInfo(BaseModel):
@@ -107,10 +107,26 @@ class McpServer(BaseModel):
 
 
 class PythonFunction(BaseModel):
+    """Declares a Python tool available to a workflow.
+
+    Attributes:
+        name: Name the tool is registered and addressed under
+            (``python://<name>``).
+        path: Import path to the ``@kavalai.pythontool`` decorated function,
+            e.g. ``my_package.my_module.my_func``.
+    """
+
     name: str
     path: str
 
 
 class TemplateModel(BaseModel):
+    """A named, reusable text template referenced within a workflow.
+
+    Attributes:
+        name: Identifier the template is referenced by.
+        value: The template text (e.g. a prompt) to interpolate at run time.
+    """
+
     name: str
     value: str

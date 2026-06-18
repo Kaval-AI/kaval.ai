@@ -159,17 +159,18 @@ Node = Annotated[
 
 
 class WorkflowGraph(BaseModel):
-    """A v2 workflow: a directed graph of nodes forming a state machine.
+    """A workflow: a directed graph of nodes forming a state machine.
 
-    name: str - workflow / agent name.
-    description: str - human-readable description.
-    version: str - schema version.
-    llm_model: str - default LLM model (``provider/model``); nodes may override.
-    llm_kwargs: dict - default LLM kwargs; nodes may override.
-    data_types: dict - JSON-schema data type definitions (parsed by SchemaParser).
-    nodes: list[Node] - the graph vertices.
-    start: str - optional explicit start node name (otherwise the single
-        ``start`` node is used).
+    Attributes:
+        name: Workflow / agent name.
+        description: Human-readable description.
+        version: Schema version.
+        llm_model: Default LLM model (``provider/model``); nodes may override.
+        llm_kwargs: Default LLM kwargs; nodes may override.
+        data_types: JSON-schema data type definitions (parsed by SchemaParser).
+        nodes: The graph vertices.
+        start: Optional explicit start node name (otherwise the single
+            ``start`` node is used).
     """
 
     name: str

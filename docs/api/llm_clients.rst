@@ -1,19 +1,31 @@
 LLM Clients API
 ===============
 
-Documentation for the `kavalai.llm_clients` module.
+:mod:`kavalai.llm_clients` provides a unified, observable interface over LLM and
+embedding providers. Every call returns a :class:`~kavalai.ModelCallStat` with
+token usage and timing, and structured output is validated against a Pydantic
+``response_model``.
 
-.. automodule:: kavalai.llm_clients.llm_client
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Base client and models
+----------------------
+
+.. automodule:: kavalai.llm_clients.base_client
+
+Provider clients
+----------------
 
 .. automodule:: kavalai.llm_clients.openai_client
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 .. automodule:: kavalai.llm_clients.gemini_client
-   :members:
-   :undoc-members:
-   :show-inheritance:
+
+.. automodule:: kavalai.llm_clients.ollama_client
+
+Embeddings
+----------
+
+.. automodule:: kavalai.llm_clients.embeddings
+
+Streaming
+---------
+
+.. automodule:: kavalai.llm_clients.streamer
