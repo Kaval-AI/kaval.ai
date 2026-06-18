@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Playground (Pyodide)</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <!-- CodeMirror for Python syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            background: #1e1e2e;
+            color: #cdd6f4;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            background: #181825;
+            border-bottom: 1px solid #313244;
+            flex-wrap: wrap;
+        }
+        header h1 { font-size: 1rem; margin: 0; font-weight: 600; }
+        header .status { font-size: 0.8rem; color: #a6adc8; margin-left: auto; }
+        #packages {
+            background: #1e1e2e;
+            color: #cdd6f4;
+            border: 1px solid #313244;
+            border-radius: 6px;
+            padding: 0.4rem 0.6rem;
+            font-size: 0.8rem;
+            min-width: 240px;
+        }
+        button {
+            background: #89b4fa;
+            color: #1e1e2e;
+            border: none;
+            border-radius: 6px;
+            padding: 0.4rem 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button:not(:disabled):hover { background: #74c7ec; }
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background: #313244;
+            min-height: 0;
+        }
+        .panel { display: flex; flex-direction: column; background: #1e1e2e; min-height: 0; }
+        .panel-label {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #a6adc8;
+            background: #181825;
+        }
+        .CodeMirror {
+            flex: 1;
+            height: auto;
+            font-family: "SF Mono", "Fira Code", Consolas, monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        #output {
+            flex: 1;
+            margin: 0;
+            overflow: auto;
+            padding: 0.75rem;
+            font-family: "SF Mono", "Fira Code", Consolas, monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .stderr { color: #f38ba8; }
+        .meta { color: #a6adc8; font-style: italic; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>🐍 Python Playground</h1>
+    <input id="packages" type="text" placeholder="packages to install (e.g. numpy, plotly)" disabled>
+    <button id="run" disabled>Run ▶</button>
+    <span class="status" id="status">Loading Pyodide…</span>
+</header>
+<main>
+    <section class="panel">
+        <div class="panel-label">Code — press Ctrl+Enter to run</div>
+        <textarea id="code"></textarea>
+    </section>
+    <section class="panel">
+        <div class="panel-label">Output (stdout / stderr)</div>
+        <pre id="output"></pre>
+    </section>
+</main>
+
+<script>
+    const outputEl = document.getElementById("output");
+    const runBtn = document.getElementById("run");
+    const statusEl = document.getElementById("status");
+    const packagesEl = document.getElementById("packages");
+
+    const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+        mode: "python",
+        theme: "dracula",
+        lineNumbers: true,
+        indentUnit: 4,
+        extraKeys: { "Ctrl-Enter": run, "Cmd-Enter": run },
+    });
+    editor.setValue(
+        "print('Hello from Pyodide!')\n" +
+        "import sys\n" +
+        "print('this goes to stderr', file=sys.stderr)\n" +
+        "1 + 1"
+    );
+
+    let pyodide = null;
+    let micropip = null;
+    const installed = new Set();
+
+    function append(text, isError) {
+        const span = document.createElement("span");
+        if (isError) span.className = "stderr";
+        span.textContent = text;
+        outputEl.appendChild(span);
+    }
+
+    function appendMeta(text) {
+        const span = document.createElement("span");
+        span.className = "meta";
+        span.textContent = text;
+        outputEl.appendChild(span);
+    }
+
+    async function init() {
+        pyodide = await loadPyodide();
+        pyodide.setStdout({ batched: (s) => append(s + "\n", false) });
+        pyodide.setStderr({ batched: (s) => append(s + "\n", true) });
+        await pyodide.loadPackage("micropip");
+        micropip = pyodide.pyimport("micropip");
+        statusEl.textContent = "Ready";
+        runBtn.disabled = false;
+        packagesEl.disabled = false;
+    }
+
+    async function installPackages() {
+        const names = packagesEl.value.split(",").map(s => s.trim()).filter(Boolean);
+        for (const name of names) {
+            if (installed.has(name)) continue;
+            statusEl.textContent = `Installing ${name}…`;
+            await micropip.install(name);
+            installed.add(name);
+        }
+    }
+
+    async function run() {
+        if (!pyodide) return;
+        runBtn.disabled = true;
+        outputEl.innerHTML = "";
+        try {
+            // Install any packages listed in the input field.
+            await installPackages();
+            // Auto-load pure-Pyodide packages referenced by imports (numpy, pandas, …).
+            statusEl.textContent = "Loading imports…";
+            await pyodide.loadPackagesFromImports(editor.getValue());
+            statusEl.textContent = "Running…";
+            const result = await pyodide.runPythonAsync(editor.getValue());
+            if (result !== undefined) {
+                appendMeta("=> " + result + "\n");
+            }
+        } catch (err) {
+            append(String(err.message || err), true);
+        } finally {
+            statusEl.textContent = "Ready";
+            runBtn.disabled = false;
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>
