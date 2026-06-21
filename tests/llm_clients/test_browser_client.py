@@ -139,6 +139,44 @@ async def test_structured_output_passes_schema_and_parses(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_prompt_wraps_system_message_and_returns_content(monkeypatch):
+    bridge = FakeBridge(result=json.dumps({"content": "42", "usage": {}}))
+    _install_bridge(monkeypatch, bridge)
+
+    client = BrowserLLMClient("model-x")
+
+    result = await client.prompt("What is six times seven?")
+
+    assert result == "42"
+
+    # prompt() builds a lone system message; the browser client relabels it to
+    # ``user`` so WebLLM (which rejects a trailing system message) accepts it.
+    sent = json.loads(bridge.last_request)
+    assert sent["messages"] == [{"role": "user", "content": "What is six times seven?"}]
+    assert "response_format" not in sent
+
+
+@pytest.mark.asyncio
+async def test_prompt_with_response_model_parses(monkeypatch):
+    bridge = FakeBridge(
+        result=json.dumps({"content": '{"answer": "Paris"}', "usage": {}})
+    )
+    _install_bridge(monkeypatch, bridge)
+
+    client = BrowserLLMClient("model-x")
+
+    result = await client.prompt("Capital of France?", response_model=Answer)
+
+    assert isinstance(result, Answer)
+    assert result.answer == "Paris"
+
+    sent = json.loads(bridge.last_request)
+    assert sent["messages"] == [{"role": "user", "content": "Capital of France?"}]
+    assert sent["response_format"]["type"] == "json_object"
+    assert "answer" in sent["response_format"]["schema"]["properties"]
+
+
+@pytest.mark.asyncio
 async def test_usage_total_falls_back_to_sum(monkeypatch):
     # No total_tokens in usage: the client computes prompt + completion.
     bridge = FakeBridge(
@@ -231,6 +269,37 @@ def test_get_bridge_raises_outside_pyodide(monkeypatch):
     client = BrowserLLMClient("model-x")
     with pytest.raises(LlmClientException, match="only works inside a Pyodide"):
         client._get_bridge()
+
+
+def test_build_request_relabels_trailing_system_message():
+    # WebLLM rejects a conversation ending on a system message, so a lone
+    # system message is relabeled to ``user``.
+    client = BrowserLLMClient("model-x")
+    chat_history = ChatHistory(
+        messages=[ChatMessage(role="system", content="Answer briefly.")]
+    )
+
+    request = client._build_request(chat_history, None)
+
+    assert request["messages"] == [{"role": "user", "content": "Answer briefly."}]
+
+
+def test_build_request_keeps_leading_system_message():
+    # A system message followed by a user turn is left untouched.
+    client = BrowserLLMClient("model-x")
+    chat_history = ChatHistory(
+        messages=[
+            ChatMessage(role="system", content="You are terse."),
+            ChatMessage(role="user", content="Capital of Estonia?"),
+        ]
+    )
+
+    request = client._build_request(chat_history, None)
+
+    assert request["messages"] == [
+        {"role": "system", "content": "You are terse."},
+        {"role": "user", "content": "Capital of Estonia?"},
+    ]
 
 
 def test_build_request_omits_none_params():

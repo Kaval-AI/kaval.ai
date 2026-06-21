@@ -106,6 +106,12 @@ class BrowserLLMClient(BaseLlmClient):
             {"role": msg.role or "user", "content": msg.content or ""}
             for msg in chat_history.messages
         ]
+        # WebLLM requires the final message to come from the user (or a tool);
+        # a conversation that ends on a system message is rejected. ``prompt()``
+        # produces exactly that — a lone system message — so relabel a trailing
+        # system message as ``user`` to keep single-instruction prompts working.
+        if messages and messages[-1]["role"] == "system":
+            messages[-1]["role"] = "user"
         request: dict = {"model": self.model, "messages": messages}
 
         if self.parameters:
