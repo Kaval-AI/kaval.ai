@@ -18,11 +18,56 @@ import asyncio
 import random
 from typing import Any, Callable, TypeVar
 
-import openai
-from google.genai import errors
 from loguru import logger
 
 T = TypeVar("T")
+
+
+class _NeverRaised(Exception):
+    """Sentinel exception used as an ``except`` target for an absent optional SDK.
+
+    It is never raised, so an ``except _NeverRaised`` clause is effectively a
+    no-op when the corresponding provider package (``openai`` / ``google-genai``)
+    is not installed.
+    """
+
+
+def _retriable_exceptions() -> tuple:
+    """Collect retriable exception types from whichever LLM SDKs are installed.
+
+    ``openai`` and ``google-genai`` are optional extras; when a package is
+    absent its exception types simply do not contribute to the retry set.
+    """
+    exceptions: list = []
+    try:
+        import openai
+
+        exceptions += [
+            openai.RateLimitError,
+            openai.InternalServerError,
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.LengthFinishReasonError,
+        ]
+    except ImportError:
+        pass
+    try:
+        from google.genai import errors
+
+        exceptions += [errors.ServerError, errors.ClientError]
+    except ImportError:
+        pass
+    return tuple(exceptions) or (_NeverRaised,)
+
+
+def _gemini_client_error() -> type:
+    """Return the Gemini ``ClientError`` type, or a sentinel if google-genai is absent."""
+    try:
+        from google.genai import errors
+
+        return errors.ClientError
+    except ImportError:
+        return _NeverRaised
 
 
 async def with_retry(
@@ -37,29 +82,24 @@ async def with_retry(
     Exponential backoff retry wrapper for LLM client calls.
     Retries only on specific OpenAI and Gemini exceptions.
 
+    The ``openai`` and ``google-genai`` SDKs are optional extras and are
+    imported lazily, so this wrapper also works in lightweight / pyodide
+    installs where neither is present.
+
     :param func: The function to call.
     :param max_retries: Maximum number of retries.
     :param base_delay: Initial delay in seconds.
     :param max_delay: Maximum delay in seconds.
     :return: The result of the function call.
     """
-    retriable_exceptions = (
-        # OpenAI exceptions
-        openai.RateLimitError,
-        openai.InternalServerError,
-        openai.APIConnectionError,
-        openai.APITimeoutError,
-        openai.LengthFinishReasonError,
-        # Gemini exceptions
-        errors.ServerError,
-        errors.ClientError,
-    )
+    retriable_exceptions = _retriable_exceptions()
+    gemini_client_error = _gemini_client_error()
 
     last_exception = None
     for attempt in range(max_retries + 1):
         try:
             return await func(*args, **kwargs)
-        except errors.ClientError as e:
+        except gemini_client_error as e:
             # Special handling for Gemini ClientError to avoid retrying on 404
             if hasattr(e, "status") and e.status == 404:
                 raise e

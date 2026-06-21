@@ -4,38 +4,83 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kavalai"
-version = "0.1.5"
+version = "1.0.0"
 description = "Kaval.AI Enterprise Agent Management System"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
     { name = "Kaval.AI Team" },
 ]
+# Mandatory core dependencies.
+#
+# These are intentionally restricted to libraries that work under pyodide, so
+# the lightweight core can be imported and run in the browser. Most are
+# pure-Python; numpy and pydantic-core are native but ship as prebuilt pyodide
+# packages. Everything that needs an unsupported native extension or a heavy
+# provider SDK lives under an optional extra below.
+#
+# Note on async SQLAlchemy: its async engine needs ``greenlet``, which
+# SQLAlchemy pulls in automatically (via a platform marker) on normal installs.
+# greenlet has no pyodide build, so we deliberately do NOT list it here; under
+# pyodide the IndexedDB-backed SQLite database uses SQLAlchemy's *sync* engine,
+# which does not require greenlet.
 dependencies = [
-    "asyncpg",
-    "authlib",
+    "aiosqlite",
     "environs",
-    "fastapi[standard]",
-    "feedparser",
-    "google-genai",
     "httpx",
-    "itsdangerous",
+    "jinja2",
     "json-schema-to-pydantic",
     "loguru",
-    "mcp",
     "numpy",
-    "ollama",
-    "openai",
     "partial-json-parser",
-    "psycopg2-binary",
+    "pydantic",
+    "pyyaml",
     "rich",
     "sqlalchemy",
-    "scikit-learn",
-    "fastembed",
-    "ipykernel>=7.3.0",
 ]
 
 [project.optional-dependencies]
+# LLM provider SDKs (not pyodide-compatible).
+openai = ["openai"]
+gemini = ["google-genai"]
+ollama = ["ollama"]
+llm = ["openai", "google-genai", "ollama"]
+# Embeddings / RAG (native extensions).
+rag = ["fastembed", "scikit-learn"]
+# PostgreSQL drivers (native extensions).
+postgres = ["asyncpg", "psycopg2-binary"]
+# Model Context Protocol client support.
+mcp = ["mcp"]
+# REST / SSE servers and auth (backoffice + agent server).
+server = [
+    "fastapi[standard]",
+    "authlib",
+    "itsdangerous",
+]
+tools = [
+    "crawl4ai",
+    "feedparser",
+]
+notebooks = [
+    "ipykernel>=7.3.0",
+    "ipywidgets",
+]
+# Convenience extra pulling in the full, non-pyodide runtime.
+all = [
+    "openai",
+    "google-genai",
+    "ollama",
+    "fastembed",
+    "scikit-learn",
+    "asyncpg",
+    "psycopg2-binary",
+    "mcp",
+    "fastapi[standard]",
+    "authlib",
+    "itsdangerous",
+    "crawl4ai",
+    "feedparser",
+]
 test = [
     "aiosqlite",
     "pre-commit",
@@ -44,13 +89,18 @@ test = [
     "pytest-cov",
     "python-dotenv",
     "testcontainers[postgres]",
-]
-tools = [
-    "crawl4ai",
-]
-notebooks = [
-    "ipykernel>=7.3.0",
-    "ipywidgets",
+    # Provider SDKs and native deps exercised by the test suite.
+    "openai",
+    "google-genai",
+    "ollama",
+    "fastembed",
+    "scikit-learn",
+    "asyncpg",
+    "psycopg2-binary",
+    "mcp",
+    "fastapi[standard]",
+    "authlib",
+    "itsdangerous",
 ]
 docs = [
     "sphinx<9",

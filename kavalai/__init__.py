@@ -86,10 +86,42 @@ from kavalai.llm_clients.base_client import (
     ModelStatsReceiver,
     ModelStatsLogger,
 )
-from kavalai.llm_clients.openai_client import OpenAIClient
-from kavalai.llm_clients.gemini_client import GeminiClient
-from kavalai.llm_clients.ollama_client import OllamaClient
 from kavalai.llm_clients.embeddings import make_embedding_client
+
+# The provider LLM clients (``OpenAIClient`` / ``GeminiClient`` /
+# ``OllamaClient``) pull in optional SDKs that are not part of the
+# pyodide-compatible core (``openai`` / ``google-genai`` / ``ollama``). They are
+# resolved lazily via ``__getattr__`` below so that ``import kavalai`` works in
+# lightweight / pyodide environments where only the core dependencies are
+# installed. Install the matching extra (e.g. ``kavalai[openai]``) to use them.
+_LAZY_CLIENTS = {
+    "OpenAIClient": ("kavalai.llm_clients.openai_client", "openai"),
+    "GeminiClient": ("kavalai.llm_clients.gemini_client", "gemini"),
+    "OllamaClient": ("kavalai.llm_clients.ollama_client", "ollama"),
+}
+
+
+def __getattr__(name: str):
+    """Lazily import optional provider clients (PEP 562)."""
+    target = _LAZY_CLIENTS.get(name)
+    if target is not None:
+        module_path, extra = target
+        import importlib
+
+        try:
+            module = importlib.import_module(module_path)
+        except ImportError as exc:
+            raise ImportError(
+                f"'{name}' requires the optional '{extra}' dependency. "
+                f"Install it with: pip install kavalai[{extra}]"
+            ) from exc
+        return getattr(module, name)
+    raise AttributeError(f"module 'kavalai' has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(__all__)
+
 
 # --- Streaming -------------------------------------------------------------
 from kavalai.llm_clients.streamer import (

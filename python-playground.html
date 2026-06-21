@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Python Playground (Pyodide)</title>
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <title>Kaval.AI Python Playground (Pyodide)</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
     <!-- CodeMirror for Python syntax highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
@@ -32,7 +32,7 @@
         }
         header h1 { font-size: 1rem; margin: 0; font-weight: 600; }
         header .status { font-size: 0.8rem; color: #a6adc8; margin-left: auto; }
-        #packages {
+        #packages, #wheel {
             background: #1e1e2e;
             color: #cdd6f4;
             border: 1px solid #313244;
@@ -41,6 +41,7 @@
             font-size: 0.8rem;
             min-width: 240px;
         }
+        #wheel { min-width: 320px; }
         button {
             background: #89b4fa;
             color: #1e1e2e;
@@ -93,8 +94,10 @@
 </head>
 <body>
 <header>
-    <h1>🐍 Python Playground</h1>
-    <input id="packages" type="text" placeholder="packages to install (e.g. numpy, plotly)" disabled>
+    <h1>🐍 Kaval.AI Playground</h1>
+    <input id="wheel" type="text" value="dist/kavalai-1.0.0-py3-none-any.whl"
+           title="URL or relative path to the kavalai wheel (built with: uv build --wheel)">
+    <input id="packages" type="text" placeholder="extra packages (e.g. plotly)" disabled>
     <button id="run" disabled>Run ▶</button>
     <span class="status" id="status">Loading Pyodide…</span>
 </header>
@@ -114,6 +117,7 @@
     const runBtn = document.getElementById("run");
     const statusEl = document.getElementById("status");
     const packagesEl = document.getElementById("packages");
+    const wheelEl = document.getElementById("wheel");
 
     const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
         mode: "python",
@@ -123,10 +127,53 @@
         extraKeys: { "Ctrl-Enter": run, "Cmd-Enter": run },
     });
     editor.setValue(
-        "print('Hello from Pyodide!')\n" +
-        "import sys\n" +
-        "print('this goes to stderr', file=sys.stderr)\n" +
-        "1 + 1"
+`import kavalai
+from kavalai import evaluate_expression, evaluate_bool, FunctionKernel, pythontool
+from kavalai.agents.db import db_manager, Agent
+from sqlalchemy import select
+
+print("Loaded the Kaval.AI core in the browser 🎉")
+
+# --- 1) Core expression engine (pure Python, pyodide-friendly) ---
+ctx = {"user": {"name": "Ada", "age": 36}}
+print("name     =", evaluate_expression("user.name", ctx))
+print("is_adult =", evaluate_bool("user.age >= 18", ctx))
+
+# --- 2) Register a Python tool and call it through the FunctionKernel ---
+@pythontool
+def add(a: int, b: int) -> int:
+    return a + b
+
+kernel = FunctionKernel()
+kernel.register_python_tool("add", add)
+
+# Pyodide supports top-level await, so we can await the async kernel directly.
+print("add(2, 40) =", await kernel.call_tool("python://add", {"a": 2, "b": 40}))
+
+# --- 3) Persistent database backed by the browser's IndexedDB ---
+# init_sqlite_sync() mounts IndexedDB, creates the tables and persists the file.
+# We use the *sync* SQLite engine: SQLAlchemy's async engine needs greenlet (no
+# pyodide build) plus aiosqlite's worker thread, neither of which works in the
+# browser. The sync engine uses plain sqlite3 on the main thread instead; only
+# the IndexedDB mount/flush are awaited. The SQLite file lives on Emscripten's
+# IDBFS, so it survives reloads.
+await db_manager.init_sqlite_sync()
+sm = db_manager.get_sqlite_sync_sessionmaker()
+
+with sm() as session:
+    stored = session.execute(select(Agent)).scalars().all()
+    print(f"agents already in IndexedDB: {len(stored)}")
+    session.add(Agent(name=f"agent-{len(stored) + 1}"))
+    session.commit()
+
+# Persist the change so it survives a page reload.
+await db_manager.flush()
+
+with sm() as session:
+    names = [a.name for a in session.execute(select(Agent)).scalars()]
+print("agents now stored:", names)
+print("Re-run / reload the page — the list keeps growing (persisted in IndexedDB).")
+`
     );
 
     let pyodide = null;
@@ -153,7 +200,30 @@
         pyodide.setStderr({ batched: (s) => append(s + "\n", true) });
         await pyodide.loadPackage("micropip");
         micropip = pyodide.pyimport("micropip");
-        statusEl.textContent = "Ready";
+
+        try {
+            // Install the kavalai wheel and let micropip resolve the whole
+            // dependency tree: native packages (numpy, pydantic-core, …) are
+            // pulled from Pyodide's bundled lock, and the pure-Python core deps
+            // (loguru, rich, httpx, sqlalchemy, …) are fetched from PyPI.
+            // We deliberately do NOT pre-load anything, so micropip is free to
+            // pick versions that satisfy kavalai's requirements.
+            const wheel = wheelEl.value.trim();
+            statusEl.textContent = "Installing kavalai (downloading dependencies)…";
+            await micropip.install(wheel);
+
+            statusEl.textContent = "Ready — kavalai installed";
+        } catch (err) {
+            statusEl.textContent = "kavalai install failed (see output)";
+            append(
+                "Could not install kavalai: " + String(err.message || err) + "\n\n" +
+                "Tip: serve this folder over HTTP (e.g. `python -m http.server` from the\n" +
+                "repo root) and make sure the wheel exists — build it with `uv build --wheel`.\n" +
+                "You can still run plain Python below.\n",
+                true,
+            );
+        }
+        wheelEl.disabled = true;
         runBtn.disabled = false;
         packagesEl.disabled = false;
     }

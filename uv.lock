@@ -1059,6 +1059,15 @@ wheels = [
 ]
 
 [[package]]
+name = "fastjsonschema"
+version = "2.21.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/b5/23b216d9d985a956623b6bd12d4086b60f0059b27799f23016af04a74ea1/fastjsonschema-2.21.2.tar.gz", hash = "sha256:b1eb43748041c880796cd077f1a07c3d94e93ae84bba5ed36800a33554ae05de", size = 374130, upload-time = "2025-08-14T18:49:36.666Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/a8/20d0723294217e47de6d9e2e40fd4a9d2f7c4b6ef974babd482a59743694/fastjsonschema-2.21.2-py3-none-any.whl", hash = "sha256:1c797122d0a86c5cace2e54bf4e819c36223b552017172f32c5c024a6b77e463", size = 24024, upload-time = "2025-08-14T18:49:34.776Z" },
+]
+
+[[package]]
 name = "fastuuid"
 version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1263,15 +1272,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5b/52/0244e310812f3063d09d60b30ae29ab7df9343bd005744cd5eeaa6ba39b4/google_genai-2.8.0.tar.gz", hash = "sha256:37a9b3cb127d763e7f4ca47452ae3562c87728773bd1b149f7b559c239da2bc1", size = 564955, upload-time = "2026-06-03T22:55:38.397Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e2/de/747ad1aa49e902da9a4699081c282a1ed8ceed3b4d295fd99a6d286e09e4/google_genai-2.8.0-py3-none-any.whl", hash = "sha256:4da0a223a100f4b37f609a68b835e3326ab0fa313314dc0fd9d34e76ee293844", size = 832497, upload-time = "2026-06-03T22:55:36.598Z" },
-]
-
-[[package]]
-name = "graphviz"
-version = "0.21"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f8/b3/3ac91e9be6b761a4b30d66ff165e54439dcd48b83f4e20d644867215f6ca/graphviz-0.21.tar.gz", hash = "sha256:20743e7183be82aaaa8ad6c93f8893c923bd6658a04c32ee115edb3c8a835f78", size = 200434, upload-time = "2025-06-15T09:35:05.824Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/91/4c/e0ce1ef95d4000ebc1c11801f9b944fa5910ecc15b5e351865763d8657f8/graphviz-0.21-py3-none-any.whl", hash = "sha256:54f33de9f4f911d7e84e4191749cac8cc5653f815b06738c54db9a15ab8b1e42", size = 47300, upload-time = "2025-06-15T09:35:04.433Z" },
 ]
 
 [[package]]
@@ -1809,6 +1809,25 @@ wheels = [
 ]
 
 [[package]]
+name = "jupyter-cache"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "click" },
+    { name = "importlib-metadata" },
+    { name = "nbclient" },
+    { name = "nbformat" },
+    { name = "pyyaml" },
+    { name = "sqlalchemy" },
+    { name = "tabulate" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bb/f7/3627358075f183956e8c4974603232b03afd4ddc7baf72c2bc9fff522291/jupyter_cache-1.0.1.tar.gz", hash = "sha256:16e808eb19e3fb67a223db906e131ea6e01f03aa27f49a7214ce6a5fec186fb9", size = 32048, upload-time = "2024-11-15T16:03:55.322Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/6b/67b87da9d36bff9df7d0efbd1a325fa372a43be7158effaf43ed7b22341d/jupyter_cache-1.0.1-py3-none-any.whl", hash = "sha256:9c3cafd825ba7da8b5830485343091143dff903e4d8c69db9349b728b140abf6", size = 33907, upload-time = "2024-11-15T16:03:54.021Z" },
+]
+
+[[package]]
 name = "jupyter-client"
 version = "8.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1849,91 +1868,171 @@ wheels = [
 
 [[package]]
 name = "kavalai"
-version = "0.1.5"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "asyncpg" },
-    { name = "authlib" },
+    { name = "aiosqlite" },
     { name = "environs" },
-    { name = "fastapi", extra = ["standard"] },
-    { name = "fastembed" },
-    { name = "feedparser" },
-    { name = "google-genai" },
-    { name = "graphviz" },
     { name = "httpx" },
-    { name = "ipykernel" },
-    { name = "itsdangerous" },
+    { name = "jinja2" },
     { name = "json-schema-to-pydantic" },
     { name = "loguru" },
-    { name = "mcp" },
     { name = "numpy" },
-    { name = "ollama" },
-    { name = "openai" },
     { name = "partial-json-parser" },
-    { name = "psycopg2-binary" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "rich" },
-    { name = "scikit-learn" },
     { name = "sqlalchemy" },
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "asyncpg" },
+    { name = "authlib" },
+    { name = "crawl4ai" },
+    { name = "fastapi", extra = ["standard"] },
+    { name = "fastembed" },
+    { name = "feedparser" },
+    { name = "google-genai" },
+    { name = "itsdangerous" },
+    { name = "mcp" },
+    { name = "ollama" },
+    { name = "openai" },
+    { name = "psycopg2-binary" },
+    { name = "scikit-learn" },
+]
 docs = [
+    { name = "myst-nb" },
     { name = "sphinx" },
     { name = "sphinx-immaterial" },
+]
+gemini = [
+    { name = "google-genai" },
+]
+llm = [
+    { name = "google-genai" },
+    { name = "ollama" },
+    { name = "openai" },
+]
+mcp = [
+    { name = "mcp" },
 ]
 notebooks = [
     { name = "ipykernel" },
     { name = "ipywidgets" },
 ]
+ollama = [
+    { name = "ollama" },
+]
+openai = [
+    { name = "openai" },
+]
+postgres = [
+    { name = "asyncpg" },
+    { name = "psycopg2-binary" },
+]
+rag = [
+    { name = "fastembed" },
+    { name = "scikit-learn" },
+]
+server = [
+    { name = "authlib" },
+    { name = "fastapi", extra = ["standard"] },
+    { name = "itsdangerous" },
+]
 test = [
+    { name = "aiosqlite" },
+    { name = "asyncpg" },
+    { name = "authlib" },
+    { name = "fastapi", extra = ["standard"] },
+    { name = "fastembed" },
+    { name = "google-genai" },
+    { name = "itsdangerous" },
+    { name = "mcp" },
+    { name = "ollama" },
+    { name = "openai" },
     { name = "pre-commit" },
+    { name = "psycopg2-binary" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "python-dotenv" },
+    { name = "scikit-learn" },
     { name = "testcontainers" },
 ]
 tools = [
     { name = "crawl4ai" },
+    { name = "feedparser" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "asyncpg" },
-    { name = "authlib" },
+    { name = "aiosqlite" },
+    { name = "aiosqlite", marker = "extra == 'test'" },
+    { name = "asyncpg", marker = "extra == 'all'" },
+    { name = "asyncpg", marker = "extra == 'postgres'" },
+    { name = "asyncpg", marker = "extra == 'test'" },
+    { name = "authlib", marker = "extra == 'all'" },
+    { name = "authlib", marker = "extra == 'server'" },
+    { name = "authlib", marker = "extra == 'test'" },
+    { name = "crawl4ai", marker = "extra == 'all'" },
     { name = "crawl4ai", marker = "extra == 'tools'" },
     { name = "environs" },
-    { name = "fastapi", extras = ["standard"] },
-    { name = "fastembed" },
-    { name = "feedparser" },
-    { name = "google-genai" },
-    { name = "graphviz" },
+    { name = "fastapi", extras = ["standard"], marker = "extra == 'all'" },
+    { name = "fastapi", extras = ["standard"], marker = "extra == 'server'" },
+    { name = "fastapi", extras = ["standard"], marker = "extra == 'test'" },
+    { name = "fastembed", marker = "extra == 'all'" },
+    { name = "fastembed", marker = "extra == 'rag'" },
+    { name = "fastembed", marker = "extra == 'test'" },
+    { name = "feedparser", marker = "extra == 'all'" },
+    { name = "feedparser", marker = "extra == 'tools'" },
+    { name = "google-genai", marker = "extra == 'all'" },
+    { name = "google-genai", marker = "extra == 'gemini'" },
+    { name = "google-genai", marker = "extra == 'llm'" },
+    { name = "google-genai", marker = "extra == 'test'" },
     { name = "httpx" },
-    { name = "ipykernel", specifier = ">=7.3.0" },
     { name = "ipykernel", marker = "extra == 'notebooks'", specifier = ">=7.3.0" },
     { name = "ipywidgets", marker = "extra == 'notebooks'" },
-    { name = "itsdangerous" },
+    { name = "itsdangerous", marker = "extra == 'all'" },
+    { name = "itsdangerous", marker = "extra == 'server'" },
+    { name = "itsdangerous", marker = "extra == 'test'" },
+    { name = "jinja2" },
     { name = "json-schema-to-pydantic" },
     { name = "loguru" },
-    { name = "mcp" },
+    { name = "mcp", marker = "extra == 'all'" },
+    { name = "mcp", marker = "extra == 'mcp'" },
+    { name = "mcp", marker = "extra == 'test'" },
+    { name = "myst-nb", marker = "extra == 'docs'" },
     { name = "numpy" },
-    { name = "ollama" },
-    { name = "openai" },
+    { name = "ollama", marker = "extra == 'all'" },
+    { name = "ollama", marker = "extra == 'llm'" },
+    { name = "ollama", marker = "extra == 'ollama'" },
+    { name = "ollama", marker = "extra == 'test'" },
+    { name = "openai", marker = "extra == 'all'" },
+    { name = "openai", marker = "extra == 'llm'" },
+    { name = "openai", marker = "extra == 'openai'" },
+    { name = "openai", marker = "extra == 'test'" },
     { name = "partial-json-parser" },
     { name = "pre-commit", marker = "extra == 'test'" },
-    { name = "psycopg2-binary" },
+    { name = "psycopg2-binary", marker = "extra == 'all'" },
+    { name = "psycopg2-binary", marker = "extra == 'postgres'" },
+    { name = "psycopg2-binary", marker = "extra == 'test'" },
+    { name = "pydantic" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
     { name = "pytest-cov", marker = "extra == 'test'" },
     { name = "python-dotenv", marker = "extra == 'test'" },
+    { name = "pyyaml" },
     { name = "rich" },
-    { name = "scikit-learn" },
+    { name = "scikit-learn", marker = "extra == 'all'" },
+    { name = "scikit-learn", marker = "extra == 'rag'" },
+    { name = "scikit-learn", marker = "extra == 'test'" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = "<9" },
     { name = "sphinx-immaterial", marker = "extra == 'docs'" },
     { name = "sqlalchemy" },
     { name = "testcontainers", extras = ["postgres"], marker = "extra == 'test'" },
 ]
-provides-extras = ["test", "tools", "notebooks", "docs"]
+provides-extras = ["openai", "gemini", "ollama", "llm", "rag", "postgres", "mcp", "server", "tools", "notebooks", "all", "test", "docs"]
 
 [[package]]
 name = "lark"
@@ -2118,6 +2217,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/27/3c/347cf965d313f5d41764e7d46bea6ffe7d9ef13b983cc429b0340962a082/mcp-1.27.2.tar.gz", hash = "sha256:8e02db104096d1c25b28e64bde29a5c32b31bc241710213e12fd4d84985bdfef", size = 621116, upload-time = "2026-05-29T17:16:04.039Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c9/11/252c6f971dc4f16af1d98a1c469d8ba523aab00d1bb76b4d3bc1ff32eacc/mcp-1.27.2-py3-none-any.whl", hash = "sha256:d6ff5160c6ca65d93013626efb3fc249de683c30b2d8570755ceddd490344de5", size = 220498, upload-time = "2026-05-29T17:16:02.442Z" },
+]
+
+[[package]]
+name = "mdit-py-plugins"
+version = "0.6.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/59/fc/f8d0863f8862f25602c0404d75568e89fb6b4109804645e5cdfb1be5cf56/mdit_py_plugins-0.6.1.tar.gz", hash = "sha256:a2bca0f039f39dbd35fb74ae1b5f998608c437463371f0ff7f49a19a17a114d0", size = 56114, upload-time = "2026-05-13T09:03:38.91Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a5/69/6da5581c6a7fede7dc261bf4e67d6adca4196f176b43288b55b3db395b6e/mdit_py_plugins-0.6.1-py3-none-any.whl", hash = "sha256:214c82fb2ac524472ab6a5bcab1de80f73b50443e187f401bfd77efbc7c6481d", size = 66663, upload-time = "2026-05-13T09:03:37.76Z" },
 ]
 
 [[package]]
@@ -2311,12 +2422,80 @@ wheels = [
 ]
 
 [[package]]
+name = "myst-nb"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "importlib-metadata" },
+    { name = "ipykernel" },
+    { name = "ipython" },
+    { name = "jupyter-cache" },
+    { name = "myst-parser" },
+    { name = "nbclient" },
+    { name = "nbformat" },
+    { name = "pyyaml" },
+    { name = "sphinx" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bd/b4/ff1abeea67e8cfe0a8c033389f6d1d8b0bfecfd611befb5cbdeab884fce6/myst_nb-1.4.0.tar.gz", hash = "sha256:c145598de62446a6fd009773dd071a40d3b76106ace780de1abdfc6961f614c2", size = 82285, upload-time = "2026-03-02T21:14:56.95Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/93/0a378b48488879a1d925b42a804edfc6e0cd0ef854220f2dce738a46e7e9/myst_nb-1.4.0-py3-none-any.whl", hash = "sha256:0e2c86e7d3b82c3aa51383f82d6268f7714f3b772c23a796ab09538a8e68b4e4", size = 82555, upload-time = "2026-03-02T21:14:55.652Z" },
+]
+
+[[package]]
+name = "myst-parser"
+version = "5.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "docutils" },
+    { name = "jinja2" },
+    { name = "markdown-it-py" },
+    { name = "mdit-py-plugins" },
+    { name = "pyyaml" },
+    { name = "sphinx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/21/dc/603751677fff302f34396e206b610f556a59d7fe58b9a2145f54e96b48e8/myst_parser-5.1.0.tar.gz", hash = "sha256:ab69322dc6719dcc7f296479dbb70181b66df6ed315064f92dbc85c0e1bf2f02", size = 101182, upload-time = "2026-05-13T09:38:19.361Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/09/dc/f3dfb7488b770f3f67e6545085bf2abea5172e88f57b8ad25ef860ca704c/myst_parser-5.1.0-py3-none-any.whl", hash = "sha256:9c91c52b3cdb4d94a6506e4fab4e2f296c7623a0da0dcbe6de1565c3dad67a8a", size = 85817, upload-time = "2026-05-13T09:38:17.904Z" },
+]
+
+[[package]]
 name = "narwhals"
 version = "2.22.1"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/62/3c/c4ef2164a71c1a63d7f1ae411c4082c5fa872405106db60a4b7114989ad7/narwhals-2.22.1.tar.gz", hash = "sha256:d62920805a0a43b7ff8b54b0c0d3142d796f8a9301836ada37e573d6a33cbcd9", size = 647493, upload-time = "2026-06-05T12:34:34.051Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/48/ca/36339329c4604adbcc99c899b7eb1ce1a555c499b6a6860757dc9bfed36d/narwhals-2.22.1-py3-none-any.whl", hash = "sha256:60567d774edf77db53906f89d9fbd164e66e56d66d388e1e6990f17ac33cfb53", size = 454815, upload-time = "2026-06-05T12:34:32.289Z" },
+]
+
+[[package]]
+name = "nbclient"
+version = "0.11.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jupyter-client" },
+    { name = "jupyter-core" },
+    { name = "nbformat" },
+    { name = "traitlets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/28/a5/b3bae4b590c0cbcada2c63a34f7580024e834a8ba213e949a2f906705787/nbclient-0.11.0.tar.gz", hash = "sha256:04a134a5b087f2c5887f228aca155db50169b8cd9334dee6942c8e927e56081a", size = 62535, upload-time = "2026-06-05T07:52:41.746Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/36/c9/94d73e5a01c5b926c3fa2496e97d7a8dc28ed5a77c0b2ed712f1a62e6694/nbclient-0.11.0-py3-none-any.whl", hash = "sha256:ef7fa0d59d6e1d41103933d8a445a18d5de860ca6b613b87b8574accdb3c2895", size = 25288, upload-time = "2026-06-05T07:52:40.115Z" },
+]
+
+[[package]]
+name = "nbformat"
+version = "5.10.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastjsonschema" },
+    { name = "jsonschema" },
+    { name = "jupyter-core" },
+    { name = "traitlets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6d/fd/91545e604bc3dad7dca9ed03284086039b294c6b3d75c0d2fa45f9e9caf3/nbformat-5.10.4.tar.gz", hash = "sha256:322168b14f937a5d11362988ecac2a4952d3d8e3a2cbeb2319584631226d5b3a", size = 142749, upload-time = "2024-04-04T11:20:37.371Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a9/82/0340caa499416c78e5d8f5f05947ae4bc3cba53c9f038ab6e9ed964e22f1/nbformat-5.10.4-py3-none-any.whl", hash = "sha256:3b48d6c8fbca4b299bf3982ea7db1af21580e4fec269ad087b9e81588891200b", size = 78454, upload-time = "2024-04-04T11:20:34.895Z" },
 ]
 
 [[package]]
@@ -4082,6 +4261,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/eb/e3/7c1dc7381d9f8ab7d854328ebfa884e62cb3f3d8549ddfd37c7814f42afa/starlette-1.3.1.tar.gz", hash = "sha256:05d0213193f2fbaae60e2ecb593b4add4262ad4e46536b54abe36f11a71724e0", size = 2703240, upload-time = "2026-06-12T09:23:11.602Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/bb/2799cc2ede3ed41131f8975621e7213dfc7ef4acbbaadfa440f32500c370/starlette-1.3.1-py3-none-any.whl", hash = "sha256:c7372aae11c3c3f26a42df7bd626cec2f47d03483d261d369516a615a53714c6", size = 73632, upload-time = "2026-06-12T09:23:10.017Z" },
+]
+
+[[package]]
+name = "tabulate"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/58/8c37dea7bbf769b20d58e7ace7e5edfe65b849442b00ffcdd56be88697c6/tabulate-0.10.0.tar.gz", hash = "sha256:e2cfde8f79420f6deeffdeda9aaec3b6bc5abce947655d17ac662b126e48a60d", size = 91754, upload-time = "2026-03-04T18:55:34.402Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/55/db07de81b5c630da5cbf5c7df646580ca26dfaefa593667fc6f2fe016d2e/tabulate-0.10.0-py3-none-any.whl", hash = "sha256:f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3", size = 39814, upload-time = "2026-03-04T18:55:31.284Z" },
 ]
 
 [[package]]

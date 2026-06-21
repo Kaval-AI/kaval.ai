@@ -21,10 +21,20 @@ import os
 from typing import Any, Dict, List, Optional, Callable, Type
 
 import httpx
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.sse import sse_client
-from mcp.client.stdio import stdio_client
 from pydantic import BaseModel, create_model
+
+# ``mcp`` is an optional extra: it is not pyodide-compatible and pulls in a
+# large dependency tree. Import it lazily so the core library imports without
+# it; only MCP tool calls require ``pip install kavalai[mcp]``.
+try:
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.sse import sse_client
+    from mcp.client.stdio import stdio_client
+except ImportError:  # pragma: no cover - exercised in pyodide / minimal installs
+    ClientSession = None
+    StdioServerParameters = None
+    sse_client = None
+    stdio_client = None
 
 from kavalai.agents.workflow_model import (
     McpServer,
@@ -181,7 +191,7 @@ class FunctionKernel:
         self.mcp_tool_definitions: Dict[str, Dict[str, ToolDefinition]] = {}
 
         # MCP session management
-        self.mcp_sessions: Dict[str, ClientSession] = {}
+        self.mcp_sessions: Dict[str, "ClientSession"] = {}
         self.mcp_cleanups: List[Any] = []
 
     def register_rest_server(self, server: RestServer):
@@ -405,7 +415,13 @@ class FunctionKernel:
                 result_data, output_type, f"REST tool '{server_name}.{tool}'"
             )
 
-    async def _get_mcp_session(self, server_name: str) -> ClientSession:
+    async def _get_mcp_session(self, server_name: str) -> "ClientSession":
+        if ClientSession is None:
+            raise FunctionKernelException(
+                "MCP support requires the optional 'mcp' dependency. "
+                "Install it with: pip install kavalai[mcp]"
+            )
+
         if server_name in self.mcp_sessions:
             return self.mcp_sessions[server_name]
 
@@ -460,7 +476,7 @@ class FunctionKernel:
         return session
 
     async def _refresh_mcp_tool_definitions(
-        self, server_name: str, session: ClientSession
+        self, server_name: str, session: "ClientSession"
     ):
         try:
             tools_result = await session.list_tools()
