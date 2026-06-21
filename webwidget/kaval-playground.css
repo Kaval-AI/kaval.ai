@@ -43,7 +43,8 @@
   align-items: center;
   gap: 0.3em;
   padding: 0.15rem 0.55rem;
-  font-size: 0.7rem;
+  /* Fixed (not rem) so the docs theme's html{font-size:125%} doesn't inflate it. */
+  font-size: 11px;
   font-weight: 600;
   line-height: 1.6;
   letter-spacing: 0.02em;
@@ -70,6 +71,11 @@
   background: var(--kaval-pg-bg);
   color: var(--kaval-pg-fg);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Anchor the widget to a fixed base so it matches the docs' code size and is
+   * not inflated by a host page that scales the root font (e.g. the Material
+   * docs theme sets html{font-size:125%}). All inner sizes use `em`. */
+  font-size: 13px;
+  line-height: 1.5;
   overscroll-behavior: contain;
 }
 .kaval-pg-panel *,
@@ -140,7 +146,7 @@
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  font-size: 0.85rem;
+  font-size: 1em;
   font-weight: 700;
 }
 .kaval-pg-title .kaval-pg-logo {
@@ -150,7 +156,7 @@
 }
 .kaval-pg-status {
   margin-left: auto;
-  font-size: 0.72rem;
+  font-size: 0.85em;
   color: var(--kaval-pg-muted);
   font-style: italic;
 }
@@ -158,7 +164,7 @@
   background: transparent;
   border: none;
   color: var(--kaval-pg-muted);
-  font-size: 1rem;
+  font-size: 1.15em;
   cursor: pointer;
   padding: 0.1rem 0.35rem;
   border-radius: 0.35rem;
@@ -172,19 +178,19 @@
 .kaval-pg-keys {
   padding: 0.5rem 0.8rem;
   border-bottom: 1px solid var(--kaval-pg-border);
-  font-size: 0.78rem;
 }
 .kaval-pg-keys > summary {
   cursor: pointer;
   color: var(--kaval-pg-muted);
   user-select: none;
+  font-size: 0.9em;
 }
 .kaval-pg-keys label {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.9em;
   color: var(--kaval-pg-muted);
 }
 .kaval-pg-keys input {
@@ -195,12 +201,12 @@
   border: 1px solid var(--kaval-pg-border);
   border-radius: 0.4rem;
   padding: 0.3rem 0.5rem;
-  font-size: 0.78rem;
+  font-size: 0.9em;
   font-family: inherit;
 }
 .kaval-pg-keys-note {
   margin: 0.5rem 0 0.1rem;
-  font-size: 0.68rem;
+  font-size: 0.82em;
   color: var(--kaval-pg-muted);
   line-height: 1.4;
 }
@@ -220,7 +226,7 @@
 .kaval-pg-editor .CodeMirror {
   height: 100%;
   font-family: "SF Mono", "Fira Code", Consolas, monospace;
-  font-size: 0.85rem;
+  font-size: 1em;
   line-height: 1.5;
 }
 
@@ -240,7 +246,7 @@
   border-radius: 0.45rem;
   padding: 0.35rem 1.1rem;
   font-weight: 700;
-  font-size: 0.8rem;
+  font-size: 0.95em;
   cursor: pointer;
 }
 .kaval-pg-run:hover:not(:disabled) {
@@ -256,7 +262,7 @@
   border: 1px solid var(--kaval-pg-border);
   border-radius: 0.45rem;
   padding: 0.3rem 0.7rem;
-  font-size: 0.75rem;
+  font-size: 0.9em;
   cursor: pointer;
 }
 .kaval-pg-ghost:hover {
@@ -273,7 +279,7 @@
   border: 1px solid var(--kaval-pg-border);
   border-radius: 0.45rem;
   padding: 0.3rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.9em;
   font-family: inherit;
   cursor: pointer;
 }
@@ -293,7 +299,7 @@
 /* Output — pinned to the bottom with its own scroll */
 .kaval-pg-output-label {
   padding: 0.35rem 0.8rem;
-  font-size: 0.68rem;
+  font-size: 0.82em;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--kaval-pg-muted);
@@ -308,7 +314,7 @@
   overflow: auto;
   background: var(--kaval-pg-bg);
   font-family: "SF Mono", "Fira Code", Consolas, monospace;
-  font-size: 0.8rem;
+  font-size: 0.95em;
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
