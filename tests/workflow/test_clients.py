@@ -2,6 +2,7 @@ import pytest
 
 from kavalai.workflow import clients
 from kavalai.llm_clients.base_client import LlmClientParameters
+from kavalai.llm_clients.browser_client import BrowserLLMClient
 from kavalai.llm_clients.gemini_client import GeminiClient
 from kavalai.llm_clients.ollama_client import OllamaClient
 from kavalai.llm_clients.openai_client import OpenAIClient
@@ -39,6 +40,12 @@ def test_make_client_ollama():
     client = clients.make_client("ollama/llama3")
     assert isinstance(client, OllamaClient)
     assert client.model == "llama3"
+
+
+def test_make_client_browser():
+    client = clients.make_client("browser/Llama-3.2-1B-Instruct-q4f32_1-MLC")
+    assert isinstance(client, BrowserLLMClient)
+    assert client.model == "Llama-3.2-1B-Instruct-q4f32_1-MLC"
 
 
 def test_make_client_requires_provider():

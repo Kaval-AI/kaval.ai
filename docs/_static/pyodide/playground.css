@@ -1,0 +1,262 @@
+/*
+ * Kaval.AI docs playground styling.
+ *
+ * Two pieces:
+ *   1. The "Run in browser" button injected onto every Python code block.
+ *   2. The playground drawer — a right-hand panel on desktop, a full-width
+ *      bottom sheet with a vertical (editor-on-top / output-at-bottom) split on
+ *      mobile.
+ *
+ * The drawer is a self-contained dark "console" so it reads consistently
+ * regardless of the light/dark docs theme.
+ */
+
+:root {
+  --kaval-pg-bg: #1e1e2e;
+  --kaval-pg-bg-2: #181825;
+  --kaval-pg-border: #313244;
+  --kaval-pg-fg: #cdd6f4;
+  --kaval-pg-muted: #a6adc8;
+  --kaval-pg-accent: #89b4fa;
+  --kaval-pg-accent-hover: #74c7ec;
+  --kaval-pg-error: #f38ba8;
+  --kaval-pg-width: 540px;
+}
+
+/* -- "Run in browser" button on code blocks -------------------------------- */
+.kaval-pg-has-btn {
+  position: relative;
+}
+
+.kaval-pg-run-btn {
+  position: absolute;
+  top: 0.4rem;
+  /* Sit to the left of the theme's clipboard/copy button (top-right). */
+  right: 2.4rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--md-primary-fg-color, var(--kaval-pg-accent));
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.kaval-pg-run-btn:hover,
+.kaval-pg-run-btn:focus-visible {
+  opacity: 1;
+  transform: translateY(-1px);
+  outline: none;
+}
+
+/* -- The drawer ------------------------------------------------------------ */
+.kaval-pg-panel {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: var(--kaval-pg-bg);
+  color: var(--kaval-pg-fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 0 2rem rgba(0, 0, 0, 0.45);
+  transition: transform 0.25s ease;
+  overscroll-behavior: contain;
+}
+
+/* Desktop: right-hand drawer, full height, slides in from the right. */
+@media (min-width: 768px) {
+  .kaval-pg-panel {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(var(--kaval-pg-width), 92vw);
+    border-left: 1px solid var(--kaval-pg-border);
+    transform: translateX(105%);
+  }
+  .kaval-pg-panel.open {
+    transform: translateX(0);
+  }
+}
+
+/* Mobile: full-width bottom sheet, vertical split, slides up from the bottom. */
+@media (max-width: 767px) {
+  .kaval-pg-panel {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 88vh;
+    border-top: 1px solid var(--kaval-pg-border);
+    border-radius: 0.9rem 0.9rem 0 0;
+    transform: translateY(105%);
+  }
+  .kaval-pg-panel.open {
+    transform: translateY(0);
+  }
+}
+
+/* Header */
+.kaval-pg-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--kaval-pg-bg-2);
+  border-bottom: 1px solid var(--kaval-pg-border);
+}
+.kaval-pg-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.kaval-pg-status {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--kaval-pg-muted);
+  font-style: italic;
+}
+.kaval-pg-icon {
+  background: transparent;
+  border: none;
+  color: var(--kaval-pg-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+}
+.kaval-pg-icon:hover {
+  color: var(--kaval-pg-fg);
+  background: var(--kaval-pg-border);
+}
+
+/* API keys */
+.kaval-pg-keys {
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid var(--kaval-pg-border);
+  font-size: 0.78rem;
+}
+.kaval-pg-keys > summary {
+  cursor: pointer;
+  color: var(--kaval-pg-muted);
+  user-select: none;
+}
+.kaval-pg-keys label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--kaval-pg-muted);
+}
+.kaval-pg-keys input {
+  flex: 1;
+  min-width: 0;
+  background: var(--kaval-pg-bg);
+  color: var(--kaval-pg-fg);
+  border: 1px solid var(--kaval-pg-border);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.78rem;
+  font-family: inherit;
+}
+.kaval-pg-keys-note {
+  margin: 0.5rem 0 0.1rem;
+  font-size: 0.68rem;
+  color: var(--kaval-pg-muted);
+  line-height: 1.4;
+}
+.kaval-pg-keys-note code {
+  background: var(--kaval-pg-bg-2);
+  padding: 0 0.25em;
+  border-radius: 0.25em;
+}
+
+/* Editor — grows to fill available height */
+.kaval-pg-editor {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--kaval-pg-border);
+}
+.kaval-pg-editor .CodeMirror {
+  height: 100%;
+  font-family: "SF Mono", "Fira Code", Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* Toolbar */
+.kaval-pg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  background: var(--kaval-pg-bg-2);
+}
+.kaval-pg-run {
+  background: var(--kaval-pg-accent);
+  color: var(--kaval-pg-bg);
+  border: none;
+  border-radius: 0.45rem;
+  padding: 0.35rem 1.1rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.kaval-pg-run:hover:not(:disabled) {
+  background: var(--kaval-pg-accent-hover);
+}
+.kaval-pg-run:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.kaval-pg-ghost {
+  background: transparent;
+  color: var(--kaval-pg-muted);
+  border: 1px solid var(--kaval-pg-border);
+  border-radius: 0.45rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.kaval-pg-ghost:hover {
+  color: var(--kaval-pg-fg);
+  border-color: var(--kaval-pg-muted);
+}
+
+/* Output — pinned to the bottom with its own scroll */
+.kaval-pg-output-label {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--kaval-pg-muted);
+  background: var(--kaval-pg-bg-2);
+  border-top: 1px solid var(--kaval-pg-border);
+}
+.kaval-pg-output {
+  flex: 0 0 34%;
+  min-height: 84px;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  overflow: auto;
+  background: var(--kaval-pg-bg);
+  font-family: "SF Mono", "Fira Code", Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.kaval-pg-stderr {
+  color: var(--kaval-pg-error);
+}
+.kaval-pg-meta {
+  color: var(--kaval-pg-muted);
+  font-style: italic;
+}

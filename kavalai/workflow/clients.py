@@ -45,7 +45,10 @@ def make_client(
 ) -> BaseLlmClient:
     """Construct a v2 LLM client from a ``provider/model`` string.
 
-    Supported providers: ``openai``, ``gemini``, ``ollama``.
+    Supported providers: ``openai``, ``gemini``, ``ollama``, ``browser``.
+    The ``browser`` provider runs inference client-side via a WebLLM bridge
+    (Pyodide only) and needs no API key — see
+    :class:`~kavalai.llm_clients.browser_client.BrowserLLMClient`.
     """
     if "/" not in model:
         raise ValueError(f"Model must be in 'provider/model' form, got '{model}'.")
@@ -71,6 +74,14 @@ def make_client(
         from kavalai.llm_clients.ollama_client import OllamaClient
 
         return OllamaClient(
+            model_name,
+            llm_client_parameters=parameters,
+            model_stats_receiver=stats_receiver,
+        )
+    if provider == "browser":
+        from kavalai.llm_clients.browser_client import BrowserLLMClient
+
+        return BrowserLLMClient(
             model_name,
             llm_client_parameters=parameters,
             model_stats_receiver=stats_receiver,

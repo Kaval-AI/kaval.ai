@@ -6,6 +6,36 @@ minutes. You will install Kaval.AI, configure an LLM provider, and run your
 first **workflow** — a small typed state machine that takes an input and
 returns a structured result.
 
+.. admonition:: Run it in your browser 🐍
+   :class: tip
+
+   Every Python snippet in these docs has a **Run in browser ▶** button. It
+   boots `Pyodide <https://pyodide.org>`_, installs Kaval.AI client-side and runs
+   the code in a side panel — nothing to install locally. The snippet below
+   needs no API key, so try it first:
+
+   .. code-block:: python
+
+      from kavalai import evaluate_expression, evaluate_bool, FunctionKernel, pythontool
+
+      # 1) Pure-Python expression engine
+      ctx = {"user": {"name": "Ada", "age": 36}}
+      print("name     =", evaluate_expression("user.name", ctx))
+      print("is_adult =", evaluate_bool("user.age >= 18", ctx))
+
+      # 2) Register a tool and call it through the FunctionKernel
+      @pythontool
+      def add(a: int, b: int) -> int:
+          return a + b
+
+      kernel = FunctionKernel()
+      kernel.register_python_tool("add", add)
+      print("add(2, 40) =", await kernel.call_tool("python://add", {"a": 2, "b": 40}))
+
+   To run the LLM workflows below, open the panel's **API keys** section and
+   paste an OpenAI or Gemini key — it is stored only in your browser. Note that
+   provider calls made directly from the browser may be blocked by CORS.
+
 Installation
 ------------
 

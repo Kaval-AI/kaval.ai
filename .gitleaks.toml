@@ -1,0 +1,20 @@
+# Gitleaks configuration for Kaval.AI.
+#
+# Extends the upstream default ruleset (so all built-in secret rules stay
+# active) and adds one narrow allowlist: public WebLLM / MLC model identifiers
+# such as "Llama-3.2-1B-Instruct-q4f32_1-MLC" are high-entropy enough to trip
+# the generic-api-key rule, but they are public model names with no secret
+# value. They appear in the in-browser LLM client and its tests.
+
+title = "Kaval.AI gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public WebLLM (MLC) model identifiers are not secrets"
+# Matches the quantization suffix that uniquely marks an MLC model id
+# (e.g. -q4f32_1-MLC, -q4f16_1-MLC); cannot match a real credential.
+regexes = [
+  '''-q4f\d+_\d+-MLC''',
+]

@@ -88,6 +88,11 @@ from kavalai.llm_clients.base_client import (
 )
 from kavalai.llm_clients.embeddings import make_embedding_client
 
+# The in-browser client is part of the pyodide-compatible core (it only bridges
+# to a JS engine at call time) so it is imported eagerly, unlike the provider
+# clients below which pull in optional SDKs.
+from kavalai.llm_clients.browser_client import BrowserLLMClient
+
 # The provider LLM clients (``OpenAIClient`` / ``GeminiClient`` /
 # ``OllamaClient``) pull in optional SDKs that are not part of the
 # pyodide-compatible core (``openai`` / ``google-genai`` / ``ollama``). They are
@@ -187,6 +192,7 @@ __all__ = [
     "OpenAIClient",
     "GeminiClient",
     "OllamaClient",
+    "BrowserLLMClient",
     "make_embedding_client",
     # Streaming
     "Streamer",

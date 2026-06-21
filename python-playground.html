@@ -10,6 +10,89 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+    <!--
+      In-browser LLM bridge for Kaval.AI's BrowserLLMClient ("browser/..." models).
+
+      It exposes a single async function on the global scope:
+
+          window.kavalBrowserLLM.chat(requestJson) -> Promise<resultJson>
+
+      Python (kavalai.llm_clients.browser_client.BrowserLLMClient) hands it a JSON
+      string {model, messages, temperature, top_p, response_format?} and reads back
+      a JSON string {content, usage} or {error}. Inference runs locally via WebLLM
+      (WebGPU) — no API key, no provider account, no CORS. The model is downloaded
+      and cached by the browser on first use. WebLLM is loaded lazily so the page
+      stays light until an LLM call is actually made.
+    -->
+    <script type="module">
+        let webllmModulePromise = null;
+        let enginePromise = null;
+        let loadedModel = null;
+
+        function loadWebLLM() {
+            if (!webllmModulePromise) {
+                webllmModulePromise = import("https://esm.run/@mlc-ai/web-llm");
+            }
+            return webllmModulePromise;
+        }
+
+        async function getEngine(modelId) {
+            if (!navigator.gpu) {
+                throw new Error(
+                    "WebGPU is not available in this browser. On Linux, Chrome/Brave " +
+                    "need it enabled: set chrome://flags/#enable-unsafe-webgpu and " +
+                    "chrome://flags/#enable-vulkan to Enabled, then relaunch (Firefox: " +
+                    "about:config dom.webgpu.enabled=true). Verify at chrome://gpu."
+                );
+            }
+            // Reuse the engine while the model is unchanged; rebuild on switch.
+            if (enginePromise && loadedModel === modelId) return enginePromise;
+            loadedModel = modelId;
+            const webllm = await loadWebLLM();
+            enginePromise = webllm.CreateMLCEngine(modelId, {
+                initProgressCallback: (report) => {
+                    if (typeof window.__kavalLLMProgress === "function") {
+                        window.__kavalLLMProgress(report);
+                    }
+                },
+            });
+            return enginePromise;
+        }
+
+        window.kavalBrowserLLM = {
+            async chat(requestJson) {
+                try {
+                    const req = typeof requestJson === "string"
+                        ? JSON.parse(requestJson) : requestJson;
+                    const engine = await getEngine(req.model);
+
+                    const opts = { messages: req.messages, stream: false };
+                    if (req.temperature != null) opts.temperature = req.temperature;
+                    if (req.top_p != null) opts.top_p = req.top_p;
+                    if (req.max_tokens != null) opts.max_tokens = req.max_tokens;
+                    if (req.response_format) {
+                        const rf = { type: req.response_format.type || "json_object" };
+                        if (req.response_format.schema != null) {
+                            // WebLLM expects the JSON schema as a string.
+                            rf.schema = typeof req.response_format.schema === "string"
+                                ? req.response_format.schema
+                                : JSON.stringify(req.response_format.schema);
+                        }
+                        opts.response_format = rf;
+                    }
+
+                    const reply = await engine.chat.completions.create(opts);
+                    const choice = reply.choices && reply.choices[0];
+                    return JSON.stringify({
+                        content: (choice && choice.message && choice.message.content) || "",
+                        usage: reply.usage || {},
+                    });
+                } catch (err) {
+                    return JSON.stringify({ error: String((err && err.message) || err) });
+                }
+            },
+        };
+    </script>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -32,7 +115,7 @@
         }
         header h1 { font-size: 1rem; margin: 0; font-weight: 600; }
         header .status { font-size: 0.8rem; color: #a6adc8; margin-left: auto; }
-        #packages, #wheel {
+        #packages, #wheel, #llmModel {
             background: #1e1e2e;
             color: #cdd6f4;
             border: 1px solid #313244;
@@ -42,6 +125,7 @@
             min-width: 240px;
         }
         #wheel { min-width: 320px; }
+        #llmModel { min-width: 200px; }
         button {
             background: #89b4fa;
             color: #1e1e2e;
@@ -97,6 +181,14 @@
     <h1>🐍 Kaval.AI Playground</h1>
     <input id="wheel" type="text" value="dist/kavalai-1.0.0-py3-none-any.whl"
            title="URL or relative path to the kavalai wheel (built with: uv build --wheel)">
+    <select id="llmModel" title="In-browser LLM model (WebLLM, downloaded on first use). q4f32 builds run on GPUs without FP16 shaders (e.g. GTX 10xx).">
+        <option value="Llama-3.2-1B-Instruct-q4f32_1-MLC">Llama-3.2-1B · q4f32 (≈1.1 GB)</option>
+        <option value="Llama-3.2-3B-Instruct-q4f32_1-MLC">Llama-3.2-3B · q4f32 (≈2.9 GB)</option>
+        <option value="Qwen2.5-1.5B-Instruct-q4f32_1-MLC">Qwen2.5-1.5B · q4f32 (≈1.6 GB)</option>
+        <option value="Qwen2.5-0.5B-Instruct-q4f32_1-MLC">Qwen2.5-0.5B · q4f32 (≈0.6 GB)</option>
+        <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Llama-3.2-1B · q4f16 (needs FP16 GPU)</option>
+        <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Llama-3.2-3B · q4f16 (needs FP16 GPU)</option>
+    </select>
     <input id="packages" type="text" placeholder="extra packages (e.g. plotly)" disabled>
     <button id="run" disabled>Run ▶</button>
     <span class="status" id="status">Loading Pyodide…</span>
@@ -118,6 +210,12 @@
     const statusEl = document.getElementById("status");
     const packagesEl = document.getElementById("packages");
     const wheelEl = document.getElementById("wheel");
+    const llmModelEl = document.getElementById("llmModel");
+
+    // The WebLLM bridge calls this with model-download / init progress reports.
+    window.__kavalLLMProgress = (report) => {
+        statusEl.textContent = report && report.text ? report.text : "Loading model…";
+    };
 
     const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
         mode: "python",
@@ -127,52 +225,23 @@
         extraKeys: { "Ctrl-Enter": run, "Cmd-Enter": run },
     });
     editor.setValue(
-`import kavalai
-from kavalai import evaluate_expression, evaluate_bool, FunctionKernel, pythontool
-from kavalai.agents.db import db_manager, Agent
-from sqlalchemy import select
+`# Call an LLM fully in the browser with Kaval.AI — no API key, no server, no CORS.
+#
+# make_client("browser/<model>") returns a BrowserLLMClient that runs inference
+# locally through the page's WebLLM bridge (WebGPU). The first run downloads the
+# selected model (watch the status bar) and the browser caches it for next time.
+# Needs a WebGPU-capable browser; KAVAL_BROWSER_MODEL comes from the header dropdown.
+from kavalai import make_client, ChatHistory, ChatMessage
 
-print("Loaded the Kaval.AI core in the browser 🎉")
+print(f"Loading {KAVAL_BROWSER_MODEL} in the browser (first run can take a while)…")
+client = make_client(f"browser/{KAVAL_BROWSER_MODEL}")
 
-# --- 1) Core expression engine (pure Python, pyodide-friendly) ---
-ctx = {"user": {"name": "Ada", "age": 36}}
-print("name     =", evaluate_expression("user.name", ctx))
-print("is_adult =", evaluate_bool("user.age >= 18", ctx))
+reply = await client.chat_completions(chat_history=ChatHistory(messages=[
+    ChatMessage(role="system", content="You are a terse, friendly assistant."),
+    ChatMessage(role="user", content="Say hello and tell me one fun fact about Estonia."),
+]))
 
-# --- 2) Register a Python tool and call it through the FunctionKernel ---
-@pythontool
-def add(a: int, b: int) -> int:
-    return a + b
-
-kernel = FunctionKernel()
-kernel.register_python_tool("add", add)
-
-# Pyodide supports top-level await, so we can await the async kernel directly.
-print("add(2, 40) =", await kernel.call_tool("python://add", {"a": 2, "b": 40}))
-
-# --- 3) Persistent database backed by the browser's IndexedDB ---
-# init_sqlite_sync() mounts IndexedDB, creates the tables and persists the file.
-# We use the *sync* SQLite engine: SQLAlchemy's async engine needs greenlet (no
-# pyodide build) plus aiosqlite's worker thread, neither of which works in the
-# browser. The sync engine uses plain sqlite3 on the main thread instead; only
-# the IndexedDB mount/flush are awaited. The SQLite file lives on Emscripten's
-# IDBFS, so it survives reloads.
-await db_manager.init_sqlite_sync()
-sm = db_manager.get_sqlite_sync_sessionmaker()
-
-with sm() as session:
-    stored = session.execute(select(Agent)).scalars().all()
-    print(f"agents already in IndexedDB: {len(stored)}")
-    session.add(Agent(name=f"agent-{len(stored) + 1}"))
-    session.commit()
-
-# Persist the change so it survives a page reload.
-await db_manager.flush()
-
-with sm() as session:
-    names = [a.name for a in session.execute(select(Agent)).scalars()]
-print("agents now stored:", names)
-print("Re-run / reload the page — the list keeps growing (persisted in IndexedDB).")
+print("\\nLLM says:", reply)
 `
     );
 
@@ -245,6 +314,9 @@ print("Re-run / reload the page — the list keeps growing (persisted in Indexed
         try {
             // Install any packages listed in the input field.
             await installPackages();
+            // Expose the chosen in-browser LLM model to Python as a global so the
+            // example can build a "browser/<model>" client without hardcoding ids.
+            pyodide.globals.set("KAVAL_BROWSER_MODEL", llmModelEl.value);
             // Auto-load pure-Pyodide packages referenced by imports (numpy, pandas, …).
             statusEl.textContent = "Loading imports…";
             await pyodide.loadPackagesFromImports(editor.getValue());

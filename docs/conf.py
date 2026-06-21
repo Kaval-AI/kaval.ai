@@ -7,6 +7,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath(".."))
+# Local Sphinx extensions (docs/_ext), e.g. the in-browser playground.
+sys.path.insert(0, os.path.abspath("_ext"))
 
 # Set dummy environment variables for modules that require them during doc build
 # (autodoc imports the real modules, some of which read DB config at import time).
@@ -35,6 +37,7 @@ extensions = [
     "sphinx.ext.githubpages",
     "myst_nb",
     "sphinx_immaterial",
+    "kaval_playground",
 ]
 
 # Napoleon settings
