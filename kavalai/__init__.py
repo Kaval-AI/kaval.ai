@@ -86,11 +86,14 @@ from kavalai.llm_clients.base_client import (
     ModelStatsReceiver,
     ModelStatsLogger,
 )
-from kavalai.llm_clients.embeddings import make_embedding_client
+from kavalai.llm_clients.embeddings import (
+    make_embedding_client,
+    BrowserEmbeddingClient,
+)
 
-# The in-browser client is part of the pyodide-compatible core (it only bridges
-# to a JS engine at call time) so it is imported eagerly, unlike the provider
-# clients below which pull in optional SDKs.
+# The in-browser clients are part of the pyodide-compatible core (they only
+# bridge to a JS engine at call time) so they are imported eagerly, unlike the
+# provider clients below which pull in optional SDKs.
 from kavalai.llm_clients.browser_client import BrowserLLMClient
 
 # The provider LLM clients (``OpenAIClient`` / ``GeminiClient`` /
@@ -194,6 +197,7 @@ __all__ = [
     "OllamaClient",
     "BrowserLLMClient",
     "make_embedding_client",
+    "BrowserEmbeddingClient",
     # Streaming
     "Streamer",
     "StreamContent",

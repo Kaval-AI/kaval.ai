@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kaval.AI Python Playground (Pyodide)</title>
+    <!-- Kaval.AI icon mark (matches docs/_static/favicon.svg), inlined to keep
+         this page self-contained. -->
+    <link rel="icon" type="image/svg+xml"
+          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 79.375 79.375'><g transform='translate(-27.011657,-24.494702)'><g transform='matrix(0.26458333,0,0,0.26458333,-506.65292,-7.2552973)'><path d='m 2317,120 h -300 v 300 h 300 z' fill='%23002626'/><path d='m 2145.42,235.72 c -1.16,-1.164 -1.82,-2.752 -1.82,-4.424 V 120 H 2017 v 1.842 L 2138.82,233.9 c 1.29,1.185 2.01,2.857 2.01,4.593 V 420 h 176.15 v -12.679 z' fill='%23acc12f'/></g></g></svg>">
     <script src="https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"></script>
     <!-- CodeMirror for Python syntax highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
@@ -11,18 +15,23 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
     <!--
-      In-browser LLM bridge for Kaval.AI's BrowserLLMClient ("browser/..." models).
+      In-browser bridge for Kaval.AI's "browser/..." models (chat + embeddings).
 
-      It exposes a single async function on the global scope:
+      It exposes two async functions on the global scope:
 
-          window.kavalBrowserLLM.chat(requestJson) -> Promise<resultJson>
+          window.kavalBrowserLLM.chat(requestJson)  -> Promise<resultJson>
+          window.kavalBrowserLLM.embed(requestJson) -> Promise<resultJson>
 
-      Python (kavalai.llm_clients.browser_client.BrowserLLMClient) hands it a JSON
-      string {model, messages, temperature, top_p, response_format?} and reads back
-      a JSON string {content, usage} or {error}. Inference runs locally via WebLLM
-      (WebGPU) — no API key, no provider account, no CORS. The model is downloaded
-      and cached by the browser on first use. WebLLM is loaded lazily so the page
-      stays light until an LLM call is actually made.
+      - chat (kavalai.llm_clients.browser_client.BrowserLLMClient) takes a JSON
+        string {model, messages, temperature, top_p, response_format?} and reads
+        back {content, usage} or {error}.
+      - embed (kavalai.llm_clients.embeddings.BrowserEmbeddingClient) takes a JSON
+        string {model, input} (input = list of texts) and reads back
+        {embeddings, usage} or {error}.
+
+      Inference runs locally via WebLLM (WebGPU) — no API key, no provider account,
+      no CORS. Models are downloaded and cached by the browser on first use. WebLLM
+      is loaded lazily so the page stays light until a call is actually made.
     -->
     <script type="module">
         let webllmModulePromise = null;
@@ -91,6 +100,25 @@
                     return JSON.stringify({ error: String((err && err.message) || err) });
                 }
             },
+            async embed(requestJson) {
+                try {
+                    const req = typeof requestJson === "string"
+                        ? JSON.parse(requestJson) : requestJson;
+                    const engine = await getEngine(req.model);
+
+                    const reply = await engine.embeddings.create({
+                        input: req.input,
+                        model: req.model,
+                    });
+                    return JSON.stringify({
+                        // OpenAI-shaped: one {embedding} object per input text.
+                        embeddings: (reply.data || []).map((d) => d.embedding),
+                        usage: reply.usage || {},
+                    });
+                } catch (err) {
+                    return JSON.stringify({ error: String((err && err.message) || err) });
+                }
+            },
         };
     </script>
     <style>
@@ -113,9 +141,13 @@
             border-bottom: 1px solid #313244;
             flex-wrap: wrap;
         }
-        header h1 { font-size: 1rem; margin: 0; font-weight: 600; }
+        header h1 {
+            font-size: 1rem; margin: 0; font-weight: 600;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        header h1 .logo { width: 1.4rem; height: 1.4rem; display: block; }
         header .status { font-size: 0.8rem; color: #a6adc8; margin-left: auto; }
-        #packages, #wheel, #llmModel {
+        #packages, #wheel, #llmModel, #example {
             background: #1e1e2e;
             color: #cdd6f4;
             border: 1px solid #313244;
@@ -126,6 +158,7 @@
         }
         #wheel { min-width: 320px; }
         #llmModel { min-width: 200px; }
+        #example { min-width: 150px; }
         button {
             background: #89b4fa;
             color: #1e1e2e;
@@ -178,7 +211,21 @@
 </head>
 <body>
 <header>
-    <h1>🐍 Kaval.AI Playground</h1>
+    <h1>
+        <svg class="logo" viewBox="0 0 79.375 79.375" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <g transform="translate(-27.011657,-24.494702)">
+                <g transform="matrix(0.26458333,0,0,0.26458333,-506.65292,-7.2552973)">
+                    <path d="m 2317,120 h -300 v 300 h 300 z" fill="#002626"/>
+                    <path d="m 2145.42,235.72 c -1.16,-1.164 -1.82,-2.752 -1.82,-4.424 V 120 H 2017 v 1.842 L 2138.82,233.9 c 1.29,1.185 2.01,2.857 2.01,4.593 V 420 h 176.15 v -12.679 z" fill="#acc12f"/>
+                </g>
+            </g>
+        </svg>
+        Kaval.AI Playground
+    </h1>
+    <select id="example" title="Load a ready-made example into the editor">
+        <option value="chat">Example: Chat</option>
+        <option value="embeddings">Example: Embeddings</option>
+    </select>
     <input id="wheel" type="text" value="dist/kavalai-1.0.0-py3-none-any.whl"
            title="URL or relative path to the kavalai wheel (built with: uv build --wheel)">
     <select id="llmModel" title="In-browser LLM model (WebLLM, downloaded on first use). q4f32 builds run on GPUs without FP16 shaders (e.g. GTX 10xx).">
@@ -211,20 +258,16 @@
     const packagesEl = document.getElementById("packages");
     const wheelEl = document.getElementById("wheel");
     const llmModelEl = document.getElementById("llmModel");
+    const exampleEl = document.getElementById("example");
 
     // The WebLLM bridge calls this with model-download / init progress reports.
     window.__kavalLLMProgress = (report) => {
         statusEl.textContent = report && report.text ? report.text : "Loading model…";
     };
 
-    const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
-        mode: "python",
-        theme: "dracula",
-        lineNumbers: true,
-        indentUnit: 4,
-        extraKeys: { "Ctrl-Enter": run, "Cmd-Enter": run },
-    });
-    editor.setValue(
+    // Ready-made examples; the header "Example" dropdown swaps between them.
+    const EXAMPLES = {
+        chat:
 `# Call an LLM fully in the browser with Kaval.AI — no API key, no server, no CORS.
 #
 # make_client("browser/<model>") returns a BrowserLLMClient that runs inference
@@ -242,8 +285,51 @@ reply = await client.chat_completions(chat_history=ChatHistory(messages=[
 ]))
 
 print("\\nLLM says:", reply)
-`
-    );
+`,
+        embeddings:
+`# Compute text embeddings fully in the browser with Kaval.AI — no API key, no server.
+#
+# make_embedding_client("browser/<model>") returns a BrowserEmbeddingClient that
+# runs locally through the page's WebLLM bridge (WebGPU). Embedding models are
+# separate from chat models — here we use a small Snowflake Arctic model in q0f32
+# (full precision, so it runs even on GPUs without FP16 shaders). The first run
+# downloads and caches the model; later runs are instant.
+from kavalai import make_embedding_client
+
+client = make_embedding_client("browser/snowflake-arctic-embed-s-q0f32-MLC-b4")
+
+texts = [
+    "Tallinn is the capital of Estonia.",
+    "Estonia's capital city is Tallinn.",
+    "I had pasta for dinner last night.",
+]
+print(f"Embedding {len(texts)} texts in the browser (first run downloads the model)…")
+
+# normalize=True returns L2-normalised vectors, so cosine similarity is just
+# their dot product.
+vectors, stats = await client.compute_embeddings(texts, normalize=True)
+print(f"\\nGot {len(vectors)} vectors, each of dimension {len(vectors[0])}.")
+
+def similarity(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+print(f"sim(0, 1) = {similarity(vectors[0], vectors[1]):.3f}  # same meaning")
+print(f"sim(0, 2) = {similarity(vectors[0], vectors[2]):.3f}  # unrelated")
+`,
+    };
+
+    const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+        mode: "python",
+        theme: "dracula",
+        lineNumbers: true,
+        indentUnit: 4,
+        extraKeys: { "Ctrl-Enter": run, "Cmd-Enter": run },
+    });
+    editor.setValue(EXAMPLES[exampleEl.value] || EXAMPLES.chat);
+    // Swap the editor contents when the user picks a different example.
+    exampleEl.addEventListener("change", () => {
+        editor.setValue(EXAMPLES[exampleEl.value] || EXAMPLES.chat);
+    });
 
     let pyodide = null;
     let micropip = null;

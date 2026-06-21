@@ -37,6 +37,31 @@ from kavalai.llm_clients.streamer import Streamer
 BRIDGE_GLOBAL = "kavalBrowserLLM"
 
 
+def get_browser_bridge():
+    """Return the page's JS bridge object (``window.kavalBrowserLLM``).
+
+    Shared by the browser LLM client (``.chat``) and the browser embedding
+    client (``.embed``). Raises a helpful :class:`LlmClientException` when not
+    running under Pyodide, or when the page has not loaded a bridge.
+    """
+    if not is_pyodide():
+        raise LlmClientException(
+            "The browser bridge only works inside a Pyodide/browser runtime. "
+            "Use an 'openai/', 'gemini/' or 'ollama/' model outside the browser."
+        )
+
+    import js  # type: ignore[import-not-found]  # provided by Pyodide
+
+    bridge = getattr(js, BRIDGE_GLOBAL, None)
+    if bridge is None:
+        raise LlmClientException(
+            f"No in-browser LLM engine found (window.{BRIDGE_GLOBAL} is "
+            "undefined). Load a WebLLM bridge in the page before using a "
+            "'browser/...' model — see python-playground.html for an example."
+        )
+    return bridge
+
+
 class BrowserLLMClient(BaseLlmClient):
     """LLM client that runs entirely in the browser, with no network calls.
 
@@ -79,22 +104,7 @@ class BrowserLLMClient(BaseLlmClient):
 
     def _get_bridge(self):
         """Return the JS bridge object, or raise a helpful error if absent."""
-        if not is_pyodide():
-            raise LlmClientException(
-                "BrowserLLMClient only works inside a Pyodide/browser runtime. "
-                "Use an 'openai/', 'gemini/' or 'ollama/' model outside the browser."
-            )
-
-        import js  # type: ignore[import-not-found]  # provided by Pyodide
-
-        bridge = getattr(js, BRIDGE_GLOBAL, None)
-        if bridge is None:
-            raise LlmClientException(
-                f"No in-browser LLM engine found (window.{BRIDGE_GLOBAL} is "
-                "undefined). Load a WebLLM bridge in the page before using a "
-                "'browser/...' model — see python-playground.html for an example."
-            )
-        return bridge
+        return get_browser_bridge()
 
     def _build_request(
         self,

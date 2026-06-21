@@ -245,12 +245,79 @@ class FastEmbedClient(BaseEmbeddingClient):
         return embeddings, stats
 
 
+class BrowserEmbeddingClient(BaseEmbeddingClient):
+    """In-browser embeddings via the WebLLM bridge (Pyodide only, no API key).
+
+    Mirrors :class:`~kavalai.llm_clients.browser_client.BrowserLLMClient`:
+    inference happens inside the page through ``window.kavalBrowserLLM``, here
+    via its async ``embed`` function::
+
+        window.kavalBrowserLLM.embed(requestJson) -> Promise<resultJson>
+
+    where ``requestJson`` is a JSON string of ``{model, input}`` (``input`` is
+    the list of texts) and ``resultJson`` is a JSON string of either
+    ``{embeddings, usage}`` or ``{error}``. The model is downloaded once and
+    cached by the browser — no API key, no provider account, no CORS.
+
+    Use it through ``make_embedding_client("browser/<model-id>")``; ``<model-id>``
+    is passed verbatim to the bridge (e.g. a WebLLM embedding id like
+    ``snowflake-arctic-embed-m-q0f32-MLC-b4``).
+    """
+
+    async def compute_embeddings(
+        self,
+        texts: List[str],
+        normalize: bool = False,
+        normalizer: Optional[Normalizer] = None,
+        **kwargs,
+    ) -> Tuple[Embeddings, ModelCallStat]:
+        import json
+
+        from kavalai.llm_clients.base_client import LlmClientException
+        from kavalai.llm_clients.browser_client import get_browser_bridge
+
+        start_time = time.perf_counter()
+        bridge = get_browser_bridge()
+        request = {"model": self.model, "input": list(texts)}
+
+        try:
+            # ``bridge.embed`` resolves to a JS Promise; awaiting it in Pyodide
+            # yields the resolved JSON string.
+            raw = await bridge.embed(json.dumps(request))
+        except Exception as exc:  # JsException or anything the bridge throws.
+            raise LlmClientException(
+                f"In-browser embedding call failed: {exc}"
+            ) from exc
+
+        data = json.loads(raw)
+        if data.get("error"):
+            raise LlmClientException(f"In-browser embedding error: {data['error']}")
+
+        embeddings = _maybe_normalize(
+            data.get("embeddings") or [], normalize, normalizer
+        )
+        usage = data.get("usage") or {}
+        total_tokens = usage.get("total_tokens") or usage.get("prompt_tokens") or 0
+        duration = time.perf_counter() - start_time
+
+        stats = create_model_call_stat(
+            call_type="embedding",
+            model=f"browser/{self.model}",
+            duration_sections=duration,
+            batch_size=len(texts),
+            total_tokens=total_tokens,
+        )
+        return embeddings, stats
+
+
 def make_embedding_client(model: str) -> BaseEmbeddingClient:
     """Construct a v2 embedding client from a ``provider/model`` string.
 
-    Supported providers: ``openai``, ``gemini``, ``ollama``, ``fastembed``.
-    The provider is split off and the remainder (which may itself contain
-    slashes, e.g. ``fastembed/BAAI/bge-small-en-v1.5``) is the model name.
+    Supported providers: ``openai``, ``gemini``, ``ollama``, ``fastembed``,
+    ``browser``. The provider is split off and the remainder (which may itself
+    contain slashes, e.g. ``fastembed/BAAI/bge-small-en-v1.5``) is the model
+    name. The ``browser`` provider runs entirely client-side via a WebLLM
+    bridge (Pyodide only) and needs no API key.
     """
     if "/" not in model:
         raise ValueError(f"Embedding model must be 'provider/model', got '{model}'.")
@@ -269,4 +336,6 @@ def make_embedding_client(model: str) -> BaseEmbeddingClient:
             cache_dir=os.getenv("FASTEMBED_CACHE_DIR"),
             threads=int(threads) if threads else None,
         )
+    if provider == "browser":
+        return BrowserEmbeddingClient(model_name)
     raise ValueError(f"Unsupported embedding provider: '{provider}'.")

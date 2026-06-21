@@ -1,12 +1,18 @@
+import json
+import sys
+import types
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from kavalai.agents.db import ModelCallStat
+from kavalai.llm_clients import browser_client
 from kavalai.llm_clients import embeddings as emb
+from kavalai.llm_clients.base_client import LlmClientException
 from kavalai.llm_clients.embeddings import (
     BaseEmbeddingClient,
+    BrowserEmbeddingClient,
     FastEmbedClient,
     GeminiEmbeddingClient,
     OllamaEmbeddingClient,
@@ -33,6 +39,9 @@ def test_make_embedding_client_providers(monkeypatch):
     assert isinstance(fc, FastEmbedClient)
     # The provider is split off but the rest of the path is kept intact.
     assert fc.model == "BAAI/bge-small-en-v1.5"
+    bc = make_embedding_client("browser/snowflake-arctic-embed-m-q0f32-MLC-b4")
+    assert isinstance(bc, BrowserEmbeddingClient)
+    assert bc.model == "snowflake-arctic-embed-m-q0f32-MLC-b4"
 
 
 def test_make_embedding_client_errors():
@@ -153,3 +162,126 @@ def test_fastembed_get_model_lazy(monkeypatch):
     second = client._get_model()
     assert first is second
     assert created and created[0]["model_name"] == "m"
+
+
+# ------------------------------------------------------------- browser bridge
+class FakeEmbedBridge:
+    """Stand-in for ``window.kavalBrowserLLM`` exposing an ``embed`` function."""
+
+    def __init__(self, result=None, raise_exc=None):
+        self._result = result
+        self._raise_exc = raise_exc
+        self.last_request = None
+
+    async def embed(self, request_json):
+        self.last_request = request_json
+        if self._raise_exc is not None:
+            raise self._raise_exc
+        return self._result
+
+
+def _install_bridge(monkeypatch, bridge, *, pyodide=True):
+    """Pretend we run under Pyodide and inject a fake ``js`` module.
+
+    ``get_browser_bridge`` resolves ``is_pyodide`` and the ``js`` module in the
+    ``browser_client`` namespace, so that is where we patch.
+    """
+    monkeypatch.setattr(browser_client, "is_pyodide", lambda: pyodide)
+    fake_js = types.ModuleType("js")
+    if bridge is not None:
+        fake_js.kavalBrowserLLM = bridge
+    monkeypatch.setitem(sys.modules, "js", fake_js)
+
+
+async def test_browser_embeddings(monkeypatch):
+    bridge = FakeEmbedBridge(
+        result=json.dumps(
+            {
+                "embeddings": [[0.1, 0.2], [0.3, 0.4]],
+                "usage": {"prompt_tokens": 5, "total_tokens": 5},
+            }
+        )
+    )
+    _install_bridge(monkeypatch, bridge)
+
+    client = BrowserEmbeddingClient("snowflake-arctic-embed-m-q0f32-MLC-b4")
+    vectors, stats = await client.compute_embeddings(["hello", "world"])
+
+    assert vectors == [[0.1, 0.2], [0.3, 0.4]]
+    assert isinstance(stats, ModelCallStat)
+    assert stats.call_type == "embedding"
+    assert stats.model == "browser/snowflake-arctic-embed-m-q0f32-MLC-b4"
+    assert stats.batch_size == 2
+    assert stats.total_tokens == 5
+
+    # The request handed to the bridge carries the model and the texts.
+    sent = json.loads(bridge.last_request)
+    assert sent == {
+        "model": "snowflake-arctic-embed-m-q0f32-MLC-b4",
+        "input": ["hello", "world"],
+    }
+
+
+async def test_browser_embeddings_normalized(monkeypatch):
+    bridge = FakeEmbedBridge(
+        result=json.dumps({"embeddings": [[3.0, 4.0]], "usage": {}})
+    )
+    _install_bridge(monkeypatch, bridge)
+
+    client = BrowserEmbeddingClient("model-x")
+    vectors, _ = await client.compute_embeddings(
+        ["x"], normalize=True, normalizer=Normalizer(l2=True)
+    )
+
+    # L2-normalised [3,4] -> [0.6, 0.8]
+    assert vectors[0][0] == pytest.approx(0.6)
+    assert vectors[0][1] == pytest.approx(0.8)
+
+
+async def test_browser_embeddings_usage_falls_back_to_prompt_tokens(monkeypatch):
+    # No total_tokens: the client falls back to prompt_tokens.
+    bridge = FakeEmbedBridge(
+        result=json.dumps({"embeddings": [[0.0]], "usage": {"prompt_tokens": 9}})
+    )
+    _install_bridge(monkeypatch, bridge)
+
+    _, stats = await BrowserEmbeddingClient("m").compute_embeddings(["a"])
+    assert stats.total_tokens == 9
+
+
+async def test_browser_embeddings_missing_usage_defaults_to_zero(monkeypatch):
+    bridge = FakeEmbedBridge(result=json.dumps({"embeddings": [[0.0]]}))
+    _install_bridge(monkeypatch, bridge)
+
+    _, stats = await BrowserEmbeddingClient("m").compute_embeddings(["a"])
+    assert stats.total_tokens == 0
+
+
+async def test_browser_embeddings_error_payload_raises(monkeypatch):
+    bridge = FakeEmbedBridge(result=json.dumps({"error": "WebGPU not available"}))
+    _install_bridge(monkeypatch, bridge)
+
+    with pytest.raises(LlmClientException, match="WebGPU not available"):
+        await BrowserEmbeddingClient("m").compute_embeddings(["a"])
+
+
+async def test_browser_embeddings_bridge_exception_is_wrapped(monkeypatch):
+    bridge = FakeEmbedBridge(raise_exc=ValueError("boom"))
+    _install_bridge(monkeypatch, bridge)
+
+    with pytest.raises(LlmClientException, match="In-browser embedding call failed"):
+        await BrowserEmbeddingClient("m").compute_embeddings(["a"])
+
+
+async def test_browser_embeddings_raises_outside_pyodide(monkeypatch):
+    _install_bridge(monkeypatch, None, pyodide=False)
+
+    with pytest.raises(LlmClientException, match="only works inside a Pyodide"):
+        await BrowserEmbeddingClient("m").compute_embeddings(["a"])
+
+
+async def test_browser_embeddings_raises_when_bridge_absent(monkeypatch):
+    _install_bridge(monkeypatch, None, pyodide=True)
+
+    with pytest.raises(LlmClientException, match="No in-browser LLM engine found"):
+        await BrowserEmbeddingClient("m").compute_embeddings(["a"])
