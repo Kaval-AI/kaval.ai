@@ -24,6 +24,8 @@ jobs:
         run: uv sync --extra test --extra tools
 
       - name: Run backend unit tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: uv run --extra test pytest
 
   frontend-tests:
