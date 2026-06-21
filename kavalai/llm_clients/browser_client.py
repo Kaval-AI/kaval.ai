@@ -32,8 +32,8 @@ from kavalai.llm_clients.base_client import (
 from kavalai.llm_clients.streamer import Streamer
 
 # Name of the JavaScript bridge the host page must expose on the global scope
-# (``window.kavalBrowserLLM``). See ``python-playground.html`` for a
-# WebLLM-backed reference implementation of the bridge.
+# (``window.kavalBrowserLLM``). See ``webwidget/`` for a WebLLM-backed
+# reference implementation of the bridge.
 BRIDGE_GLOBAL = "kavalBrowserLLM"
 
 
@@ -57,7 +57,7 @@ def get_browser_bridge():
         raise LlmClientException(
             f"No in-browser LLM engine found (window.{BRIDGE_GLOBAL} is "
             "undefined). Load a WebLLM bridge in the page before using a "
-            "'browser/...' model — see python-playground.html for an example."
+            "'browser/...' model — see webwidget/ for an example."
         )
     return bridge
 

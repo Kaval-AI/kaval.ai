@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaval.AI Python Playground (Pyodide)</title>
+    <!-- Kaval.AI icon mark (matches docs/_static/favicon.svg). -->
+    <link rel="icon" type="image/svg+xml"
+          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 79.375 79.375'><g transform='translate(-27.011657,-24.494702)'><g transform='matrix(0.26458333,0,0,0.26458333,-506.65292,-7.2552973)'><path d='m 2317,120 h -300 v 300 h 300 z' fill='%23002626'/><path d='m 2145.42,235.72 c -1.16,-1.164 -1.82,-2.752 -1.82,-4.424 V 120 H 2017 v 1.842 L 2138.82,233.9 c 1.29,1.185 2.01,2.857 2.01,4.593 V 420 h 176.15 v -12.679 z' fill='%23acc12f'/></g></g></svg>">
+    <!--
+      Standalone full-page playground. All the logic lives in the embeddable
+      widget (kaval-playground.js / .css) so the docs and this page share one
+      codebase. Serve over HTTP so the kavalai wheel can be fetched, e.g.:
+
+          uv build --wheel              # produces dist/kavalai-*.whl
+          python -m http.server         # from the repo root
+          open http://localhost:8000/webwidget/python-playground.html
+    -->
+    <link rel="stylesheet" href="kaval-playground.css">
+    <style>
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            background: #11111b;
+            color: #cdd6f4;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+        .kaval-topbar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            padding: 0.6rem 0.9rem;
+            background: #181825;
+            border-bottom: 1px solid #313244;
+            font-size: 0.8rem;
+        }
+        .kaval-topbar label { display: flex; align-items: center; gap: 0.5rem; flex: 1 1 22rem; }
+        .kaval-topbar .hint { color: #a6adc8; font-size: 0.72rem; }
+        /* The widget fills the rest of the viewport. */
+        #playground { flex: 1 1 auto; min-height: 0; padding: 0.9rem; }
+        #playground .kaval-pg-embed { border-radius: 0.6rem; }
+    </style>
+</head>
+<body>
+    <div class="kaval-topbar">
+        <label>
+            kavalai wheel
+            <input id="wheel" class="kaval-pg-input kaval-pg-input--wheel" type="text"
+                   value="../dist/kavalai-1.0.0-py3-none-any.whl"
+                   title="URL or relative path to the kavalai wheel (built with: uv build --wheel)">
+        </label>
+        <span class="hint">Serve over HTTP (e.g. <code>python -m http.server</code>) so the wheel can load.</span>
+    </div>
+    <div id="playground"></div>
+
+    <script src="kaval-playground.js"></script>
+    <script>
+        // Ready-made examples; the widget's "example" dropdown swaps between them.
+        // Note: `\\n` in these JS template literals reaches Python as the `\n`
+        // escape (a single `\n` here would be a raw newline and break the string).
+        var EXAMPLES = {
+            Chat:
+`# Call an LLM fully in the browser with Kaval.AI — no API key, no server, no CORS.
+#
+# make_client("browser/<model>") returns a BrowserLLMClient that runs inference
+# locally through the page's WebLLM bridge (WebGPU). The first run downloads the
+# selected model (watch the status bar) and the browser caches it for next time.
+# Needs a WebGPU-capable browser; KAVAL_BROWSER_MODEL comes from the model picker.
+from kavalai import make_client
+
+print(f"Loading {KAVAL_BROWSER_MODEL} in the browser (first run can take a while)…")
+client = make_client(f"browser/{KAVAL_BROWSER_MODEL}")
+
+reply = await client.prompt(
+    "In one friendly sentence, say hello and share a fun fact about Estonia."
+)
+print("\\nLLM says:", reply)
+`,
+            Embeddings:
+`# Compute text embeddings fully in the browser with Kaval.AI — no API key, no server.
+#
+# make_embedding_client("browser/<model>") returns a BrowserEmbeddingClient that
+# runs locally through the page's WebLLM bridge (WebGPU). Embedding models are
+# separate from chat models — KAVAL_BROWSER_EMBED_MODEL is a small Snowflake
+# Arctic model in q0f32 (runs even on GPUs without FP16 shaders).
+from kavalai import make_embedding_client
+
+client = make_embedding_client(f"browser/{KAVAL_BROWSER_EMBED_MODEL}")
+
+texts = [
+    "Tallinn is the capital of Estonia.",
+    "Estonia's capital city is Tallinn.",
+    "I had pasta for dinner last night.",
+]
+print(f"Embedding {len(texts)} texts in the browser (first run downloads the model)…")
+
+# normalize=True returns L2-normalised vectors, so cosine similarity is just
+# their dot product.
+vectors, stats = await client.compute_embeddings(texts, normalize=True)
+print(f"\\nGot {len(vectors)} vectors, each of dimension {len(vectors[0])}.")
+
+def similarity(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+print(f"sim(0, 1) = {similarity(vectors[0], vectors[1]):.3f}  # same meaning")
+print(f"sim(0, 2) = {similarity(vectors[0], vectors[2]):.3f}  # unrelated")
+`,
+        };
+
+        var wheelInput = document.getElementById("wheel");
+        // Point the shared engine at the wheel (re-applied on edit; takes effect
+        // on the next fresh run before Pyodide has booted).
+        KavalPlayground.configure({ wheelUrl: wheelInput.value.trim() });
+        wheelInput.addEventListener("change", function () {
+            KavalPlayground.configure({ wheelUrl: wheelInput.value.trim() });
+        });
+
+        KavalPlayground.mount("#playground", {
+            title: "Kaval.AI Playground",
+            examples: EXAMPLES,
+            showPackages: true,
+        });
+    </script>
+</body>
+</html>

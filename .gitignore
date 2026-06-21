@@ -71,8 +71,11 @@ instance/
 # Sphinx documentation
 docs/_build/
 # Playground assets staged at build time by docs/_ext/kaval_playground.py
+# (the widget itself lives in webwidget/ and is copied in at build).
 docs/_static/pyodide/*.whl
 docs/_static/pyodide/playground-config.js
+docs/_static/pyodide/kaval-playground.js
+docs/_static/pyodide/kaval-playground.css
 
 # PyBuilder
 .pybuilder/

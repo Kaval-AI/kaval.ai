@@ -1,15 +1,19 @@
 /*
- * Kaval.AI docs playground styling.
+ * Kaval.AI playground widget — shared styling.
  *
- * Two pieces:
- *   1. The "Run in browser" button injected onto code blocks the author marked
- *      `run-in-browser` (opt-in).
- *   2. The playground drawer — a right-hand panel on desktop, a full-width
- *      bottom sheet with a vertical (editor-on-top / output-at-bottom) split on
- *      mobile.
+ * One stylesheet powers three surfaces, all built from the same console
+ * internals (header / API keys / editor / toolbar / output):
  *
- * The drawer is a self-contained dark "console" so it reads consistently
- * regardless of the light/dark docs theme.
+ *   1. .kaval-pg-run-btn — the "Run in browser" button injected onto code
+ *      blocks in the Sphinx docs.
+ *   2. .kaval-pg-panel   — the docs drawer (right-hand panel on desktop, a
+ *      bottom sheet on mobile) opened by that button.
+ *   3. .kaval-pg-embed   — an inline widget that fills its container; used to
+ *      embed the playground on any page and by the standalone
+ *      python-playground.html.
+ *
+ * The console is a self-contained dark "console" so it reads consistently
+ * regardless of the host page's light/dark theme.
  */
 
 :root {
@@ -58,18 +62,27 @@
   outline: none;
 }
 
-/* -- The drawer ------------------------------------------------------------ */
-.kaval-pg-panel {
-  position: fixed;
-  z-index: 1000;
+/* -- Console shell (shared by drawer + embed) ------------------------------ */
+.kaval-pg-panel,
+.kaval-pg-embed {
   display: flex;
   flex-direction: column;
   background: var(--kaval-pg-bg);
   color: var(--kaval-pg-fg);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior: contain;
+}
+.kaval-pg-panel *,
+.kaval-pg-embed * {
+  box-sizing: border-box;
+}
+
+/* -- The docs drawer ------------------------------------------------------- */
+.kaval-pg-panel {
+  position: fixed;
+  z-index: 1000;
   box-shadow: 0 0 2rem rgba(0, 0, 0, 0.45);
   transition: transform 0.25s ease;
-  overscroll-behavior: contain;
 }
 
 /* Desktop: right-hand drawer, full height, slides in from the right. */
@@ -103,6 +116,17 @@
   }
 }
 
+/* -- The embeddable / standalone widget ------------------------------------ */
+.kaval-pg-embed {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  border: 1px solid var(--kaval-pg-border);
+  border-radius: 0.6rem;
+  overflow: hidden;
+}
+
 /* Header */
 .kaval-pg-header {
   display: flex;
@@ -113,8 +137,16 @@
   border-bottom: 1px solid var(--kaval-pg-border);
 }
 .kaval-pg-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.85rem;
   font-weight: 700;
+}
+.kaval-pg-title .kaval-pg-logo {
+  width: 1.1rem;
+  height: 1.1rem;
+  display: block;
 }
 .kaval-pg-status {
   margin-left: auto;
@@ -181,7 +213,7 @@
 /* Editor — grows to fill available height */
 .kaval-pg-editor {
   flex: 1 1 auto;
-  min-height: 120px;
+  min-height: 140px;
   overflow: hidden;
   border-bottom: 1px solid var(--kaval-pg-border);
 }
@@ -195,6 +227,7 @@
 /* Toolbar */
 .kaval-pg-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.8rem;
@@ -217,19 +250,6 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-.kaval-pg-model {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 16rem;
-  background: var(--kaval-pg-bg);
-  color: var(--kaval-pg-fg);
-  border: 1px solid var(--kaval-pg-border);
-  border-radius: 0.45rem;
-  padding: 0.3rem 0.5rem;
-  font-size: 0.75rem;
-  font-family: inherit;
-  cursor: pointer;
-}
 .kaval-pg-ghost {
   background: transparent;
   color: var(--kaval-pg-muted);
@@ -242,6 +262,32 @@
 .kaval-pg-ghost:hover {
   color: var(--kaval-pg-fg);
   border-color: var(--kaval-pg-muted);
+}
+
+/* Toolbar/header fields: model picker, example picker, package + wheel inputs */
+.kaval-pg-model,
+.kaval-pg-select,
+.kaval-pg-input {
+  background: var(--kaval-pg-bg);
+  color: var(--kaval-pg-fg);
+  border: 1px solid var(--kaval-pg-border);
+  border-radius: 0.45rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+.kaval-pg-model {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 16rem;
+}
+.kaval-pg-input {
+  cursor: text;
+}
+.kaval-pg-input--wheel {
+  flex: 1 1 18rem;
+  min-width: 0;
 }
 
 /* Output — pinned to the bottom with its own scroll */

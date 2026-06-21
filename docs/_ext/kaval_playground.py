@@ -1,16 +1,21 @@
 """Sphinx extension: an in-browser Kaval.AI playground for the HTML docs.
 
-It does three things:
+The playground itself lives in ``webwidget/`` (the single source of truth, also
+used by the standalone ``webwidget/python-playground.html`` and embeddable on any
+site). This extension wires it into the Sphinx build so the docs don't duplicate
+any of that code. On every build it:
 
-* registers the playground CSS/JS (``_static/pyodide/playground.{css,js}``),
-* stages the most recently built ``dist/kavalai-*.whl`` into
-  ``_static/pyodide/`` so Pyodide's ``micropip`` can install it client-side, and
-* emits ``_static/pyodide/playground-config.js`` telling the front-end which
-  wheel filename and Pyodide build to use.
+* copies ``webwidget/kaval-playground.{css,js}`` into ``_static/pyodide/`` and
+  registers them,
+* stages the most recently built ``dist/kavalai-*.whl`` into ``_static/pyodide/``
+  so Pyodide's ``micropip`` can install it client-side, and
+* emits ``_static/pyodide/playground-config.js`` telling the widget which wheel
+  filename and Pyodide build to use.
 
-The wheel is copied (not committed) on every build; if ``dist/`` has no wheel,
-any previously staged one is reused, and failing that the playground falls back
-to plain-Python (Pyodide stdlib) mode. Build a wheel with ``uv build --wheel``.
+Copied/staged files are not committed (see ``.gitignore``). If ``dist/`` has no
+wheel, any previously staged one is reused, and failing that the playground
+falls back to plain-Python (Pyodide stdlib) mode. Build a wheel with
+``uv build --wheel``.
 """
 
 from __future__ import annotations
@@ -26,6 +31,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"
 
+# Widget assets copied from webwidget/ into the docs' _static/pyodide on build.
+WIDGET_FILES = ("kaval-playground.css", "kaval-playground.js")
+
 
 def _newest_wheel(directory: Path) -> Path | None:
     """Return the most recently modified ``kavalai-*.whl`` in *directory*."""
@@ -33,10 +41,28 @@ def _newest_wheel(directory: Path) -> Path | None:
     return wheels[-1] if wheels else None
 
 
-def _stage_wheel(app: Sphinx) -> None:
-    """Copy the freshest built wheel into ``_static/pyodide`` and write config."""
+def _copy_widget(app: Sphinx, static_dir: Path) -> None:
+    """Copy the shared widget from ``webwidget/`` into ``_static/pyodide``."""
+    webwidget = Path(app.srcdir).parent / "webwidget"
+    for name in WIDGET_FILES:
+        src = webwidget / name
+        if src.is_file():
+            shutil.copy2(src, static_dir / name)
+            logger.info("[kaval-playground] copied widget asset %s", name)
+        else:
+            logger.warning(
+                "[kaval-playground] missing widget asset %s — the playground "
+                "will not work. Expected it under webwidget/.",
+                src,
+            )
+
+
+def _stage_assets(app: Sphinx) -> None:
+    """Copy the widget + freshest wheel into ``_static/pyodide`` and write config."""
     static_dir = Path(app.srcdir) / "_static" / "pyodide"
     static_dir.mkdir(parents=True, exist_ok=True)
+
+    _copy_widget(app, static_dir)
 
     repo_root = Path(app.srcdir).parent
     built = _newest_wheel(repo_root / "dist") if (repo_root / "dist").is_dir() else None
@@ -77,16 +103,17 @@ def _stage_wheel(app: Sphinx) -> None:
 def setup(app: Sphinx) -> dict:
     app.add_config_value("kaval_pyodide_url", DEFAULT_PYODIDE_URL, "html")
 
-    # Generate the staged wheel + config before static files are copied.
-    app.connect("builder-inited", _stage_wheel)
+    # Copy the widget + stage the wheel + config before static files are copied.
+    app.connect("builder-inited", _stage_assets)
 
-    # playground-config.js must load before playground.js (registration order).
-    app.add_css_file("pyodide/playground.css")
+    # playground-config.js must load before kaval-playground.js (it reads the
+    # window.KAVAL_PLAYGROUND_CONFIG it emits).
+    app.add_css_file("pyodide/kaval-playground.css")
     app.add_js_file("pyodide/playground-config.js")
-    app.add_js_file("pyodide/playground.js")
+    app.add_js_file("pyodide/kaval-playground.js")
 
     return {
-        "version": "0.1",
+        "version": "0.2",
         "parallel_read_safe": True,
         "parallel_write_safe": True,
     }
