@@ -1,10 +1,14 @@
 /*
  * Kaval.AI docs playground.
  *
- * Adds a "Run in browser" button to every Python code block in the Sphinx HTML
- * docs. Clicking it opens a side-panel (a right-hand drawer on desktop, a
- * full-width vertical split on mobile) with an editable copy of the snippet and
- * an output pane, and runs it through Pyodide with the kavalai wheel installed.
+ * Adds a "Run in browser" button to Python code blocks the author marked
+ * `run-in-browser` (opt-in). Clicking it opens a side-panel (a right-hand
+ * drawer on desktop, a full-width vertical split on mobile) with an editable
+ * copy of the snippet and an output pane, and runs it through Pyodide with the
+ * kavalai wheel installed. A WebLLM bridge lets "browser/..." models run too.
+ *
+ * NOTE: the docs must be served over http(s); opening the built HTML via a
+ * file:// path stops the browser from fetching the kavalai wheel.
  *
  * Pyodide is booted lazily on the first run so page loads stay fast. The booted
  * interpreter, the installed wheel and the CodeMirror assets are all cached and
@@ -32,9 +36,26 @@
   var PYODIDE_INDEX = PYODIDE_URL.replace(/pyodide\.js(\?.*)?$/, "");
   var WHEEL_URL = CONFIG.wheelName ? STATIC_BASE + CONFIG.wheelName : null;
   var CM_BASE = "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/";
+  var WEBLLM_URL = "https://esm.run/@mlc-ai/web-llm";
 
   var LS_OPENAI = "kaval-pg-openai-key";
   var LS_GEMINI = "kaval-pg-gemini-key";
+  var LS_MODEL = "kaval-pg-browser-model";
+
+  // In-browser chat models offered in the drawer's model picker. q4f32 builds
+  // run on GPUs without FP16 shaders (e.g. GTX 10xx); q4f16 needs an FP16 GPU.
+  // The chosen id is exposed to Python as the KAVAL_BROWSER_MODEL global so
+  // "browser/..." examples don't hardcode it. (Mirrors python-playground.html.)
+  var BROWSER_MODELS = [
+    ["Llama-3.2-1B-Instruct-q4f32_1-MLC", "Llama-3.2-1B · q4f32 (≈1.1 GB)"],
+    ["Llama-3.2-3B-Instruct-q4f32_1-MLC", "Llama-3.2-3B · q4f32 (≈2.9 GB)"],
+    ["Qwen2.5-1.5B-Instruct-q4f32_1-MLC", "Qwen2.5-1.5B · q4f32 (≈1.6 GB)"],
+    ["Qwen2.5-0.5B-Instruct-q4f32_1-MLC", "Qwen2.5-0.5B · q4f32 (≈0.6 GB)"],
+    ["Llama-3.2-1B-Instruct-q4f16_1-MLC", "Llama-3.2-1B · q4f16 (FP16 GPU)"],
+    ["Llama-3.2-3B-Instruct-q4f16_1-MLC", "Llama-3.2-3B · q4f16 (FP16 GPU)"],
+  ];
+  // A small, full-precision (q0f32) embedding model — runs without an FP16 GPU.
+  var DEFAULT_EMBED_MODEL = "snowflake-arctic-embed-s-q0f32-MLC-b4";
 
   // -- Tiny DOM helpers -----------------------------------------------------
   function loadScript(src) {
@@ -132,6 +153,98 @@
     return pyodide;
   }
 
+  // -- In-browser LLM/embeddings engine (WebLLM) ----------------------------
+  // Exposes window.kavalBrowserLLM.{chat,embed} so kavalai's "browser/..."
+  // clients run fully client-side over WebGPU — no API key, no server, no CORS.
+  // WebLLM and the model are downloaded lazily on first use and cached by the
+  // browser. This is the docs port of python-playground.html's bridge.
+  var webllmModulePromise = null;
+  var enginePromise = null;
+  var loadedModel = null;
+
+  function loadWebLLM() {
+    if (!webllmModulePromise) webllmModulePromise = import(WEBLLM_URL);
+    return webllmModulePromise;
+  }
+
+  async function getWebLLMEngine(modelId) {
+    if (!navigator.gpu) {
+      throw new Error(
+        "WebGPU is not available in this browser, so 'browser/...' models " +
+          "cannot run. Use a recent Chrome/Edge (or Firefox with " +
+          "dom.webgpu.enabled). Verify at chrome://gpu."
+      );
+    }
+    // Reuse the engine while the model is unchanged; rebuild it on a switch
+    // (e.g. moving from a chat model to an embedding model).
+    if (enginePromise && loadedModel === modelId) return enginePromise;
+    loadedModel = modelId;
+    var webllm = await loadWebLLM();
+    enginePromise = webllm.CreateMLCEngine(modelId, {
+      initProgressCallback: function (report) {
+        setStatus(report && report.text ? report.text : "Loading model…");
+      },
+    });
+    return enginePromise;
+  }
+
+  function installBrowserLLMBridge() {
+    if (window.kavalBrowserLLM) return;
+    window.kavalBrowserLLM = {
+      // {model, messages, temperature?, top_p?, response_format?} -> {content, usage} | {error}
+      chat: async function (requestJson) {
+        try {
+          var req =
+            typeof requestJson === "string" ? JSON.parse(requestJson) : requestJson;
+          var engine = await getWebLLMEngine(req.model);
+          var opts = { messages: req.messages, stream: false };
+          if (req.temperature != null) opts.temperature = req.temperature;
+          if (req.top_p != null) opts.top_p = req.top_p;
+          if (req.max_tokens != null) opts.max_tokens = req.max_tokens;
+          if (req.response_format) {
+            var rf = { type: req.response_format.type || "json_object" };
+            if (req.response_format.schema != null) {
+              // WebLLM expects the JSON schema as a string.
+              rf.schema =
+                typeof req.response_format.schema === "string"
+                  ? req.response_format.schema
+                  : JSON.stringify(req.response_format.schema);
+            }
+            opts.response_format = rf;
+          }
+          var reply = await engine.chat.completions.create(opts);
+          var choice = reply.choices && reply.choices[0];
+          return JSON.stringify({
+            content: (choice && choice.message && choice.message.content) || "",
+            usage: reply.usage || {},
+          });
+        } catch (err) {
+          return JSON.stringify({ error: String((err && err.message) || err) });
+        }
+      },
+      // {model, input: [texts]} -> {embeddings, usage} | {error}
+      embed: async function (requestJson) {
+        try {
+          var req =
+            typeof requestJson === "string" ? JSON.parse(requestJson) : requestJson;
+          var engine = await getWebLLMEngine(req.model);
+          var reply = await engine.embeddings.create({
+            input: req.input,
+            model: req.model,
+          });
+          return JSON.stringify({
+            embeddings: (reply.data || []).map(function (d) {
+              return d.embedding;
+            }),
+            usage: reply.usage || {},
+          });
+        } catch (err) {
+          return JSON.stringify({ error: String((err && err.message) || err) });
+        }
+      },
+    };
+  }
+
   // -- CodeMirror bootstrap -------------------------------------------------
   function ensureCodeMirror() {
     if (!cmPromise) {
@@ -165,6 +278,11 @@
       "</details>" +
       '<div class="kaval-pg-editor" data-pg="editor"></div>' +
       '<div class="kaval-pg-toolbar">' +
+      '  <select class="kaval-pg-model" data-pg="model" title="In-browser model used by browser/... examples (exposed to Python as KAVAL_BROWSER_MODEL)">' +
+      BROWSER_MODELS.map(function (m) {
+        return '<option value="' + m[0] + '">' + m[1] + "</option>";
+      }).join("") +
+      "  </select>" +
       '  <button class="kaval-pg-run" data-pg="run">Run ▶</button>' +
       '  <button class="kaval-pg-ghost" data-pg="reset" title="Restore the original snippet">Reset</button>' +
       '  <button class="kaval-pg-ghost" data-pg="clear" title="Clear the output">Clear output</button>' +
@@ -183,6 +301,8 @@
     // API keys persist in localStorage (this browser only).
     wireKeyInput('[data-pg="openai"]', LS_OPENAI);
     wireKeyInput('[data-pg="gemini"]', LS_GEMINI);
+    // Remember the chosen in-browser model across snippets and visits.
+    wireKeyInput('[data-pg="model"]', LS_MODEL);
 
     return panel;
   }
@@ -190,7 +310,10 @@
   function wireKeyInput(selector, storageKey) {
     var input = panel.querySelector(selector);
     try {
-      input.value = window.localStorage.getItem(storageKey) || "";
+      // Only restore when a value was saved, so a <select> keeps its default
+      // first option instead of blanking out.
+      var stored = window.localStorage.getItem(storageKey);
+      if (stored) input.value = stored;
     } catch (e) {
       /* localStorage may be unavailable (private mode) — ignore. */
     }
@@ -243,6 +366,24 @@
     var runBtn = panel.querySelector('[data-pg="run"]');
     runBtn.disabled = true;
     clearOutput();
+
+    // Browsers block fetch() of file:// URLs, so the kavalai wheel (and Pyodide
+    // packages) can't be loaded when the docs are opened from disk. Point the
+    // user at a local web server instead of failing with a cryptic error.
+    if (window.location.protocol === "file:") {
+      appendOutput(
+        "This page was opened via a file:// path, so the browser won't let the " +
+          "playground download the kavalai wheel.\n\nServe the built docs over " +
+          "HTTP instead — from docs/_build/html run:\n\n" +
+          "    python -m http.server\n\n" +
+          "then browse to http://localhost:8000/ and try again.\n",
+        "stderr"
+      );
+      setStatus("Open over http:// to run");
+      runBtn.disabled = false;
+      return;
+    }
+
     try {
       var pyodide = await ensurePyodide();
 
@@ -260,6 +401,16 @@
           "    _os.environ['GEMINI_API_KEY'] = _kaval_gemini_key\n" +
           "    _os.environ.setdefault('GOOGLE_API_KEY', _kaval_gemini_key)\n"
       );
+
+      // Expose the chosen in-browser model to Python so "browser/..." examples
+      // can build a client without hardcoding an id (mirrors the standalone
+      // playground). The embedding default is provided alongside it.
+      var modelSel = panel.querySelector('[data-pg="model"]');
+      pyodide.globals.set(
+        "KAVAL_BROWSER_MODEL",
+        (modelSel && modelSel.value) || BROWSER_MODELS[0][0]
+      );
+      pyodide.globals.set("KAVAL_BROWSER_EMBED_MODEL", DEFAULT_EMBED_MODEL);
 
       setStatus("Running…");
       var code = editor.getValue();
@@ -285,10 +436,23 @@
     // not runnable examples.
     if (/\/_modules\//.test(window.location.pathname)) return;
 
-    var blocks = document.querySelectorAll('div[class*="highlight-python"]');
+    // Opt-in: only blocks the author marked as browser-runnable get a button.
+    // In reStructuredText add `:class: run-in-browser` to the code-block (the
+    // class lands on the highlight div); a wrapping `.. container:: run-in-browser`
+    // works too. In notebooks, a `run-in-browser` cell tag becomes the
+    // `tag_run-in-browser` class on the cell. Examples that need a provider key
+    // (openai/gemini) or anything not Pyodide-compatible are simply left
+    // unmarked, so they render as plain, un-runnable snippets.
+    var blocks = document.querySelectorAll(
+      'div[class*="highlight-python"], div[class*="highlight-ipython"]'
+    );
     Array.prototype.forEach.call(blocks, function (block) {
-      // Opt out with `:class: no-run` on the directive.
-      if (block.closest(".no-run")) return;
+      var marked =
+        block.classList.contains("run-in-browser") ||
+        block.closest(".run-in-browser, .tag_run-in-browser");
+      if (!marked) return;
+      // A nested `no-run` (class or cell tag) still wins as a hard opt-out.
+      if (block.closest(".no-run, .tag_no-run")) return;
       if (block.querySelector(".kaval-pg-run-btn")) return;
 
       var pre = block.querySelector("pre");
@@ -309,6 +473,9 @@
 
   // -- Init -----------------------------------------------------------------
   function init() {
+    // Make the in-browser LLM/embeddings bridge available before any snippet
+    // runs, so "browser/..." clients find window.kavalBrowserLLM.
+    installBrowserLLMBridge();
     injectButtons();
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && panel && panel.classList.contains("open")) {

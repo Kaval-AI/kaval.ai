@@ -23,7 +23,15 @@ os.environ.setdefault("KAVALAI_DB_URI", "postgresql://user:pass@localhost:5432/d
 project = "Kaval.AI"
 copyright = "2026, Kaval.AI Team"
 author = "Kaval.AI Team"
-release = "0.1.4"
+# Derive the version from the installed package so the docs never drift from
+# pyproject.toml. Falls back gracefully if the package isn't installed.
+try:
+    from importlib.metadata import version as _pkg_version
+
+    release = _pkg_version("kavalai")
+except Exception:  # pragma: no cover - build-time best effort
+    release = "1.0.0"
+version = release
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

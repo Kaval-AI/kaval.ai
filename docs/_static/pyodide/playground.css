@@ -2,7 +2,8 @@
  * Kaval.AI docs playground styling.
  *
  * Two pieces:
- *   1. The "Run in browser" button injected onto every Python code block.
+ *   1. The "Run in browser" button injected onto code blocks the author marked
+ *      `run-in-browser` (opt-in).
  *   2. The playground drawer — a right-hand panel on desktop, a full-width
  *      bottom sheet with a vertical (editor-on-top / output-at-bottom) split on
  *      mobile.
@@ -215,6 +216,19 @@
 .kaval-pg-run:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.kaval-pg-model {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 16rem;
+  background: var(--kaval-pg-bg);
+  color: var(--kaval-pg-fg);
+  border: 1px solid var(--kaval-pg-border);
+  border-radius: 0.45rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
 }
 .kaval-pg-ghost {
   background: transparent;

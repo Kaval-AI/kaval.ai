@@ -496,9 +496,3 @@ Inputs for tasks can be `literal` or `context` values. `context` values use a do
 
 - `{ type: literal, value: "https://news.ycombinator.com/rss" }`
 - `{ type: context, value: news_feed.items }`
-
-
-## Persona simulation
-
-Simulate a conversation with the agent using persona simulator.
-Give YAML definitions of a persona and a task they are trying to accomplish using the agent's help.

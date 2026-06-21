@@ -9,12 +9,13 @@ returns a structured result.
 .. admonition:: Run it in your browser 🐍
    :class: tip
 
-   Every Python snippet in these docs has a **Run in browser ▶** button. It
-   boots `Pyodide <https://pyodide.org>`_, installs Kaval.AI client-side and runs
-   the code in a side panel — nothing to install locally. The snippet below
-   needs no API key, so try it first:
+   Snippets you can run client-side show a **Run in browser ▶** button. It boots
+   `Pyodide <https://pyodide.org>`_, installs Kaval.AI in the page and runs the
+   code in a side panel — nothing to install locally. The snippet below is pure
+   Python (no model, no key), so try it first:
 
    .. code-block:: python
+      :class: run-in-browser
 
       from kavalai import evaluate_expression, evaluate_bool, FunctionKernel, pythontool
 
@@ -32,9 +33,30 @@ returns a structured result.
       kernel.register_python_tool("add", add)
       print("add(2, 40) =", await kernel.call_tool("python://add", {"a": 2, "b": 40}))
 
-   To run the LLM workflows below, open the panel's **API keys** section and
-   paste an OpenAI or Gemini key — it is stored only in your browser. Note that
-   provider calls made directly from the browser may be blocked by CORS.
+   Want a real model with **no API key at all**? Kaval.AI's ``browser/`` provider
+   runs a small open model entirely in your browser over WebGPU (downloaded once
+   and cached). Pick the model from the panel's dropdown — it is exposed to your
+   code as ``KAVAL_BROWSER_MODEL`` — and run:
+
+   .. code-block:: python
+      :class: run-in-browser
+
+      from kavalai import make_client
+
+      # KAVAL_BROWSER_MODEL comes from the panel's model dropdown.
+      client = make_client(f"browser/{KAVAL_BROWSER_MODEL}")
+      print(f"Loading {KAVAL_BROWSER_MODEL} (first run downloads the model)…")
+
+      reply = await client.prompt(
+          "In one friendly sentence, say hello and share a fun fact about Estonia."
+      )
+      print("\n", reply)
+
+   The OpenAI/Gemini examples further down need a provider account, so they have
+   no run button. To try them, install Kaval.AI locally (below), or paste a key
+   into the panel's **API keys** section — though browser calls to providers are
+   often blocked by CORS. Running a ``browser/`` model needs a WebGPU-capable
+   browser (recent Chrome/Edge, or Firefox with ``dom.webgpu.enabled``).
 
 Installation
 ------------
@@ -148,6 +170,53 @@ Running it prints the reply and the path the engine took through the graph:
 
    Hi Timo! It's great to meet you!
    path: start → reply → end
+
+You don't need a provider account to try this. Point the ``llm`` node at the
+``browser/`` provider and the whole workflow — schema validation, prompt
+templating, the model call — runs in your browser. (In a notebook or the panel
+you can ``await`` the engine directly; in a script, wrap it in
+``asyncio.run`` as above.)
+
+.. code-block:: python
+   :class: run-in-browser
+
+   import os
+   from kavalai import WorkflowEngine
+
+   # Send every llm node to an in-browser model — no API key required.
+   os.environ["KAVALAI_DEFAULT_LLM_MODEL"] = f"browser/{KAVAL_BROWSER_MODEL}"
+
+   greeter_yaml = """
+   name: Greeter
+   description: A one-node agent that greets the user by name.
+   data_types:
+     input:
+       type: object
+       properties:
+         user_message: {type: string}
+     output:
+       type: object
+       properties:
+         agent_response: {type: string}
+   nodes:
+     - {name: start, type: start, next: reply}
+     - name: reply
+       type: llm
+       prompt: |
+         You are a warm, concise greeter.
+         Reply in one friendly sentence: {{ context.input.user_message }}
+       inputs:
+         input: {type: context, value: input}
+       output: output
+       next: end
+     - {name: end, type: end, output: output}
+   """
+
+   print(f"Running the Greeter on browser/{KAVAL_BROWSER_MODEL}…")
+   engine = WorkflowEngine.from_yaml(greeter_yaml)
+   state = await engine.run({"user_message": "Hi, I'm Timo!"})
+   print(state.output_data["agent_response"])
+   print("path:", " → ".join(state.trace))
 
 Every run returns a :class:`~kavalai.WorkflowState`: the status, the ordered
 ``trace`` of visited nodes, the full context ``data``, the final ``output_data``,
