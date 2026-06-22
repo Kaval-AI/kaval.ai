@@ -125,6 +125,28 @@
       return row;
     }
 
+    // Render quick-reply choices (a structured `choices: string[]` from the
+    // reply) as clickable chips; clicking one sends it as the next message.
+    function addChoices(choices) {
+      if (!Array.isArray(choices) || !choices.length) return;
+      var row = document.createElement("div");
+      row.className = "kaval-chat-choices";
+      choices.forEach(function (choice) {
+        var chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "kaval-chat-choice";
+        chip.textContent = choice;
+        chip.addEventListener("click", function () {
+          if (busy) return;
+          inputEl.value = String(choice);
+          submit();
+        });
+        row.appendChild(chip);
+      });
+      logEl.appendChild(row);
+      scrollToBottom();
+    }
+
     function autoGrow() {
       inputEl.style.height = "auto";
       // Cap growth so the composer never eats the whole panel.
@@ -161,6 +183,11 @@
           setStatus("Error");
         } else {
           addMessage("assistant", result.reply != null ? result.reply : "");
+          // Surface a structured `choices` list (top-level or nested under the
+          // workflow's full `data`) as quick-reply chips.
+          addChoices(
+            result.choices || (result.data && result.data.choices) || null
+          );
           setStatus("Idle");
         }
       } catch (err) {

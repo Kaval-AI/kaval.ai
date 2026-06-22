@@ -16,6 +16,8 @@ limitations under the License.
 
 from typing import Any, Optional, Union
 
+from pydantic import BaseModel
+
 from kavalai.workflow.models import (
     AgentNode,
     EndNode,
@@ -117,6 +119,7 @@ class WorkflowBuilder:
         self.llm_model = llm_model
         self.llm_kwargs = llm_kwargs or {}
         self._data_types: dict[str, dict] = {}
+        self._data_models: dict[str, type[BaseModel]] = {}
         self._nodes: list = []
         self._start: Optional[str] = None
         self._rest_servers: list[RestServer] = []
@@ -146,6 +149,22 @@ class WorkflowBuilder:
         else:
             properties = {f: _field_schema(t) for f, t in (fields or {}).items()}
             self._data_types[name] = {"type": "object", "properties": properties}
+        return self
+
+    def data_model(self, name: str, model: type[BaseModel]) -> "WorkflowBuilder":
+        """Declare a data type from a Pydantic model class.
+
+        The model is used directly at run time (its fields validate the matching
+        node input/output and drive structured LLM output), so you get full
+        Pydantic expressiveness — ``Literal`` enums, defaults, validators —
+        without writing a JSON-schema fragment. Its JSON schema is also recorded
+        on the graph for storage and inspection.
+
+        Build the engine with :meth:`build_engine` (which forwards the models) or
+        pass ``data_models=`` to :class:`WorkflowEngine` yourself.
+        """
+        self._data_models[name] = model
+        self._data_types[name] = model.model_json_schema()
         return self
 
     # -------------------------------------------------------------------- nodes
@@ -301,9 +320,12 @@ class WorkflowBuilder:
     def build_engine(self, **kwargs):
         """Build the graph and wrap it in a ready-to-run :class:`WorkflowEngine`.
 
-        Keyword arguments are forwarded to the engine (``storage``,
-        ``task_logger``, ``client_factory``, ``max_node_visits``).
+        Any Pydantic models registered via :meth:`data_model` are forwarded to
+        the engine. Keyword arguments are passed through (``storage``,
+        ``task_logger``, ``client_factory``, ``data_models``, ``max_node_visits``).
         """
         from kavalai.workflow.engine import WorkflowEngine
 
+        if self._data_models:
+            kwargs.setdefault("data_models", self._data_models)
         return WorkflowEngine(self.build(), **kwargs)

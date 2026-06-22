@@ -1,0 +1,131 @@
+<!--
+  Interactive chatbot demo for the docs landing page: the chat widget (left)
+  talks to the WorkflowBuilder chatbot defined in the playground (right).
+
+  Single source for the demo: index.rst pulls it in with
+  `.. raw:: html :file: _includes/chatbot-demo.html`, and
+  tests/test_chatbot_demo.py extracts the CHATBOT_CODE below and runs it.
+
+  The workflow returns a structured `Reply` (agent_response + choices), so the
+  chat renders `choices` as clickable quick-reply chips — a concrete reason
+  structured output is useful. Everything runs client-side via WebGPU.
+-->
+<style>
+  .kaval-chatbot-demo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    height: 840px;
+    margin: 1rem 0 1.5rem;
+  }
+  .kaval-chatbot-demo > div { min-width: 0; min-height: 0; }
+  /* The playground (code) is the larger pane on desktop. */
+  .kaval-chatbot-demo .demo-chat { flex: 1 1 36%; }
+  .kaval-chatbot-demo .demo-code { flex: 1 1 64%; }
+  .kaval-chatbot-demo .kaval-chat,
+  .kaval-chatbot-demo .kaval-pg-embed { border-radius: 0.6rem; }
+  /* Stack on narrow viewports so neither pane gets squeezed. */
+  @media (max-width: 820px) {
+    .kaval-chatbot-demo { flex-direction: column; height: auto; }
+    .kaval-chatbot-demo > div { flex: 1 1 auto; min-height: 26rem; }
+  }
+</style>
+
+<div class="kaval-chatbot-demo">
+  <div class="demo-chat" id="chatbot-chat"></div>
+  <div class="demo-code" id="chatbot-code"></div>
+</div>
+
+<script>
+(function () {
+  var CHATBOT_CODE =
+`from pydantic import BaseModel
+from kavalai.workflow import WorkflowBuilder, InMemoryDataStorage
+
+class Message(BaseModel):
+    message: str
+
+
+class Reply(BaseModel):
+    agent_response: str
+    choices: list[str]
+
+# A few examples help a tiny model answer well and fill choices in the right
+# shape. Keep them short — the structured output schema enforces the format.
+prompt = """You are a friendly, concise chatbot. Reply to the user in
+agent_response, and suggest up to 3 short quick-reply choices the user might
+tap next. Use earlier messages in the conversation for context.
+
+Example:
+user: hi
+agent_response: Hey there! What can I help you with today?
+choices: ["What can you do?", "Tell me a joke", "Give me an idea"]
+
+Example:
+user: I want to get rich
+agent_response: Work hard and invest wisely — small, steady steps win. Want a
+few beginner investing tips?
+choices: ["Yes, tips please", "Maybe later", "No thanks"]
+"""
+
+workflow = (
+    WorkflowBuilder("Chatbot", llm_model=f"browser/{KAVAL_BROWSER_MODEL}")
+    .data_model("input", Message)
+    .data_model("output", Reply)
+    .start("reply")
+    .llm(
+        "reply",
+        prompt=prompt,
+        inputs={"message": "input"},
+        output="output",
+        next="end",
+    )
+    .end()
+    # Storage + use_history (on by default) give the bot memory: each turn sees
+    # the conversation so far, under the chat's reusing session.
+    .build_engine(storage=InMemoryDataStorage())
+)
+print("Chatbot ready — say hi in the chat on the left.")
+`;
+
+  function whenReady(cb) {
+    if (window.KavalPlayground && window.KavalChat) return cb();
+    var tries = 0;
+    var timer = setInterval(function () {
+      if (window.KavalPlayground && window.KavalChat) {
+        clearInterval(timer);
+        cb();
+      } else if (++tries > 100) {
+        clearInterval(timer); // ~10s — give up quietly
+      }
+    }, 100);
+  }
+
+  whenReady(function () {
+    // Right: the chatbot workflow (read it, tweak it, Run ▶ to rebuild).
+    var pg = KavalPlayground.mount("#chatbot-code", {
+      title: "Chatbot workflow — WorkflowBuilder + Pydantic models",
+      code: CHATBOT_CODE,
+      showPackages: false,
+    });
+
+    // Left: the chat. The bot's input is a Message, so the bridge sends each
+    // turn as {message: ...}; its Reply.choices show up as quick-reply chips.
+    var bridge = KavalPlayground.workflowBridge({
+      inputKey: "message",
+      ensureWorkflow: function () { return pg.run(); },
+    });
+    KavalChat.mount("#chatbot-chat", {
+      title: "Chat with your bot",
+      placeholder: "Say something…",
+      greeting:
+        "Hi! I'm a tiny chatbot running entirely in your browser. Ask me " +
+        "anything — my reply is a structured Reply, so the suggestions under " +
+        "it come straight from its choices field. Your first message downloads " +
+        "a small model, so give it a moment.",
+      send: bridge.send,
+      onReset: bridge.reset,
+    });
+  });
+})();
+</script>

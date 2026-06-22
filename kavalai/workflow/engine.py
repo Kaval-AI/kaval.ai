@@ -96,6 +96,7 @@ class WorkflowEngine:
         storage: Optional[DataStorage] = None,
         task_logger: Optional[TaskLogger] = None,
         client_factory: Optional[ClientFactory] = None,
+        data_models: Optional[dict[str, type[BaseModel]]] = None,
         max_node_visits: int = DEFAULT_MAX_NODE_VISITS,
     ):
         self.graph = graph
@@ -106,8 +107,15 @@ class WorkflowEngine:
         # Per-run token aggregator; recreated for each run() so totals don't leak.
         self._token_stats = TokenAccumulator(task_logger)
 
-        self.parser = SchemaParser(graph.data_types)
+        # Data types are usually JSON-schema fragments compiled to Pydantic models
+        # by the SchemaParser. ``data_models`` lets callers (e.g. the
+        # WorkflowBuilder's ``data_model``) supply ready-made Pydantic models
+        # directly; those names are used as-is and skip the parser.
+        overrides = data_models or {}
+        to_parse = {k: v for k, v in graph.data_types.items() if k not in overrides}
+        self.parser = SchemaParser(to_parse)
         self.models = self.parser.parse_all()
+        self.models.update(overrides)
         self.node_map = graph.node_map
 
         # Build the function kernel and register declared servers / tools, reusing

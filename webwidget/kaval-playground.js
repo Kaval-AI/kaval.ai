@@ -355,13 +355,16 @@
     "    except Exception as _exc:\n" +
     "        return _kaval_json.dumps({'error': 'run_failed', 'detail': str(_exc)})\n" +
     "    _out = _state.output_data or {}\n" +
+    "    _data = _out if isinstance(_out, dict) else None\n" +
     "    if isinstance(_out, dict):\n" +
     "        _reply = _out.get(_kaval_chat_reply_key)\n" +
     "        if _reply is None and _out:\n" +
     "            _reply = _kaval_json.dumps(_out)\n" +
     "    else:\n" +
     "        _reply = str(_out)\n" +
-    "    return _kaval_json.dumps({'reply': '' if _reply is None else _reply})\n" +
+    "    return _kaval_json.dumps(\n" +
+    "        {'reply': '' if _reply is None else _reply, 'data': _data}\n" +
+    "    )\n" +
     "await _kaval_chat_turn()\n";
 
   function lsGet(key) {
@@ -442,7 +445,9 @@
       if (data.error) {
         return { error: data.detail || "The workflow run failed." };
       }
-      return { reply: data.reply };
+      // `data.data` is the workflow's full structured output (e.g. a Reply with
+      // `choices`), so a UI can render more than the plain reply text.
+      return { reply: data.reply, data: data.data || null };
     }
 
     return {

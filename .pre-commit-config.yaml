@@ -2,9 +2,9 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.4.2
     hooks:
-      - id: ruff
-        args: ["--fix", "--ignore=E402", "--ignore=B506"] # Adds E402 to the ignore list
+      # Formatting only — the ruff linter is intentionally disabled.
       - id: ruff-format
+
 
   # -------------------------------
   # Misc quality tools

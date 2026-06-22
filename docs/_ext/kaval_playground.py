@@ -5,9 +5,8 @@ used by the standalone ``webwidget/python-playground.html`` and embeddable on an
 site). This extension wires it into the Sphinx build so the docs don't duplicate
 any of that code. On every build it:
 
-* copies ``webwidget/kaval-playground.{css,js}`` and ``webwidget/kaval-chat.{css,js}``
-  into ``_static/pyodide/`` and registers them (the chat widget powers the
-  interactive workflow demo on the landing page),
+* copies ``webwidget/kaval-playground.{css,js}`` into ``_static/pyodide/`` and
+  registers them,
 * stages the most recently built ``dist/kavalai-*.whl`` into ``_static/pyodide/``
   so Pyodide's ``micropip`` can install it client-side, and
 * emits ``_static/pyodide/playground-config.js`` telling the widget which wheel
@@ -33,6 +32,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.0/full/pyodide.js"
 
 # Widget assets copied from webwidget/ into the docs' _static/pyodide on build.
+# The chat widget powers the interactive chatbot demo on the landing page.
 WIDGET_FILES = (
     "kaval-playground.css",
     "kaval-playground.js",

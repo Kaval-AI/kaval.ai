@@ -693,3 +693,37 @@ async def test_rest_function_node_passes_method():
     _, kwargs = engine.kernel.call_tool.call_args
     assert kwargs["method"] == "post"
     assert kwargs["tool_uri"] == "rest://api.do"
+
+
+async def test_engine_data_models_override_parsed_types():
+    """data_models supplies ready-made Pydantic models that the engine uses
+    verbatim, skipping the SchemaParser for those names while still parsing the
+    rest."""
+    from pydantic import BaseModel
+
+    class Output(BaseModel):
+        agent_response: str
+
+    nodes = [
+        {"name": "s", "type": "start", "next": "answer"},
+        {
+            "name": "answer",
+            "type": "llm",
+            "prompt": "p",
+            "inputs": {"input": {"type": "context", "value": "input"}},
+            "output": "output",
+            "next": "e",
+        },
+        {"name": "e", "type": "end", "output": "output"},
+    ]
+    engine = WorkflowEngine.from_dict(
+        graph_dict(nodes),
+        client_factory=make_factory({"agent_response": "hi"}),
+        data_models={"output": Output},
+    )
+    # The provided model is used as-is; "input" is still parser-compiled.
+    assert engine.get_data_type("output") is Output
+    assert engine.get_data_type("input").__name__ == "input"
+
+    state = await engine.run({"user_message": "hello"})
+    assert state.output_data == {"agent_response": "hi"}

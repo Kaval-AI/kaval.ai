@@ -152,3 +152,93 @@ def test_build_engine_returns_engine():
     )
     assert isinstance(engine, WorkflowEngine)
     assert engine.graph.name == "eng"
+
+
+def test_data_model_uses_pydantic_models_directly():
+    """data_model registers a Pydantic model used as-is by the engine (no
+    re-parsing), and records its JSON schema on the graph for validation."""
+    from typing import Literal
+
+    from pydantic import BaseModel
+
+    class Email(BaseModel):
+        sender: str
+        subject: str
+        content: str
+
+    class Classification(BaseModel):
+        category: Literal["support_request", "other"]
+
+    builder = (
+        WorkflowBuilder("triage", llm_model="openai/fake")
+        .data_model("input", Email)
+        .data_model("classification", Classification)
+        .data_type("output", {"agent_response": str})
+        .start("classify")
+        .llm(
+            "classify",
+            prompt="p",
+            inputs={"email": "input"},
+            output="classification",
+            next="end",
+        )
+        .end()
+    )
+
+    # The graph carries each model's JSON schema (so validate_graph accepts the
+    # node outputs and storage has a schema).
+    graph = builder.build()
+    assert graph.data_types["input"]["properties"].keys() >= {
+        "sender",
+        "subject",
+        "content",
+    }
+    assert "enum" in graph.data_types["classification"]["properties"]["category"]
+
+    # The engine uses the supplied models verbatim, not parser-compiled copies.
+    engine = builder.build_engine()
+    assert engine.get_data_type("input") is Email
+    assert engine.get_data_type("classification") is Classification
+    # The non-model data_type is still compiled by the parser.
+    assert engine.get_data_type("output").__name__ == "output"
+
+
+def test_data_model_validates_input_at_runtime():
+    import asyncio
+
+    from pydantic import BaseModel
+
+    from kavalai.llm_clients.base_client import BaseLlmClient
+
+    class Email(BaseModel):
+        sender: str
+        content: str
+
+    class Reply(BaseModel):
+        agent_response: str
+
+    class _Fake(BaseLlmClient):
+        def __init__(self, *a, **k):
+            super().__init__()
+
+        async def chat_completions(self, *, chat_history, response_model=None):
+            return response_model(agent_response="ok")
+
+    engine = (
+        WorkflowBuilder("e", llm_model="openai/fake")
+        .data_model("input", Email)
+        .data_model("output", Reply)
+        .start("reply")
+        .llm(
+            "reply", prompt="p", inputs={"email": "input"}, output="output", next="end"
+        )
+        .end()
+        .build_engine(client_factory=lambda *a, **k: _Fake())
+    )
+
+    state = asyncio.run(engine.run({"sender": "a@b.c", "content": "hi"}))
+    assert state.output_data == {"agent_response": "ok"}
+
+    # A payload that violates the Email model is rejected.
+    with pytest.raises(Exception):
+        asyncio.run(engine.run({"sender": "a@b.c"}))  # missing 'content'
