@@ -324,6 +324,10 @@
   // reusing one session id so the engine's history-aware nodes (use_history,
   // on by default) see the whole conversation. The bridge knows nothing about
   // the chat UI — it just exposes a send(message) callback the UI can drive.
+  //
+  // opts.ensureWorkflow: optional async fn run once if no `workflow` exists yet
+  // (e.g. () => playground.run()), so an embedded demo can answer the first
+  // message without the user clicking Run ▶ first.
 
   // Runs one chat turn. Reads the `workflow` global, gives it a thread-free
   // InMemoryDataStorage if the author wired none (so history is remembered —
@@ -384,6 +388,20 @@
     // engine accumulates chat history under it. reset() starts a fresh chat.
     var sessionId = newSessionId();
 
+    // Run a single turn: refresh the globals the snippet reads, then execute it.
+    async function runTurn(pyodide, message) {
+      // Run against the same in-browser model the playground's picker selected.
+      setModelGlobals(pyodide, {
+        model: lsGet(LS.model) || CONFIG.models[0][0],
+        embedModel: CONFIG.embedModel,
+      });
+      pyodide.globals.set("_kaval_chat_msg", String(message));
+      pyodide.globals.set("_kaval_chat_session", sessionId);
+      pyodide.globals.set("_kaval_chat_input_key", inputKey);
+      pyodide.globals.set("_kaval_chat_reply_key", replyKey);
+      return JSON.parse(await pyodide.runPythonAsync(CHAT_TURN_PY));
+    }
+
     async function send(message) {
       if (window.location.protocol === "file:") {
         return {
@@ -394,18 +412,18 @@
       }
       var pyodide = await ensurePyodide();
 
-      // Run against the same in-browser model the playground's picker selected.
-      setModelGlobals(pyodide, {
-        model: lsGet(LS.model) || CONFIG.models[0][0],
-        embedModel: CONFIG.embedModel,
-      });
-
-      pyodide.globals.set("_kaval_chat_msg", String(message));
-      pyodide.globals.set("_kaval_chat_session", sessionId);
-      pyodide.globals.set("_kaval_chat_input_key", inputKey);
-      pyodide.globals.set("_kaval_chat_reply_key", replyKey);
-
-      var data = JSON.parse(await pyodide.runPythonAsync(CHAT_TURN_PY));
+      var data = await runTurn(pyodide, message);
+      // If nothing has defined `workflow` yet and the host gave us a way to
+      // bootstrap it (e.g. run the editor's code), do that once and retry — so
+      // an embedded demo answers the first message without a manual Run ▶.
+      if (data.error === "no_workflow" && typeof opts.ensureWorkflow === "function") {
+        try {
+          await opts.ensureWorkflow();
+        } catch (e) {
+          /* fall through to the friendly no_workflow message below */
+        }
+        data = await runTurn(pyodide, message);
+      }
       if (data.error === "no_workflow") {
         return {
           error:

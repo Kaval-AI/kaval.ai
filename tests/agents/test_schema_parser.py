@@ -145,3 +145,69 @@ def test_optional_ref():
     user = User(name="bob")
     assert user.name == "bob"
     assert user.address is None
+
+
+def test_enum_field_is_constrained_and_in_schema():
+    """An enum property becomes a Literal: only listed values validate, and the
+    compiled model's JSON schema carries the enum (so structured-output backends
+    like the in-browser WebLLM grammar can constrain generation)."""
+    datatypes = {
+        "Classification": {
+            "type": "object",
+            "properties": {
+                "intent": {
+                    "type": "string",
+                    "enum": ["order", "feedback", "question", "other"],
+                }
+            },
+        }
+    }
+    parser = SchemaParser(datatypes)
+    models = parser.parse_all()
+    Classification = models["Classification"]
+
+    assert Classification(intent="order").intent == "order"
+    with pytest.raises(ValueError):
+        Classification(intent="not-a-listed-value")
+
+    schema = Classification.model_json_schema()
+    assert schema["properties"]["intent"]["enum"] == [
+        "order",
+        "feedback",
+        "question",
+        "other",
+    ]
+
+
+def test_optional_enum_field():
+    """An enum can also be optional via required: false."""
+    datatypes = {
+        "Feedback": {
+            "type": "object",
+            "properties": {
+                "sentiment": {
+                    "type": "string",
+                    "enum": ["positive", "negative"],
+                    "required": False,
+                }
+            },
+        }
+    }
+    parser = SchemaParser(datatypes)
+    models = parser.parse_all()
+    Feedback = models["Feedback"]
+
+    assert Feedback().sentiment is None
+    assert Feedback(sentiment="positive").sentiment == "positive"
+    with pytest.raises(ValueError):
+        Feedback(sentiment="neutral")
+
+
+def test_empty_enum_raises_error():
+    """An empty enum list is rejected with a helpful error."""
+    datatypes = {
+        "Bad": {"type": "object", "properties": {"x": {"type": "string", "enum": []}}}
+    }
+    parser = SchemaParser(datatypes)
+    with pytest.raises(ValueError, match="'enum' must be a non-empty list"):
+        parser.parse_all()

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import Any, Dict, Type, Tuple, Optional
+from typing import Any, Dict, Type, Tuple, Optional, Literal
 from pydantic import BaseModel, create_model, Field, ConfigDict
 
 
@@ -35,6 +35,7 @@ class SchemaParser:
             "items",
             "properties",
             "$ref",
+            "enum",
             "max_length",
             "min_length",
             "required",
@@ -59,6 +60,19 @@ class SchemaParser:
         # Handle References
         if "$ref" in prop_def:
             python_type = self.parse_type(prop_def["$ref"])
+
+        # A closed set of allowed values -> Literal, so the compiled model's
+        # JSON schema carries the enum and structured-output backends (e.g. the
+        # in-browser WebLLM grammar) constrain generation to those values.
+        elif "enum" in prop_def:
+            values = prop_def["enum"]
+            if not values:
+                raise ValueError(
+                    f"'enum' must be a non-empty list in {context}"
+                    if context
+                    else "'enum' must be a non-empty list"
+                )
+            python_type = Literal[tuple(values)]
 
         else:
             # Determine base type
