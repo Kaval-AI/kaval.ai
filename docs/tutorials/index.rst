@@ -13,6 +13,7 @@ repository and run it cell by cell.
    LLM clients <llm_clients>
    Agents & tools <agents>
    Workflows <workflow>
+   Observability & storage <observability_storage>
    Streaming <streamer>
    RAG <rag>
    Running in the browser <run_in_browser>

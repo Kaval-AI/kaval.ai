@@ -7,6 +7,10 @@ every run **observable** by default: each run carries its own state and trace,
 every node and model call is logged, and the whole history is persisted so you
 can reload and inspect it later — in code or in the backoffice UI.
 
+This guide covers the *why*; for a hands-on tour of storage — chat history,
+context, sessions, the tables and writing your own backend — see the
+:doc:`../tutorials/observability_storage` tutorial.
+
 What a run records
 ------------------
 
