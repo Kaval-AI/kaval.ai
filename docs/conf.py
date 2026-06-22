@@ -91,6 +91,7 @@ language = "en"
 
 html_theme = "sphinx_immaterial"
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
 
 html_theme_options = {
     "icon": {

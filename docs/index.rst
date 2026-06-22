@@ -1,10 +1,7 @@
 .. image:: _static/iconlogo.svg
-   :width: 200
-   :align: center
-   :alt: Kaval.AI Logo
-
-Kaval.AI
-========
+   :width: 300
+   :align: left
+   :alt: Kaval.AI
 
 **Kaval.AI is a Python framework for building agentic AI pipelines that are
 predictable, observable, and safe.**

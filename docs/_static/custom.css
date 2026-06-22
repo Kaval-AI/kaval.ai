@@ -1,0 +1,10 @@
+/* Kaval.AI docs theme overrides. */
+
+/* Dark green header background (#002626). The header and navigation tabs in
+   the sphinx-immaterial theme derive their background from the Material
+   primary color, so override it rather than styling .md-header directly. */
+:root {
+  --md-primary-fg-color: #002626;
+  --md-primary-fg-color--light: #1a4040;
+  --md-primary-fg-color--dark: #001a1a;
+}
