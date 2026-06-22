@@ -29,6 +29,9 @@ repos:
     hooks:
       - id: bandit
         args: ["-ll", "-iii"]
+        # Scan application code only. Tests legitimately use constructs bandit
+        # flags (assert, exec of repo-owned demo code), so they are noise here.
+        exclude: "^tests/"
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.2
