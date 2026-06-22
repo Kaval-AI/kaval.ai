@@ -1,24 +1,18 @@
 Tutorials
 =========
 
-The fastest way to learn Kaval.AI is to run it. Start with **Installation**
-to install the SDK and ship your first workflow, then work through the hands-on
-notebooks below. Each notebook is executable — find the matching ``.ipynb``
-under ``notebooks/`` in the repository and run it cell by cell.
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Start here
-
-   installation
-   Running in the browser <run_in_browser>
+Already installed? These hands-on guides and notebooks walk through Kaval.AI
+feature by feature. (New here? Start with :doc:`/tutorials/installation`.) Each
+notebook is executable — find the matching ``.ipynb`` under ``notebooks/`` in the
+repository and run it cell by cell.
 
 .. toctree::
    :maxdepth: 1
    :caption: Guides & notebooks
 
    LLM clients <llm_clients>
-   Workflows <workflow>
    Agents & tools <agents>
+   Workflows <workflow>
    Streaming <streamer>
    RAG <rag>
+   Running in the browser <run_in_browser>

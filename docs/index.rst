@@ -148,6 +148,11 @@ tasks, token usage and cost. The guides, tutorials and API reference below cover
 each of these in depth.
 
 .. toctree::
+   :maxdepth: 1
+
+   Installation <tutorials/installation>
+
+.. toctree::
    :maxdepth: 2
    :caption: Learn
 

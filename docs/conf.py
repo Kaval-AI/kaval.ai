@@ -101,6 +101,8 @@ html_theme_options = {
     "site_url": "https://kaval.ai/",
     "repo_url": "https://github.com/kavalai/kaval.ai/",
     "repo_name": "Kaval.AI",
+    # Expand all navigation sections instead of collapsing them.
+    "features": ["navigation.expand"],
 }
 
 html_logo = "_static/logo.svg"
