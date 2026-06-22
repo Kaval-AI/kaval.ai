@@ -411,3 +411,46 @@ async def test_users_delete_self_fails(client, backoffice_db):
         # Initially this might be 200, but we want it to be 400
         assert response.status_code == 400
         assert response.json()["detail"] == "You cannot delete yourself."
+
+
+@pytest.mark.asyncio
+async def test_render_workflow_svg_unauthorized(client):
+    response = await client.post(
+        "/workflows/render-svg", json={"workflow": {"nodes": []}}
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_render_workflow_svg(client):
+    workflow = {
+        "start": "s",
+        "nodes": [
+            {"name": "s", "type": "start", "next": "reply"},
+            {"name": "reply", "type": "llm", "next": "e"},
+            {"name": "e", "type": "end"},
+        ],
+    }
+    with patch(
+        "starlette.requests.Request.session",
+        {"user_info": {"id": str(uuid.uuid4())}},
+    ):
+        response = await client.post(
+            "/workflows/render-svg", json={"workflow": workflow}
+        )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/svg+xml")
+    assert response.text.startswith("<svg")
+    assert ">reply<" in response.text and ">start<" in response.text
+
+
+@pytest.mark.asyncio
+async def test_render_workflow_svg_bad_input(client):
+    with patch(
+        "starlette.requests.Request.session",
+        {"user_info": {"id": str(uuid.uuid4())}},
+    ):
+        response = await client.post(
+            "/workflows/render-svg", json={"workflow": "not-a-workflow"}
+        )
+    assert response.status_code == 400

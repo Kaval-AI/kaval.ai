@@ -25,7 +25,7 @@ from fastapi import FastAPI, Request, HTTPException, status, Body
 from sqlalchemy.exc import SQLAlchemyError
 from kavalai.crud import insert, select, delete, update, get_one, get_all
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse, Response
 from kavalai.backoffice import db
 from kavalai.backoffice.db import is_owner, is_member
 from kavalai.backoffice.project_service import ProjectService
@@ -359,6 +359,25 @@ async def agents_get_by_id(project_id: UUID, agent_id: UUID, request: Request):
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
         return agent
+
+
+@app.post("/workflows/render-svg")
+async def workflows_render_svg(request: Request, data: dict = Body(...)):
+    """Render a workflow graph to an SVG diagram.
+
+    Accepts ``{"workflow": {...}}`` (or a bare workflow dict) and returns an
+    ``image/svg+xml`` document. The agents page uses this to show an agent's
+    workflow as a backend-generated diagram (replacing the client-side build).
+    """
+    assert_logged_in(request)
+    from kavalai.workflow import render_workflow_svg
+
+    workflow = data.get("workflow", data)
+    try:
+        svg = render_workflow_svg(workflow)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not render workflow: {exc}")
+    return Response(content=svg, media_type="image/svg+xml")
 
 
 @app.get("/agents/all/{project_id}")

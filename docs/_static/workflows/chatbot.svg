@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="224" height="376" viewBox="0 0 224 376" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+<defs><marker id="kv-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker></defs>
+<rect width="224" height="376" fill="#1e1e2e"/>
+<path d="M 112.0,84.0 C 112.0,122.0 112.0,122.0 112.0,160.0" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#kv-arrow)"/>
+<path d="M 112.0,216.0 C 112.0,254.0 112.0,254.0 112.0,292.0" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#kv-arrow)"/>
+<rect x="28.0" y="28.0" width="168" height="56" rx="10" fill="#16a34a" stroke="#15803d" stroke-width="1.5"/><text x="112.0" y="54.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ffffff">start</text><text x="112.0" y="71.0" text-anchor="middle" font-size="11" fill="#ffffff" opacity="0.8">start</text>
+<rect x="28.0" y="160.0" width="168" height="56" rx="10" fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/><text x="112.0" y="186.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ffffff">reply</text><text x="112.0" y="203.0" text-anchor="middle" font-size="11" fill="#ffffff" opacity="0.8">llm</text>
+<rect x="28.0" y="292.0" width="168" height="56" rx="10" fill="#dc2626" stroke="#b91c1c" stroke-width="1.5"/><text x="112.0" y="318.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ffffff">end</text><text x="112.0" y="335.0" text-anchor="middle" font-size="11" fill="#ffffff" opacity="0.8">end</text>
+</svg>

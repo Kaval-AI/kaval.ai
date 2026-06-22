@@ -34,6 +34,7 @@ from kavalai.workflow.expressions import (
 from kavalai.workflow.state import WorkflowState
 from kavalai.workflow.engine import WorkflowEngine
 from kavalai.workflow.builder import WorkflowBuilder
+from kavalai.workflow.render import render_workflow_svg
 from kavalai.workflow.storage.base import DataStorage, RunHandle, ChatMsg
 from kavalai.workflow.storage.memory import InMemoryDataStorage, SqliteDataStorage
 from kavalai.workflow.tasklog.base import (
@@ -60,6 +61,7 @@ __all__ = [
     "WorkflowState",
     "WorkflowEngine",
     "WorkflowBuilder",
+    "render_workflow_svg",
     "DataStorage",
     "RunHandle",
     "ChatMsg",

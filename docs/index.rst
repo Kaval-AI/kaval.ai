@@ -130,6 +130,13 @@ a structured ``Reply`` whose ``choices`` become the quick-reply buttons.
    :file: _includes/chatbot-demo.html
 
 
+Under the hood that chatbot is a tiny workflow — one LLM node between ``start``
+and ``end``:
+
+.. image:: /_static/workflows/chatbot.svg
+   :alt: The chatbot workflow: start → reply (an LLM node) → end.
+   :align: center
+
 This is just a small glimpse of what Kaval.AI can do. Check out the tutorials and
 examples — they cover a wide range of topics for building production-grade
 agentic workflows.

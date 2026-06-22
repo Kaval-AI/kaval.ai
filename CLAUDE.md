@@ -54,6 +54,7 @@ uv run --env-file .env pytest
 - `kavalai/agents/workflow_model.py` — Pydantic data models for workflows
 - `kavalai/agents/workflow_validation.py` — workflow validation logic
 - `kavalai/agents/run_context.py` — RunContext model and context resolution helpers
+- `kavalai/workflow/render.py` — renders a workflow graph to an SVG diagram (`render_workflow_svg`); used by the docs build (`docs/_ext/workflow_svgs.py`) and the backoffice `POST /workflows/render-svg` endpoint. The frontend `workflow-graph` component displays that backend SVG.
 - `backoffice/server.py` — FastAPI backoffice API (agents, sessions, stats, projects)
 - `kavalai/agents/server.py` — Agent REST server (sync + SSE streaming)
 - `kavalai/llm_clients/llm_client.py` — high-level LLM client interface
@@ -74,7 +75,7 @@ pytest tests/test_functionkernel.py
 - Framework: `pytest` + `pytest-asyncio`
 - Target: **100% coverage** for new and modified code
 - Keep tests for a single source file in a single test file (e.g. `agent.py` → `test_agent.py`)
-- Run relevant tests after every coding task; run only failing tests to save time when you know which ones fail
+- At the end of every coding task, update the relevant tests and run them to catch regressions and confirm new behavior; always run tests before submitting a task. Run only failing tests to save time when you know which ones fail
 - Mock MCP servers used in tests live in `tests/helpers/`
 
 ## Frontend Testing
@@ -94,6 +95,7 @@ cd frontend && npm test -- --watch=false --code-coverage
 - Refactor code blocks with distinct responsibilities into dedicated functions
 - Do not update `README.md`
 - Python tools must be decorated with `@kavalai.pythontool` and registered via `register_python_tool`
+- Keep this `CLAUDE.md` current: after a task, update it for important changes to project structure, components, or workflow
 
 ## Dangerous Commands
 

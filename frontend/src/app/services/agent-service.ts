@@ -32,6 +32,13 @@ export class AgentService {
     return this.http.get<Agent[]>(`/api/agents/all/${projectId}`);
   }
 
+  /** Render a workflow graph to an SVG diagram on the backend. */
+  renderWorkflowSvg(workflow: any): Observable<string> {
+    return this.http.post('/api/workflows/render-svg', { workflow }, {
+      responseType: 'text',
+    });
+  }
+
   getAgentStats(projectId: string, agentId?: string): Observable<any> {
     let url = `/api/agents/stats/${projectId}`;
     if (agentId) {

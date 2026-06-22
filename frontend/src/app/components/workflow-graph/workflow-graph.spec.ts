@@ -13,61 +13,63 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+import { of, throwError } from 'rxjs';
 import { WorkflowGraphComponent } from './workflow-graph';
 
 describe('WorkflowGraphComponent', () => {
   let component: WorkflowGraphComponent;
+  let agentService: { renderWorkflowSvg: jasmine.Spy };
+  let sanitizer: { bypassSecurityTrustHtml: jasmine.Spy };
 
   const workflow = {
     nodes: [
-      { name: 'start', type: 'start', next: 'classify' },
-      { name: 'classify', type: 'llm', next: 'route' },
-      {
-        name: 'route',
-        type: 'switch',
-        cases: { refund: 'refund_reply' },
-        default: 'general',
-      },
-      { name: 'check', type: 'if', then: 'a', else_: 'b' },
-      { name: 'refund_reply', type: 'agent', next: 'finish' },
-      { name: 'finish', type: 'end' },
+      { name: 'start', type: 'start', next: 'reply' },
+      { name: 'reply', type: 'llm', next: 'end' },
+      { name: 'end', type: 'end' },
     ],
   };
 
   beforeEach(() => {
-    component = new WorkflowGraphComponent();
+    agentService = { renderWorkflowSvg: jasmine.createSpy('renderWorkflowSvg') };
+    sanitizer = {
+      bypassSecurityTrustHtml: jasmine
+        .createSpy('bypassSecurityTrustHtml')
+        .and.callFake((value: string) => value),
+    };
+    component = new WorkflowGraphComponent(
+      agentService as any,
+      sanitizer as any,
+    );
   });
 
   it('creates', () => {
     expect(component).toBeTruthy();
   });
 
-  it('builds a Mermaid graph with typed nodes and edges', () => {
-    const def = component.buildDefinition(workflow);
-    expect(def).toContain('graph TD');
-    expect(def).toContain('n_start(["start"]):::startNode');
-    expect(def).toContain(':::llmNode');
-    expect(def).toContain('n_start --> n_classify');
-    // switch fans out to its cases and default
-    expect(def).toContain('n_route -->|refund| n_refund_reply');
-    expect(def).toContain('n_route -->|default| n_general');
-    // if branches to then/else
-    expect(def).toContain('n_check -->|true| n_a');
-    expect(def).toContain('n_check -->|false| n_b');
-    // end node has no outgoing edge
-    expect(def).not.toContain('n_finish -->');
+  it('renders the backend-generated SVG for a workflow', () => {
+    agentService.renderWorkflowSvg.and.returnValue(of('<svg>graph</svg>'));
+    component.workflow = workflow;
+    component.ngOnChanges();
+    expect(agentService.renderWorkflowSvg).toHaveBeenCalledWith(workflow);
+    expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<svg>graph</svg>');
+    expect(component.svg).toBe('<svg>graph</svg>');
+    expect(component.error).toBeNull();
   });
 
-  it('handles a missing or empty workflow', () => {
-    expect(component.buildDefinition(null)).toContain('graph TD');
-    expect(component.buildDefinition({})).toContain('graph TD');
+  it('shows an error when the backend render fails', () => {
+    agentService.renderWorkflowSvg.and.returnValue(
+      throwError(() => new Error('boom')),
+    );
+    component.workflow = workflow;
+    component.ngOnChanges();
+    expect(component.error).toContain('Could not render');
+    expect(component.svg).toBeNull();
   });
 
-  it('sanitizes node names into safe ids', () => {
-    const def = component.buildDefinition({
-      nodes: [{ name: 'my node!', type: 'llm', next: 'end node' }],
-    });
-    expect(def).toContain('n_my_node_');
-    expect(def).toContain('n_end_node');
+  it('does nothing without a workflow', () => {
+    component.workflow = null;
+    component.ngOnChanges();
+    expect(agentService.renderWorkflowSvg).not.toHaveBeenCalled();
+    expect(component.svg).toBeNull();
   });
 });

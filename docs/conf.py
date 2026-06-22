@@ -46,6 +46,7 @@ extensions = [
     "myst_nb",
     "sphinx_immaterial",
     "kaval_playground",
+    "workflow_svgs",
 ]
 
 # Napoleon settings

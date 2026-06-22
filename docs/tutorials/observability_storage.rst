@@ -146,9 +146,9 @@ by default, or pass a path to persist across process runs:
 
    storage = SqliteDataStorage("kavalai.db")   # or SqliteDataStorage() for in-memory
 
-**PostgresDataStorage** is the production backend. It writes into the shared
-``agents`` schema that backs the backoffice, so anything you run shows up in the
-UI:
+**PostgresDataStorage** is the production backend. It writes your agents' data
+into the standard ``agents`` / ``sessions`` / ``runs`` / … tables (the same shape
+as the other backends) of whatever Postgres database you point it at:
 
 .. code-block:: python
 
@@ -172,8 +172,7 @@ The tables
 ----------
 
 Every backend stores the same shape — SQLite and the in-memory store mirror the
-Postgres ``agents`` schema column for column — so a run looks identical wherever
-it lives:
+Postgres tables column for column — so a run looks identical wherever it lives:
 
 .. list-table::
    :header-rows: 1
@@ -247,10 +246,16 @@ interface — no engine changes required.
 Browsing it in the backoffice
 -----------------------------
 
-When you run against Postgres, every session, run, task and model call is
-browsable in the **backoffice UI**. You can drill from a *conversation* down to
-an individual *run*, *node* or *model call*, with token and cost metrics along
-the way — the visual side of everything above. See :doc:`../ui/index`.
+The **backoffice UI** is a separate service with its own database (it does not
+share your agents' tables). It browses agent databases through **projects**: you
+register a database — host, port and schema — as a project, and the backoffice
+connects to it to show its sessions, runs, tasks and model calls. You can
+register several (local, staging, production) behind one UI.
+
+So point ``PostgresDataStorage`` at a database, add that database as a project,
+and every session, run, task and model call becomes browsable — drill from a
+*conversation* down to an individual *run*, *node* or *model call*, with token
+and cost metrics along the way. See :doc:`../ui/index`.
 
 Where to next
 -------------

@@ -28,6 +28,16 @@ The caller hands an input to the ``start`` node and reads the result off the
 ``end`` node. By convention the input is the data type named ``input``, and the
 returned value is the ``output`` variable named on the ``end`` node.
 
+The arrows are the transitions: the output of one node flows into the next.
+Branch nodes choose between several arrows, each labelled with the condition
+that selects it — a ``switch`` here routes a classified request to one of three
+handlers:
+
+.. image:: /_static/workflows/support-agent.svg
+   :alt: A support-agent workflow: begin → classify → a switch routing to
+         handle_technical, handle_refund or handle_general, all ending at finish.
+   :align: center
+
 Data types and validation
 --------------------------
 
