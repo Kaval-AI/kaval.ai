@@ -15,7 +15,7 @@ under ``notebooks/`` in the repository and run it cell by cell.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Guided notebooks
+   :caption: Guides & notebooks
 
    LLM clients <llm_clients>
    Workflows <workflow>
