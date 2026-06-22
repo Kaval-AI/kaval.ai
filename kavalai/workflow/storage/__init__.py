@@ -15,13 +15,14 @@ limitations under the License.
 """
 
 from kavalai.workflow.storage.base import DataStorage, RunHandle, ChatMsg
-from kavalai.workflow.storage.memory import SqliteDataStorage
+from kavalai.workflow.storage.memory import InMemoryDataStorage, SqliteDataStorage
 from kavalai.workflow.storage.postgres import PostgresDataStorage
 
 __all__ = [
     "DataStorage",
     "RunHandle",
     "ChatMsg",
+    "InMemoryDataStorage",
     "SqliteDataStorage",
     "PostgresDataStorage",
 ]

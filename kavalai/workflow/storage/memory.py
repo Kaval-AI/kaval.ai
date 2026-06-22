@@ -223,3 +223,96 @@ class SqliteDataStorage(DataStorage):
         if self._conn is not None:
             await self._conn.close()
             self._conn = None
+
+
+class InMemoryDataStorage(DataStorage):
+    """Pure-Python, thread-free in-memory data storage.
+
+    A dependency-free alternative to :class:`SqliteDataStorage` that keeps
+    everything in plain Python structures. Crucially it spawns no background
+    thread, so it works under Pyodide / WebAssembly — where ``aiosqlite`` cannot
+    start its worker thread (``RuntimeError: can't start new thread``). It is the
+    natural store for the in-browser playground and for fast unit tests.
+
+    Semantics mirror :class:`SqliteDataStorage`: agents are reused by name,
+    sessions are reused when a known id is supplied, and chat history is returned
+    oldest-first. State lives only for the lifetime of the instance.
+    """
+
+    def __init__(self) -> None:
+        self._agent_ids_by_name: dict[str, str] = {}
+        self._sessions: set[str] = set()
+        # run_id -> {"output_data": ..., "context": ...}
+        self._runs: dict[str, dict] = {}
+        self._states: dict[str, WorkflowState] = {}
+        # session_id -> ordered chat messages
+        self._chat: dict[str, list[ChatMsg]] = {}
+
+    async def initialize_run(
+        self,
+        *,
+        workflow_name: str,
+        description: Optional[str] = None,
+        input_schema: Optional[dict] = None,
+        output_schema: Optional[dict] = None,
+        workflow: Optional[dict] = None,
+        session_id: Optional[str] = None,
+        external_id: Optional[str] = None,
+        input_data: Optional[dict] = None,
+    ) -> RunHandle:
+        # Reuse an agent with the same name, mirroring get_or_create_agent.
+        agent_id = self._agent_ids_by_name.get(workflow_name)
+        if agent_id is None:
+            agent_id = str(uuid4())
+            self._agent_ids_by_name[workflow_name] = agent_id
+
+        # Reuse the session when a known id is supplied, else create one (keeping
+        # a supplied-but-unknown id so callers can pin their own session ids).
+        if session_id is not None and session_id in self._sessions:
+            resolved_session_id = session_id
+        else:
+            resolved_session_id = session_id or str(uuid4())
+            self._sessions.add(resolved_session_id)
+
+        run_id = str(uuid4())
+        self._runs[run_id] = {"output_data": None, "context": None}
+        return RunHandle(
+            agent_id=agent_id, session_id=resolved_session_id, run_id=run_id
+        )
+
+    async def update_run(
+        self,
+        run_id: str,
+        *,
+        output_data: Optional[dict] = None,
+        context: Optional[dict] = None,
+    ) -> None:
+        run = self._runs.get(run_id)
+        if run is None:
+            return
+        if output_data is not None:
+            run["output_data"] = output_data
+        if context is not None:
+            run["context"] = context
+
+    async def save_state(self, run_id: str, state: WorkflowState) -> None:
+        self._states[run_id] = state
+
+    async def load_state(self, run_id: str) -> Optional[WorkflowState]:
+        return self._states.get(run_id)
+
+    async def add_chat_message(
+        self,
+        *,
+        agent_id: str,
+        session_id: str,
+        run_id: Optional[str],
+        role: str,
+        content: Optional[str],
+    ) -> None:
+        self._chat.setdefault(session_id, []).append(
+            ChatMsg(role=role, content=content)
+        )
+
+    async def get_chat_history(self, session_id: str, limit: int = 50) -> list[ChatMsg]:
+        return list(self._chat.get(session_id, []))[:limit]

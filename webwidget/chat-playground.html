@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaval.AI Chat Playground</title>
+    <!-- Kaval.AI icon mark (matches docs/_static/favicon.svg). -->
+    <link rel="icon" type="image/svg+xml"
+          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 79.375 79.375'><g transform='translate(-27.011657,-24.494702)'><g transform='matrix(0.26458333,0,0,0.26458333,-506.65292,-7.2552973)'><path d='m 2317,120 h -300 v 300 h 300 z' fill='%23002626'/><path d='m 2145.42,235.72 c -1.16,-1.164 -1.82,-2.752 -1.82,-4.424 V 120 H 2017 v 1.842 L 2138.82,233.9 c 1.29,1.185 2.01,2.857 2.01,4.593 V 420 h 176.15 v -12.679 z' fill='%23acc12f'/></g></g></svg>">
+    <!--
+      Standalone chat playground. Two independent widgets, side by side:
+
+        - left  : the chat widget (kaval-chat.js / window.KavalChat);
+        - right : the Python playground (kaval-playground.js) where the
+                  `workflow` the chat talks to is defined.
+
+      They are kept as separate widgets on purpose so each can be embedded on
+      its own (e.g. in the docs) later. The chat is wired to the playground via
+      KavalPlayground.workflowBridge() — nothing else couples them.
+
+      Everything runs client-side over WebGPU (no API key, no server). Serve
+      over HTTP so the kavalai wheel can be fetched, e.g.:
+
+          uv build --wheel              # produces dist/kavalai-*.whl
+          python -m http.server         # from the repo root
+          open http://localhost:8000/webwidget/chat-playground.html
+    -->
+    <link rel="stylesheet" href="kaval-playground.css">
+    <link rel="stylesheet" href="kaval-chat.css">
+    <style>
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            background: #11111b;
+            color: #cdd6f4;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+        .kaval-topbar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            padding: 0.6rem 0.9rem;
+            background: #181825;
+            border-bottom: 1px solid #313244;
+            font-size: 0.8rem;
+        }
+        .kaval-topbar label { display: flex; align-items: center; gap: 0.5rem; flex: 1 1 22rem; }
+        .kaval-topbar .hint { color: #a6adc8; font-size: 0.72rem; }
+        /* Chat on the left, the workflow definition on the right. */
+        .kaval-split {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            gap: 0.9rem;
+            padding: 0.9rem;
+        }
+        .kaval-split > div { flex: 1 1 50%; min-width: 0; min-height: 0; }
+        #playground .kaval-pg-embed,
+        #chat .kaval-chat { border-radius: 0.6rem; }
+        /* Stack on narrow viewports so neither widget gets squeezed. */
+        @media (max-width: 820px) {
+            .kaval-split { flex-direction: column; overflow: auto; }
+            .kaval-split > div { flex: 1 1 auto; min-height: 24rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="kaval-topbar">
+        <label>
+            kavalai wheel
+            <input id="wheel" class="kaval-pg-input kaval-pg-input--wheel" type="text"
+                   value="../dist/kavalai-1.0.0-py3-none-any.whl"
+                   title="URL or relative path to the kavalai wheel (built with: uv build --wheel)">
+        </label>
+        <span class="hint">Edit the workflow on the right, click Run ▶, then chat with it on the left.</span>
+    </div>
+    <div class="kaval-split">
+        <div id="chat"></div>
+        <div id="playground"></div>
+    </div>
+
+    <script src="kaval-playground.js"></script>
+    <script src="kaval-chat.js"></script>
+    <script>
+        // A minimal chat workflow the user can edit and run. It defines a
+        // `workflow` (a WorkflowEngine) the chat widget then drives. The LLM
+        // node keeps `use_history: true` (the default) so each turn sees the
+        // whole conversation; InMemoryDataStorage remembers it across turns
+        // (it is thread-free, so it works under Pyodide — unlike aiosqlite).
+        //
+        // `browser/{KAVAL_BROWSER_MODEL}` runs the model in this page via WebGPU
+        // — no API key, no server. KAVAL_BROWSER_MODEL comes from the model
+        // picker in the playground toolbar.
+        var WORKFLOW_CODE =
+`from kavalai.workflow import WorkflowEngine, InMemoryDataStorage
+
+# The chat panel sends each message as {"user_message": ...} and shows the
+# workflow's "agent_response". Edit the prompt, click Run ▶, then say hi ←
+YAML = f"""
+name: Browser chat
+description: A friendly assistant that remembers the conversation.
+llm_model: browser/{KAVAL_BROWSER_MODEL}
+
+data_types:
+  input:
+    type: object
+    properties:
+      user_message:
+        type: string
+  output:
+    type: object
+    properties:
+      agent_response:
+        type: string
+
+start: begin
+nodes:
+  - name: begin
+    type: start
+    next: reply
+
+  - name: reply
+    type: llm
+    use_history: true
+    prompt: >
+      You are a warm, concise assistant chatting with a user in a browser
+      playground. Answer their latest message in one short paragraph and put
+      your reply in the agent_response field.
+    inputs:
+      input:
+        type: context
+        value: input
+    output: output
+    next: done
+
+  - name: done
+    type: end
+    output: output
+"""
+
+workflow = WorkflowEngine.from_yaml(YAML, storage=InMemoryDataStorage())
+print("workflow ready — say hi in the chat panel ←")
+`;
+
+        var wheelInput = document.getElementById("wheel");
+        // Point the shared engine at the wheel (re-applied on edit; takes effect
+        // on the next fresh run before Pyodide has booted).
+        KavalPlayground.configure({ wheelUrl: wheelInput.value.trim() });
+        wheelInput.addEventListener("change", function () {
+            KavalPlayground.configure({ wheelUrl: wheelInput.value.trim() });
+        });
+
+        // Right: the playground where the `workflow` is defined.
+        KavalPlayground.mount("#playground", {
+            title: "Define your workflow",
+            code: WORKFLOW_CODE,
+            showPackages: false,
+        });
+
+        // Left: the chat widget, wired to a bridge that runs the `workflow`.
+        // The widget itself knows nothing about Pyodide — it just calls send().
+        var bridge = KavalPlayground.workflowBridge();
+        KavalChat.mount("#chat", {
+            title: "Chat with your workflow",
+            greeting:
+                "Define a workflow on the right and click Run ▶, then chat here. " +
+                "I'll remember what we say so follow-ups have context.",
+            send: bridge.send,
+            onReset: bridge.reset,
+        });
+    </script>
+</body>
+</html>

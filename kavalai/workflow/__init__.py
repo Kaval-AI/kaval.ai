@@ -35,7 +35,7 @@ from kavalai.workflow.state import WorkflowState
 from kavalai.workflow.engine import WorkflowEngine
 from kavalai.workflow.builder import WorkflowBuilder
 from kavalai.workflow.storage.base import DataStorage, RunHandle, ChatMsg
-from kavalai.workflow.storage.memory import SqliteDataStorage
+from kavalai.workflow.storage.memory import InMemoryDataStorage, SqliteDataStorage
 from kavalai.workflow.tasklog.base import (
     TaskLogger,
     StatsBridge,
@@ -63,6 +63,7 @@ __all__ = [
     "DataStorage",
     "RunHandle",
     "ChatMsg",
+    "InMemoryDataStorage",
     "SqliteDataStorage",
     "TaskLogger",
     "StatsBridge",

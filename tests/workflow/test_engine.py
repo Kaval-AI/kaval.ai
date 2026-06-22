@@ -4,6 +4,7 @@ import pytest
 
 from kavalai.workflow import (
     WorkflowEngine,
+    InMemoryDataStorage,
     SqliteDataStorage,
     SqliteTaskLogger,
 )
@@ -489,6 +490,85 @@ async def test_use_history_includes_prior_messages():
     contents = [m.content for m in client.calls[0].messages]
     assert any(c == "earlier" for c in contents)
     await storage.close()
+
+
+# The exact workflow the standalone chat-playground.html builds, with the
+# in-browser model swapped for the test fake (browser/... only runs in Pyodide).
+CHAT_WORKFLOW_YAML = """
+name: Browser chat
+description: A friendly assistant that remembers the conversation.
+llm_model: openai/fake
+
+data_types:
+  input:
+    type: object
+    properties:
+      user_message:
+        type: string
+  output:
+    type: object
+    properties:
+      agent_response:
+        type: string
+
+start: begin
+nodes:
+  - name: begin
+    type: start
+    next: reply
+  - name: reply
+    type: llm
+    use_history: true
+    prompt: >
+      You are a warm, concise assistant chatting with a user. Answer their
+      latest message and put your reply in the agent_response field.
+    inputs:
+      input:
+        type: context
+        value: input
+    output: output
+    next: done
+  - name: done
+    type: end
+    output: output
+"""
+
+
+async def test_chat_workflow_remembers_history_in_memory():
+    """End-to-end chat-playground scenario over the thread-free in-memory store:
+    one InMemoryDataStorage and a stable session id, so each turn's LLM call
+    sees the whole prior conversation (no seeding — the engine accumulates it).
+    """
+    storage = InMemoryDataStorage()
+    factory = make_factory({"agent_response": "ack"})
+    engine = WorkflowEngine.from_yaml(
+        CHAT_WORKFLOW_YAML, storage=storage, client_factory=factory
+    )
+    session = "chat-1"
+
+    for msg in ["hello", "what did I say?", "and before that?"]:
+        state = await engine.run({"user_message": msg}, session_id=session)
+        assert state.status == "completed"
+        assert state.output_data == {"agent_response": "ack"}
+        assert state.session_id == session
+
+    # Turn 3's LLM call must include every earlier user + assistant message.
+    third_call = factory.created[2].calls[0]
+    contents = [m.content for m in third_call.messages]
+    assert "hello" in contents
+    assert "what did I say?" in contents
+    assert contents.count("ack") == 2  # the two prior assistant replies
+
+    # Persisted history holds all six messages, oldest first.
+    history = await storage.get_chat_history(session)
+    assert [(m.role, m.content) for m in history] == [
+        ("user", "hello"),
+        ("assistant", "ack"),
+        ("user", "what did I say?"),
+        ("assistant", "ack"),
+        ("user", "and before that?"),
+        ("assistant", "ack"),
+    ]
 
 
 def test_servers_and_unmarked_python_function_registration():

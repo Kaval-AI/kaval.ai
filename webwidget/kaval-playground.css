@@ -174,48 +174,6 @@
   background: var(--kaval-pg-border);
 }
 
-/* API keys */
-.kaval-pg-keys {
-  padding: 0.5rem 0.8rem;
-  border-bottom: 1px solid var(--kaval-pg-border);
-}
-.kaval-pg-keys > summary {
-  cursor: pointer;
-  color: var(--kaval-pg-muted);
-  user-select: none;
-  font-size: 0.9em;
-}
-.kaval-pg-keys label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  font-size: 0.9em;
-  color: var(--kaval-pg-muted);
-}
-.kaval-pg-keys input {
-  flex: 1;
-  min-width: 0;
-  background: var(--kaval-pg-bg);
-  color: var(--kaval-pg-fg);
-  border: 1px solid var(--kaval-pg-border);
-  border-radius: 0.4rem;
-  padding: 0.3rem 0.5rem;
-  font-size: 0.9em;
-  font-family: inherit;
-}
-.kaval-pg-keys-note {
-  margin: 0.5rem 0 0.1rem;
-  font-size: 0.82em;
-  color: var(--kaval-pg-muted);
-  line-height: 1.4;
-}
-.kaval-pg-keys-note code {
-  background: var(--kaval-pg-bg-2);
-  padding: 0 0.25em;
-  border-radius: 0.25em;
-}
-
 /* Editor — grows to fill available height */
 .kaval-pg-editor {
   flex: 1 1 auto;

@@ -9,18 +9,21 @@
  *   - the docs: a "Run in browser" button on code blocks marked
  *     `run-in-browser` opens a shared drawer (KavalPlayground.attachButtons);
  *   - any website: an inline, embeddable widget (KavalPlayground.mount); and
- *   - the standalone webwidget/python-playground.html.
+ *   - the standalone webwidget/chat-playground.html, paired with the chat
+ *     widget (kaval-chat.js) via KavalPlayground.workflowBridge().
  *
  * Public API (window.KavalPlayground):
  *   configure(opts)        merge config: { pyodideUrl, wheelUrl, models,
  *                          embedModel, webllmUrl, cmBase }
  *   mount(el, opts)        render an inline widget into `el` and return its
  *                          instance ({ setCode, run, ... }); opts:
- *                          { code, examples, showModel, showKeys,
- *                            showPackages, title }
+ *                          { code, examples, showModel, showPackages, title }
  *   attachButtons(opts)    add Run buttons to `.run-in-browser` code blocks
  *   open(code)             load `code` into the shared drawer and open it
  *   bridge()               the WebLLM bridge (window.kavalBrowserLLM)
+ *   workflowBridge(opts)   chat bridge to a `workflow` defined in the
+ *                          playground -> { send, reset, sessionId } (drives
+ *                          the separate chat widget in kaval-chat.js)
  *
  * NOTE: the page must be served over http(s); opening built HTML via a file://
  * path stops the browser from fetching the kavalai wheel.
@@ -67,8 +70,6 @@
   })();
 
   var LS = {
-    openai: "kaval-pg-openai-key",
-    gemini: "kaval-pg-gemini-key",
     model: "kaval-pg-browser-model",
   };
 
@@ -134,8 +135,9 @@
     await pyodide.loadPackage("micropip");
     var micropip = pyodide.pyimport("micropip");
 
-    // Route httpx/requests/urllib through the browser's fetch so the LLM
-    // clients have a chance of reaching providers (subject to provider CORS).
+    // Route httpx/requests/urllib through the browser's fetch so Kaval.AI's
+    // HTTP tools (web search, RSS, REST) work from Python (subject to CORS).
+    // LLM inference itself stays fully in-browser via the WebLLM bridge.
     sinkStatus("Installing pyodide-http…");
     await micropip.install("pyodide-http");
     await pyodide.runPythonAsync("import pyodide_http; pyodide_http.patch_all()");
@@ -264,6 +266,15 @@
   // -- Run core (shared by every instance) ----------------------------------
   var installedPackages = new Set();
 
+  // Expose the chosen in-browser model ids to the running Python. Shared by a
+  // normal Run and by the workflow chat bridge so both pick up whatever the
+  // toolbar's model picker selected. Kaval.AI runs fully client-side here via
+  // the WebLLM bridge, so there are no provider API keys to inject.
+  function setModelGlobals(pyodide, ctx) {
+    pyodide.globals.set("KAVAL_BROWSER_MODEL", ctx.model || CONFIG.models[0][0]);
+    pyodide.globals.set("KAVAL_BROWSER_EMBED_MODEL", ctx.embedModel || CONFIG.embedModel);
+  }
+
   async function runPython(code, ctx) {
     activeSink = ctx.sink;
 
@@ -283,20 +294,8 @@
 
     var pyodide = await ensurePyodide();
 
-    // Inject API keys as environment variables (set via globals to avoid any
-    // string-escaping issues), then expose the chosen browser model ids.
-    pyodide.globals.set("_kaval_openai_key", ctx.openaiKey || "");
-    pyodide.globals.set("_kaval_gemini_key", ctx.geminiKey || "");
-    await pyodide.runPythonAsync(
-      "import os as _os\n" +
-        "if _kaval_openai_key:\n" +
-        "    _os.environ['OPENAI_API_KEY'] = _kaval_openai_key\n" +
-        "if _kaval_gemini_key:\n" +
-        "    _os.environ['GEMINI_API_KEY'] = _kaval_gemini_key\n" +
-        "    _os.environ.setdefault('GOOGLE_API_KEY', _kaval_gemini_key)\n"
-    );
-    pyodide.globals.set("KAVAL_BROWSER_MODEL", ctx.model || CONFIG.models[0][0]);
-    pyodide.globals.set("KAVAL_BROWSER_EMBED_MODEL", ctx.embedModel || CONFIG.embedModel);
+    // Expose the chosen in-browser model ids to the running code.
+    setModelGlobals(pyodide, ctx);
 
     // Install any extra PyPI packages requested by the widget.
     if (ctx.packages && ctx.packages.length) {
@@ -318,6 +317,129 @@
     ctx.sink.status("Done");
   }
 
+  // -- Workflow chat bridge --------------------------------------------------
+  // Lets a separate chat UI (kaval-chat.js) talk to a `workflow` the user has
+  // defined and run in the playground. Each turn calls
+  // `workflow.run({user_message: ...}, session_id=...)` on the shared Pyodide,
+  // reusing one session id so the engine's history-aware nodes (use_history,
+  // on by default) see the whole conversation. The bridge knows nothing about
+  // the chat UI — it just exposes a send(message) callback the UI can drive.
+
+  // Runs one chat turn. Reads the `workflow` global, gives it a thread-free
+  // InMemoryDataStorage if the author wired none (so history is remembered —
+  // aiosqlite cannot start its worker thread under Pyodide), runs it for the
+  // message and returns a JSON string of {reply} or {error,detail}.
+  var CHAT_TURN_PY =
+    "import json as _kaval_json\n" +
+    "async def _kaval_chat_turn():\n" +
+    "    _wf = globals().get('workflow')\n" +
+    "    if _wf is None:\n" +
+    "        return _kaval_json.dumps({'error': 'no_workflow'})\n" +
+    "    if not hasattr(_wf, 'run'):\n" +
+    "        return _kaval_json.dumps({'error': 'not_a_workflow'})\n" +
+    "    if getattr(_wf, 'storage', None) is None:\n" +
+    "        try:\n" +
+    "            from kavalai.workflow import InMemoryDataStorage as _KavalStore\n" +
+    "            _wf.storage = _KavalStore()\n" +
+    "        except Exception:\n" +
+    "            pass\n" +
+    "    try:\n" +
+    "        _state = await _wf.run(\n" +
+    "            {_kaval_chat_input_key: _kaval_chat_msg},\n" +
+    "            session_id=_kaval_chat_session,\n" +
+    "        )\n" +
+    "    except Exception as _exc:\n" +
+    "        return _kaval_json.dumps({'error': 'run_failed', 'detail': str(_exc)})\n" +
+    "    _out = _state.output_data or {}\n" +
+    "    if isinstance(_out, dict):\n" +
+    "        _reply = _out.get(_kaval_chat_reply_key)\n" +
+    "        if _reply is None and _out:\n" +
+    "            _reply = _kaval_json.dumps(_out)\n" +
+    "    else:\n" +
+    "        _reply = str(_out)\n" +
+    "    return _kaval_json.dumps({'reply': '' if _reply is None else _reply})\n" +
+    "await _kaval_chat_turn()\n";
+
+  function lsGet(key) {
+    try {
+      return window.localStorage.getItem(key) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function newSessionId() {
+    return (
+      "kaval-chat-" +
+      Math.random().toString(36).slice(2) +
+      Date.now().toString(36)
+    );
+  }
+
+  function createWorkflowBridge(opts) {
+    opts = opts || {};
+    var inputKey = opts.inputKey || "user_message";
+    var replyKey = opts.replyKey || "agent_response";
+    // One id for the life of the conversation; reused across turns so the
+    // engine accumulates chat history under it. reset() starts a fresh chat.
+    var sessionId = newSessionId();
+
+    async function send(message) {
+      if (window.location.protocol === "file:") {
+        return {
+          error:
+            "This page was opened from disk. Serve it over HTTP (e.g. " +
+            "`python -m http.server`) so the kavalai wheel can load.",
+        };
+      }
+      var pyodide = await ensurePyodide();
+
+      // Run against the same in-browser model the playground's picker selected.
+      setModelGlobals(pyodide, {
+        model: lsGet(LS.model) || CONFIG.models[0][0],
+        embedModel: CONFIG.embedModel,
+      });
+
+      pyodide.globals.set("_kaval_chat_msg", String(message));
+      pyodide.globals.set("_kaval_chat_session", sessionId);
+      pyodide.globals.set("_kaval_chat_input_key", inputKey);
+      pyodide.globals.set("_kaval_chat_reply_key", replyKey);
+
+      var data = JSON.parse(await pyodide.runPythonAsync(CHAT_TURN_PY));
+      if (data.error === "no_workflow") {
+        return {
+          error:
+            "No `workflow` is defined yet. Assign a workflow (e.g. " +
+            "`workflow = WorkflowEngine.from_yaml(...)`) in the playground and " +
+            "click Run ▶ first.",
+        };
+      }
+      if (data.error === "not_a_workflow") {
+        return {
+          error:
+            "`workflow` is defined but isn't runnable — it needs an async " +
+            "`run(input, session_id=...)` method (a WorkflowEngine).",
+        };
+      }
+      if (data.error) {
+        return { error: data.detail || "The workflow run failed." };
+      }
+      return { reply: data.reply };
+    }
+
+    return {
+      // send(message) -> Promise<{reply} | {error}>
+      send: send,
+      // Start a new conversation (drops the remembered history).
+      reset: function () {
+        sessionId = newSessionId();
+      },
+      sessionId: function () {
+        return sessionId;
+      },
+    };
+  }
+
   // -- A playground instance (one editor + output, drawer or inline) --------
   function modelOptionsHtml() {
     return CONFIG.models
@@ -330,7 +452,6 @@
   function createInstance(root, opts) {
     opts = opts || {};
     var variant = opts.variant === "drawer" ? "drawer" : "embed";
-    var showKeys = opts.showKeys !== false;
     var showModel = opts.showModel !== false;
     var showPackages = !!opts.showPackages;
     var examples = opts.examples || null; // { label: code, ... }
@@ -351,16 +472,6 @@
         ? '<button class="kaval-pg-icon" data-pg="close" aria-label="Close playground" title="Close (Esc)">✕</button>'
         : "") +
       "</div>";
-
-    if (showKeys) {
-      html +=
-        '<details class="kaval-pg-keys">' +
-        "<summary>API keys — optional, stored only in this browser</summary>" +
-        '<label>OpenAI<input type="password" data-pg="openai" placeholder="sk-…" autocomplete="off" spellcheck="false"></label>' +
-        '<label>Gemini<input type="password" data-pg="gemini" placeholder="AIza…" autocomplete="off" spellcheck="false"></label>' +
-        '<p class="kaval-pg-keys-note">Injected as <code>OPENAI_API_KEY</code> / <code>GEMINI_API_KEY</code> before your code runs. Calls may still be blocked by provider CORS.</p>' +
-        "</details>";
-    }
 
     html += '<div class="kaval-pg-editor" data-pg="editor"></div>';
 
@@ -403,8 +514,6 @@
     var editorHost = q('[data-pg="editor"]');
     var runBtn = q('[data-pg="run"]');
     var modelSel = q('[data-pg="model"]');
-    var openaiInput = q('[data-pg="openai"]');
-    var geminiInput = q('[data-pg="gemini"]');
     var packagesInput = q('[data-pg="packages"]');
     var exampleSel = q('[data-pg="example"]');
 
@@ -457,8 +566,6 @@
           sink: sink,
           model: modelSel ? modelSel.value : null,
           embedModel: CONFIG.embedModel,
-          openaiKey: openaiInput ? openaiInput.value.trim() : "",
-          geminiKey: geminiInput ? geminiInput.value.trim() : "",
           packages: packagesInput
             ? packagesInput.value.split(",").map(trim).filter(Boolean)
             : [],
@@ -484,8 +591,6 @@
         if (editor) editor.setValue(code);
       });
     }
-    if (openaiInput) wirePersist(openaiInput, LS.openai);
-    if (geminiInput) wirePersist(geminiInput, LS.gemini);
     if (modelSel) wirePersist(modelSel, LS.model);
 
     function refresh() {
@@ -570,7 +675,7 @@
     if (drawer) return drawer;
     var root = document.createElement("div");
     document.body.appendChild(root);
-    drawer = createInstance(root, { variant: "drawer", showKeys: true, showModel: true });
+    drawer = createInstance(root, { variant: "drawer", showModel: true });
     return drawer;
   }
 
@@ -632,6 +737,11 @@
     bridge: function () {
       installBrowserLLMBridge();
       return window.kavalBrowserLLM;
+    },
+    // Build a chat bridge to a `workflow` defined in the playground; returns
+    // { send(message), reset(), sessionId() }. Hand `send` to KavalChat.mount.
+    workflowBridge: function (opts) {
+      return createWorkflowBridge(opts);
     },
     config: CONFIG,
   };

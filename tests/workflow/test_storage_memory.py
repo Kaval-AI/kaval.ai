@@ -1,7 +1,7 @@
 import pytest
 
 from kavalai.workflow.state import WorkflowState
-from kavalai.workflow.storage.memory import SqliteDataStorage
+from kavalai.workflow.storage.memory import InMemoryDataStorage, SqliteDataStorage
 
 
 @pytest.fixture
@@ -150,3 +150,130 @@ async def test_base_close_default_returns_none():
             return []
 
     assert await MinimalStorage().close() is None
+
+
+# --------------------------------------------------------------------------
+# InMemoryDataStorage — the thread-free backend used under Pyodide (where
+# aiosqlite cannot start its worker thread). It mirrors SqliteDataStorage's
+# semantics, so the behavioural expectations below match the suite above.
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mem_storage():
+    return InMemoryDataStorage()
+
+
+async def test_mem_initialize_run_creates_ids(mem_storage):
+    handle = await mem_storage.initialize_run(
+        workflow_name="wf", input_data={"user_message": "hi"}
+    )
+    assert handle.agent_id
+    assert handle.session_id
+    assert handle.run_id
+
+
+async def test_mem_agent_is_reused_by_name(mem_storage):
+    h1 = await mem_storage.initialize_run(workflow_name="wf")
+    h2 = await mem_storage.initialize_run(workflow_name="wf")
+    assert h1.agent_id == h2.agent_id
+    # New run + session each time though.
+    assert h1.run_id != h2.run_id
+    assert h1.session_id != h2.session_id
+
+
+async def test_mem_session_is_reused_when_supplied(mem_storage):
+    h1 = await mem_storage.initialize_run(workflow_name="wf")
+    h2 = await mem_storage.initialize_run(workflow_name="wf", session_id=h1.session_id)
+    assert h2.session_id == h1.session_id
+
+
+async def test_mem_supplied_unknown_session_id_is_kept(mem_storage):
+    handle = await mem_storage.initialize_run(
+        workflow_name="wf", session_id="custom-session"
+    )
+    assert handle.session_id == "custom-session"
+
+
+async def test_mem_save_and_load_state(mem_storage):
+    handle = await mem_storage.initialize_run(workflow_name="wf")
+    state = WorkflowState(
+        workflow_name="wf", status="running", trace=["start"], run_id=handle.run_id
+    )
+    await mem_storage.save_state(handle.run_id, state)
+    loaded = await mem_storage.load_state(handle.run_id)
+    assert loaded == state
+
+
+async def test_mem_load_state_none_when_absent(mem_storage):
+    handle = await mem_storage.initialize_run(workflow_name="wf")
+    assert await mem_storage.load_state(handle.run_id) is None
+    assert await mem_storage.load_state("does-not-exist") is None
+
+
+async def test_mem_update_run(mem_storage):
+    handle = await mem_storage.initialize_run(workflow_name="wf")
+    await mem_storage.update_run(
+        handle.run_id, output_data={"agent_response": "ok"}, context={"a": 1}
+    )
+    run = mem_storage._runs[handle.run_id]
+    assert run["output_data"] == {"agent_response": "ok"}
+    assert run["context"] == {"a": 1}
+
+
+async def test_mem_update_run_no_fields_is_noop(mem_storage):
+    handle = await mem_storage.initialize_run(workflow_name="wf")
+    await mem_storage.update_run(handle.run_id)  # nothing to update
+    run = mem_storage._runs[handle.run_id]
+    assert run["output_data"] is None and run["context"] is None
+
+
+async def test_mem_update_run_unknown_id_is_noop(mem_storage):
+    # Updating a run that was never initialized must not raise.
+    await mem_storage.update_run("does-not-exist", output_data={"x": 1})
+
+
+async def test_mem_chat_history_order(mem_storage):
+    handle = await mem_storage.initialize_run(workflow_name="wf")
+    await mem_storage.add_chat_message(
+        agent_id=handle.agent_id,
+        session_id=handle.session_id,
+        run_id=handle.run_id,
+        role="user",
+        content="hi",
+    )
+    await mem_storage.add_chat_message(
+        agent_id=handle.agent_id,
+        session_id=handle.session_id,
+        run_id=handle.run_id,
+        role="assistant",
+        content="hello",
+    )
+    history = await mem_storage.get_chat_history(handle.session_id)
+    assert [(m.role, m.content) for m in history] == [
+        ("user", "hi"),
+        ("assistant", "hello"),
+    ]
+
+
+async def test_mem_chat_history_limit(mem_storage):
+    handle = await mem_storage.initialize_run(workflow_name="wf")
+    for i in range(5):
+        await mem_storage.add_chat_message(
+            agent_id=handle.agent_id,
+            session_id=handle.session_id,
+            run_id=handle.run_id,
+            role="user",
+            content=f"m{i}",
+        )
+    history = await mem_storage.get_chat_history(handle.session_id, limit=2)
+    assert [m.content for m in history] == ["m0", "m1"]
+
+
+async def test_mem_chat_history_empty_for_unknown_session(mem_storage):
+    assert await mem_storage.get_chat_history("nope") == []
+
+
+async def test_mem_close_default_is_noop(mem_storage):
+    # InMemoryDataStorage holds no resources, so the inherited close() is a no-op.
+    assert await mem_storage.close() is None
