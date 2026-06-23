@@ -20,9 +20,9 @@ os.environ.setdefault("KAVALAI_DB_URI", "postgresql://user:pass@localhost:5432/d
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "Kaval.AI"
-copyright = "2026, Kaval.AI Team"
-author = "Kaval.AI Team"
+project = "Kaval AI"
+copyright = "2026, Kaval.AI"
+author = "Timo Petmanson"
 # Derive the version from the installed package so the docs never drift from
 # pyproject.toml. Falls back gracefully if the package isn't installed.
 try:
@@ -91,6 +91,10 @@ language = "en"
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_immaterial"
+# Canonical site URL (the custom domain). sphinx_immaterial drives sitemap.xml
+# and canonical links from html_theme_options["site_url"] below; html_baseurl is
+# the standard-Sphinx equivalent — keep the two in sync.
+html_baseurl = "https://docs.kaval.ai/"
 html_static_path = ["_static"]
 # Files copied verbatim into the site root. CNAME tells GitHub Pages to serve
 # the site at the custom domain (docs.kaval.ai); it must live at the published
@@ -103,8 +107,8 @@ html_theme_options = {
         "repo": "fontawesome/brands/github",
         "edit": "material/file-edit-outline",
     },
-    "site_url": "https://kaval.ai/",
-    "repo_url": "https://github.com/kavalai/kaval.ai/",
+    "site_url": "https://docs.kaval.ai/",
+    "repo_url": "https://github.com/Kaval-AI/kaval.ai",
     "repo_name": "Kaval.AI",
     # Expand all navigation sections instead of collapsing them.
     "features": ["navigation.expand"],
