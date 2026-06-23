@@ -92,6 +92,10 @@ language = "en"
 
 html_theme = "sphinx_immaterial"
 html_static_path = ["_static"]
+# Files copied verbatim into the site root. CNAME tells GitHub Pages to serve
+# the site at the custom domain (docs.kaval.ai); it must live at the published
+# root, and docs/_build is gitignored, so we ship it from source on every build.
+html_extra_path = ["_extra"]
 html_css_files = ["custom.css"]
 
 html_theme_options = {
