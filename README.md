@@ -26,4 +26,4 @@ limitations under the License.
 
 # Documentation
 
-For full documentation, please visit [Kaval.AI Documentation](https://kaval.ai/docs).
+For full documentation, please visit [Kaval.AI Documentation](https://docs.kaval.ai/).
