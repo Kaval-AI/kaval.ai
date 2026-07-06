@@ -12,6 +12,12 @@ Features:
 - Agent server REST API with authentication and streaming support.
 - Supports calling REST servers with basic authentication.
 
+## Install
+
+```
+pip install kavalai
+```
+
 ## License
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,6 +30,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-# Documentation
+## Documentation
 
 For full documentation, please visit [Kaval.AI Documentation](https://docs.kaval.ai/).
