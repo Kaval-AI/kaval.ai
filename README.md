@@ -2,10 +2,12 @@
 
 [![CI](https://github.com/Kaval-AI/kaval.ai/actions/workflows/ci.yml/badge.svg)](https://github.com/Kaval-AI/kaval.ai/actions/workflows/ci.yml)
 
-Kaval.AI is an open source Python SDK for writing AI agents and workflow automation pipelines.
-Suitable for conversational agents and generic workflow automation.
+Kaval.AI is an opinionated, elegant, production-grade Python library for building LLM-powered workflows,
+chatbots and agents, and connecting them to databases and tooling — with a focus on observability and debuggability.
+
 
 Features:
+- Supports common LLM backends out of the box (OpenAI, Gemini, Ollama).
 - Makes implementing simple workflows simple via YAML-defined workflows.
 - Built-in debugging and monitoring tools via modern UI.
 - Built-in support for Retrieval augmented generation (RAG) index.
