@@ -7,7 +7,7 @@ chatbots and agents, and connecting them to databases and tooling — with a foc
 
 
 Features:
-- Supports common LLM backends out of the box (OpenAI, Gemini, Ollama).
+- Supports common LLM backends out of the box (OpenAI, Gemini, Ollama, WebLLM).
 - Makes implementing simple workflows simple via YAML-defined workflows.
 - Built-in debugging and monitoring tools via modern UI.
 - Built-in support for Retrieval augmented generation (RAG) index.
