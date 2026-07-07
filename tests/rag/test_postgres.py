@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy import Table, Column, String, Boolean, MetaData, Float, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
-from kavalai.agents.rag_service import RagService, RagServiceResult
+from kavalai.rag import PostgresRagService, RagServiceResult
 from kavalai.normalizer import Normalizer
 from kavalai.agents.db import ModelCallStat, db_manager
 
@@ -20,12 +20,12 @@ def embedding_model():
 async def test_rag_service_indexing(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     texts = ["hello", "world"]
     source_metadata = [{"id": 1}, {"id": 2}]
 
-    items = await service.batch_index(
+    items = await service.index_batch(
         texts=texts, metadata_list=source_metadata, collection_name="test_coll"
     )
     assert len(items) == 2
@@ -47,7 +47,7 @@ async def test_rag_service_indexing(
 async def test_rag_service_deletion(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     texts = ["item 1", "item 2", "item 3"]
     source_ids = ["sid1", "sid2", "sid3"]
@@ -55,7 +55,7 @@ async def test_rag_service_deletion(
     collection = "delete_test"
 
     # Index items
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=metadata,
         collection_name=collection,
@@ -67,7 +67,7 @@ async def test_rag_service_deletion(
     assert len(results) == 3
 
     # Delete sid1 and sid3
-    await service.delete_by_source_ids(collection, ["sid1", "sid3"])
+    await service.delete_by_source_id(collection, ["sid1", "sid3"])
 
     # Verify only sid2 remains
     results = await service.query("item", top_k=10, collection_name=collection)
@@ -80,7 +80,7 @@ async def test_rag_service_deletion(
 async def test_rag_service_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # We index multiple items with the same source_id
     texts = ["apple", "apple pie", "banana"]
@@ -88,7 +88,7 @@ async def test_rag_service_keep_best(
     metadata = [{}, {}, {}]
     collection = "keep_best_test"
 
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=metadata,
         collection_name=collection,
@@ -129,30 +129,28 @@ async def test_rag_service_with_normalizer():
     model = "openai/text-embedding-3-small"
     normalizer = Normalizer(l2=True)
 
-    # We need to mock LLMClient's compute_embeddings in RagService
-    with patch(
-        "kavalai.agents.rag_service.make_embedding_client"
-    ) as mock_llm_client_cls:
+    # We need to mock LLMClient's compute_embeddings in PostgresRagService
+    with patch("kavalai.rag.postgres.make_embedding_client") as mock_llm_client_cls:
         mock_llm_client = mock_llm_client_cls.return_value
         mock_stats = MagicMock(spec=ModelCallStat)
         mock_llm_client.compute_embeddings = AsyncMock(
             return_value=([[0.1, 0.2, 0.3]], mock_stats)
         )
 
-        # Initialize RagService with normalizer
+        # Initialize PostgresRagService with normalizer
         # Pass a session instead of URI to avoid real DB engine creation
         @asynccontextmanager
         async def session_factory():
             yield mock_session
 
-        service = RagService(
+        service = PostgresRagService(
             session_maker=session_factory, model=model, normalizer=normalizer
         )
 
         assert service.normalizer == normalizer
 
-        # 1. Test batch_index
-        await service.batch_index(
+        # 1. Test index_batch
+        await service.index_batch(
             texts=["test"], metadata_list=[{}], collection_name="test_coll"
         )
 
@@ -185,21 +183,19 @@ async def test_rag_service_without_normalizer():
 
     model = "openai/text-embedding-3-small"
 
-    with patch(
-        "kavalai.agents.rag_service.make_embedding_client"
-    ) as mock_llm_client_cls:
+    with patch("kavalai.rag.postgres.make_embedding_client") as mock_llm_client_cls:
         mock_llm_client = mock_llm_client_cls.return_value
         mock_stats = MagicMock(spec=ModelCallStat)
         mock_llm_client.compute_embeddings = AsyncMock(
             return_value=([[0.1, 0.2, 0.3]], mock_stats)
         )
 
-        # Initialize RagService without normalizer
+        # Initialize PostgresRagService without normalizer
         @asynccontextmanager
         async def session_factory():
             yield mock_session
 
-        service = RagService(session_maker=session_factory, model=model)
+        service = PostgresRagService(session_maker=session_factory, model=model)
 
         assert service.normalizer is None
 
@@ -215,7 +211,7 @@ async def test_rag_service_keep_best_duplicates(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test that keep_best handles duplicate content/distances correctly."""
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     collection = "duplicate_test"
     # Index exactly the same content for the same source_id multiple times
@@ -223,7 +219,7 @@ async def test_rag_service_keep_best_duplicates(
     source_ids = ["tesla_3", "tesla_3"]
     metadata = [{"brand": "Tesla"}, {"brand": "Tesla"}]
 
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=metadata,
         collection_name=collection,
@@ -244,7 +240,7 @@ async def test_rag_service_keep_best_duplicates(
 async def test_rag_service_top_k_with_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Index items for 5 different source IDs, each with 2 items
     texts = []
@@ -257,7 +253,7 @@ async def test_rag_service_top_k_with_keep_best(
     metadata = [{} for _ in texts]
     collection = "top_k_keep_best_test"
 
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=metadata,
         collection_name=collection,
@@ -287,14 +283,14 @@ async def test_rag_service_top_k_with_keep_best(
 async def test_rag_service_query_source_ids(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     texts = ["apple", "banana", "cherry"]
     source_ids = ["sid_apple", "sid_banana", "sid_cherry"]
     metadata = [{}, {}, {}]
     collection = "source_ids_test"
 
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=metadata,
         collection_name=collection,
@@ -319,7 +315,7 @@ async def test_rag_service_query_source_ids(
 async def test_rag_service_query_source_ids_with_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Index multiple items for some source_ids
     texts = ["apple 1", "apple 2", "banana 1", "banana 2", "cherry"]
@@ -327,7 +323,7 @@ async def test_rag_service_query_source_ids_with_keep_best(
     metadata = [{}, {}, {}, {}, {}]
     collection = "source_ids_keep_best_test"
 
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=metadata,
         collection_name=collection,
@@ -354,12 +350,12 @@ async def test_rag_service_query_source_ids_with_keep_best(
 async def test_compute_similarity_matrix(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Index some documents
     texts = ["apple", "apple pie", "banana", "banana bread", "cherry"]
     source_ids = ["fruit_1", "fruit_1", "fruit_2", "fruit_2", "fruit_3"]
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=[{}] * len(texts),
         collection_name="matrix_test",
@@ -403,17 +399,17 @@ async def test_compute_similarity_matrix(
 
 
 @pytest.mark.asyncio
-async def test_rag_service_batch_query(
+async def test_rag_service_query_batch(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Index some test documents
     texts = ["apple", "banana", "cherry", "date", "elderberry"]
     source_ids = ["s1", "s2", "s3", "s4", "s5"]
     collection = "batch_query_test"
 
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=[{}] * len(texts),
         collection_name=collection,
@@ -422,7 +418,7 @@ async def test_rag_service_batch_query(
 
     # 1. Basic batch query with multiple texts
     queries = ["apple", "banana"]
-    results = await service.batch_query(
+    results = await service.query_batch(
         texts=queries, top_k=1, collection_name=collection
     )
 
@@ -434,7 +430,7 @@ async def test_rag_service_batch_query(
 
     # 2. Batch query with collection filtering
     # Create another collection
-    await service.batch_index(
+    await service.index_batch(
         texts=["pineapple"],
         metadata_list=[{}],
         collection_name="other_coll",
@@ -442,7 +438,7 @@ async def test_rag_service_batch_query(
     )
 
     # Query in original collection, should not find "pineapple"
-    results_filtered = await service.batch_query(
+    results_filtered = await service.query_batch(
         texts=["apple", "pineapple"], top_k=1, collection_name=collection
     )
     assert len(results_filtered) == 2
@@ -451,13 +447,13 @@ async def test_rag_service_batch_query(
     assert results_filtered[1][0].content != "pineapple"
 
     # Query in other collection
-    results_other = await service.batch_query(
+    results_other = await service.query_batch(
         texts=["pineapple"], top_k=1, collection_name="other_coll"
     )
     assert results_other[0][0].content == "pineapple"
 
     # 3. Batch query with source_ids filtering
-    results_sid = await service.batch_query(
+    results_sid = await service.query_batch(
         texts=["apple", "banana"],
         top_k=5,
         collection_name=collection,
@@ -474,10 +470,10 @@ async def test_rag_service_batch_query(
     assert results_sid[1][0].source_id != "s2"
 
     # 4. Empty input
-    assert await service.batch_query(texts=[]) == []
+    assert await service.query_batch(texts=[]) == []
 
     # 5. Verify top_k
-    results_top_k = await service.batch_query(
+    results_top_k = await service.query_batch(
         texts=["fruit"], top_k=3, collection_name=collection
     )
     assert len(results_top_k) == 1
@@ -489,7 +485,7 @@ async def test_rag_service_batch_query_with_join(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test batch_query_with_join with a mock products table."""
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     async with service.session_maker() as session:
         # Create a mock products table
@@ -582,7 +578,7 @@ async def test_rag_service_batch_query_with_join(
     source_ids = [str(p[0]) for p in product_data]  # Product IDs
     collection = "products"
 
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=[{}] * len(texts),
         collection_name=collection,
@@ -682,7 +678,7 @@ async def test_build_batch_query_cte(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test the build_batch_query_cte method directly."""
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Create some embeddings (mock)
     embeddings = [
@@ -738,7 +734,7 @@ async def test_batch_query_with_join_empty_input(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test batch_query_with_join with empty texts."""
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     results = await service.batch_query_with_join(
         texts=[],
@@ -754,7 +750,7 @@ async def test_batch_query_with_join_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test batch_query_with_join with keep_best parameter."""
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
     collection = "test_keep_best_join"
 
     # Index some items for the same source
@@ -762,7 +758,7 @@ async def test_batch_query_with_join_keep_best(
     metadata = [{"key": "1"}, {"key": "2"}, {"key": "3"}]
     source_ids = ["source_1", "source_1", "source_2"]
 
-    await service.batch_index(
+    await service.index_batch(
         texts=texts,
         metadata_list=metadata,
         source_ids=source_ids,
@@ -817,24 +813,24 @@ async def test_batch_query_with_join_keep_best(
 async def test_rag_service_from_session_maker(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    """Test creating RagService from session maker."""
+    """Test creating PostgresRagService from session maker."""
     session_maker = db_manager.get_sessionmaker(uri=agents_db_config["uri"])
-    service = RagService.from_session_maker(session_maker, embedding_model)
-    assert isinstance(service, RagService)
+    service = PostgresRagService.from_session_maker(session_maker, embedding_model)
+    assert isinstance(service, PostgresRagService)
     assert service.model == embedding_model
     assert service.session_maker == session_maker
 
 
 @pytest.mark.asyncio
-async def test_rag_service_batch_index_edge_cases(
+async def test_rag_service_index_batch_edge_cases(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    """Test batch_index edge cases for coverage."""
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    """Test index_batch edge cases for coverage."""
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Empty texts
     assert (
-        await service.batch_index(texts=[], metadata_list=[], collection_name="test")
+        await service.index_batch(texts=[], metadata_list=[], collection_name="test")
         == []
     )
 
@@ -843,13 +839,13 @@ async def test_rag_service_batch_index_edge_cases(
         ValueError,
         match="The number of texts and metadata dictionaries must be the same.",
     ):
-        await service.batch_index(texts=["a"], metadata_list=[], collection_name="test")
+        await service.index_batch(texts=["a"], metadata_list=[], collection_name="test")
 
     # Mismatched texts and source_ids
     with pytest.raises(
         ValueError, match="The number of texts and source_ids must be the same."
     ):
-        await service.batch_index(
+        await service.index_batch(
             texts=["a"],
             metadata_list=[{}],
             source_ids=["1", "2"],
@@ -870,7 +866,7 @@ async def test_rag_service_compute_similarity_matrix_empty(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test compute_similarity_matrix with empty inputs."""
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Empty texts
     res1 = await service.compute_similarity_matrix(texts=[], source_ids=["1"])
@@ -886,7 +882,7 @@ async def test_rag_service_batch_query_with_join_no_table(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test batch_query_with_join without join_table to cover the 'else' branch (line 479)."""
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Index something
     await service.index(text="test join", collection_name="join_test", source_id="s1")
@@ -911,10 +907,10 @@ async def test_rag_service_learn_normalizer(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test learn_normalizer method."""
-    service = RagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
 
     # Add some data to learn from
-    await service.batch_index(
+    await service.index_batch(
         texts=["data 1", "data 2", "data 3"],
         metadata_list=[{}, {}, {}],
         collection_name="learn_test",
@@ -925,3 +921,47 @@ async def test_rag_service_learn_normalizer(
     # Actually, let's just run it to be sure it works.
     normalizer = await service.learn_normalizer(collection_name="learn_test")
     assert isinstance(normalizer, Normalizer)
+
+
+@pytest.mark.asyncio
+async def test_rag_service_delete_by_id(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test deleting a single indexed item by its id."""
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    collection = "delete_by_id_test"
+    items = await service.index_batch(
+        texts=["first item", "second item"],
+        metadata_list=[{}, {}],
+        collection_name=collection,
+        source_ids=["sid1", "sid2"],
+    )
+
+    await service.delete(items[0].id)
+
+    results = await service.query("item", top_k=10, collection_name=collection)
+    assert len(results) == 1
+    assert results[0].id == items[1].id
+
+
+@pytest.mark.asyncio
+async def test_rag_service_delete_by_source_id_single(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Test delete_by_source_id with a single source id string."""
+    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+
+    collection = "delete_single_sid_test"
+    await service.index_batch(
+        texts=["doc a part 1", "doc a part 2", "doc b"],
+        metadata_list=[{}, {}, {}],
+        collection_name=collection,
+        source_ids=["sid_a", "sid_a", "sid_b"],
+    )
+
+    await service.delete_by_source_id(collection, "sid_a")
+
+    results = await service.query("doc", top_k=10, collection_name=collection)
+    assert len(results) == 1
+    assert results[0].source_id == "sid_b"

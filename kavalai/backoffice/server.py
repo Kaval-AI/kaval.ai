@@ -33,7 +33,7 @@ from kavalai.agents.agent_service import AgentService
 from kavalai.agents.db import db_manager, Agent
 from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions
-from kavalai.agents.rag_service import RagService
+from kavalai.rag import PostgresRagService
 from kavalai.llm_clients.common import Streamer
 from kavalai.backoffice.embedding_projector import train_pca
 from sse_starlette.sse import EventSourceResponse
@@ -533,7 +533,7 @@ async def projects_rag_query(
         async def session_factory():
             yield session
 
-        rag_service = RagService(session_factory, model, normalizer=normalizer)
+        rag_service = PostgresRagService(session_factory, model, normalizer=normalizer)
         results = await rag_service.query(
             text=text,
             top_k=top_k,
@@ -565,7 +565,10 @@ async def projects_rag_query(
                         ipca = pickle.loads(base64.b64decode(cache_entry.value))  # nosec B301
 
                         # Get query embedding
-                        embeddings, _ = await rag_service.llm_client.compute_embeddings(
+                        (
+                            embeddings,
+                            _,
+                        ) = await rag_service.embedding_client.compute_embeddings(
                             texts=[text], normalizer=normalizer
                         )
                         query_point = ipca.transform(np.array(embeddings))[0]

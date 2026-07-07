@@ -32,7 +32,7 @@ class BaseEmbeddingClient:
     ``provider/model`` string), so ``compute_embeddings`` only takes the texts.
     Implementations return the embeddings plus a database-ready
     :class:`~kavalai.agents.db.ModelCallStat` (the ORM row) so callers such as
-    :class:`~kavalai.agents.rag_service.RagService` can persist usage directly.
+    :class:`~kavalai.rag.postgres.PostgresRagService` can persist usage directly.
     """
 
     def __init__(self, model: str):

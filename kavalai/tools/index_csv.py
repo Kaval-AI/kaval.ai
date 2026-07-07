@@ -41,7 +41,7 @@ import os
 import sys
 from typing import List, Optional, Generator, Dict, Any
 
-from kavalai.agents.rag_service import RagService
+from kavalai.rag import PostgresRagService
 
 
 def csv_row_generator(
@@ -107,7 +107,9 @@ async def index_csv(
     batch_size: int = 10,
 ):
     model = model if model else os.environ["KAVALAI_DEFAULT_EMBEDDING_MODEL"]
-    rag_service = RagService.from_uri(uri=os.environ["KAVALAI_DB_URI"], model=model)
+    rag_service = PostgresRagService.from_uri(
+        uri=os.environ["KAVALAI_DB_URI"], model=model
+    )
 
     rows_processed = 0
     total_chunks = 0
@@ -140,7 +142,7 @@ async def index_csv(
             if replace:
                 # Collect unique source_ids in this batch to delete them
                 unique_source_ids = list(set(source_ids))
-                await rag_service.delete_by_source_ids(
+                await rag_service.delete_by_source_id(
                     collection_name, unique_source_ids
                 )
 
@@ -149,8 +151,11 @@ async def index_csv(
             logger.info(
                 f"Indexing batch of {len(batch_rows)} rows generating {len(texts)} chunks (Total rows: {rows_processed}, total chunks: {total_chunks})..."
             )
-            await rag_service.batch_index(
-                texts, metas, collection_name=collection_name, source_ids=source_ids
+            await rag_service.index_batch(
+                texts=texts,
+                metadata_list=metas,
+                collection_name=collection_name,
+                source_ids=source_ids,
             )
         else:
             rows_processed += len(batch_rows)

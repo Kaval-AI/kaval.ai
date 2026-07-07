@@ -102,11 +102,13 @@ async def test_projects_rag_query_with_pca(backoffice_db, agents_db, monkeypatch
     mock_rag_result.content = "result content"
     mock_rag_result.similarity = 0.9
 
-    # We need to mock the RagService.query return value and also handle the internal llm_client call
-    with patch("kavalai.backoffice.server.RagService") as mock_rag_service_class:
+    # We need to mock the RagService.query return value and also handle the internal embedding_client call
+    with patch(
+        "kavalai.backoffice.server.PostgresRagService"
+    ) as mock_rag_service_class:
         mock_instance = mock_rag_service_class.return_value
         mock_instance.query = AsyncMock(return_value=[mock_rag_result])
-        mock_instance.llm_client.compute_embeddings = AsyncMock(
+        mock_instance.embedding_client.compute_embeddings = AsyncMock(
             return_value=([np.random.rand(3).tolist()], None)
         )
 

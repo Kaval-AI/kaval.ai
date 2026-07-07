@@ -15,11 +15,9 @@ limitations under the License.
 """
 
 import os
-from datetime import datetime
 from typing import Optional, Union, Callable, AsyncContextManager
 from uuid import UUID
 
-from pydantic import BaseModel
 from sqlalchemy import delete, select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
@@ -27,45 +25,17 @@ from sqlalchemy.orm import aliased
 from kavalai.agents.db import RagIndex, Agent, db_manager
 from kavalai.llm_clients.embeddings import make_embedding_client
 from kavalai.normalizer import Normalizer
+from kavalai.rag.base import BaseRagService, RagServiceResult
 
 
-class RagServiceResult(BaseModel):
+class PostgresRagService(BaseRagService):
     """
-    Represents a single result from a RAG query.
+    PostgreSQL (pgvector) backed RAG service.
 
-    Attributes:
-        id (UUID): Unique identifier of the indexed item.
-        model (str): The embedding model used for this item.
-        collection_name (str): The name of the collection this item belongs to.
-        source_id (str): An external identifier for the source of this item.
-        content (Optional[str]): The original text content that was indexed.
-        embedding_size (int): The dimension of the embedding vector.
-        rag_metadata (dict): Additional metadata associated with the item.
-        similarity (float): The similarity score (1.0 - distance) relative to the query.
-        created_at (Optional[datetime]): Timestamp when the item was created.
-        updated_at (Optional[datetime]): Timestamp when the item was last updated.
-        query_index (Optional[int]): Index of the query in batch queries (for batch_query results).
-    """
-
-    id: UUID
-    model: str
-    collection_name: str
-    source_id: str
-    content: Optional[str] = None
-    embedding_size: int
-    rag_metadata: dict
-    similarity: float
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    query_index: Optional[int] = None
-
-
-class RagService:
-    """
-    Service for indexing and querying text using embeddings (Retrieval-Augmented Generation).
-
-    This service provides methods to batch index text, delete items, query similarities,
-    and compute similarity matrices against indexed content.
+    Stores embeddings in the ``rag_index`` table and answers similarity
+    queries with pgvector distance operators. Provides methods to batch index
+    text, delete items, query similarities, and compute similarity matrices
+    against indexed content.
     """
 
     def __init__(
@@ -79,7 +49,7 @@ class RagService:
         normalizer: Optional[Normalizer] = None,
     ):
         """
-        Initialize the RagService.
+        Initialize the PostgresRagService.
 
         Args:
             session_maker (Union[async_sessionmaker[AsyncSession], Callable[[], AsyncContextManager[AsyncSession]]]):
@@ -101,9 +71,9 @@ class RagService:
         model: str,
         agent: Optional[Agent] = None,
         normalizer: Optional[Normalizer] = None,
-    ) -> "RagService":
+    ) -> "PostgresRagService":
         """
-        Create a RagService from a database URI.
+        Create a PostgresRagService from a database URI.
 
         Args:
             uri (str): Database URI.
@@ -112,7 +82,7 @@ class RagService:
             normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
 
         Returns:
-            RagService: A new instance of RagService.
+            PostgresRagService: A new instance of PostgresRagService.
         """
         session_maker = db_manager.get_sessionmaker(uri=uri)
         return cls(session_maker, model, agent, normalizer)
@@ -124,9 +94,9 @@ class RagService:
         model: str,
         agent: Optional[Agent] = None,
         normalizer: Optional[Normalizer] = None,
-    ) -> "RagService":
+    ) -> "PostgresRagService":
         """
-        Create a RagService from a session maker.
+        Create a PostgresRagService from a session maker.
 
         Args:
             session_maker (async_sessionmaker[AsyncSession]): Async session maker for the database.
@@ -135,13 +105,12 @@ class RagService:
             normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
 
         Returns:
-            RagService: A new instance of RagService.
+            PostgresRagService: A new instance of PostgresRagService.
         """
         return cls(session_maker, model, agent, normalizer)
 
-    async def batch_index(
+    async def index_batch(
         self,
-        *,
         texts: list[str],
         metadata_list: list[dict],
         source_ids: Optional[list[str]] = None,
@@ -206,18 +175,31 @@ class RagService:
 
             return rag_items
 
-    async def delete_by_source_ids(
+    async def delete(self, item_id: UUID) -> None:
+        """
+        Delete a single indexed item by its identifier.
+
+        Args:
+            item_id (UUID): Identifier of the indexed item to delete.
+        """
+        stmt = delete(RagIndex).where(RagIndex.id == item_id)
+        async with self.session_maker() as session:
+            await session.execute(stmt)
+            await session.commit()
+
+    async def delete_by_source_id(
         self,
         collection_name: str,
-        source_ids: list[str],
-    ):
+        source_id: Union[str, list[str]],
+    ) -> None:
         """
-        Delete items from a collection by their source identifiers.
+        Delete all items in a collection that match the given source identifier(s).
 
         Args:
             collection_name (str): The name of the collection.
-            source_ids (list[str]): List of source identifiers to delete.
+            source_id (Union[str, list[str]]): A source identifier, or a list of them.
         """
+        source_ids = [source_id] if isinstance(source_id, str) else source_id
         stmt = delete(RagIndex).where(
             RagIndex.collection_name == collection_name,
             RagIndex.source_id.in_(source_ids),
@@ -246,7 +228,7 @@ class RagService:
             RagIndex: The created RagIndex database object.
         """
         return (
-            await self.batch_index(
+            await self.index_batch(
                 texts=[text],
                 metadata_list=[source_metadata or {}],
                 collection_name=collection_name,
@@ -297,7 +279,7 @@ class RagService:
 
             return [self._map_row_to_result(row[0], row[1]) for row in rows]
 
-    async def batch_query(
+    async def query_batch(
         self,
         texts: list[str],
         top_k: int = 5,

@@ -4,7 +4,7 @@ import math
 import numpy as np
 from kavalai.normalizer import Normalizer
 from kavalai.agents.db import RagIndex
-from kavalai.agents.rag_service import RagService
+from kavalai.rag import PostgresRagService
 
 
 def test_normalize_l1():
@@ -175,7 +175,7 @@ async def test_rag_service_learn_normalizer(agents_db):
     from unittest.mock import patch
 
     with patch.dict(os.environ, {"OPENAI_API_KEY": "fake"}):
-        rag_service = RagService(session_maker=session_factory, model=model)
+        rag_service = PostgresRagService(session_maker=session_factory, model=model)
     normalizer = await rag_service.learn_normalizer(collection_name="test")
 
     assert np.allclose(normalizer.center_vector, [2.0, 2.0])

@@ -24,7 +24,7 @@ limitations under the License.
 #   * ``Agent``                                -- the multi-step tool-calling agent.
 #   * ``FunctionKernel`` / ``pythontool``      -- register and call tools.
 #   * ``OpenAIClient`` / ``GeminiClient`` / ``OllamaClient`` -- LLM backends.
-#   * ``RagService``                           -- index and query embeddings.
+#   * ``PostgresRagService``                   -- index and query embeddings.
 #
 # The persistence-layer ORM table classes (Agent row, Run, Task, ...) live in
 # ``kavalai.agents.db`` to keep the runtime names (``Agent`` the agent,
@@ -141,7 +141,7 @@ from kavalai.llm_clients.streamer import (
 )
 
 # --- RAG, normalization, persistence --------------------------------------
-from kavalai.agents.rag_service import RagService
+from kavalai.rag import BaseRagService, PostgresRagService, RagServiceResult
 from kavalai.normalizer import Normalizer
 from kavalai.agents.db import db_manager
 
@@ -206,7 +206,9 @@ __all__ = [
     "ValueStreamer",
     "StreamerTimeoutException",
     # RAG, normalization, persistence
-    "RagService",
+    "BaseRagService",
+    "PostgresRagService",
+    "RagServiceResult",
     "Normalizer",
     "db_manager",
 ]

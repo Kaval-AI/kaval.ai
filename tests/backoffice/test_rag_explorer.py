@@ -35,7 +35,7 @@ async def test_projects_rag_query_with_normalizer(client, mock_user_session):
     with patch(
         "kavalai.backoffice.server.db_manager.get_sessionmaker"
     ) as mock_get_sessionmaker, patch(
-        "kavalai.backoffice.server.RagService"
+        "kavalai.backoffice.server.PostgresRagService"
     ) as MockRagService, patch(
         "kavalai.normalizer.Normalizer.from_yaml"
     ) as mock_from_yaml:
