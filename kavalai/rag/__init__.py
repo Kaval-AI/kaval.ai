@@ -16,9 +16,11 @@ limitations under the License.
 
 from kavalai.rag.base import BaseRagService, RagServiceResult
 from kavalai.rag.postgres import PostgresRagService
+from kavalai.rag.sqllite import SqliteRagService
 
 __all__ = [
     "BaseRagService",
     "PostgresRagService",
     "RagServiceResult",
+    "SqliteRagService",
 ]

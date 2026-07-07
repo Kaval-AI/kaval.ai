@@ -46,7 +46,7 @@ gemini = ["google-genai"]
 ollama = ["ollama"]
 llm = ["openai", "google-genai", "ollama"]
 # Embeddings / RAG (native extensions).
-rag = ["fastembed", "scikit-learn"]
+rag = ["fastembed", "scikit-learn", "sqliteai-vector"]
 # PostgreSQL drivers (native extensions).
 postgres = ["asyncpg", "psycopg2-binary"]
 # Model Context Protocol client support.
@@ -72,6 +72,7 @@ all = [
     "ollama",
     "fastembed",
     "scikit-learn",
+    "sqliteai-vector",
     "asyncpg",
     "psycopg2-binary",
     "mcp",
@@ -95,6 +96,7 @@ test = [
     "ollama",
     "fastembed",
     "scikit-learn",
+    "sqliteai-vector",
     "asyncpg",
     "psycopg2-binary",
     "mcp",

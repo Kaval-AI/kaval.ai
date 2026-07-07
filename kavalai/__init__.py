@@ -141,7 +141,12 @@ from kavalai.llm_clients.streamer import (
 )
 
 # --- RAG, normalization, persistence --------------------------------------
-from kavalai.rag import BaseRagService, PostgresRagService, RagServiceResult
+from kavalai.rag import (
+    BaseRagService,
+    PostgresRagService,
+    RagServiceResult,
+    SqliteRagService,
+)
 from kavalai.normalizer import Normalizer
 from kavalai.agents.db import db_manager
 
@@ -209,6 +214,7 @@ __all__ = [
     "BaseRagService",
     "PostgresRagService",
     "RagServiceResult",
+    "SqliteRagService",
     "Normalizer",
     "db_manager",
 ]

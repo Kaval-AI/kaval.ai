@@ -34,7 +34,8 @@ uv run --env-file .env pytest
 
 | Path | Purpose |
 |------|---------|
-| `kavalai/agents/` | Core SDK: workflow engine, planning agent, sessions, RAG |
+| `kavalai/agents/` | Core SDK: workflow engine, planning agent, sessions |
+| `kavalai/rag/` | RAG services: `BaseRagService` interface, `PostgresRagService` (pgvector), `SqliteRagService` (sqlite-vector file index, browser/WASM-portable) |
 | `kavalai/llm_clients/` | Native LLM clients (OpenAI, Gemini, Ollama) + v2 variants |
 | `kavalai/prices/` | LLM pricing data and cost calculation |
 | `kavalai/tools/` | Utility tools (browser, RSS, web search, HTTP) |
