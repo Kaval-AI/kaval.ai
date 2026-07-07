@@ -36,6 +36,13 @@ jobs:
         # google-genai, fastapi, ...); --extra docs adds Sphinx + theme.
         run: uv sync --extra docs --extra all
 
+      - name: Build kavalai wheel
+        # The playground extension (docs/_ext/kaval_playground.py) stages the
+        # newest dist/kavalai-*.whl into _static/pyodide so the in-browser
+        # Pyodide playground can `import kavalai`. Without this, the deployed
+        # docs fall back to plain-Python mode.
+        run: uv build --wheel
+
       - name: Build HTML
         run: uv run sphinx-build -b html docs docs/_build/html
 
