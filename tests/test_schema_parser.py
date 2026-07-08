@@ -1,7 +1,7 @@
 import pytest
 from pydantic import BaseModel
 
-from kavalai.agents.schema_parser import SchemaParser
+from kavalai.schema_parser import SchemaParser
 
 
 # Assuming SchemaParser is imported from your module

@@ -1,7 +1,7 @@
 import pytest
 from uuid import uuid4
 from kavalai.agent_service import AgentService
-from kavalai.agents.db import ModelCallStat
+from kavalai.db import ModelCallStat
 
 
 @pytest.mark.asyncio
@@ -85,7 +85,9 @@ class TestAgentService:
         assert history[1].role == "assistant"
         assert history[1].content == "Response 1"
 
-    async def test_get_model_call_stats(self, agents_session_maker):
+    async def test_get_model_call_stats(self, agents_session_maker, agents_db):
+        # agents_db truncates the tables so the count assertions below see
+        # only the stats created here, regardless of test collection order.
         service = AgentService(agents_session_maker)
 
         # Create some call stats

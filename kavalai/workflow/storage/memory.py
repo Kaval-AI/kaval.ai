@@ -24,7 +24,7 @@ from kavalai.workflow.state import WorkflowState
 from kavalai.workflow.storage.base import ChatMsg, DataStorage, RunHandle
 
 # Schema mirrors the agents tables (agents/sessions/runs/chat_messages) defined
-# by the ORM models in kavalai/agents/db.py, using TEXT UUIDs and JSON-encoded
+# by the ORM models in kavalai/db.py, using TEXT UUIDs and JSON-encoded
 # columns so the in-memory backend has identical semantics to the production
 # backend.
 _SCHEMA = """

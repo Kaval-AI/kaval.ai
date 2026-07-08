@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 # sqlalchemy.text — use this alias inside those methods.
 sql_text = text
 
-from kavalai.agents.db import Agent, db_manager
+from kavalai.db import Agent, db_manager
 from kavalai.llm_clients.embeddings import make_embedding_client
 from kavalai.normalizer import Normalizer
 from kavalai.rag.base import BaseRagService, RagServiceResult

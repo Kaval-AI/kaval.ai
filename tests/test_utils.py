@@ -1,7 +1,7 @@
 import unicodedata
 from pydantic import BaseModel
-from kavalai.agents.utils import to_plain
-from kavalai.agents.utils import clean_text
+from kavalai.utils import to_plain
+from kavalai.utils import clean_text
 
 
 class DemoModel(BaseModel):

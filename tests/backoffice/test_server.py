@@ -101,7 +101,7 @@ async def test_projects_test_connection_success(client, backoffice_db):
 
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(
         "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
-    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm:
+    ), patch("kavalai.db.db_manager.get_sessionmaker") as mock_sm:
         mock_session = AsyncMock()
         mock_sm.return_value = MagicMock(return_value=mock_session)
         mock_session.__aenter__.return_value = mock_session
@@ -114,7 +114,7 @@ async def test_projects_test_connection_success(client, backoffice_db):
 @pytest.mark.asyncio
 async def test_projects_test_connection_new_success(client, backoffice_db):
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(
-        "kavalai.agents.db.db_manager.get_sessionmaker"
+        "kavalai.db.db_manager.get_sessionmaker"
     ) as mock_sm:
         mock_session = AsyncMock()
         mock_sm.return_value = MagicMock(return_value=mock_session)
@@ -150,7 +150,7 @@ async def test_agents_get_all(client, backoffice_db):
 
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(
         "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
-    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm:
+    ), patch("kavalai.db.db_manager.get_sessionmaker") as mock_sm:
         mock_session = AsyncMock()
         mock_sm.return_value = MagicMock(return_value=mock_session)
         mock_session.__aenter__.return_value = mock_session
@@ -212,7 +212,7 @@ async def test_agents_get_stats(client, backoffice_db):
 
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(
         "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
-    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm:
+    ), patch("kavalai.db.db_manager.get_sessionmaker") as mock_sm:
         mock_session = AsyncMock()
         mock_sm.return_value = MagicMock(return_value=mock_session)
         mock_session.__aenter__.return_value = mock_session
@@ -258,7 +258,7 @@ async def test_agents_get_summary_stats(client, backoffice_db):
 
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(
         "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
-    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm:
+    ), patch("kavalai.db.db_manager.get_sessionmaker") as mock_sm:
         mock_session = AsyncMock()
         mock_sm.return_value = MagicMock(return_value=mock_session)
         mock_session.__aenter__.return_value = mock_session
@@ -299,7 +299,7 @@ async def test_projects_get_llm_call_stats(client, backoffice_db):
 
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(
         "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
-    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm:
+    ), patch("kavalai.db.db_manager.get_sessionmaker") as mock_sm:
         mock_session = AsyncMock()
         # mock_sm returns an async_sessionmaker object
         # which when called returns a context manager (mock_session)

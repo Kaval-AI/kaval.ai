@@ -32,7 +32,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from kavalai.agent_service import AgentService
-from kavalai.agents.db import db_manager
+from kavalai.db import db_manager
 from kavalai.workflow import WorkflowEngine
 from kavalai.workflow.storage.postgres import PostgresDataStorage
 from kavalai.workflow.tasklog.postgres import PostgresTaskLogger

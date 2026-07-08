@@ -6,8 +6,8 @@ import os
 from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict
 
-from kavalai.agents.run_context import RunContext
-from kavalai.agents.utils import to_plain
+from kavalai.run_context import RunContext
+from kavalai.utils import to_plain
 from kavalai.functionkernel import FunctionKernel
 from kavalai.llm_clients.base_client import BaseLlmClient, ChatHistory, ChatMessage
 from jinja2 import Template

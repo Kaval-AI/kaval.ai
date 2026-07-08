@@ -2,8 +2,8 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from pydantic import BaseModel
 
-from kavalai.agents.agent import Agent, ToolCall, get_step_output_type
-from kavalai.agents.run_context import RunContext
+from kavalai.agent import Agent, ToolCall, get_step_output_type
+from kavalai.run_context import RunContext
 from kavalai.functionkernel import FunctionKernel
 from kavalai.llm_clients.base_client import BaseLlmClient
 

@@ -3,7 +3,7 @@
 ## Project Overview
 
 Kaval.AI is a YAML-based AI agent framework with two main components:
-- **kavalai.agents**: Core SDK/runtime running on client infrastructure (agent logic, workflows, own DB).
+- **kavalai**: Core SDK/runtime running on client infrastructure (agent logic, workflows, own DB); the runtime modules (`agent.py`, `db.py`, `server.py`, …) live directly in the top-level package.
 - **kavalai.backoffice**: Management UI for configuring and monitoring agents.
 
 Uses `loguru` for all logging and prefers f-strings for formatting.
@@ -36,7 +36,7 @@ Claude Code's static command analysis and forces a manual permission prompt.
 
 | Path | Purpose |
 |------|---------|
-| `kavalai/agents/` | Core SDK: workflow engine, planning agent, sessions |
+| `kavalai/` (top level) | Core SDK/runtime modules: `agent.py`, `agent_service.py`, `db.py`, `server.py`, `run_context.py`, `functionkernel.py`, … |
 | `kavalai/rag/` | RAG services: `BaseRagService` interface, `PostgresRagService` (pgvector), `SqliteRagService` (sqlite-vector file index, browser/WASM-portable) |
 | `kavalai/llm_clients/` | Native LLM clients (OpenAI, Gemini, Ollama) + v2 variants |
 | `kavalai/prices/` | LLM pricing data and cost calculation |
@@ -56,14 +56,14 @@ Claude Code's static command analysis and forces a manual permission prompt.
 - `kavalai/agent_service.py` — `AgentService`: all runtime persistence (agents, sessions, runs, chat history, tasks, model-call stats) over a plain `async_sessionmaker`
 - `kavalai/workflow/engine.py` — core workflow engine (`WorkflowEngine.from_yaml_path`, YAML → execution)
 - `kavalai/workflow/models.py` — Pydantic data models for workflows
-- `kavalai/agents/agent.py` — modular planning agent (uses the native LLM clients)
+- `kavalai/agent.py` — modular planning agent (uses the native LLM clients)
 - `kavalai/functionkernel.py` — tool registration and execution (REST, MCP, Python); unified tool URI format `protocol://[name|module].function_name(args: type) -> return_type`; duplicate tool/server names raise `WorkflowException`; `get_tool_descriptions()` takes an explicit `allowed_tools` filter (`None`/empty → no tools)
-- `kavalai/agents/workflow_model.py` — legacy workflow data models
-- `kavalai/agents/run_context.py` — RunContext model and context resolution helpers
+- `kavalai/workflow_model.py` — legacy workflow data models
+- `kavalai/run_context.py` — RunContext model and context resolution helpers
 - `kavalai/workflow/render.py` — renders a workflow graph to an SVG diagram (`render_workflow_svg`); used by the docs build (`docs/_ext/workflow_svgs.py`) and the backoffice `POST /workflows/render-svg` endpoint. The frontend `workflow-graph` component displays that backend SVG.
 - `kavalai/migrate_db.py` — Alembic migration runner (`python -m kavalai.migrate_db {app|backoffice}`); only its `main()` reads env vars
 - `backoffice/server.py` — FastAPI backoffice API (agents, sessions, stats, projects)
-- `kavalai/agents/server.py` — Agent REST server (sync + SSE streaming)
+- `kavalai/server.py` — Agent REST server (sync + SSE streaming)
 - `kavalai/llm_clients/llm_client.py` — high-level LLM client interface
 
 ## Backend Testing
@@ -106,7 +106,7 @@ cd frontend && npm test -- --watch=false --code-coverage
 
 ## Database Migrations
 
-- Alembic, two sets: `kavalai/migrations/agents/` and `kavalai/migrations/backoffice/`; the ORM models (`kavalai/agents/db.py`, `kavalai/backoffice/db.py`) are the single source of truth
+- Alembic, two sets: `kavalai/migrations/agents/` and `kavalai/migrations/backoffice/`; the ORM models (`kavalai/db.py`, `kavalai/backoffice/db.py`) are the single source of truth
 - Models are **schema-less**; the target schema is applied per-engine via `schema_translate_map` (`DatabaseManager.get_sessionmaker(..., schema=...)`). Library code never reads env vars — only entry-point `main()`s do
 - New revision: change the models, then autogenerate against an empty scratch DB with the set's env (`config.attributes["connection"]`/`["schema"]`); parity tests in `tests/test_migrate_db.py` fail if models and revisions diverge
 - Raw SQL bypasses `schema_translate_map` — qualify the schema explicitly (see `_translated_schema_prefix` in the agents initial revision, `SET search_path` in `PostgresRagService`)

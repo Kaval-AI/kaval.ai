@@ -1,8 +1,8 @@
 import pytest
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from kavalai.agents.db import Agent, ModelCallStat
-from kavalai.agents.stats import get_summary_stats, get_daily_stats
+from kavalai.db import Agent, ModelCallStat
+from kavalai.stats import get_summary_stats, get_daily_stats
 from kavalai.crud import insert
 
 

@@ -20,7 +20,7 @@ from typing import Optional, Type
 
 from pydantic import BaseModel
 
-from kavalai.agents.idb import is_pyodide
+from kavalai.idb import is_pyodide
 from kavalai.llm_clients.base_client import (
     BaseLlmClient,
     ChatHistory,

@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai.agents.db import (
+from kavalai.db import (
     Agent,
     Session,
     Run,

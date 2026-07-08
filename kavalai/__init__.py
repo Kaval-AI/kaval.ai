@@ -27,7 +27,7 @@ limitations under the License.
 #   * ``PostgresRagService``                   -- index and query embeddings.
 #
 # The persistence-layer ORM table classes (Agent row, Run, Task, ...) live in
-# ``kavalai.agents.db`` to keep the runtime names (``Agent`` the agent,
+# ``kavalai.db`` to keep the runtime names (``Agent`` the agent,
 # ``ModelCallStat`` the stats model) unambiguous at the top level.
 
 # --- Workflow engine -------------------------------------------------------
@@ -61,9 +61,9 @@ from kavalai.workflow import (
 from kavalai.workflow.clients import make_client
 
 # --- Agent & tools ---------------------------------------------------------
-from kavalai.agents.agent import Agent, ToolCall
-from kavalai.agents.run_context import RunContext
-from kavalai.agents.workflow_model import (
+from kavalai.agent import Agent, ToolCall
+from kavalai.run_context import RunContext
+from kavalai.workflow_model import (
     RestServer,
     McpServer,
     PythonFunction,
@@ -148,7 +148,7 @@ from kavalai.rag import (
     SqliteRagService,
 )
 from kavalai.normalizer import Normalizer
-from kavalai.agents.db import EngineOptionsConflictError, db_manager
+from kavalai.db import EngineOptionsConflictError, db_manager
 
 __all__ = [
     # Workflow engine

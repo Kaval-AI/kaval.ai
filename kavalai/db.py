@@ -42,7 +42,7 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.pool import StaticPool
 
-from kavalai.agents import idb
+from kavalai import idb
 
 
 def uuid_column():
@@ -176,7 +176,7 @@ class DatabaseManager:
 
     # Default location of the SQLite file when running under Pyodide. It lives
     # inside the IDBFS mount point so it is persisted to the browser's
-    # IndexedDB (see :mod:`kavalai.agents.idb`).
+    # IndexedDB (see :mod:`kavalai.idb`).
     SQLITE_PYODIDE_DB_PATH = f"{idb.MOUNT_DIR}/kavalai.db"
 
     def __init__(self):

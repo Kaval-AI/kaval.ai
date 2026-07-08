@@ -170,7 +170,7 @@ class ProjectService:
             await session.commit()
 
     async def test_connection(self, project: db.Project) -> Dict[str, str]:
-        from kavalai.agents.db import db_manager
+        from kavalai.db import db_manager
         from sqlalchemy import text
         from loguru import logger
 

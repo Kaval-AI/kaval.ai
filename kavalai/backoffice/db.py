@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.pool import NullPool
 
-from kavalai.agents.db import ensure_async_scheme
+from kavalai.db import ensure_async_scheme
 
 
 def AsyncBackofficeSession(uri: str | None = None, schema: str | None = None):

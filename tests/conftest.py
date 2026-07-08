@@ -10,7 +10,7 @@ from sqlalchemy import text
 from testcontainers.postgres import PostgresContainer
 from kavalai.migrate_db import migrate
 
-from kavalai.agents.db import Base, build_db_uri, db_manager
+from kavalai.db import Base, build_db_uri, db_manager
 
 
 @pytest.fixture(autouse=True)

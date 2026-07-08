@@ -20,8 +20,8 @@ import json
 from partial_json_parser import ensure_json
 from pydantic import BaseModel
 from loguru import logger
-from kavalai.agents.db import ModelCallStat
-from kavalai.agents.utils import to_plain
+from kavalai.db import ModelCallStat
+from kavalai.utils import to_plain
 
 
 def safe_parse_json(data: str) -> Any:

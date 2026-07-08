@@ -21,7 +21,7 @@ from argparse import ArgumentParser
 from rich.console import Console
 from rich.prompt import Prompt
 
-from kavalai.agents.client import AgentClient
+from kavalai.client import AgentClient
 
 console = Console()
 

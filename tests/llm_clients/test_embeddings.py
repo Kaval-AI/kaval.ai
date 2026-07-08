@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from kavalai.agents.db import ModelCallStat
+from kavalai.db import ModelCallStat
 from kavalai.llm_clients import browser_client
 from kavalai.llm_clients import embeddings as emb
 from kavalai.llm_clients.base_client import LlmClientException

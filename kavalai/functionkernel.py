@@ -36,7 +36,7 @@ except ImportError:  # pragma: no cover - exercised in pyodide / minimal install
     sse_client = None
     stdio_client = None
 
-from kavalai.agents.workflow_model import (
+from kavalai.workflow_model import (
     McpServer,
     RestServer,
     WorkflowException,

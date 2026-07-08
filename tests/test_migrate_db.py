@@ -199,7 +199,7 @@ def _parity_diffs(db_uri, schema, target_metadata, include_object=None):
 
 
 def test_agents_migrations_match_models(db_uri):
-    from kavalai.agents.db import Base
+    from kavalai.db import Base
     from kavalai.migrations.common import agents_include_object
 
     schema = "parity_agents"

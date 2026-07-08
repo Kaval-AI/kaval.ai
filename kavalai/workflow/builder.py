@@ -28,7 +28,7 @@ from kavalai.workflow.models import (
     SwitchNode,
     WorkflowGraph,
 )
-from kavalai.agents.workflow_model import (
+from kavalai.workflow_model import (
     ArgumentInfo,
     McpServer,
     PythonFunction,

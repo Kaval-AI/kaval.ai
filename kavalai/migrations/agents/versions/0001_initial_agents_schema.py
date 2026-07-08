@@ -10,7 +10,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from kavalai.agents.db import VectorType, json_column, uuid_column
+from kavalai.db import VectorType, json_column, uuid_column
 
 # revision identifiers, used by Alembic.
 revision: str = "0001"

@@ -50,9 +50,9 @@ def agents_render_item(type_, obj, autogen_context):
     from sqlalchemy.dialects.postgresql import JSONB
     from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
-    from kavalai.agents.db import VectorType
+    from kavalai.db import VectorType
 
-    imports = "from kavalai.agents.db import VectorType, json_column, uuid_column"
+    imports = "from kavalai.db import VectorType, json_column, uuid_column"
     if isinstance(obj, VectorType):
         autogen_context.imports.add(imports)
         return "VectorType()"

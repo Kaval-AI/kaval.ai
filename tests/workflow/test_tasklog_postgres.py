@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import select
 
-from kavalai.agents.db import ModelCallStat, Task
+from kavalai.db import ModelCallStat, Task
 from kavalai.workflow.storage.postgres import PostgresDataStorage
 from kavalai.workflow.tasklog.postgres import PostgresTaskLogger, _to_orm_stat
 from kavalai.llm_clients.base_client import ModelCallStat as PydModelCallStat

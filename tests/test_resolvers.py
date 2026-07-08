@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from kavalai.agents.resolvers import resolve_path, find_key_recursive
+from kavalai.resolvers import resolve_path, find_key_recursive
 
 
 class SimpleModel(BaseModel):

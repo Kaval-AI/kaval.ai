@@ -3,7 +3,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import text
 from kavalai.migrate_db import migrate
-from kavalai.agents.db import build_db_uri
+from kavalai.db import build_db_uri
 
 
 # The backoffice application reads these at call time (AsyncBackofficeSession

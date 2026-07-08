@@ -26,13 +26,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from kavalai.crud import insert, select, delete, update, get_one, get_all
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse, Response
-from kavalai.backoffice import db
+from kavalai.backoffice import db, sessions as agent_sessions
 from kavalai.backoffice.db import is_owner, is_member
 from kavalai.backoffice.project_service import ProjectService
 from kavalai.agent_service import AgentService
-from kavalai.agents.db import db_manager, Agent
-from kavalai.agents import stats as agent_stats
-from kavalai.agents import sessions as agent_sessions
+from kavalai.db import db_manager, Agent
+from kavalai import stats as agent_stats
 from kavalai.rag import PostgresRagService
 from kavalai.llm_clients.streamer import StreamContent, Streamer
 from kavalai.backoffice.embedding_projector import train_pca

@@ -9,7 +9,7 @@ from kavalai.workflow import (
     SqliteTaskLogger,
 )
 from kavalai.workflow.state import WorkflowState
-from kavalai.agents.workflow_model import WorkflowException
+from kavalai.workflow_model import WorkflowException
 from kavalai.functionkernel import pythontool
 from kavalai.llm_clients.base_client import BaseLlmClient, ModelCallStat
 from pydantic import BaseModel
@@ -584,7 +584,7 @@ def test_servers_and_unmarked_python_function_registration():
         mcp_servers=[{"name": "m", "command": "echo"}],
         python_functions=[
             # clean_text is NOT decorated with @pythontool -> exercises the wrap.
-            {"name": "clean_text", "path": "kavalai.agents.utils.clean_text"}
+            {"name": "clean_text", "path": "kavalai.utils.clean_text"}
         ],
     )
     engine = WorkflowEngine.from_dict(g, client_factory=make_factory())
@@ -616,7 +616,7 @@ def test_get_data_type_none():
 
 
 def test_next_node_end_returns_none():
-    from kavalai.agents.run_context import RunContext
+    from kavalai.run_context import RunContext
 
     nodes = [
         {"name": "s", "type": "start", "next": "e"},

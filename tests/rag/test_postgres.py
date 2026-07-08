@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from kavalai.rag import PostgresRagService, RagServiceResult
 from kavalai.normalizer import Normalizer
-from kavalai.agents.db import ModelCallStat, db_manager
+from kavalai.db import ModelCallStat, db_manager
 
 
 @pytest.fixture

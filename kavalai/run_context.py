@@ -21,8 +21,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from kavalai.agents.resolvers import resolve_path
-from kavalai.agents.workflow_model import ArgumentInfo
+from kavalai.resolvers import resolve_path
+from kavalai.workflow_model import ArgumentInfo
 
 
 class RunContext(BaseModel):
@@ -78,7 +78,7 @@ class RunContext(BaseModel):
                 raise ValueError(f"Could not resolve {prefix}.{path}")
 
             if isinstance(val, (dict, list, BaseModel)):
-                from kavalai.agents.utils import to_plain
+                from kavalai.utils import to_plain
                 import json
 
                 try:

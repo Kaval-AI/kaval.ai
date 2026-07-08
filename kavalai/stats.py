@@ -17,7 +17,7 @@ limitations under the License.
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from kavalai.agents.db import (
+from kavalai.db import (
     Run,
     Session,
     ChatMessage,
@@ -89,7 +89,7 @@ async def get_summary_stats(session: AsyncSession, agent_id: str | None = None):
         )
 
     # Get total tasks
-    from kavalai.agents.db import Task
+    from kavalai.db import Task
 
     stmt_tasks = (
         select(func.count(Task.id))
@@ -162,7 +162,7 @@ async def get_daily_stats(
     dates = [(start_date + timedelta(days=i)).date() for i in range(days)]
 
     async def get_counts_for_model(model):
-        from kavalai.agents.db import Run, Session, Agent
+        from kavalai.db import Run, Session, Agent
 
         # func.date(model.created_at) might depend on DB type,
         # for Postgres it works to get the date part.
@@ -265,7 +265,7 @@ async def get_daily_stats(
     runs_counts = await get_counts_for_model(Run)
     sessions_counts = await get_counts_for_model(Session)
     messages_counts = await get_counts_for_model(ChatMessage)
-    from kavalai.agents.db import Task
+    from kavalai.db import Task
 
     tasks_counts = await get_counts_for_model(Task)
     llm_stats = await get_model_stats("llm")

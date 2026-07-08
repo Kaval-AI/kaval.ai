@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field, model_validator
 
 # Reuse the v1 building blocks for input wiring and server/tool declarations so
 # the v2 graph shares the exact same YAML vocabulary for these pieces.
-from kavalai.agents.workflow_model import (
+from kavalai.workflow_model import (
     ArgumentInfo,
     RestServer,
     McpServer,
@@ -84,7 +84,7 @@ class LLMNode(BaseNode):
 class AgentNode(BaseNode):
     """Multi-step agent node.
 
-    Runs the v2 :class:`~kavalai.agents.agent.Agent` loop (tool calling) up
+    Runs the v2 :class:`~kavalai.agent.Agent` loop (tool calling) up
     to ``max_steps`` and stores the final result in ``output``.
     """
 

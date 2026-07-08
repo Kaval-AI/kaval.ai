@@ -1,13 +1,13 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from kavalai.agents.db import DatabaseManager, EngineOptionsConflictError
+from kavalai.db import DatabaseManager, EngineOptionsConflictError
 
 
 def test_database_manager_pooling():
     db_manager = DatabaseManager()
 
     # Test default (pool_size=1)
-    with patch("kavalai.agents.db.create_async_engine") as mock_create_engine:
+    with patch("kavalai.db.create_async_engine") as mock_create_engine:
         db_manager.get_sessionmaker(uri="postgresql://localhost/test")
         mock_create_engine.assert_called_with(
             "postgresql+asyncpg://localhost/test",
@@ -21,7 +21,7 @@ def test_database_manager_pooling():
     db_manager._engine_options = {}
 
     # Test QueuePool (pool_size > 0)
-    with patch("kavalai.agents.db.create_async_engine") as mock_create_engine:
+    with patch("kavalai.db.create_async_engine") as mock_create_engine:
         db_manager.get_sessionmaker(
             uri="postgresql://localhost/test", pool_size=5, max_overflow=10
         )
@@ -37,7 +37,7 @@ def test_database_manager_caching():
     db_manager = DatabaseManager()
     uri = "postgresql://localhost/test"
 
-    with patch("kavalai.agents.db.create_async_engine") as mock_create_engine:
+    with patch("kavalai.db.create_async_engine") as mock_create_engine:
         mock_engine = MagicMock()
         mock_create_engine.return_value = mock_engine
 
@@ -55,7 +55,7 @@ def test_cache_hit_with_matching_explicit_options():
     db_manager = DatabaseManager()
     uri = "postgresql://localhost/test"
 
-    with patch("kavalai.agents.db.create_async_engine") as mock_create_engine:
+    with patch("kavalai.db.create_async_engine") as mock_create_engine:
         db_manager.get_sessionmaker(uri=uri, pool_size=5, max_overflow=10)
 
         # Same explicit options, a subset, and fully unspecified all reuse it.
@@ -70,7 +70,7 @@ def test_cache_hit_with_conflicting_options_raises():
     db_manager = DatabaseManager()
     uri = "postgresql://user:secret@localhost/test"
 
-    with patch("kavalai.agents.db.create_async_engine"):
+    with patch("kavalai.db.create_async_engine"):
         db_manager.get_sessionmaker(uri=uri, pool_size=1, max_overflow=0)
 
         with pytest.raises(EngineOptionsConflictError) as exc_info:
@@ -92,7 +92,7 @@ def test_conflict_against_default_created_engine():
     db_manager = DatabaseManager()
     uri = "postgresql://localhost/test"
 
-    with patch("kavalai.agents.db.create_async_engine"):
+    with patch("kavalai.db.create_async_engine"):
         db_manager.get_sessionmaker(uri=uri)  # effective: echo=False, 1/0
 
         # Explicitly matching the applied defaults is fine.
@@ -107,7 +107,7 @@ def test_conflict_is_scoped_per_url_and_schema():
     db_manager = DatabaseManager()
     uri = "postgresql://localhost/test"
 
-    with patch("kavalai.agents.db.create_async_engine") as mock_create_engine:
+    with patch("kavalai.db.create_async_engine") as mock_create_engine:
         mock_create_engine.return_value = MagicMock()
         db_manager.get_sessionmaker(uri=uri, schema="tenant_a", pool_size=1)
 

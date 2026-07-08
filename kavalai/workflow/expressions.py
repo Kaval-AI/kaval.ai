@@ -18,7 +18,7 @@ import ast
 import operator
 from typing import Any
 
-from kavalai.agents.resolvers import resolve_path
+from kavalai.resolvers import resolve_path
 
 
 class ExpressionError(ValueError):

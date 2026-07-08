@@ -20,7 +20,7 @@ from uuid import uuid4
 
 import aiosqlite
 
-from kavalai.agents.utils import to_plain
+from kavalai.utils import to_plain
 from kavalai.workflow.tasklog.base import TaskLogger
 from kavalai.llm_clients.base_client import ModelCallStat
 

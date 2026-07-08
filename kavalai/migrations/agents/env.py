@@ -6,7 +6,7 @@ built-in SQL history backend tables (``chat_messages``, ``tasks``,
 self-provisioning — ``rag_index``.
 """
 
-from kavalai.agents.db import Base
+from kavalai.db import Base
 from kavalai.migrations.common import (
     agents_include_object,
     agents_render_item,

@@ -37,7 +37,7 @@ async def test_projects_rag_query_with_source_ids(client):
 
     with patch("kavalai.backoffice.server.assert_logged_in"), patch(
         "kavalai.backoffice.server.get_project_and_assert_access", return_value=project
-    ), patch("kavalai.agents.db.db_manager.get_sessionmaker") as mock_sm, patch(
+    ), patch("kavalai.db.db_manager.get_sessionmaker") as mock_sm, patch(
         "kavalai.backoffice.server.PostgresRagService"
     ) as mock_rag_service_class, patch(
         "kavalai.backoffice.server.get_backoffice_session"

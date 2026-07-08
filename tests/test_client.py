@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from pydantic import BaseModel
 
-from kavalai.agents.client import AgentClient
+from kavalai.client import AgentClient
 
 
 class MockInput(BaseModel):

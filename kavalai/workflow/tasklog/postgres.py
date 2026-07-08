@@ -20,7 +20,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kavalai.agent_service import AgentService
-from kavalai.agents.db import ModelCallStat as DbModelCallStat
+from kavalai.db import ModelCallStat as DbModelCallStat
 from kavalai.workflow.tasklog.base import TaskLogger
 from kavalai.llm_clients.base_client import ModelCallStat
 

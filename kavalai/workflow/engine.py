@@ -24,10 +24,10 @@ import yaml
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
-from kavalai.agents.schema_parser import SchemaParser
-from kavalai.agents.run_context import RunContext
-from kavalai.agents.utils import to_plain
-from kavalai.agents.agent import Agent
+from kavalai.schema_parser import SchemaParser
+from kavalai.run_context import RunContext
+from kavalai.utils import to_plain
+from kavalai.agent import Agent
 from kavalai.workflow import clients as client_factory_module
 from kavalai.workflow.expressions import evaluate_bool, evaluate_value
 from kavalai.workflow.models import (
@@ -43,7 +43,7 @@ from kavalai.workflow.models import (
 from kavalai.workflow.state import WorkflowState
 from kavalai.workflow.storage.base import DataStorage
 from kavalai.workflow.tasklog.base import TaskLogger, TokenAccumulator
-from kavalai.agents.workflow_model import WorkflowException
+from kavalai.workflow_model import WorkflowException
 from kavalai.functionkernel import FunctionKernel, pythontool
 from kavalai.llm_clients.base_client import BaseLlmClient, ChatHistory, ChatMessage
 

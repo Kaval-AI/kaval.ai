@@ -19,7 +19,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select, desc, asc, case
 from sqlalchemy.ext.asyncio import AsyncSession
-from kavalai.agents.db import Session, Run, Task, ChatMessage, Agent
+from kavalai.db import Session, Run, Task, ChatMessage, Agent
 from typing import TypedDict, Any
 
 

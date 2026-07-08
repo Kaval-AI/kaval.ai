@@ -22,7 +22,7 @@ import pytest
 import numpy as np
 from sklearn.decomposition import IncrementalPCA
 
-from kavalai.agents.db import ModelCallStat
+from kavalai.db import ModelCallStat
 from kavalai.backoffice.embedding_projector import download_rag_index, compute_pca
 from kavalai.llm_clients.streamer import Streamer
 from kavalai.rag import PostgresRagService

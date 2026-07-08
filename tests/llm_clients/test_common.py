@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import BaseModel
 
-from kavalai.agents.db import ModelCallStat
+from kavalai.db import ModelCallStat
 from kavalai.llm_clients.common import (
     create_model_call_stat,
     get_model_name,

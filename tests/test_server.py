@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from kavalai.agents.server import create_agent_app
+from kavalai.server import create_agent_app
 from kavalai.workflow import WorkflowEngine
 from kavalai.llm_clients.base_client import BaseLlmClient
 

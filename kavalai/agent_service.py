@@ -19,9 +19,9 @@ from uuid import UUID
 
 from sqlalchemy import asc, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, ModelCallStat
-from kavalai.agents.resolvers import resolve_path, find_key_recursive
-from kavalai.agents.utils import clean_text, to_plain
+from kavalai.db import Agent, Session, Run, Task, ChatMessage, ModelCallStat
+from kavalai.resolvers import resolve_path, find_key_recursive
+from kavalai.utils import clean_text, to_plain
 
 
 class AgentService:

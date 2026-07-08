@@ -9,7 +9,7 @@ from kavalai.workflow.models import (
     LLMNode,
     SwitchNode,
 )
-from kavalai.agents.workflow_model import ArgumentInfo
+from kavalai.workflow_model import ArgumentInfo
 
 
 def _base(builder: WorkflowBuilder) -> WorkflowBuilder:
@@ -118,7 +118,7 @@ def test_resources_registered():
         _base(WorkflowBuilder("res"))
         .start("end")
         .end()
-        .python_function("noop", "kavalai.agents.utils.to_plain")
+        .python_function("noop", "kavalai.utils.to_plain")
         .rest_server({"name": "api", "url": "http://localhost"})
         .mcp_server({"name": "m", "command": "echo"})
         .template("greeting", "Hello {{ name }}")

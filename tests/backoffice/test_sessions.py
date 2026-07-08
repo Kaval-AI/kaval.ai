@@ -1,8 +1,8 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage
-from kavalai.agents.sessions import get_sessions_summary, get_session_details
+from kavalai.db import Agent, Session, Run, Task, ChatMessage
+from kavalai.backoffice.sessions import get_sessions_summary, get_session_details
 
 
 @pytest.mark.asyncio

@@ -23,7 +23,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai.agents.db import ModelCallStat
+from kavalai.db import ModelCallStat
 from kavalai.backoffice.db import Project, ProjectCache
 from kavalai.backoffice.embedding_projector import train_pca
 from kavalai.llm_clients.streamer import Streamer

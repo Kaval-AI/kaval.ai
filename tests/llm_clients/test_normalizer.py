@@ -116,7 +116,7 @@ async def test_rag_service_learn_normalizer(agents_db):
     from contextlib import asynccontextmanager
     from unittest.mock import AsyncMock, MagicMock
 
-    from kavalai.agents.db import ModelCallStat
+    from kavalai.db import ModelCallStat
 
     model = "openai/test-model"
 

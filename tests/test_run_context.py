@@ -4,8 +4,8 @@ from uuid import uuid4
 from pydantic import BaseModel
 from unittest.mock import AsyncMock
 
-from kavalai.agents.run_context import RunContext
-from kavalai.agents.workflow_model import ArgumentInfo
+from kavalai.run_context import RunContext
+from kavalai.workflow_model import ArgumentInfo
 
 
 class MockModel(BaseModel):

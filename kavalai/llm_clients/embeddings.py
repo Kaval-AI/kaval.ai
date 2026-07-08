@@ -18,7 +18,7 @@ import os
 import time
 from typing import List, Optional, Tuple
 
-from kavalai.agents.db import ModelCallStat
+from kavalai.db import ModelCallStat
 from kavalai.llm_clients.common import create_model_call_stat, get_model_name
 from kavalai.normalizer import Normalizer, get_default_normalizer
 
@@ -31,7 +31,7 @@ class BaseEmbeddingClient:
     The model name is bound at construction (the factory splits the
     ``provider/model`` string), so ``compute_embeddings`` only takes the texts.
     Implementations return the embeddings plus a database-ready
-    :class:`~kavalai.agents.db.ModelCallStat` (the ORM row) so callers such as
+    :class:`~kavalai.db.ModelCallStat` (the ORM row) so callers such as
     :class:`~kavalai.rag.postgres.PostgresRagService` can persist usage directly.
     """
 
