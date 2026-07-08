@@ -1,18 +1,22 @@
 import typing
+from uuid import UUID
 
 import pytest
+from sqlalchemy import select
 
-from kavalai.workflow import (
-    WorkflowEngine,
-    InMemoryDataStorage,
-    SqliteDataStorage,
-    SqliteTaskLogger,
-)
-from kavalai.workflow.state import WorkflowState
+from kavalai.agent_service import AgentService
+from kavalai.db import DatabaseManager, Run
+from kavalai.workflow import WorkflowEngine, SqliteTaskLogger
 from kavalai.workflow_model import WorkflowException
 from kavalai.functionkernel import pythontool
 from kavalai.llm_clients.base_client import BaseLlmClient, ModelCallStat
 from pydantic import BaseModel
+
+
+def make_agent_service() -> AgentService:
+    """AgentService over a private in-memory SQLite database, through the
+    greenlet-free compat shim — the same stack the browser playground uses."""
+    return AgentService(DatabaseManager().get_sqlite_compat_sessionmaker())
 
 
 # --------------------------------------------------------------------------- fakes
@@ -135,11 +139,14 @@ async def test_linear_llm_workflow_persists_everything():
         },
         {"name": "e", "type": "end", "output": "output"},
     ]
-    storage = SqliteDataStorage()
+    service = make_agent_service()
     tlog = SqliteTaskLogger()
     factory = make_factory({"agent_response": "hi there"})
     engine = WorkflowEngine.from_dict(
-        graph_dict(nodes), storage=storage, task_logger=tlog, client_factory=factory
+        graph_dict(nodes),
+        agent_service=service,
+        task_logger=tlog,
+        client_factory=factory,
     )
     state = await engine.run({"user_message": "hello"})
 
@@ -156,15 +163,15 @@ async def test_linear_llm_workflow_persists_everything():
         "total_tokens": 1,
     }
 
-    # Checkpointed state is reloadable and matches (token usage persisted too).
-    loaded = await storage.load_state(state.run_id)
-    assert loaded.status == "completed"
-    assert loaded.output_data == {"agent_response": "hi there"}
-    assert loaded.token_usage == state.token_usage
-    assert loaded.invocation_id == state.invocation_id
+    # The run row holds the output and the resolved run context.
+    async with service.session_maker() as db:
+        run = (await db.execute(select(Run))).scalars().one()
+    assert str(run.id) == state.run_id
+    assert run.output_data == {"agent_response": "hi there"}
+    assert run.context["output"] == {"agent_response": "hi there"}
 
     # Chat history captured both turns.
-    history = await storage.get_chat_history(state.session_id)
+    history = await service.get_chat_history(UUID(state.session_id))
     assert [(m.role, m.content) for m in history] == [
         ("user", "hello"),
         ("assistant", "hi there"),
@@ -179,7 +186,6 @@ async def test_linear_llm_workflow_persists_everything():
     async with conn.execute("SELECT count(*) FROM model_call_stats") as cur:
         assert (await cur.fetchone())[0] == 1
 
-    await storage.close()
     await tlog.close()
 
 
@@ -343,7 +349,7 @@ async def test_invocation_id_is_unique_per_run_and_tokens_aggregate():
     assert s2.token_usage["model_calls"] == 2
 
 
-async def test_no_storage_or_logger_still_runs():
+async def test_no_persistence_or_logger_still_runs():
     nodes = [
         {"name": "s", "type": "start", "next": "answer"},
         {
@@ -360,7 +366,7 @@ async def test_no_storage_or_logger_still_runs():
     )
     state = await engine.run({"user_message": "x"})
     assert state.status == "completed"
-    assert state.run_id is None  # no storage -> no ids
+    assert state.run_id is None  # no agent_service -> no ids
 
 
 async def test_cycle_guard():
@@ -411,21 +417,20 @@ async def test_failure_marks_state_failed_and_persists():
         },
         {"name": "e", "type": "end", "output": "output"},
     ]
-    storage = SqliteDataStorage()
+    service = make_agent_service()
     engine = WorkflowEngine.from_dict(
-        graph_dict(nodes), storage=storage, client_factory=make_factory(raises=True)
+        graph_dict(nodes),
+        agent_service=service,
+        client_factory=make_factory(raises=True),
     )
     with pytest.raises(WorkflowException, match="llm boom"):
         await engine.run({"user_message": "x"})
 
-    # The failed state was checkpointed.
-    conn = await storage._connect()
-    async with conn.execute("SELECT context FROM runs LIMIT 1") as cur:
-        row = await cur.fetchone()
-    failed = WorkflowState.from_json(row["context"])
-    assert failed.status == "failed"
-    assert "llm boom" in failed.error
-    await storage.close()
+    # The failure was recorded on the run row.
+    async with service.session_maker() as db:
+        run = (await db.execute(select(Run))).scalars().one()
+    assert run.context["status"] == "failed"
+    assert "llm boom" in run.context["error"]
 
 
 async def test_from_yaml_invalid_raises():
@@ -469,27 +474,26 @@ async def test_use_history_includes_prior_messages():
         },
         {"name": "e", "type": "end", "output": "output"},
     ]
-    storage = SqliteDataStorage()
+    service = make_agent_service()
     factory = make_factory({"agent_response": "r"})
     engine = WorkflowEngine.from_dict(
-        graph_dict(nodes), storage=storage, client_factory=factory
+        graph_dict(nodes), agent_service=service, client_factory=factory
     )
     # Seed a session with a prior message, then run on the same session.
-    handle = await storage.initialize_run(workflow_name="wf")
-    await storage.add_chat_message(
-        agent_id=handle.agent_id,
-        session_id=handle.session_id,
-        run_id=handle.run_id,
+    agent, session, run = await service.initialize_workflow_run(agent_name="wf")
+    await service.add_chat_message(
+        agent_id=agent.id,
+        session_id=session.id,
+        run_id=run.id,
         role="user",
         content="earlier",
     )
-    await engine.run({"user_message": "now"}, session_id=handle.session_id)
+    await engine.run({"user_message": "now"}, session_id=str(session.id))
 
     # The LLM client received the seeded history in its chat_history.
     client = factory.created[0]
     contents = [m.content for m in client.calls[0].messages]
     assert any(c == "earlier" for c in contents)
-    await storage.close()
 
 
 # The exact workflow the standalone chat-playground.html builds, with the
@@ -535,22 +539,27 @@ nodes:
 
 
 async def test_chat_workflow_remembers_history_in_memory():
-    """End-to-end chat-playground scenario over the thread-free in-memory store:
-    one InMemoryDataStorage and a stable session id, so each turn's LLM call
-    sees the whole prior conversation (no seeding — the engine accumulates it).
+    """End-to-end chat-playground scenario over in-memory SQLite via the
+    greenlet-free compat shim: a stable client-supplied external id pins the
+    session, so each turn's LLM call sees the whole prior conversation
+    (no seeding — the engine accumulates it).
     """
-    storage = InMemoryDataStorage()
+    service = make_agent_service()
     factory = make_factory({"agent_response": "ack"})
     engine = WorkflowEngine.from_yaml(
-        CHAT_WORKFLOW_YAML, storage=storage, client_factory=factory
+        CHAT_WORKFLOW_YAML, agent_service=service, client_factory=factory
     )
-    session = "chat-1"
+    chat_id = "chat-1"
 
+    session_ids = set()
     for msg in ["hello", "what did I say?", "and before that?"]:
-        state = await engine.run({"user_message": msg}, session_id=session)
+        state = await engine.run({"user_message": msg}, external_id=chat_id)
         assert state.status == "completed"
         assert state.output_data == {"agent_response": "ack"}
-        assert state.session_id == session
+        session_ids.add(state.session_id)
+
+    # Every turn ran under the same session, pinned by the external id.
+    assert len(session_ids) == 1
 
     # Turn 3's LLM call must include every earlier user + assistant message.
     third_call = factory.created[2].calls[0]
@@ -560,7 +569,7 @@ async def test_chat_workflow_remembers_history_in_memory():
     assert contents.count("ack") == 2  # the two prior assistant replies
 
     # Persisted history holds all six messages, oldest first.
-    history = await storage.get_chat_history(session)
+    history = await service.get_chat_history(UUID(session_ids.pop()))
     assert [(m.role, m.content) for m in history] == [
         ("user", "hello"),
         ("assistant", "ack"),

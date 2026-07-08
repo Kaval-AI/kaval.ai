@@ -321,7 +321,7 @@ class WorkflowBuilder:
         """Build the graph and wrap it in a ready-to-run :class:`WorkflowEngine`.
 
         Any Pydantic models registered via :meth:`data_model` are forwarded to
-        the engine. Keyword arguments are passed through (``storage``,
+        the engine. Keyword arguments are passed through (``agent_service``,
         ``task_logger``, ``client_factory``, ``data_models``, ``max_node_visits``).
         """
         from kavalai.workflow.engine import WorkflowEngine

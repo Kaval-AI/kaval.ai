@@ -93,16 +93,16 @@ standalone `chat-playground.html`.
 <div id="chat"></div>
 <script>
   KavalPlayground.mount("#pg", {
-    code: 'from kavalai.workflow import WorkflowEngine, InMemoryDataStorage\n' +
-          'workflow = WorkflowEngine.from_yaml(YAML, storage=InMemoryDataStorage())',
+    code: 'from kavalai.workflow import WorkflowEngine\n' +
+          'workflow = WorkflowEngine.from_yaml(YAML)',
   });
 
-  // The bridge runs `workflow.run({user_message}, session_id=...)`, reusing one
-  // session so history-aware nodes (use_history, on by default) see the whole
-  // conversation. InMemoryDataStorage is thread-free, so history works under
-  // Pyodide (aiosqlite can't start its worker thread there). If the workflow
-  // has no storage, the bridge attaches one. The chat works once a `workflow`
-  // has been Run ▶.
+  // The bridge runs `workflow.run({user_message}, external_id=...)`, reusing
+  // one chat id so history-aware nodes (use_history, on by default) see the
+  // whole conversation. History lives in an AgentService over in-browser
+  // SQLite (SQLAlchemy's sync engine — greenlet/aiosqlite don't run under
+  // Pyodide); if the workflow has none, the bridge attaches one. The chat
+  // works once a `workflow` has been Run ▶.
   var bridge = KavalPlayground.workflowBridge();
   KavalChat.mount("#chat", { send: bridge.send, onReset: bridge.reset });
 </script>

@@ -18,7 +18,7 @@ import importlib
 import os
 import time
 from typing import Any, Callable, Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import yaml
 from loguru import logger
@@ -40,8 +40,8 @@ from kavalai.workflow.models import (
     SwitchNode,
     WorkflowGraph,
 )
+from kavalai.agent_service import AgentService
 from kavalai.workflow.state import WorkflowState
-from kavalai.workflow.storage.base import DataStorage
 from kavalai.workflow.tasklog.base import TaskLogger, TokenAccumulator
 from kavalai.workflow_model import WorkflowException
 from kavalai.functionkernel import FunctionKernel, pythontool
@@ -69,16 +69,15 @@ class WorkflowEngine:
 
     The engine walks the graph from the start node, following transitions and
     evaluating branch nodes, until it reaches an end node. Each node's result
-    is stored in the run context; the serialized :class:`WorkflowState` is
-    checkpointed to ``storage`` after every node and per-node debug data flows
-    to ``task_logger``.
+    is stored in the run context; per-node debug data flows to ``task_logger``.
 
     Parameters
     ==========
     graph: WorkflowGraph
         The parsed workflow definition.
-    storage: Optional[DataStorage]
-        Persistence backend for agents/sessions/runs/chat/state.
+    agent_service: Optional[AgentService]
+        Persistence for agents/sessions/runs/chat history. ``None`` runs the
+        workflow without any persistence (no chat memory across turns).
     task_logger: Optional[TaskLogger]
         Backend for per-node debug data and model statistics.
     client_factory: Optional[ClientFactory]
@@ -93,14 +92,14 @@ class WorkflowEngine:
         self,
         graph: WorkflowGraph,
         *,
-        storage: Optional[DataStorage] = None,
+        agent_service: Optional[AgentService] = None,
         task_logger: Optional[TaskLogger] = None,
         client_factory: Optional[ClientFactory] = None,
         data_models: Optional[dict[str, type[BaseModel]]] = None,
         max_node_visits: int = DEFAULT_MAX_NODE_VISITS,
     ):
         self.graph = graph
-        self.storage = storage
+        self.agent_service = agent_service
         self.task_logger = task_logger
         self.client_factory = client_factory or client_factory_module.make_client
         self.max_node_visits = max_node_visits
@@ -197,8 +196,8 @@ class WorkflowEngine:
         text = make_prompt(rendered_prompt, input_data)
 
         messages = [ChatMessage(role="system", content=text)]
-        if node.use_history and self.storage and run_context.session_id:
-            history = await self.storage.get_chat_history(str(run_context.session_id))
+        if node.use_history and self.agent_service and run_context.session_id:
+            history = await self.agent_service.get_chat_history(run_context.session_id)
             for msg in history:
                 messages.append(ChatMessage(role=msg.role, content=msg.content))
 
@@ -355,29 +354,31 @@ class WorkflowEngine:
         with logger.contextualize(invocation_id=invocation_id):
             logger.info(f"[{invocation_id}] Starting workflow '{self.graph.name}'")
 
-            if self.storage:
-                handle = await self.storage.initialize_run(
-                    workflow_name=self.graph.name,
-                    description=self.graph.description,
+            if self.agent_service:
+                agent, session, run = await self.agent_service.initialize_workflow_run(
+                    agent_name=self.graph.name,
+                    agent_description=self.graph.description,
                     input_schema=self.graph.data_types.get("input"),
                     output_schema=self.graph.data_types.get("output"),
                     workflow=self.graph.model_dump(),
-                    session_id=session_id,
+                    session_id=UUID(session_id) if session_id else None,
                     external_id=external_id,
                     input_data=to_plain(input_data),
                 )
-                run_context.agent_id = handle.agent_id
-                run_context.session_id = handle.session_id
-                run_context.run_id = handle.run_id
-                state.agent_id = handle.agent_id
-                state.session_id = handle.session_id
-                state.run_id = handle.run_id
+                run_context.agent_id = agent.id
+                run_context.session_id = session.id
+                run_context.run_id = run.id
+                # Lets ``history:`` inputs resolve values from previous runs.
+                run_context.agent_service = self.agent_service
+                state.agent_id = str(agent.id)
+                state.session_id = str(session.id)
+                state.run_id = str(run.id)
 
                 user_message = getattr(parsed_input, "user_message", str(input_data))
-                await self.storage.add_chat_message(
-                    agent_id=handle.agent_id,
-                    session_id=handle.session_id,
-                    run_id=handle.run_id,
+                await self.agent_service.add_chat_message(
+                    agent_id=agent.id,
+                    session_id=session.id,
+                    run_id=run.id,
                     role="user",
                     content=user_message,
                 )
@@ -389,15 +390,14 @@ class WorkflowEngine:
             except Exception as e:
                 state.status = "failed"
                 state.error = str(e)
+                await self._record_failure(run_context, state)
                 raise WorkflowException(e) from e
             finally:
                 await self.kernel.close()
-                # Record and report token usage, then persist the final state
-                # (including the totals) regardless of success or failure.
+                # Record and report token usage regardless of success or failure.
                 state.token_usage = self._token_stats.summary()
                 if self.task_logger:
                     await self.task_logger.flush()
-                await self._checkpoint(run_context, state)
                 self._log_token_usage(invocation_id)
 
         return state
@@ -428,7 +428,6 @@ class WorkflowEngine:
             await self._execute_node(node, run_context)
             state.trace.append(node.name)
             state.data = to_plain(run_context.data)
-            await self._checkpoint(run_context, state)
 
             if isinstance(node, EndNode):
                 await self._finish(node, run_context, state)
@@ -450,26 +449,43 @@ class WorkflowEngine:
         state.output_data = output_data
         state.status = "completed"
 
-        if self.storage and run_context.run_id:
-            await self.storage.update_run(
-                str(run_context.run_id),
+        if self.agent_service and run_context.run_id:
+            await self.agent_service.update_run(
+                run_context.run_id,
                 output_data=output_data,
                 context=to_plain(run_context.data),
             )
             agent_response = getattr(output_value, "agent_response", "")
-            await self.storage.add_chat_message(
-                agent_id=str(run_context.agent_id),
-                session_id=str(run_context.session_id),
-                run_id=str(run_context.run_id),
+            await self.agent_service.add_chat_message(
+                agent_id=run_context.agent_id,
+                session_id=run_context.session_id,
+                run_id=run_context.run_id,
                 role="assistant",
                 content=agent_response,
             )
-        await self._checkpoint(run_context, state)
         logger.info(
             f"[{state.invocation_id}] Workflow '{self.graph.name}' completed "
             f"(session={state.session_id})"
         )
 
-    async def _checkpoint(self, run_context: RunContext, state: WorkflowState) -> None:
-        if self.storage and run_context.run_id:
-            await self.storage.save_state(str(run_context.run_id), state)
+    async def _record_failure(
+        self, run_context: RunContext, state: WorkflowState
+    ) -> None:
+        """Persist a failed run's error and partial data so it shows up in the
+        backoffice; best-effort, since the failure may be the database itself."""
+        if not (self.agent_service and run_context.run_id):
+            return
+        try:
+            await self.agent_service.update_run(
+                run_context.run_id,
+                context={
+                    "status": state.status,
+                    "error": state.error,
+                    "data": state.data,
+                },
+            )
+        except Exception:
+            logger.warning(
+                f"[{state.invocation_id}] Could not persist failure state "
+                f"for run {run_context.run_id}"
+            )

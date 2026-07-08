@@ -40,7 +40,9 @@
 (function () {
   var CHATBOT_CODE =
 `from pydantic import BaseModel
-from kavalai.workflow import WorkflowBuilder, InMemoryDataStorage
+from kavalai.agent_service import AgentService
+from kavalai.db import db_manager
+from kavalai.workflow import WorkflowBuilder
 
 class Message(BaseModel):
     message: str
@@ -81,9 +83,13 @@ workflow = (
         next="end",
     )
     .end()
-    # Storage + use_history (on by default) give the bot memory: each turn sees
-    # the conversation so far, under the chat's reusing session.
-    .build_engine(storage=InMemoryDataStorage())
+    # Persistence + use_history (on by default) give the bot memory: each turn
+    # sees the conversation so far, under the chat's reusing session. The
+    # agent service runs on in-browser SQLite here — the same one a deployed
+    # agent points at Postgres.
+    .build_engine(
+        agent_service=AgentService(db_manager.get_sqlite_compat_sessionmaker())
+    )
 )
 print("Chatbot ready — say hi in the chat on the left.")
 `;

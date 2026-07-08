@@ -34,7 +34,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from kavalai.agent_service import AgentService
 from kavalai.db import db_manager
 from kavalai.workflow import WorkflowEngine
-from kavalai.workflow.storage.postgres import PostgresDataStorage
 from kavalai.workflow.tasklog.postgres import PostgresTaskLogger
 
 
@@ -402,14 +401,13 @@ def create_app_from_env_conf(
         max_overflow=max_overflow,
     )
 
-    # Create the shared agent service and the v2 Postgres persistence backends.
+    # Create the shared agent service and the write-behind task logger.
     agent_service = AgentService(session_provider)
-    storage = PostgresDataStorage(agent_service)
     task_logger = PostgresTaskLogger(agent_service)
 
     logger.info(f"Loading workflow from {workflow_path}.")
     engine = WorkflowEngine.from_yaml_path(
-        workflow_path, storage=storage, task_logger=task_logger
+        workflow_path, agent_service=agent_service, task_logger=task_logger
     )
 
     return create_agent_app(

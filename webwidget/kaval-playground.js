@@ -320,8 +320,8 @@
   // -- Workflow chat bridge --------------------------------------------------
   // Lets a separate chat UI (kaval-chat.js) talk to a `workflow` the user has
   // defined and run in the playground. Each turn calls
-  // `workflow.run({user_message: ...}, session_id=...)` on the shared Pyodide,
-  // reusing one session id so the engine's history-aware nodes (use_history,
+  // `workflow.run({user_message: ...}, external_id=...)` on the shared Pyodide,
+  // reusing one chat id so the engine's history-aware nodes (use_history,
   // on by default) see the whole conversation. The bridge knows nothing about
   // the chat UI — it just exposes a send(message) callback the UI can drive.
   //
@@ -329,10 +329,11 @@
   // (e.g. () => playground.run()), so an embedded demo can answer the first
   // message without the user clicking Run ▶ first.
 
-  // Runs one chat turn. Reads the `workflow` global, gives it a thread-free
-  // InMemoryDataStorage if the author wired none (so history is remembered —
-  // aiosqlite cannot start its worker thread under Pyodide), runs it for the
-  // message and returns a JSON string of {reply} or {error,detail}.
+  // Runs one chat turn. Reads the `workflow` global, gives it an AgentService
+  // over in-browser SQLite if the author wired none (so history is remembered
+  // — the compat sessionmaker uses SQLAlchemy's sync engine, since neither
+  // greenlet nor aiosqlite runs under Pyodide), runs it for the message and
+  // returns a JSON string of {reply} or {error,detail}.
   var CHAT_TURN_PY =
     "import json as _kaval_json\n" +
     "async def _kaval_chat_turn():\n" +
@@ -341,16 +342,19 @@
     "        return _kaval_json.dumps({'error': 'no_workflow'})\n" +
     "    if not hasattr(_wf, 'run'):\n" +
     "        return _kaval_json.dumps({'error': 'not_a_workflow'})\n" +
-    "    if getattr(_wf, 'storage', None) is None:\n" +
+    "    if getattr(_wf, 'agent_service', None) is None:\n" +
     "        try:\n" +
-    "            from kavalai.workflow import InMemoryDataStorage as _KavalStore\n" +
-    "            _wf.storage = _KavalStore()\n" +
+    "            from kavalai.agent_service import AgentService as _KavalAS\n" +
+    "            from kavalai.db import db_manager as _kaval_dbm\n" +
+    "            _wf.agent_service = _KavalAS(\n" +
+    "                _kaval_dbm.get_sqlite_compat_sessionmaker()\n" +
+    "            )\n" +
     "        except Exception:\n" +
     "            pass\n" +
     "    try:\n" +
     "        _state = await _wf.run(\n" +
     "            {_kaval_chat_input_key: _kaval_chat_msg},\n" +
-    "            session_id=_kaval_chat_session,\n" +
+    "            external_id=_kaval_chat_session,\n" +
     "        )\n" +
     "    except Exception as _exc:\n" +
     "        return _kaval_json.dumps({'error': 'run_failed', 'detail': str(_exc)})\n" +
@@ -439,7 +443,7 @@
         return {
           error:
             "`workflow` is defined but isn't runnable — it needs an async " +
-            "`run(input, session_id=...)` method (a WorkflowEngine).",
+            "`run(input, external_id=...)` method (a WorkflowEngine).",
         };
       }
       if (data.error) {

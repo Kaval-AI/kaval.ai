@@ -1,8 +1,8 @@
 import pytest
 from sqlalchemy import select
 
+from kavalai.agent_service import AgentService
 from kavalai.db import ModelCallStat, Task
-from kavalai.workflow.storage.postgres import PostgresDataStorage
 from kavalai.workflow.tasklog.postgres import PostgresTaskLogger, _to_orm_stat
 from kavalai.llm_clients.base_client import ModelCallStat as PydModelCallStat
 
@@ -25,14 +25,16 @@ def test_to_orm_stat_converts_and_passes_through():
 @pytest.mark.asyncio
 class TestPostgresTaskLogger:
     async def test_log_node_and_model_call(self, agents_session_maker, agents_db):
-        storage = PostgresDataStorage.from_session_maker(agents_session_maker)
-        handle = await storage.initialize_run(workflow_name="tl_wf")
+        service = AgentService(agents_session_maker)
+        agent, session_obj, run = await service.initialize_workflow_run(
+            agent_name="tl_wf"
+        )
 
         tlog = PostgresTaskLogger.from_session_maker(agents_session_maker)
         tlog.log_node(
-            run_id=handle.run_id,
-            session_id=handle.session_id,
-            agent_id=handle.agent_id,
+            run_id=str(run.id),
+            session_id=str(session_obj.id),
+            agent_id=str(agent.id),
             node_name="classify",
             node_type="llm",
             inputs={"x": 1},
@@ -42,7 +44,7 @@ class TestPostgresTaskLogger:
         )
         tlog.log_model_call(
             PydModelCallStat(call_type="llm", model="openai/x", total_tokens=5),
-            agent_id=handle.agent_id,
+            agent_id=str(agent.id),
         )
         await tlog.flush()
 

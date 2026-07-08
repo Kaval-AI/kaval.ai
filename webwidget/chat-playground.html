@@ -89,14 +89,16 @@
         // A minimal chat workflow the user can edit and run. It defines a
         // `workflow` (a WorkflowEngine) the chat widget then drives. The LLM
         // node keeps `use_history: true` (the default) so each turn sees the
-        // whole conversation; InMemoryDataStorage remembers it across turns
-        // (it is thread-free, so it works under Pyodide — unlike aiosqlite).
+        // whole conversation; the AgentService over in-browser SQLite (via the
+        // greenlet-free compat sessionmaker) remembers it across turns.
         //
         // `browser/{KAVAL_BROWSER_MODEL}` runs the model in this page via WebGPU
         // — no API key, no server. KAVAL_BROWSER_MODEL comes from the model
         // picker in the playground toolbar.
         var WORKFLOW_CODE =
-`from kavalai.workflow import WorkflowEngine, InMemoryDataStorage
+`from kavalai.agent_service import AgentService
+from kavalai.db import db_manager
+from kavalai.workflow import WorkflowEngine
 
 # The chat panel sends each message as {"user_message": ...} and shows the
 # workflow's "agent_response". Edit the prompt, click Run ▶, then say hi ←
@@ -142,7 +144,10 @@ nodes:
     output: output
 """
 
-workflow = WorkflowEngine.from_yaml(YAML, storage=InMemoryDataStorage())
+workflow = WorkflowEngine.from_yaml(
+    YAML,
+    agent_service=AgentService(db_manager.get_sqlite_compat_sessionmaker()),
+)
 print("workflow ready — say hi in the chat panel ←")
 `;
 

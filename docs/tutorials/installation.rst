@@ -64,8 +64,8 @@ Your first workflow: a chatbot
 A workflow is built from typed **data models** and **nodes**. The example below
 is a one-node chatbot: it validates the incoming ``Message``, asks the model to
 reply, and returns a structured ``Reply`` — both the prose answer and a list of
-suggested quick-reply ``choices``. ``InMemoryDataStorage`` gives it memory, so
-each turn can use the conversation so far.
+suggested quick-reply ``choices``. An in-memory ``AgentService`` gives it
+memory, so each turn can use the conversation so far.
 
 .. code-block:: python
 
@@ -73,7 +73,9 @@ each turn can use the conversation so far.
    import os
 
    from pydantic import BaseModel
-   from kavalai.workflow import WorkflowBuilder, InMemoryDataStorage
+   from kavalai.agent_service import AgentService
+   from kavalai.db import db_manager
+   from kavalai.workflow import WorkflowBuilder
 
    # Paste your OpenAI key here, or export OPENAI_API_KEY in your shell / .env.
    os.environ["OPENAI_API_KEY"] = ""
@@ -113,7 +115,9 @@ each turn can use the conversation so far.
            next="end",
        )
        .end()
-       .build_engine(storage=InMemoryDataStorage())
+       .build_engine(
+           agent_service=AgentService(db_manager.get_sqlite_compat_sessionmaker())
+       )
    )
 
 
@@ -127,8 +131,9 @@ each turn can use the conversation so far.
 
 Every run returns a :class:`~kavalai.WorkflowState`: the status, the ordered
 ``trace`` of visited nodes, the full context ``data``, the final ``output_data``,
-and an aggregate ``token_usage``. It is JSON-serialisable and checkpointed after
-every node, so runs can be reloaded and inspected later.
+and an aggregate ``token_usage``. It is JSON-serialisable, and the run's output
+and context are persisted through the agent service, so runs can be reloaded
+and inspected later.
 
 Try it with no install or API key
 ---------------------------------

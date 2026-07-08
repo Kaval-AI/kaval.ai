@@ -264,6 +264,21 @@ class TestAgentService:
         assert session.external_id == "user-123-session"
         assert session.agent_id == agent.id
 
+        # The same external_id reuses the session on later runs (new run each
+        # time); a different one starts a fresh session.
+        _, session2, run2 = await service.initialize_workflow_run(
+            agent_name="ExternalIdAgent",
+            external_id="user-123-session",
+        )
+        assert session2.id == session.id
+        assert run2.id != run.id
+
+        _, session3, _ = await service.initialize_workflow_run(
+            agent_name="ExternalIdAgent",
+            external_id="user-456-session",
+        )
+        assert session3.id != session.id
+
     async def test_initialize_workflow_run_invalid_session_id(
         self, agents_session_maker
     ):

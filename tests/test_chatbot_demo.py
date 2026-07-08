@@ -79,20 +79,20 @@ def test_demo_uses_browser_model_and_choices_field():
 
 
 def test_demo_has_memory_and_prompt_examples():
-    from kavalai.workflow import InMemoryDataStorage
+    from kavalai.agent_service import AgentService
 
-    # The chatbot is built with storage, which (with use_history on by default)
-    # is what gives it memory.
+    # The chatbot is built with an agent service, which (with use_history on
+    # by default) is what gives it memory.
     ns = {"KAVAL_BROWSER_MODEL": MODEL}
     exec(_chatbot_code(), ns)  # noqa: S102 - trusted, repo-owned demo code
-    assert isinstance(ns["workflow"].storage, InMemoryDataStorage)
+    assert isinstance(ns["workflow"].agent_service, AgentService)
     # The prompt carries at least one few-shot example for the tiny model.
     assert "Example:" in _chatbot_code()
 
 
 async def test_chatbot_remembers_earlier_turns(workflow):
-    """Storage + use_history + a reused session id means each turn sees the
-    conversation so far."""
+    """Persistence + use_history + a reused external id (what the chat widget
+    passes) means each turn sees the conversation so far."""
     seen = []
 
     class _Recorder(_FakeClient):
@@ -103,8 +103,8 @@ async def test_chatbot_remembers_earlier_turns(workflow):
             )
 
     workflow.client_factory = lambda *a, **k: _Recorder()
-    await workflow.run({"message": "my name is Tim"}, session_id="s")
-    await workflow.run({"message": "what is my name?"}, session_id="s")
+    await workflow.run({"message": "my name is Tim"}, external_id="s")
+    await workflow.run({"message": "what is my name?"}, external_id="s")
 
     # Turn 2's prompt includes turn 1's message — the bot has memory.
     turn_two = " ".join(c or "" for c in seen[1])

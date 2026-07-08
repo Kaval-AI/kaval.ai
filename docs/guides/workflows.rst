@@ -102,7 +102,7 @@ To load and run from YAML:
 
    from kavalai import WorkflowEngine
 
-   engine = WorkflowEngine.from_yaml(yaml, storage=..., task_logger=...)
+   engine = WorkflowEngine.from_yaml(yaml, agent_service=..., task_logger=...)
    state = await engine.run({...})
 
 Other constructors include ``WorkflowEngine.from_yaml_path`` and

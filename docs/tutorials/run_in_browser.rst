@@ -186,4 +186,4 @@ Where to next
 
 * :doc:`llm_clients` — the clients (including the ``browser/`` provider) in depth.
 * :doc:`rag` — retrieval-augmented generation with Postgres + pgvector.
-* :doc:`observability_storage` — the in-browser ``InMemoryDataStorage`` backend.
+* :doc:`observability_storage` — sessions, runs and chat history, in the browser and out.

@@ -358,6 +358,20 @@ class DatabaseManager:
         engine = self.get_sqlite_sync_engine(db_path=db_path, echo=echo)
         return sessionmaker(bind=engine, expire_on_commit=False)
 
+    @staticmethod
+    def _ensure_sqlite_schema_sync(engine):
+        """Create the ORM tables on a sync SQLite engine and stamp the version.
+
+        Drops a stale-version database first (browser stores are ephemeral,
+        there is no in-place upgrade path). Safe to call repeatedly.
+        """
+        with engine.begin() as conn:
+            version = conn.exec_driver_sql("PRAGMA user_version").scalar()
+            if version not in (0, SQLITE_SCHEMA_VERSION):
+                _drop_all_sqlite_tables(conn)
+            Base.metadata.create_all(conn)
+            conn.exec_driver_sql(f"PRAGMA user_version = {SQLITE_SCHEMA_VERSION}")
+
     async def init_sqlite_sync(self, *, db_path=None, echo=False):
         """Prepare the sync SQLite/IndexedDB backend (mount, create tables, persist).
 
@@ -369,17 +383,69 @@ class DatabaseManager:
         """
         await idb.mount()
         engine = self.get_sqlite_sync_engine(db_path=db_path, echo=echo)
-        with engine.begin() as conn:
-            version = conn.exec_driver_sql("PRAGMA user_version").scalar()
-            if version not in (0, SQLITE_SCHEMA_VERSION):
-                _drop_all_sqlite_tables(conn)
-            Base.metadata.create_all(conn)
-            conn.exec_driver_sql(f"PRAGMA user_version = {SQLITE_SCHEMA_VERSION}")
+        self._ensure_sqlite_schema_sync(engine)
         await idb.flush()
+
+    def get_sqlite_compat_sessionmaker(self, *, db_path=":memory:", echo=False):
+        """Return an async-interface sessionmaker over the **sync** SQLite engine.
+
+        For platforms without ``greenlet`` (Pyodide/WASM), where neither
+        SQLAlchemy's async engine nor ``aiosqlite`` can run: sessions produced
+        here expose the awaitable surface :class:`~kavalai.agent_service.AgentService`
+        uses (``execute``/``commit``/``refresh``/``flush``/``rollback``) but run
+        each call synchronously, briefly blocking the event loop — fine for
+        local SQLite queries.
+
+        Bootstraps the schema on first use. ``db_path`` defaults to a private
+        in-memory database; for a persistent Pyodide/IndexedDB store call
+        :meth:`init_sqlite_sync` first and pass its (default) file path.
+        """
+        engine = self.get_sqlite_sync_engine(db_path=db_path, echo=echo)
+        self._ensure_sqlite_schema_sync(engine)
+        sync_maker = sessionmaker(bind=engine, expire_on_commit=False)
+        return lambda: AsyncSessionShim(sync_maker())
 
     async def flush(self):
         """Persist pending SQLite changes to IndexedDB (no-op outside Pyodide)."""
         await idb.flush()
+
+
+class AsyncSessionShim:
+    """Async facade over a synchronous ORM :class:`~sqlalchemy.orm.Session`.
+
+    Produced by :meth:`DatabaseManager.get_sqlite_compat_sessionmaker` for
+    greenlet-less platforms (Pyodide/WASM). The awaitable methods execute
+    synchronously on the calling thread.
+    """
+
+    def __init__(self, session):
+        self._session = session
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        if exc_type is not None:
+            self._session.rollback()
+        self._session.close()
+
+    def add(self, obj):
+        self._session.add(obj)
+
+    async def execute(self, statement):
+        return self._session.execute(statement)
+
+    async def flush(self):
+        self._session.flush()
+
+    async def commit(self):
+        self._session.commit()
+
+    async def rollback(self):
+        self._session.rollback()
+
+    async def refresh(self, obj):
+        self._session.refresh(obj)
 
 
 # Global instance to manage cached engines

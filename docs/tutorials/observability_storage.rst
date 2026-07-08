@@ -2,11 +2,11 @@ Observability & storage
 ========================
 
 Kaval.AI persists what your agents do, so you can give them **memory**, **reload**
-and inspect past runs, and **browse** everything in the backoffice UI. Two small,
-pluggable interfaces handle it:
+and inspect past runs, and **browse** everything in the backoffice UI. Two small
+pieces handle it:
 
-* ``DataStorage`` — agents, sessions, runs, the serialized run state and chat
-  history.
+* :class:`~kavalai.agent_service.AgentService` — agents, sessions, runs and chat
+  history, over any database the ORM supports.
 * ``TaskLogger`` — per-node debug data and per-call model statistics.
 
 This tutorial focuses on storage: how a conversation is recorded, how a workflow
@@ -51,7 +51,9 @@ node writes its result under its ``output`` name; later nodes read it back by
 .. code-block:: python
 
    from pydantic import BaseModel
-   from kavalai.workflow import WorkflowBuilder, InMemoryDataStorage
+   from kavalai.agent_service import AgentService
+   from kavalai.db import db_manager
+   from kavalai.workflow import WorkflowBuilder
 
    class Email(BaseModel):
        text: str
@@ -75,7 +77,9 @@ node writes its result under its ``output`` name; later nodes read it back by
        .llm("reply", prompt="Write a reply for a {{ context.analysis.category }} email.",
             inputs={"email": "input"}, output="output", next="end")
        .end()
-       .build_engine(storage=InMemoryDataStorage())
+       .build_engine(
+           agent_service=AgentService(db_manager.get_sqlite_compat_sessionmaker())
+       )
    )
 
 When the run finishes, the whole context is returned as
@@ -87,92 +91,94 @@ Sessions and runs
 
 A **session** is one conversation between a user and an agent. Every message the
 user sends triggers a **run** — a single invocation of the workflow that produces
-one reply. Reuse the same ``session_id`` across turns and all those runs (and
-their chat messages) belong to one thread — which is how memory works:
+one reply. Reuse the same ``external_id`` — any identifier from your own system,
+a user, ticket or thread id — across turns and all those runs (and their chat
+messages) belong to one thread, which is how memory works:
 
 .. code-block:: python
 
-   state1 = await engine.run({"text": "Hi, I'm Ada."}, session_id="user-42")
-   state2 = await engine.run({"text": "What's my name?"}, session_id="user-42")
+   state1 = await engine.run({"text": "Hi, I'm Ada."}, external_id="user-42")
+   state2 = await engine.run({"text": "What's my name?"}, external_id="user-42")
 
-Pass no ``session_id`` and the engine starts a fresh session each time — a
-one-off interaction.
+(``session_id`` does the same with the session's own primary id, e.g. the
+``state.session_id`` of an earlier run.) Pass neither and the engine starts a
+fresh session each time — a one-off interaction.
 
-The storage backends
---------------------
+One service, any database
+-------------------------
 
-Storage is pluggable: hand a backend to the engine and the same workflow code
-runs against any of them. Kaval.AI ships three.
-
-**InMemoryDataStorage** keeps everything in plain Python structures — no
-database, no background thread. It is ephemeral (it lives only as long as the
-process or browser page) and perfect for tests, demos and the in-browser
-playground. You can drive the storage interface directly; this runs **in your
-browser**:
+There is a single persistence service, :class:`~kavalai.agent_service.AgentService`;
+what varies is the database its sessionmaker points at. You can drive it
+directly; this runs **in your browser** over in-browser SQLite:
 
 .. code-block:: python
    :class: run-in-browser
 
-   from kavalai.workflow import InMemoryDataStorage
+   from kavalai.agent_service import AgentService
+   from kavalai.db import db_manager
 
-   storage = InMemoryDataStorage()
+   service = AgentService(db_manager.get_sqlite_compat_sessionmaker())
 
-   # A run belongs to a session. Reuse the session id and the conversation
-   # accumulates under it.
-   h1 = await storage.initialize_run(workflow_name="Greeter", session_id="user-42")
-   await storage.add_chat_message(agent_id=h1.agent_id, session_id=h1.session_id,
-                                  run_id=h1.run_id, role="user", content="My name is Ada.")
-   await storage.add_chat_message(agent_id=h1.agent_id, session_id=h1.session_id,
-                                  run_id=h1.run_id, role="assistant", content="Hi Ada!")
+   # A run belongs to a session. Reuse the external id and the conversation
+   # accumulates under one session.
+   agent, session, run1 = await service.initialize_workflow_run(
+       agent_name="Greeter", external_id="user-42")
+   await service.add_chat_message(agent_id=agent.id, session_id=session.id,
+                                  run_id=run1.id, role="user", content="My name is Ada.")
+   await service.add_chat_message(agent_id=agent.id, session_id=session.id,
+                                  run_id=run1.id, role="assistant", content="Hi Ada!")
 
-   h2 = await storage.initialize_run(workflow_name="Greeter", session_id="user-42")
-   await storage.add_chat_message(agent_id=h2.agent_id, session_id=h2.session_id,
-                                  run_id=h2.run_id, role="user", content="What's my name?")
+   agent2, session2, run2 = await service.initialize_workflow_run(
+       agent_name="Greeter", external_id="user-42")
+   await service.add_chat_message(agent_id=agent2.id, session_id=session2.id,
+                                  run_id=run2.id, role="user", content="What's my name?")
 
    # Same agent + session across both runs; two different runs.
-   print("same agent  :", h1.agent_id == h2.agent_id)
-   print("same session:", h1.session_id == h2.session_id)
-   print("two runs    :", h1.run_id != h2.run_id)
+   print("same agent  :", agent.id == agent2.id)
+   print("same session:", session.id == session2.id)
+   print("two runs    :", run1.id != run2.id)
 
-   for m in await storage.get_chat_history("user-42"):
+   for m in await service.get_chat_history(session.id):
        print(f"{m.role:>9}: {m.content}")
 
-**SqliteDataStorage** keeps the same data in a local SQLite database — ``:memory:``
-by default, or pass a path to persist across process runs:
+For local development and tests use SQLite — in-memory or file-backed:
 
 .. code-block:: python
 
-   from kavalai.workflow import SqliteDataStorage
+   from kavalai.agent_service import AgentService
+   from kavalai.db import db_manager
 
-   storage = SqliteDataStorage("kavalai.db")   # or SqliteDataStorage() for in-memory
+   await db_manager.init_sqlite()               # create the tables
+   service = AgentService(db_manager.get_sqlite_sessionmaker())
 
-**PostgresDataStorage** is the production backend. It writes your agents' data
-into the standard ``agents`` / ``sessions`` / ``runs`` / … tables (the same shape
-as the other backends) of whatever Postgres database you point it at:
+(``get_sqlite_compat_sessionmaker()`` above is its greenlet-free sibling for
+the browser, where SQLAlchemy's async engine cannot run.)
+
+In production, point the very same service at Postgres:
 
 .. code-block:: python
 
    from kavalai import db_manager
-   from kavalai.workflow.storage import PostgresDataStorage
+   from kavalai.agent_service import AgentService
 
    session_maker = db_manager.get_sessionmaker(
        uri="postgresql://user:pass@localhost:5432/kavalai"
    )
-   storage = PostgresDataStorage.from_session_maker(session_maker)
+   service = AgentService(session_maker)
 
-Hand any of them to the engine the same way — only the backend changes:
+Hand it to the engine the same way — only the connection changes:
 
 .. code-block:: python
 
    from kavalai.workflow import WorkflowEngine
 
-   engine = WorkflowEngine.from_yaml(workflow_yaml, storage=storage)
+   engine = WorkflowEngine.from_yaml(workflow_yaml, agent_service=service)
 
 The tables
 ----------
 
-Every backend stores the same shape — SQLite and the in-memory store mirror the
-Postgres tables column for column — so a run looks identical wherever it lives:
+The same ORM models define the schema everywhere — SQLite and Postgres hold
+identical tables — so a run looks identical wherever it lives:
 
 .. list-table::
    :header-rows: 1
@@ -188,7 +194,7 @@ Postgres tables column for column — so a run looks identical wherever it lives
        ties it to your own user, ticket or thread id.
    * - ``runs``
      - One row per workflow invocation: the ``input_data``, the ``output_data``
-       and the full serialized ``context`` (the checkpointed run state).
+       and the resolved run ``context`` (what each step saw).
    * - ``chat_messages``
      - The conversation turns (``role`` + ``content``) — the basis of chat history.
    * - ``tasks``
@@ -197,51 +203,20 @@ Postgres tables column for column — so a run looks identical wherever it lives
    * - ``model_call_stats``
      - One row per LLM or embedding call: model, token counts, duration and cost.
 
-The first four come from ``DataStorage``; ``tasks`` and ``model_call_stats`` come
-from ``TaskLogger`` (the SQLite pair is ``SqliteDataStorage`` +
-``SqliteTaskLogger``). The relationship is a simple hierarchy:
+The first four are written by ``AgentService``; ``tasks`` and
+``model_call_stats`` come from ``TaskLogger``. The relationship is a simple
+hierarchy:
 **agent → sessions → runs → (chat_messages, tasks, model_call_stats)**.
 
-Bring your own backend
-----------------------
+Custom persistence
+------------------
 
-Need Redis, MongoDB, a managed store, or your existing database? Implement the
-``DataStorage`` interface — six async methods — and pass an instance to the
-engine. Nothing else changes:
-
-.. code-block:: python
-
-   from typing import Optional
-   from kavalai import DataStorage, RunHandle, ChatMsg, WorkflowState
-
-   class MyStorage(DataStorage):
-       async def initialize_run(self, *, workflow_name, description=None,
-                                input_schema=None, output_schema=None, workflow=None,
-                                session_id=None, external_id=None, input_data=None) -> RunHandle:
-           # Create or reuse the agent + session, start a run, and return their ids.
-           ...
-
-       async def update_run(self, run_id, *, output_data=None, context=None) -> None:
-           ...
-
-       async def save_state(self, run_id, state: WorkflowState) -> None:
-           ...  # checkpoint the serialized state (called after every node)
-
-       async def load_state(self, run_id) -> Optional[WorkflowState]:
-           ...
-
-       async def add_chat_message(self, *, agent_id, session_id, run_id, role, content) -> None:
-           ...
-
-       async def get_chat_history(self, session_id, limit=50) -> list[ChatMsg]:
-           ...
-
-       # close() is optional — override it if your backend holds resources.
-
-Today Kaval.AI ships the in-memory, SQLite and Postgres backends, and **more are
-planned**. Because the engine only ever talks to the ``DataStorage`` and
-``TaskLogger`` interfaces, adding one is purely a matter of implementing the
-interface — no engine changes required.
+Need to send runs or chat history somewhere else — Redis, MongoDB, a managed
+store? Subclass ``AgentService`` and override the methods you want to redirect
+(``add_chat_message`` / ``get_chat_history`` for the conversation,
+``initialize_workflow_run`` / ``update_run`` for runs), then pass your instance
+to the engine. The engine only ever talks to the service's public methods, so
+no engine changes are required.
 
 Browsing it in the backoffice
 -----------------------------
@@ -252,7 +227,7 @@ register a database — host, port and schema — as a project, and the backoffi
 connects to it to show its sessions, runs, tasks and model calls. You can
 register several (local, staging, production) behind one UI.
 
-So point ``PostgresDataStorage`` at a database, add that database as a project,
+So point your ``AgentService`` at a database, add that database as a project,
 and every session, run, task and model call becomes browsable — drill from a
 *conversation* down to an individual *run*, *node* or *model call*, with token
 and cost metrics along the way. See :doc:`../ui/index`.

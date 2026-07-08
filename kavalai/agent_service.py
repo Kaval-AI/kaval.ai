@@ -137,6 +137,12 @@ class AgentService:
         This is an optimized batch operation that reduces 3 DB roundtrips to 1,
         improving performance especially for remote databases.
 
+        ``session_id`` selects an existing session by primary id (raises
+        ``ValueError`` if absent). Without it, ``external_id`` reuses the
+        agent's most recent session carrying that caller-supplied id — letting
+        clients pin a conversation to their own identifier — and a new session
+        is created when neither matches.
+
         Returns:
             tuple of (agent, session, run)
         """
@@ -176,9 +182,23 @@ class AgentService:
                 if not session_obj:
                     raise ValueError(f"Session with ID {session_id} not found")
             else:
-                session_obj = Session(agent_id=agent.id, external_id=external_id)
-                db_session.add(session_obj)
-                await db_session.flush()  # Get session_obj.id for run creation
+                session_obj = None
+                if external_id:
+                    stmt = (
+                        select(Session)
+                        .where(
+                            Session.agent_id == agent.id,
+                            Session.external_id == external_id,
+                        )
+                        .order_by(Session.created_at.desc())
+                        .limit(1)
+                    )
+                    result = await db_session.execute(stmt)
+                    session_obj = result.scalar_one_or_none()
+                if session_obj is None:
+                    session_obj = Session(agent_id=agent.id, external_id=external_id)
+                    db_session.add(session_obj)
+                    await db_session.flush()  # Get session_obj.id for run creation
 
             # 3. Create run
             run = Run(

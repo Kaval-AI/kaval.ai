@@ -33,13 +33,6 @@ Client factory
 
 .. automodule:: kavalai.workflow.clients
 
-Storage backends
-----------------
-
-.. automodule:: kavalai.workflow.storage.base
-
-.. automodule:: kavalai.workflow.storage.memory
-
 Task logging backends
 ---------------------
 

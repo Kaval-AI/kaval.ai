@@ -5,12 +5,14 @@
 # evaluated against the run context (e.g. `classification.intent == 'refund'`).
 #
 # Run it with:
-#   from kavalai.workflow import (
-#       WorkflowEngine, SqliteDataStorage, SqliteTaskLogger,
-#   )
+#   from kavalai.agent_service import AgentService
+#   from kavalai.db import db_manager
+#   from kavalai.workflow import WorkflowEngine, SqliteTaskLogger
+#
+#   await db_manager.init_sqlite()  # in-memory SQLite; point at Postgres in prod
 #   engine = WorkflowEngine.from_yaml_path(
 #       "examples/v2_workflow_support_agent.yaml",
-#       storage=SqliteDataStorage(),
+#       agent_service=AgentService(db_manager.get_sqlite_sessionmaker()),
 #       task_logger=SqliteTaskLogger(),
 #   )
 #   state = await engine.run({"user_message": "I want a refund"})

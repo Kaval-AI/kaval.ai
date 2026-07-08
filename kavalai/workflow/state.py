@@ -25,8 +25,7 @@ class WorkflowState(BaseModel):
     """Serializable runtime state of a single workflow interaction.
 
     The state is JSON round-trippable (``to_json`` / ``from_json``) and is
-    checkpointed to the configured :class:`DataStorage` after every node so a
-    run can be inspected or resumed.
+    returned by :meth:`WorkflowEngine.run` so a run can be inspected.
 
     workflow_name: name of the workflow being executed.
     status: lifecycle status of the run.

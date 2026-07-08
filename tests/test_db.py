@@ -173,3 +173,39 @@ def test_ensure_async_scheme():
     assert ensure_async_scheme("not_a_uri") == "not_a_uri"
     assert ensure_async_scheme("") == ""
     assert ensure_async_scheme(None) is None
+
+
+@pytest.mark.asyncio
+async def test_sqlite_compat_sessionmaker_runs_agent_service():
+    """The greenlet-free compat shim (sync SQLite engine behind an async
+    session surface) supports the full AgentService flow — the stack the
+    in-browser playground runs on."""
+    from kavalai.agent_service import AgentService
+    from kavalai.db import DatabaseManager
+
+    service = AgentService(DatabaseManager().get_sqlite_compat_sessionmaker())
+
+    agent, session, run = await service.initialize_workflow_run(
+        agent_name="shim-bot", external_id="chat-1", input_data={"q": "hi"}
+    )
+    assert agent.id and session.id and run.id
+    assert session.external_id == "chat-1"
+
+    # The same external id reuses the session; a new one starts fresh.
+    _, session2, run2 = await service.initialize_workflow_run(
+        agent_name="shim-bot", external_id="chat-1"
+    )
+    assert session2.id == session.id and run2.id != run.id
+    _, other, _ = await service.initialize_workflow_run(
+        agent_name="shim-bot", external_id="chat-2"
+    )
+    assert other.id != session.id
+
+    await service.add_chat_message(
+        agent_id=agent.id, session_id=session.id, role="user", content="hello"
+    )
+    history = await service.get_chat_history(session.id)
+    assert [(m.role, m.content) for m in history] == [("user", "hello")]
+
+    updated = await service.update_run(run.id, output_data={"a": 1})
+    assert updated.output_data == {"a": 1}

@@ -25,45 +25,44 @@ observability the key fields are:
   storage, and chat history together. The 8-char ``invocation_id`` prefixes
   every log line of the run, so logs are easy to grep per run.
 
-The state is checkpointed to storage after every node, so even a partial run is
-recoverable.
+Persistence and logging
+-----------------------
 
-Two pluggable interfaces
-------------------------
+Persistence and logging are split into two pieces handed to the engine when
+you build it:
 
-Persistence and logging are split into two interfaces you can swap:
-
-* **DataStorage** — agents, sessions, runs, and chat history.
+* :class:`~kavalai.agent_service.AgentService` — agents, sessions, runs, and
+  chat history.
 * **TaskLogger** — per-node logs and model call stats.
-
-Both are handed to the engine when you build it:
 
 .. code-block:: python
 
    from kavalai import WorkflowEngine
 
-   engine = WorkflowEngine.from_yaml(yaml, storage=..., task_logger=...)
+   engine = WorkflowEngine.from_yaml(yaml, agent_service=..., task_logger=...)
 
-Local vs. production backends
------------------------------
+Local vs. production databases
+------------------------------
 
-For local development and tests, use the SQLite-backed pair:
-``SqliteDataStorage`` and ``SqliteTaskLogger``. In production, Postgres backends
-map onto the existing ``agents`` / ``sessions`` / ``runs`` / ``chat_messages``
-tables and the ``tasks`` / ``model_call_stats`` tables. The same code runs
-against either — only the backend changes.
+The ``AgentService`` runs against any database the ORM models support: for
+local development and tests point it at in-memory SQLite
+(``AgentService(db_manager.get_sqlite_sessionmaker())``), in production at
+Postgres — the same ``agents`` / ``sessions`` / ``runs`` / ``chat_messages``
+tables either way. ``SqliteTaskLogger`` is the local counterpart of the
+production ``PostgresTaskLogger``. The same code runs against either — only
+the connection changes.
 
-DataStorage
------------
+AgentService
+------------
 
-``DataStorage`` exposes ``initialize_run``, ``update_run``, ``save_state``,
-``load_state``, ``add_chat_message``, and ``get_chat_history``. For example, to
-reload a finished run or pull back the conversation:
+The engine records each run through the service: ``initialize_workflow_run``
+starts it, ``update_run`` lands the output and resolved context, and
+``add_chat_message`` / ``get_chat_history`` carry the conversation. To pull a
+finished run's conversation back:
 
 .. code-block:: python
 
-   state = await engine.storage.load_state(state.run_id)
-   history = await engine.storage.get_chat_history(state.session_id)
+   history = await engine.agent_service.get_chat_history(UUID(state.session_id))
 
 Per-model-call statistics come from the LLM clients themselves: every call
 produces a ``ModelCallStat`` with token usage and timing, delivered through the

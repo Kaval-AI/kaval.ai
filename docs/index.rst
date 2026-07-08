@@ -30,7 +30,9 @@ predictable. The simplest way to create a workflow is the
 
 .. code-block:: python
 
-   from kavalai.workflow import WorkflowBuilder, InMemoryDataStorage
+   from kavalai.agent_service import AgentService
+   from kavalai.db import db_manager
+   from kavalai.workflow import WorkflowBuilder
 
    # A short example or two helps a tiny model answer well and fill the choices
    # in the right shape; the structured output schema enforces the format.
@@ -57,7 +59,9 @@ predictable. The simplest way to create a workflow is the
            next="end",
        )
        .end()
-       .build_engine(storage=InMemoryDataStorage())
+       .build_engine(
+           agent_service=AgentService(db_manager.get_sqlite_compat_sessionmaker())
+       )
    )
 
 Let's go over the code step-by-step.
@@ -112,14 +116,17 @@ model's answer — validated against ``Reply`` — under ``output``, and
 
 .. code-block:: python
 
-   .build_engine(storage=InMemoryDataStorage())
+   .build_engine(
+       agent_service=AgentService(db_manager.get_sqlite_compat_sessionmaker())
+   )
 
 Finally, ``build_engine`` validates the graph and returns a ready-to-run
-:class:`~kavalai.WorkflowEngine`. Passing ``storage`` gives the bot **memory**:
-LLM nodes read the conversation history by default (``use_history=True``), so
-each turn sees what was said before. The chat keeps one session and
-``InMemoryDataStorage`` holds that history for the page's lifetime; in
-production you would point it at a database instead.
+:class:`~kavalai.WorkflowEngine`. Passing an
+:class:`~kavalai.agent_service.AgentService` gives the bot **memory**: LLM
+nodes read the conversation history by default (``use_history=True``), so each
+turn sees what was said before. The chat keeps one session, stored here in an
+in-browser SQLite database that lives for the page's lifetime; in production
+the very same service points at Postgres instead.
 
 Here is that chatbot, running entirely in your browser. The first run takes a
 moment to download the model (or load it from cache), and because the model is
