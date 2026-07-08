@@ -148,7 +148,7 @@ from kavalai.rag import (
     SqliteRagService,
 )
 from kavalai.normalizer import Normalizer
-from kavalai.agents.db import db_manager
+from kavalai.agents.db import EngineOptionsConflictError, db_manager
 
 __all__ = [
     # Workflow engine
@@ -217,4 +217,5 @@ __all__ = [
     "SqliteRagService",
     "Normalizer",
     "db_manager",
+    "EngineOptionsConflictError",
 ]

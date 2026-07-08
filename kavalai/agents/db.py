@@ -156,6 +156,21 @@ def _drop_all_sqlite_tables(connection):
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
 
 
+class EngineOptionsConflictError(ValueError):
+    """Raised when a cached engine is requested with conflicting options.
+
+    Engines are cached per ``(url, schema)`` and their options (``pool_size``,
+    ``max_overflow``, ``echo``) are fixed by whichever call creates them. A
+    later call that explicitly asks for different options would otherwise
+    silently receive an engine configured differently than requested — raising
+    surfaces the disagreeing call sites so they can be aligned.
+    """
+
+
+# Engine options applied when a caller leaves them unspecified (``None``).
+_ENGINE_OPTION_DEFAULTS = {"echo": False, "pool_size": 1, "max_overflow": 0}
+
+
 class DatabaseManager:
     """Manages dynamic engine creation and session factories."""
 
@@ -166,6 +181,9 @@ class DatabaseManager:
 
     def __init__(self):
         self._engines = {}
+        # Effective creation options per Postgres engine cache key, used to
+        # detect conflicting option requests on cache hits.
+        self._engine_options = {}
 
     def get_sessionmaker(
         self,
@@ -177,9 +195,9 @@ class DatabaseManager:
         db_name=None,
         uri=None,
         schema=None,
-        echo=False,
-        pool_size=1,
-        max_overflow=0,
+        echo=None,
+        pool_size=None,
+        max_overflow=None,
     ):
         """Return an ``async_sessionmaker`` for the given database and schema.
 
@@ -188,6 +206,14 @@ class DatabaseManager:
         ``schema_translate_map``, so the same models can target any schema at
         runtime. ``schema=None`` leaves table names unqualified (Postgres then
         resolves them via the connection's ``search_path``, i.e. ``public``).
+
+        ``echo``, ``pool_size`` and ``max_overflow`` are engine-level options,
+        fixed by the call that first creates the engine for a given
+        ``(url, schema)`` (unspecified options fall back to
+        ``echo=False, pool_size=1, max_overflow=0``). A later call may repeat
+        the effective options or leave them unspecified; explicitly requesting
+        different ones raises :class:`EngineOptionsConflictError` instead of
+        silently returning an engine configured otherwise.
         """
         if uri:
             url = ensure_async_scheme(uri)
@@ -196,16 +222,37 @@ class DatabaseManager:
 
         # Cache per (url, schema): translate maps are engine-level options.
         key = (url, schema)
+        requested = {"echo": echo, "pool_size": pool_size, "max_overflow": max_overflow}
         if key not in self._engines:
+            effective = {
+                name: default if requested[name] is None else requested[name]
+                for name, default in _ENGINE_OPTION_DEFAULTS.items()
+            }
             engine = create_async_engine(
                 url,
-                echo=echo,
-                pool_size=pool_size,
-                max_overflow=max_overflow,
+                echo=effective["echo"],
+                pool_size=effective["pool_size"],
+                max_overflow=effective["max_overflow"],
             )
             if schema:
                 engine = engine.execution_options(schema_translate_map={None: schema})
             self._engines[key] = engine
+            self._engine_options[key] = effective
+        else:
+            created_with = self._engine_options[key]
+            conflicts = {
+                name: {"requested": value, "engine": created_with[name]}
+                for name, value in requested.items()
+                if value is not None and value != created_with[name]
+            }
+            if conflicts:
+                safe_url = make_url(url).render_as_string(hide_password=True)
+                raise EngineOptionsConflictError(
+                    f"Engine for {safe_url} (schema={schema!r}) was created with "
+                    f"{created_with} but this call requested conflicting options: "
+                    f"{conflicts}. Engine options are fixed by the first caller — "
+                    f"align the call sites (or omit the options to reuse the engine)."
+                )
         engine = self._engines[key]
         return async_sessionmaker(
             bind=engine, class_=AsyncSession, expire_on_commit=False
@@ -565,9 +612,3 @@ class ChatMessage(Base):
     agent: Mapped["Agent"] = relationship(back_populates="chat_messages")
     session: Mapped["Session"] = relationship(back_populates="chat_messages")
     run: Mapped["Run"] = relationship(back_populates="chat_messages")
-
-
-# NOTE: RAG storage is backend-owned and NOT part of this metadata — see
-# kavalai/rag/postgres.py (self-provisioning table-per-collection) and
-# kavalai/rag/sqllite.py. ``VectorType`` above remains because the initial
-# Alembic revision (0001) references it.
