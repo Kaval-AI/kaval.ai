@@ -29,14 +29,14 @@ from loguru import logger
 
 from kavalai.agents.db import RagIndex
 from kavalai.backoffice.db import Project, ProjectCache
-from kavalai.llm_clients.common import Streamer
+from kavalai.llm_clients.streamer import ValueStreamer
 
 
 async def download_rag_index(
     session_maker: Callable[[], AsyncContextManager[AsyncSession]],
     collection_name: str,
     output_csv_path: str,
-    streamer: Optional[Streamer] = None,
+    streamer: Optional[ValueStreamer] = None,
 ):
     """
     Downloads rag index to specified CSV file using a streaming cursor.
@@ -89,7 +89,7 @@ async def compute_pca(
     csv_path: str,
     n_components: int = 2,
     batch_size: int = 100,
-    streamer: Optional[Streamer] = None,
+    streamer: Optional[ValueStreamer] = None,
 ) -> IncrementalPCA:
     """
     Given the CSV file, computes PCA model from the dataset using scikit-learn's IncrementalPCA.
@@ -149,7 +149,7 @@ async def train_pca(
     agents_session_maker: Callable[[], AsyncContextManager[AsyncSession]],
     project_name: str,
     collection_name: str,
-    streamer: Optional[Streamer] = None,
+    streamer: Optional[ValueStreamer] = None,
 ):
     """
     Trains PCA model for a given collection and stores it in the project cache.
@@ -272,7 +272,8 @@ async def train_pca(
             await bo_session.commit()
 
         if streamer:
-            await streamer.stream_complete("PCA training completed successfully.")
+            await streamer.stream_partial("PCA training completed successfully.")
+            await streamer.stream_complete()
         logger.info(f"PCA training completed for collection {collection_name}")
 
     finally:

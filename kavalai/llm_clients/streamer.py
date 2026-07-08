@@ -104,10 +104,9 @@ class ValueStreamer:
 
         Args:
             value: The partial content to stream.
-            name: Optional override for the stream name.
         """
-        self._buffer.write(value)
         if not self._stream_delta:
+            self._buffer.write(value)
             value = self.get_safe_value()
 
         await self._queue.put(
@@ -120,9 +119,8 @@ class ValueStreamer:
         """
         Push a 'complete' chunk to the queue, indicating the stream has finished.
 
-        Args:
-            value: Optional final content to append to the buffer before completing.
-            name: Optional override for the stream name.
+        In delta mode the chunk carries no value; otherwise it carries the full
+        accumulated (safe-parsed) content.
         """
         if self._completed:
             raise RuntimeError(f"stream_complete() already called for '{self._name}'")

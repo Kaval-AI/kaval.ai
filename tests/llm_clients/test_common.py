@@ -1,4 +1,3 @@
-import asyncio
 import json
 from unittest.mock import patch
 
@@ -8,8 +7,6 @@ from pydantic import BaseModel
 from kavalai.agents.db import ModelCallStat
 from kavalai.llm_clients.common import (
     create_model_call_stat,
-    StreamContent,
-    Streamer,
     get_model_name,
     safe_parse_json,
     safe_model_validate,
@@ -219,43 +216,6 @@ def test_safe_model_validate_malformed_json():
     error_str = str(exc_info.value).lower()
     # Should fail on missing field2, not on JSON parsing
     assert "field2" in error_str or "required" in error_str
-
-
-# --- StreamContent tests ---
-
-
-def test_stream_content_pydantic():
-    sc = StreamContent(type="text", name="chunk", value="hello")
-    assert sc.type == "text"
-    assert sc.name == "chunk"
-    assert sc.value == "hello"
-
-
-# --- Streamer tests ---
-
-
-@pytest.mark.asyncio
-async def test_streamer_partial():
-    queue = asyncio.Queue()
-    streamer = Streamer(name="test", queue=queue)
-    await streamer.stream_partial(value="chunk1")
-    res = await queue.get()
-    parsed = json.loads(res)
-    assert parsed["type"] == "partial"
-    assert parsed["name"] == "test"
-    assert parsed["value"] == "chunk1"
-
-
-@pytest.mark.asyncio
-async def test_streamer_complete():
-    queue = asyncio.Queue()
-    streamer = Streamer(name="test", queue=queue)
-    await streamer.stream_complete(value="final", name="override")
-    res = await queue.get()
-    parsed = json.loads(res)
-    assert parsed["type"] == "complete"
-    assert parsed["name"] == "override"
-    assert parsed["value"] == "final"
 
 
 # --- get_model_name tests ---

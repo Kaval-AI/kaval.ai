@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sklearn.decomposition import IncrementalPCA
 from kavalai.agents.db import RagIndex
 from kavalai.backoffice.embedding_projector import download_rag_index, compute_pca
-from kavalai.llm_clients.common import Streamer
+from kavalai.llm_clients.streamer import Streamer
 
 
 @pytest.mark.asyncio
@@ -61,10 +61,7 @@ async def test_download_rag_index(
     await agents_db.commit()
 
     csv_path = tmp_path / "rag_index.csv"
-    import asyncio
-
-    queue = asyncio.Queue()
-    streamer = Streamer(name="test", queue=queue)
+    streamer = Streamer(stream_delta=True).get_value_streamer("test")
 
     # Execute
     await download_rag_index(
@@ -96,10 +93,7 @@ async def test_compute_pca(tmp_path):
         writer.writerow(["p4", -0.9, -1.1, -0.02])
 
     # Execute
-    import asyncio
-
-    queue = asyncio.Queue()
-    streamer = Streamer(name="test", queue=queue)
+    streamer = Streamer(stream_delta=True).get_value_streamer("test")
     ipca = await compute_pca(
         str(csv_path), n_components=2, batch_size=2, streamer=streamer
     )

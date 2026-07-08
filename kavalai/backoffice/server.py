@@ -34,7 +34,7 @@ from kavalai.agents.db import db_manager, Agent
 from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions
 from kavalai.rag import PostgresRagService
-from kavalai.llm_clients.common import Streamer
+from kavalai.llm_clients.streamer import StreamContent, Streamer
 from kavalai.backoffice.embedding_projector import train_pca
 from sse_starlette.sse import EventSourceResponse
 from contextlib import asynccontextmanager
@@ -681,49 +681,34 @@ async def projects_train_pca(project_id: UUID, collection_name: str, request: Re
 
     import asyncio
 
-    queue = asyncio.Queue()
-    streamer = Streamer("pca_streamer", queue)
+    streamer = Streamer(stream_delta=True)
+
+    async def run_training():
+        try:
+            await train_pca(
+                bo_session_maker=get_backoffice_session,
+                agents_session_maker=lambda: get_project_session(project),
+                project_name=project.name,
+                collection_name=collection_name,
+                streamer=streamer.get_value_streamer("pca_streamer"),
+            )
+        except Exception as e:
+            logger.error(f"PCA training failed: {e}")
+            await streamer.stream_error(e)
 
     async def event_generator():
+        pca_task = asyncio.create_task(run_training())
         try:
-            # Run train_pca in a task so we can stream from the queue
-            pca_task = asyncio.create_task(
-                train_pca(
-                    bo_session_maker=get_backoffice_session,
-                    agents_session_maker=lambda: get_project_session(project),
-                    project_name=project.name,
-                    collection_name=collection_name,
-                    streamer=streamer,
-                )
-            )
-
-            while not (pca_task.done() and queue.empty()):
-                try:
-                    # Wait for a message with a timeout to check if the task is done
-                    msg = await asyncio.wait_for(queue.get(), timeout=0.1)
-                    yield {"data": msg}
-                except asyncio.TimeoutError:
-                    if pca_task.done():
-                        # Check if task failed
-                        if pca_task.exception():
-                            logger.error(f"PCA training failed: {pca_task.exception()}")
-                            import json
-
-                            yield {
-                                "data": json.dumps(
-                                    {
-                                        "status": "error",
-                                        "value": str(pca_task.exception()),
-                                    }
-                                )
-                            }
-                        break
-                    continue
+            async for chunk in streamer:
+                yield {"data": chunk.model_dump_json()}
+            await pca_task
         except Exception as e:
             logger.error(f"Error in PCA event generator: {e}")
-            import json
-
-            yield {"data": json.dumps({"status": "error", "value": str(e)})}
+            yield {
+                "data": StreamContent(
+                    type="error", name="error", value=str(e)
+                ).model_dump_json()
+            }
 
     return EventSourceResponse(event_generator())
 

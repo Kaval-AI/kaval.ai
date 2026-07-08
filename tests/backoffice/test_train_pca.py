@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import asyncio
 import base64
 import json
 import pickle
@@ -25,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from kavalai.agents.db import RagIndex
 from kavalai.backoffice.db import Project, ProjectCache
 from kavalai.backoffice.embedding_projector import train_pca
-from kavalai.llm_clients.common import Streamer
+from kavalai.llm_clients.streamer import Streamer
 
 
 @pytest.mark.asyncio
@@ -59,8 +58,8 @@ async def test_train_pca(
     await agents_db.commit()
 
     # Setup: Streamer
-    queue = asyncio.Queue()
-    streamer = Streamer("pca_streamer", queue)
+    streamer = Streamer(stream_delta=True)
+    value_streamer = streamer.get_value_streamer("pca_streamer")
 
     # Need session makers for the function
     # backoffice_db is a session, but train_pca expects a session_maker
@@ -90,7 +89,7 @@ async def test_train_pca(
         agents_session_maker=agents_sm,
         project_name=project_name,
         collection_name=collection,
-        streamer=streamer,
+        streamer=value_streamer,
     )
 
     # Verify: Check project_cache
@@ -119,23 +118,21 @@ async def test_train_pca(
     assert "x" in sample_data[0]
     assert "y" in sample_data[0]
 
-    # Verify streamer messages
+    # Verify streamer messages (all chunks are queued; iterate until 'complete')
     messages = []
     types = []
-    while not queue.empty():
-        msg_json = await queue.get()
-        msg = json.loads(msg_json)
-        messages.append(msg["value"])
-        types.append(msg["type"])
+    async for chunk in streamer:
+        messages.append(chunk.value)
+        types.append(chunk.type)
 
-    assert any("Starting PCA training" in m for m in messages)
-    assert any("Downloading embeddings" in m for m in messages)
-    assert any("Computing PCA model" in m for m in messages)
-    assert any("Generating sample points" in m for m in messages)
-    assert any("Storing results in cache" in m for m in messages)
-    assert any("Finished downloading 10/10 items" in m for m in messages)
-    assert "complete" in types
-    assert messages[types.index("complete")] == "PCA training completed successfully."
+    assert any("Starting PCA training" in m for m in messages if m)
+    assert any("Downloading embeddings" in m for m in messages if m)
+    assert any("Computing PCA model" in m for m in messages if m)
+    assert any("Generating sample points" in m for m in messages if m)
+    assert any("Storing results in cache" in m for m in messages if m)
+    assert any("Finished downloading 10/10 items" in m for m in messages if m)
+    assert types[-1] == "complete"
+    assert messages[-2] == "PCA training completed successfully."
 
 
 @pytest.mark.asyncio
@@ -244,10 +241,12 @@ async def test_train_pca_endpoint(
     data_lines = [line[5:] for line in lines if line.startswith("data:")]
     messages = [json.loads(line) for line in data_lines]
 
-    assert any("Starting PCA training" in m["value"] for m in messages)
-    assert any("Finished downloading 10/10 items" in m["value"] for m in messages)
-    assert any("Processed final" in m["value"] for m in messages)
-    assert any("completed successfully" in m["value"] for m in messages)
+    values = [m["value"] for m in messages if m.get("value")]
+    assert any("Starting PCA training" in v for v in values)
+    assert any("Finished downloading 10/10 items" in v for v in values)
+    assert any("Processed final" in v for v in values)
+    assert any("completed successfully" in v for v in values)
+    assert messages[-1]["type"] == "complete"
 
     # Verify project cache
     stmt = select(ProjectCache).where(ProjectCache.project_id == project.id)

@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import asyncio
 from typing import Any, Optional, Type
 
 import json
@@ -123,70 +122,6 @@ def safe_model_validate(response_model: Type[BaseModel], json_str: str) -> BaseM
         parsed = {}
 
     return response_model.model_validate(parsed)
-
-
-class StreamContent(BaseModel):
-    """
-    Represents a chunk of content streamed from an LLM.
-
-    Attributes:
-        type: The type of stream message (e.g., 'partial', 'complete').
-        name: The identifier for the stream source or target.
-        value: The actual content string.
-    """
-
-    type: str
-    name: str
-    value: str
-
-
-class Streamer:
-    """
-    A helper class to manage and push streaming content to an asyncio queue.
-
-    Attributes:
-        name: Default name for the stream chunks.
-        queue: The asyncio.Queue where messages are placed.
-    """
-
-    def __init__(self, name: str, queue: asyncio.Queue):
-        """
-        Initialize the Streamer.
-
-        Args:
-            name: Default name for the stream.
-            queue: Target queue for the JSON-serialized StreamContent.
-        """
-        self.name = name
-        self.queue = queue
-
-    async def stream_partial(self, value: str, name: Optional[str] = None):
-        """
-        Push a 'partial' chunk to the queue.
-
-        Args:
-            value: The partial content to stream.
-            name: Optional override for the stream name.
-        """
-        await self.queue.put(
-            StreamContent(
-                type="partial", name=name or self.name, value=value
-            ).model_dump_json()
-        )
-
-    async def stream_complete(self, value: str, name: Optional[str] = None):
-        """
-        Push a 'complete' chunk to the queue, indicating the stream has finished.
-
-        Args:
-            value: The final content to stream.
-            name: Optional override for the stream name.
-        """
-        await self.queue.put(
-            StreamContent(
-                type="complete", name=name or self.name, value=value
-            ).model_dump_json()
-        )
 
 
 def get_model_name(model: str) -> str:

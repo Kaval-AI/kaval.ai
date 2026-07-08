@@ -133,7 +133,9 @@ export class RagPage implements OnInit {
         this.ngZone.run(() => {
           try {
             const msg = JSON.parse(data);
-            this.pcaMessages.push(msg.value);
+            if (msg.value) {
+              this.pcaMessages.push(msg.value);
+            }
             if (msg.status === 'error' || msg.type === 'error') {
               this.trainingPca = false;
             }
