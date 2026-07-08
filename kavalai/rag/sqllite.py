@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import json
+import struct
 import os
 import re
 import sqlite3
@@ -37,6 +38,18 @@ def _utc_now_iso() -> str:
 
 def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
     return datetime.fromisoformat(value) if value else None
+
+
+def _decode_f32_blob(blob) -> "list[float] | None":
+    """Decode a sqlite-vector f32 BLOB back into a list of floats."""
+    if blob is None:
+        return None
+    if isinstance(blob, (bytes, bytearray, memoryview)):
+        raw = bytes(blob)
+        return list(struct.unpack(f"<{len(raw) // 4}f", raw))
+    if isinstance(blob, str):
+        return json.loads(blob)
+    return list(blob)
 
 
 class SqliteRagService(BaseRagService):
@@ -470,17 +483,60 @@ class SqliteRagService(BaseRagService):
             query_index=query_index,
         )
 
-    async def delete(self, item_id: UUID) -> None:
+    async def delete(
+        self, item_id: UUID, collection_name: Optional[str] = None
+    ) -> None:
         """
         Delete a single indexed item by its identifier.
 
         Args:
             item_id (UUID): Identifier of the indexed item to delete.
+            collection_name (Optional[str]): Ignored — all collections share
+                one table in this backend, and ids are globally unique.
         """
         self._conn.execute(
             f"DELETE FROM {self.table_name} WHERE id = ?", (str(item_id),)
         )
         self._conn.commit()
+
+    async def count_entries(self, collection_name: str) -> int:
+        """Number of entries in a collection (0 if it doesn't exist)."""
+        if not self._table_exists():
+            return 0
+        row = self._conn.execute(
+            f"SELECT count(*) FROM {self.table_name} WHERE collection_name = ?",
+            (collection_name,),
+        ).fetchone()
+        return row[0] if row else 0
+
+    async def iter_entries(self, collection_name: str, batch_size: int = 500):
+        """Iterate all entries of a collection (including embeddings)."""
+        if not self._table_exists():
+            return
+        cursor = self._conn.execute(
+            f"""
+            SELECT id, source_id, content, embedding,
+                   metadata, created_at, updated_at
+            FROM {self.table_name} WHERE collection_name = ? ORDER BY id
+            """,
+            (collection_name,),
+        )
+        while True:
+            rows = cursor.fetchmany(batch_size)
+            if not rows:
+                return
+            for row in rows:
+                yield {
+                    "id": UUID(row["id"]),
+                    "source_id": row["source_id"],
+                    "content": row["content"],
+                    "embedding": _decode_f32_blob(row["embedding"]),
+                    "rag_metadata": json.loads(row["metadata"])
+                    if row["metadata"]
+                    else {},
+                    "created_at": _parse_timestamp(row["created_at"]),
+                    "updated_at": _parse_timestamp(row["updated_at"]),
+                }
 
     async def delete_by_source_id(
         self,

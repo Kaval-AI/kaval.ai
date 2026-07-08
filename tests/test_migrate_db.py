@@ -50,14 +50,12 @@ def test_migrate_agents(db_uri):
         "tasks",
         "chat_messages",
         "model_call_stats",
-        "rag_index",
         "alembic_version",
     } <= tables
 
-    # Hand-written Postgres-only rag indexes exist.
-    index_names = {i["name"] for i in insp.get_indexes("rag_index", schema=schema)}
-    assert "idx_rag_index_metadata" in index_names
-    assert "idx_rag_embedding_768" in index_names
+    # rag_index was extracted in revision 0002: RAG storage is backend-owned
+    # (see kavalai/rag/postgres.py), no rag tables in the migration set.
+    assert "rag_index" not in tables
     engine.dispose()
 
 
@@ -102,10 +100,10 @@ def test_migrate_sqlite_file(tmp_path):
     engine = create_engine(uri)
     insp = inspect(engine)
     tables = set(insp.get_table_names())
-    assert {"agents", "rag_index", "alembic_version"} <= tables
-    # Postgres-only DDL (extension, hnsw/gin indexes) must have been skipped.
-    index_names = {i["name"] for i in insp.get_indexes("rag_index")}
-    assert "idx_rag_index_metadata" not in index_names
+    assert {"agents", "alembic_version"} <= tables
+    # rag_index was extracted in revision 0002 (RAG storage is backend-owned);
+    # Postgres-only DDL in 0001 must also have been skipped on SQLite.
+    assert "rag_index" not in tables
     engine.dispose()
 
 

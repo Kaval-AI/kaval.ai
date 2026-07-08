@@ -535,7 +535,9 @@ async def projects_rag_query(
         async def session_factory():
             yield session
 
-        rag_service = PostgresRagService(session_factory, model, normalizer=normalizer)
+        rag_service = PostgresRagService(
+            session_factory, model, normalizer=normalizer, schema=project.db_schema
+        )
         results = await rag_service.query(
             text=text,
             top_k=top_k,
@@ -576,23 +578,15 @@ async def projects_rag_query(
                         query_point = ipca.transform(np.array(embeddings))[0]
                         query_point = [float(x) for x in query_point]
 
-                        # Get result embeddings (already fetched during query)
-                        # We need to fetch actual embeddings for results as RagServiceResult doesn't include them
-                        # Let's modify RagService or fetch them here.
-                        # Actually, RagServiceResult doesn't have embeddings. Let's fetch them.
+                        # RagServiceResult doesn't include embeddings; fetch
+                        # them through the service (storage is backend-owned).
                         result_ids = [r.id for r in results]
                         logger.debug(
                             f"Fetching embeddings for result IDs: {result_ids}"
                         )
-                        from kavalai.agents.db import RagIndex
-
-                        stmt_embeddings = select(RagIndex.id, RagIndex.embedding).where(
-                            RagIndex.id.in_(result_ids)
+                        id_to_embedding = await rag_service.get_embeddings_by_ids(
+                            collection_name, result_ids
                         )
-                        res_embeddings = await session.execute(stmt_embeddings)
-                        id_to_embedding = {
-                            row[0]: row[1] for row in res_embeddings.all()
-                        }
                         logger.debug(f"Found {len(id_to_embedding)} embeddings")
 
                         result_points = []
@@ -646,33 +640,19 @@ async def projects_rag_stats(project_id: UUID, request: Request):
     assert_logged_in(request)
     project = await get_project_and_assert_access(request, project_id)
 
-    # Connect to the project database
+    # Connect to the project database; stats come from the RAG backend's
+    # collection registry (no embedding model needed).
     async with get_project_session(project) as session:
-        from sqlalchemy import func
-        from kavalai.agents.db import RagIndex
+        from contextlib import asynccontextmanager
 
-        # Total entries
-        stmt_entries = select(func.count(RagIndex.id))
-        result_entries = await session.execute(stmt_entries)
-        total_entries = result_entries.scalar()
+        @asynccontextmanager
+        async def session_factory():
+            yield session
 
-        # Collections count
-        stmt_collections_count = select(
-            func.count(func.distinct(RagIndex.collection_name))
+        rag_service = PostgresRagService(
+            session_factory, model=None, schema=project.db_schema
         )
-        result_collections_count = await session.execute(stmt_collections_count)
-        total_collections = result_collections_count.scalar()
-
-        # Collection names
-        stmt_names = select(func.distinct(RagIndex.collection_name))
-        result_names = await session.execute(stmt_names)
-        collections = result_names.scalars().all()
-
-        return {
-            "total_entries": total_entries,
-            "total_collections": total_collections,
-            "collections": collections,
-        }
+        return await rag_service.get_stats()
 
 
 @app.get("/projects/{project_id}/rag/train-pca")
@@ -685,11 +665,17 @@ async def projects_train_pca(project_id: UUID, collection_name: str, request: Re
 
     streamer = Streamer(stream_delta=True)
 
+    rag_service = PostgresRagService(
+        lambda: get_project_session(project),
+        model=None,  # export-only: PCA training never computes embeddings
+        schema=project.db_schema,
+    )
+
     async def run_training():
         try:
             await train_pca(
                 bo_session_maker=get_backoffice_session,
-                agents_session_maker=lambda: get_project_session(project),
+                rag_service=rag_service,
                 project_name=project.name,
                 collection_name=collection_name,
                 streamer=streamer.get_value_streamer("pca_streamer"),

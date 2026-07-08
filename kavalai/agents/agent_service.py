@@ -17,19 +17,32 @@ limitations under the License.
 from typing import Optional, Dict, List, Any
 from uuid import UUID
 
-from sqlalchemy import select, asc
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from kavalai.agents.db import Agent, Session, Run, Task, ChatMessage, ModelCallStat
 from kavalai.agents.resolvers import resolve_path, find_key_recursive
 from kavalai.agents.utils import to_plain
-from kavalai.agents.utils import clean_text
+from kavalai.history import HistoryService
+from kavalai.history.sql import SqlHistoryService
 
 
 class AgentService:
-    """Provider common database operation for Agents."""
+    """Common database operations for agents.
 
-    def __init__(self, session_maker: async_sessionmaker[AsyncSession]):
+    Core entities (agents, sessions, runs) are managed directly; history data
+    (chat messages, tasks, model-call stats) is delegated to a
+    :class:`~kavalai.history.base.HistoryService` so its storage backend can
+    be swapped without touching the runtime. The default backend stores
+    history in the same database as the core tables.
+    """
+
+    def __init__(
+        self,
+        session_maker: async_sessionmaker[AsyncSession],
+        history: Optional[HistoryService] = None,
+    ):
         self.session_maker = session_maker
+        self.history = history or SqlHistoryService(session_maker)
 
     async def get_or_create_agent(
         self,
@@ -226,35 +239,24 @@ class AgentService:
         node_type: Optional[str] = None,
     ) -> Task:
         """Records a specific unit of work (Task) performed within a run."""
-        async with self.session_maker() as session:
-            task = Task(
-                agent_id=agent_id,
-                session_id=session_id,
-                run_id=run_id,
-                name=clean_text(name),
-                node_type=node_type,
-                inputs=to_plain(inputs),
-                output=to_plain(output),
-                prompt=clean_text(prompt),
-                errors=to_plain(errors),
-                duration_seconds=duration_seconds,
-            )
-            session.add(task)
-            await session.commit()
-            await session.refresh(task)
-            return task
+        return await self.history.add_task(
+            session_id=session_id,
+            run_id=run_id,
+            name=name,
+            agent_id=agent_id,
+            inputs=inputs,
+            output=output,
+            prompt=prompt,
+            errors=errors,
+            duration_seconds=duration_seconds,
+            node_type=node_type,
+        )
 
     async def add_model_call_stats(
         self, stats: ModelCallStat, agent_id: Optional[UUID] = None
     ) -> ModelCallStat:
         """Records LLM/Embedding call statistics."""
-        async with self.session_maker() as session:
-            if agent_id:
-                stats.agent_id = agent_id
-            session.add(stats)
-            await session.commit()
-            await session.refresh(stats)
-            return stats
+        return await self.history.add_model_call_stat(stats, agent_id=agent_id)
 
     async def get_history_value(self, session_id: UUID, key: str) -> Optional[Any]:
         """
@@ -297,15 +299,7 @@ class AgentService:
         Retrieves the conversation history for a session,
         ordered from oldest to newest.
         """
-        async with self.session_maker() as session:
-            stmt = (
-                select(ChatMessage)
-                .where(ChatMessage.session_id == session_id)
-                .order_by(asc(ChatMessage.created_at))
-                .limit(limit)
-            )
-            result = await session.execute(stmt)
-            return list(result.scalars().all())
+        return await self.history.get_chat_messages(session_id, limit=limit)
 
     async def add_chat_message(
         self,
@@ -316,18 +310,13 @@ class AgentService:
         run_id: Optional[UUID] = None,
     ) -> ChatMessage:
         """Helper to append messages to the chat history."""
-        async with self.session_maker() as session:
-            message = ChatMessage(
-                agent_id=agent_id,
-                session_id=session_id,
-                run_id=run_id,
-                role=role,
-                content=clean_text(content or ""),
-            )
-            session.add(message)
-            await session.commit()
-            await session.refresh(message)
-            return message
+        return await self.history.add_chat_message(
+            agent_id=agent_id,
+            session_id=session_id,
+            role=role,
+            content=content,
+            run_id=run_id,
+        )
 
     async def get_model_call_stats(
         self,
@@ -338,15 +327,6 @@ class AgentService:
         """
         Retrieves paginated model call stats, optionally filtered by call type.
         """
-        async with self.session_maker() as session:
-            stmt = (
-                select(ModelCallStat)
-                .order_by(ModelCallStat.created_at.desc())
-                .limit(limit)
-                .offset(offset)
-            )
-            if call_type:
-                stmt = stmt.where(ModelCallStat.call_type == call_type)
-
-            result = await session.execute(stmt)
-            return list(result.scalars().all())
+        return await self.history.get_model_call_stats(
+            call_type=call_type, limit=limit, offset=offset
+        )

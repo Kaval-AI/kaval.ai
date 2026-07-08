@@ -25,26 +25,15 @@ the ``alembic_version`` table lands in the target schema alongside the tables.
 from alembic import context
 from sqlalchemy.engine import Connection
 
-# Postgres-only performance indexes on rag_index that are hand-written in the
-# agents revision scripts (autogenerate can neither produce nor round-trip
-# them). Shared with the model<->migration parity tests.
-AGENTS_BACKEND_OWNED_INDEXES = (
-    "idx_rag_index_metadata",
-    "idx_rag_embedding_768",
-    "idx_rag_embedding_1024",
-    "idx_rag_embedding_1536",
-)
-
 
 def agents_include_object(obj, name, type_, reflected, compare_to):
     """Keep autogenerate away from backend-owned objects (agents set).
 
-    ``rag_*`` tables other than ``rag_index`` belong to self-provisioning RAG
-    backends; the pgvector/GIN indexes are dialect-guarded hand-written DDL.
+    All ``rag_*`` tables belong to the self-provisioning RAG backends
+    (``rag_collections`` registry + one table per collection) and are never
+    part of this migration set. Shared with the parity tests.
     """
-    if type_ == "table" and name.startswith("rag_") and name != "rag_index":
-        return False
-    if type_ == "index" and name in AGENTS_BACKEND_OWNED_INDEXES:
+    if type_ == "table" and name.startswith("rag_"):
         return False
     return True
 

@@ -12,30 +12,83 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+PostgreSQL (pgvector) backed RAG service — **self-provisioning**.
+
+This backend owns its schema entirely; no Alembic migration set covers it.
+It maintains a small registry table (``rag_collections``) plus one table per
+collection with a *typed* ``vector(N)`` column, a real HNSW index for the
+collection's exact dimension, and a GIN index on the metadata column.
+Dropping a collection is ``DROP TABLE``. The registry row carries a
+``schema_version`` used for in-code upgrades of collection tables.
+
+All SQL here is raw and therefore bypasses ``schema_translate_map`` — every
+statement qualifies the configured schema explicitly.
 """
 
-from typing import Optional, Union, Callable, AsyncContextManager
-from uuid import UUID
+import hashlib
+import json
+import re
+from datetime import datetime, timezone
+from typing import AsyncIterator, Callable, Optional, Union, AsyncContextManager
+from uuid import UUID, uuid4
 
-from sqlalchemy import delete, select, func, text
+from loguru import logger
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import aliased
 
-from kavalai.agents.db import RagIndex, Agent, db_manager
+# Several methods take a parameter named ``text`` (the query text), shadowing
+# sqlalchemy.text — use this alias inside those methods.
+sql_text = text
+
+from kavalai.agents.db import Agent, db_manager
 from kavalai.llm_clients.embeddings import make_embedding_client
 from kavalai.normalizer import Normalizer
 from kavalai.rag.base import BaseRagService, RagServiceResult
 
+#: Version of the per-collection table layout. Bump when the layout changes
+#: and register an upgrade step in ``_COLLECTION_UPGRADES``.
+RAG_COLLECTION_SCHEMA_VERSION = 1
+
+#: In-code upgrade steps for collection tables: maps *from_version* to an
+#: async callable ``(session, service, collection_info) -> None`` that brings
+#: a collection from ``from_version`` to ``from_version + 1``.
+_COLLECTION_UPGRADES: dict[int, Callable] = {}
+
+
+class CollectionInfo:
+    """Registry entry for one RAG collection."""
+
+    def __init__(
+        self,
+        name: str,
+        table_name: str,
+        model: str,
+        embedding_size: int,
+        schema_version: int,
+    ):
+        self.name = name
+        self.table_name = table_name
+        self.model = model
+        self.embedding_size = embedding_size
+        self.schema_version = schema_version
+
 
 class PostgresRagService(BaseRagService):
     """
-    PostgreSQL (pgvector) backed RAG service.
+    PostgreSQL (pgvector) backed RAG service with backend-owned DDL.
 
-    Stores embeddings in the ``rag_index`` table and answers similarity
-    queries with pgvector distance operators. Provides methods to batch index
-    text, delete items, query similarities, and compute similarity matrices
-    against indexed content.
+    Each collection lives in its own table (typed ``vector(N)`` column,
+    per-collection HNSW + GIN indexes) registered in ``rag_collections``.
+    Collections are provisioned lazily on first index (the embedding dimension
+    is taken from the first batch) or explicitly via :meth:`create_collection`.
+
+    All operations are scoped to a single collection (``"default"`` unless
+    specified) — ``collection_name`` is a logical handle in the
+    :class:`BaseRagService` interface; here it maps to a table.
     """
+
+    REGISTRY_TABLE = "rag_collections"
 
     def __init__(
         self,
@@ -43,7 +96,7 @@ class PostgresRagService(BaseRagService):
             async_sessionmaker[AsyncSession],
             Callable[[], AsyncContextManager[AsyncSession]],
         ],
-        model: str,
+        model: Optional[str] = None,
         agent: Optional[Agent] = None,
         normalizer: Optional[Normalizer] = None,
         schema: Optional[str] = None,
@@ -52,21 +105,41 @@ class PostgresRagService(BaseRagService):
         Initialize the PostgresRagService.
 
         Args:
-            session_maker (Union[async_sessionmaker[AsyncSession], Callable[[], AsyncContextManager[AsyncSession]]]):
-                Async session maker or a factory that returns an async context manager for the session.
-            model (str): The name of the embedding model to use (e.g., "openai/text-embedding-3-small").
+            session_maker: Async session maker or a factory that returns an async
+                context manager for the session.
+            model (Optional[str]): The embedding model to use. May be ``None``
+                for export/stats-only usage (anything that computes embeddings
+                will then fail).
             agent (Optional[Agent]): Optional Agent object to associate with this service.
             normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
-            schema (Optional[str]): Schema the ``rag_index`` table lives in. Used to set
-                ``search_path`` for the raw-SQL similarity queries; must match the schema
-                the ``session_maker`` targets. ``None`` uses the connection default.
+            schema (Optional[str]): Schema the RAG tables live in. All backend SQL is
+                raw and qualifies this schema explicitly. ``None`` uses the
+                connection default (Postgres: ``public``).
         """
         self.session_maker = session_maker
         self.model = model
         self.agent = agent
         self.normalizer = normalizer
         self.schema = schema
-        self.embedding_client = make_embedding_client(model)
+        self._embedding_client = None
+        self._registry_ready = False
+        self._collections: dict[str, CollectionInfo] = {}
+
+    @property
+    def embedding_client(self):
+        """Embedding client, created lazily so model-less usage works."""
+        if self._embedding_client is None:
+            if not self.model:
+                raise ValueError(
+                    "This PostgresRagService was created without an embedding "
+                    "model; indexing and querying require one."
+                )
+            self._embedding_client = make_embedding_client(self.model)
+        return self._embedding_client
+
+    @embedding_client.setter
+    def embedding_client(self, client) -> None:
+        self._embedding_client = client
 
     @classmethod
     def from_uri(
@@ -77,18 +150,7 @@ class PostgresRagService(BaseRagService):
         normalizer: Optional[Normalizer] = None,
         schema: Optional[str] = None,
     ) -> "PostgresRagService":
-        """
-        Create a PostgresRagService from a database URI.
-
-        Args:
-            uri (str): Database URI.
-            model (str): The name of the embedding model to use.
-            agent (Optional[Agent]): Optional Agent object to associate with this service.
-            normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
-
-        Returns:
-            PostgresRagService: A new instance of PostgresRagService.
-        """
+        """Create a PostgresRagService from a database URI."""
         session_maker = db_manager.get_sessionmaker(uri=uri, schema=schema)
         return cls(session_maker, model, agent, normalizer, schema=schema)
 
@@ -101,19 +163,294 @@ class PostgresRagService(BaseRagService):
         normalizer: Optional[Normalizer] = None,
         schema: Optional[str] = None,
     ) -> "PostgresRagService":
-        """
-        Create a PostgresRagService from a session maker.
-
-        Args:
-            session_maker (async_sessionmaker[AsyncSession]): Async session maker for the database.
-            model (str): The name of the embedding model to use.
-            agent (Optional[Agent]): Optional Agent object to associate with this service.
-            normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
-
-        Returns:
-            PostgresRagService: A new instance of PostgresRagService.
-        """
+        """Create a PostgresRagService from a session maker."""
         return cls(session_maker, model, agent, normalizer, schema=schema)
+
+    # ------------------------------------------------------------------
+    # Naming / SQL helpers
+    # ------------------------------------------------------------------
+
+    def _qualified(self, table_name: str) -> str:
+        """Schema-qualified, quoted table reference for raw SQL."""
+        if self.schema:
+            return f'"{self.schema}"."{table_name}"'
+        return f'"{table_name}"'
+
+    @staticmethod
+    def table_name_for_collection(collection_name: str) -> str:
+        """Deterministic, SQL-safe table name for a collection.
+
+        A sanitized slug keeps the name readable; a short hash of the exact
+        collection name guarantees uniqueness across names that sanitize to
+        the same slug.
+        """
+        slug = re.sub(r"[^a-z0-9_]+", "_", collection_name.lower()).strip("_")[:32]
+        digest = hashlib.sha1(  # nosec B324 - naming, not security
+            collection_name.encode("utf-8")
+        ).hexdigest()[:8]
+        return f"rag_c_{slug}_{digest}" if slug else f"rag_c_{digest}"
+
+    # ------------------------------------------------------------------
+    # Provisioning
+    # ------------------------------------------------------------------
+
+    async def _ensure_registry(self, session: AsyncSession) -> None:
+        """Create the pgvector extension and the registry table if needed."""
+        if self._registry_ready:
+            return
+        await session.execute(
+            text("CREATE EXTENSION IF NOT EXISTS vector SCHEMA public")
+        )
+        await session.execute(
+            text(
+                f"""
+                CREATE TABLE IF NOT EXISTS {self._qualified(self.REGISTRY_TABLE)} (
+                    name TEXT PRIMARY KEY,
+                    table_name TEXT UNIQUE NOT NULL,
+                    model TEXT NOT NULL,
+                    embedding_size INTEGER NOT NULL,
+                    schema_version INTEGER NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
+        await session.commit()
+        self._registry_ready = True
+
+    async def _load_collection(
+        self, session: AsyncSession, collection_name: str
+    ) -> Optional[CollectionInfo]:
+        """Fetch a collection's registry entry (cached), upgrading if stale."""
+        cached = self._collections.get(collection_name)
+        if cached is not None:
+            return cached
+
+        await self._ensure_registry(session)
+        row = (
+            await session.execute(
+                text(
+                    f"SELECT name, table_name, model, embedding_size, schema_version "
+                    f"FROM {self._qualified(self.REGISTRY_TABLE)} WHERE name = :name"
+                ).bindparams(name=collection_name)
+            )
+        ).first()
+        if row is None:
+            return None
+
+        info = CollectionInfo(
+            name=row.name,
+            table_name=row.table_name,
+            model=row.model,
+            embedding_size=row.embedding_size,
+            schema_version=row.schema_version,
+        )
+        await self._upgrade_collection(session, info)
+        self._collections[collection_name] = info
+        return info
+
+    async def _upgrade_collection(
+        self, session: AsyncSession, info: CollectionInfo
+    ) -> None:
+        """Bring a collection table up to ``RAG_COLLECTION_SCHEMA_VERSION``."""
+        if info.schema_version > RAG_COLLECTION_SCHEMA_VERSION:
+            raise ValueError(
+                f"Collection '{info.name}' has schema_version "
+                f"{info.schema_version}, newer than this library supports "
+                f"({RAG_COLLECTION_SCHEMA_VERSION}). Upgrade kavalai."
+            )
+        while info.schema_version < RAG_COLLECTION_SCHEMA_VERSION:
+            upgrade = _COLLECTION_UPGRADES.get(info.schema_version)
+            if upgrade is None:
+                raise ValueError(
+                    f"No upgrade step registered from collection schema_version "
+                    f"{info.schema_version} (collection '{info.name}')."
+                )
+            logger.info(
+                f"Upgrading RAG collection '{info.name}' from schema_version "
+                f"{info.schema_version} to {info.schema_version + 1}."
+            )
+            await upgrade(session, self, info)
+            info.schema_version += 1
+            await session.execute(
+                text(
+                    f"UPDATE {self._qualified(self.REGISTRY_TABLE)} "
+                    f"SET schema_version = :version WHERE name = :name"
+                ).bindparams(version=info.schema_version, name=info.name)
+            )
+            await session.commit()
+
+    async def _ensure_collection(
+        self, session: AsyncSession, collection_name: str, embedding_size: int
+    ) -> CollectionInfo:
+        """Get a collection, creating its table on first use."""
+        info = await self._load_collection(session, collection_name)
+        if info is not None:
+            if info.embedding_size != embedding_size:
+                raise ValueError(
+                    f"Collection '{collection_name}' stores "
+                    f"{info.embedding_size}-dimensional embeddings; got "
+                    f"{embedding_size}."
+                )
+            return info
+
+        if not self.model:
+            raise ValueError(
+                "This PostgresRagService was created without an embedding "
+                "model; creating collections requires one."
+            )
+
+        table_name = self.table_name_for_collection(collection_name)
+        qualified = self._qualified(table_name)
+        await session.execute(
+            text(
+                f"""
+                CREATE TABLE IF NOT EXISTS {qualified} (
+                    id UUID PRIMARY KEY,
+                    source_id TEXT NOT NULL,
+                    content TEXT,
+                    embedding public.vector({embedding_size}),
+                    metadata JSONB,
+                    created_at TIMESTAMPTZ NOT NULL,
+                    updated_at TIMESTAMPTZ NOT NULL
+                )
+                """
+            )
+        )
+        await session.execute(
+            text(
+                f'CREATE INDEX IF NOT EXISTS "ix_{table_name}_source_id" '
+                f"ON {qualified} (source_id)"
+            )
+        )
+        await session.execute(
+            text(
+                f'CREATE INDEX IF NOT EXISTS "ix_{table_name}_metadata" '
+                f"ON {qualified} USING gin (metadata)"
+            )
+        )
+        await session.execute(
+            text(
+                f'CREATE INDEX IF NOT EXISTS "ix_{table_name}_embedding" '
+                f"ON {qualified} USING hnsw (embedding public.vector_cosine_ops)"
+            )
+        )
+        await session.execute(
+            text(
+                f"INSERT INTO {self._qualified(self.REGISTRY_TABLE)} "
+                f"(name, table_name, model, embedding_size, schema_version) "
+                f"VALUES (:name, :table_name, :model, :embedding_size, :version) "
+                f"ON CONFLICT (name) DO NOTHING"
+            ).bindparams(
+                name=collection_name,
+                table_name=table_name,
+                model=self.model,
+                embedding_size=embedding_size,
+                version=RAG_COLLECTION_SCHEMA_VERSION,
+            )
+        )
+        await session.commit()
+        logger.info(
+            f"Provisioned RAG collection '{collection_name}' "
+            f"(table {table_name}, dim {embedding_size})."
+        )
+        info = CollectionInfo(
+            name=collection_name,
+            table_name=table_name,
+            model=self.model,
+            embedding_size=embedding_size,
+            schema_version=RAG_COLLECTION_SCHEMA_VERSION,
+        )
+        self._collections[collection_name] = info
+        return info
+
+    async def create_collection(
+        self, collection_name: str, embedding_size: int
+    ) -> None:
+        """Explicitly provision a collection with a known embedding dimension."""
+        async with self.session_maker() as session:
+            await self._ensure_collection(session, collection_name, embedding_size)
+
+    async def drop_collection(self, collection_name: str) -> None:
+        """Drop a collection: its table and registry entry."""
+        async with self.session_maker() as session:
+            info = await self._load_collection(session, collection_name)
+            if info is None:
+                return
+            await session.execute(
+                text(f"DROP TABLE IF EXISTS {self._qualified(info.table_name)}")
+            )
+            await session.execute(
+                text(
+                    f"DELETE FROM {self._qualified(self.REGISTRY_TABLE)} "
+                    f"WHERE name = :name"
+                ).bindparams(name=collection_name)
+            )
+            await session.commit()
+        self._collections.pop(collection_name, None)
+        logger.info(f"Dropped RAG collection '{collection_name}'.")
+
+    async def list_collections(self) -> list[dict]:
+        """List registered collections with entry counts."""
+        async with self.session_maker() as session:
+            await self._ensure_registry(session)
+            rows = (
+                await session.execute(
+                    text(
+                        f"SELECT name, table_name, model, embedding_size, "
+                        f"schema_version FROM "
+                        f"{self._qualified(self.REGISTRY_TABLE)} ORDER BY name"
+                    )
+                )
+            ).all()
+            collections = []
+            for row in rows:
+                count = (
+                    await session.execute(
+                        text(f"SELECT count(*) FROM {self._qualified(row.table_name)}")
+                    )
+                ).scalar()
+                collections.append(
+                    {
+                        "name": row.name,
+                        "model": row.model,
+                        "embedding_size": row.embedding_size,
+                        "schema_version": row.schema_version,
+                        "count": count or 0,
+                    }
+                )
+            await session.commit()
+            return collections
+
+    async def get_stats(self) -> dict:
+        """Aggregate stats across collections (for e.g. the backoffice)."""
+        collections = await self.list_collections()
+        return {
+            "total_entries": sum(c["count"] for c in collections),
+            "total_collections": len(collections),
+            "collections": [c["name"] for c in collections],
+        }
+
+    # ------------------------------------------------------------------
+    # Indexing
+    # ------------------------------------------------------------------
+
+    async def index(
+        self,
+        text: str,
+        source_metadata: Optional[dict] = None,
+        collection_name: str = "default",
+        source_id: str = "default",
+    ) -> dict:
+        """Index a single text blob with metadata. Returns the created row dict."""
+        return (
+            await self.index_batch(
+                texts=[text],
+                metadata_list=[source_metadata or {}],
+                collection_name=collection_name,
+                source_ids=[source_id],
+            )
+        )[0]
 
     async def index_batch(
         self,
@@ -121,22 +458,16 @@ class PostgresRagService(BaseRagService):
         metadata_list: list[dict],
         source_ids: Optional[list[str]] = None,
         collection_name: str = "default",
-    ) -> list[RagIndex]:
+    ) -> list[dict]:
         """
         Index multiple text items in a single batch.
 
-        Args:
-            texts (list[str]): List of text strings to index.
-            metadata_list (list[dict]): List of metadata dictionaries for each text.
-            source_ids (Optional[list[str]]): Optional list of source identifiers.
-                                              If not provided, "default" is used.
-            collection_name (str): Name of the collection to add items to. Defaults to "default".
+        The collection is provisioned on first use, taking its embedding
+        dimension from the computed embeddings.
 
         Returns:
-            list[RagIndex]: List of created RagIndex database objects.
-
-        Raises:
-            ValueError: If the lengths of texts, metadata_list, or source_ids do not match.
+            list[dict]: Created rows (id, model, collection_name, source_id,
+                content, embedding_size, rag_metadata, created_at, updated_at).
         """
         if not texts:
             return []
@@ -156,41 +487,84 @@ class PostgresRagService(BaseRagService):
             )
             session.add(stats)
 
-            rag_items = []
             dim = len(embeddings[0])
+            info = await self._ensure_collection(session, collection_name, dim)
 
+            now = datetime.now(timezone.utc)
+            rows = []
             for i, (content, meta, emb) in enumerate(
                 zip(texts, metadata_list, embeddings)
             ):
-                item_data = {
-                    "model": self.model,
-                    "collection_name": collection_name,
-                    "source_id": source_ids[i] if source_ids else "default",
-                    "content": content,
-                    "embedding_size": dim,
-                    "embedding": emb,
-                    "rag_metadata": meta,
-                }
-                rag_item = RagIndex(**item_data)
-                session.add(rag_item)
-                rag_items.append(rag_item)
+                rows.append(
+                    {
+                        "id": uuid4(),
+                        "model": info.model,
+                        "collection_name": collection_name,
+                        "source_id": source_ids[i] if source_ids else "default",
+                        "content": content,
+                        "embedding_size": dim,
+                        "embedding": list(emb),
+                        "rag_metadata": meta,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
 
+            insert_sql = text(
+                f"INSERT INTO {self._qualified(info.table_name)} "
+                f"(id, source_id, content, embedding, metadata, created_at, updated_at) "
+                f"VALUES (:id, :source_id, :content, CAST(:embedding AS vector), "
+                f"CAST(:metadata AS jsonb), :created_at, :updated_at)"
+            )
+            await session.execute(
+                insert_sql,
+                [
+                    {
+                        "id": row["id"],
+                        "source_id": row["source_id"],
+                        "content": row["content"],
+                        "embedding": str(list(emb)),
+                        "metadata": json.dumps(row["rag_metadata"]),
+                        "created_at": row["created_at"],
+                        "updated_at": row["updated_at"],
+                    }
+                    for row, emb in zip(rows, embeddings)
+                ],
+            )
             await session.commit()
-            for item in rag_items:
-                await session.refresh(item)
+            return rows
 
-            return rag_items
+    # ------------------------------------------------------------------
+    # Deletion
+    # ------------------------------------------------------------------
 
-    async def delete(self, item_id: UUID) -> None:
+    async def delete(
+        self, item_id: UUID, collection_name: Optional[str] = None
+    ) -> None:
         """
         Delete a single indexed item by its identifier.
 
         Args:
             item_id (UUID): Identifier of the indexed item to delete.
+            collection_name (Optional[str]): Collection the item belongs to.
+                If omitted, all registered collections are searched.
         """
-        stmt = delete(RagIndex).where(RagIndex.id == item_id)
         async with self.session_maker() as session:
-            await session.execute(stmt)
+            if collection_name is not None:
+                info = await self._load_collection(session, collection_name)
+                infos = [info] if info else []
+            else:
+                infos = [
+                    await self._load_collection(session, c["name"])
+                    for c in await self.list_collections()
+                ]
+            for info in infos:
+                await session.execute(
+                    text(
+                        f"DELETE FROM {self._qualified(info.table_name)} "
+                        f"WHERE id = :id"
+                    ).bindparams(id=item_id)
+                )
             await session.commit()
 
     async def delete_by_source_id(
@@ -198,49 +572,38 @@ class PostgresRagService(BaseRagService):
         collection_name: str,
         source_id: Union[str, list[str]],
     ) -> None:
-        """
-        Delete all items in a collection that match the given source identifier(s).
-
-        Args:
-            collection_name (str): The name of the collection.
-            source_id (Union[str, list[str]]): A source identifier, or a list of them.
-        """
+        """Delete all items in a collection matching the source identifier(s)."""
         source_ids = [source_id] if isinstance(source_id, str) else source_id
-        stmt = delete(RagIndex).where(
-            RagIndex.collection_name == collection_name,
-            RagIndex.source_id.in_(source_ids),
-        )
         async with self.session_maker() as session:
-            await session.execute(stmt)
+            info = await self._load_collection(session, collection_name)
+            if info is None:
+                return
+            await session.execute(
+                text(
+                    f"DELETE FROM {self._qualified(info.table_name)} "
+                    f"WHERE source_id = ANY(:source_ids)"
+                ).bindparams(source_ids=source_ids)
+            )
             await session.commit()
 
-    async def index(
-        self,
-        text: str,
-        source_metadata: Optional[dict] = None,
-        collection_name: str = "default",
-        source_id: str = "default",
-    ):
-        """
-        Index a single text blob with metadata.
+    # ------------------------------------------------------------------
+    # Querying
+    # ------------------------------------------------------------------
 
-        Args:
-            text (str): The text content to index.
-            source_metadata (Optional[dict]): Metadata to associate with the text.
-            collection_name (str): Name of the collection. Defaults to "default".
-            source_id (str): Source identifier. Defaults to "default".
-
-        Returns:
-            RagIndex: The created RagIndex database object.
-        """
-        return (
-            await self.index_batch(
-                texts=[text],
-                metadata_list=[source_metadata or {}],
-                collection_name=collection_name,
-                source_ids=[source_id],
-            )
-        )[0]
+    def _map_row(self, row, info: CollectionInfo, query_index=None) -> RagServiceResult:
+        return RagServiceResult(
+            id=row.id,
+            model=info.model,
+            collection_name=info.name,
+            source_id=row.source_id,
+            content=row.content,
+            embedding_size=info.embedding_size,
+            rag_metadata=row.metadata or {},
+            similarity=1.0 - float(row.distance) if row.distance is not None else 0.0,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            query_index=query_index,
+        )
 
     async def query(
         self,
@@ -251,39 +614,23 @@ class PostgresRagService(BaseRagService):
         keep_best: bool = False,
     ) -> list[RagServiceResult]:
         """
-        Query the indexed items for similarities to the input text.
+        Query one collection for similarities to the input text.
 
-        Args:
-            text (str): The query text.
-            top_k (int): Number of top results to return. Defaults to 5.
-            collection_name (Optional[str]): If provided, filter by collection name.
-            source_ids (Optional[list[str]]): If provided, filter by source identifiers.
-            keep_best (bool): If True, only the best result per source_id is returned.
-                             Useful when a single source is split into multiple indexed items.
-
-        Returns:
-            list[RagServiceResult]: List of results with similarity scores.
+        ``collection_name`` defaults to ``"default"`` — with table-per-collection
+        storage there is no cross-collection search; query each collection
+        explicitly if needed.
         """
-        async with self.session_maker() as session:
-            embeddings, stats = await self.embedding_client.compute_embeddings(
-                texts=[text],
-                normalizer=self.normalizer,
-            )
-            session.add(stats)
-            query_embedding = embeddings[0]
-
-            stmt = self._build_query_stmt(
-                query_embedding=query_embedding,
-                top_k=top_k,
-                collection_name=collection_name,
-                source_ids=source_ids,
-                keep_best=keep_best,
-            )
-
-            result = await session.execute(stmt)
-            rows = result.all()
-
-            return [self._map_row_to_result(row[0], row[1]) for row in rows]
+        results = await self.query_batch(
+            texts=[text],
+            top_k=top_k,
+            collection_name=collection_name,
+            source_ids=source_ids,
+            keep_best=keep_best,
+        )
+        out = results[0]
+        for item in out:
+            item.query_index = None
+        return out
 
     async def query_batch(
         self,
@@ -291,77 +638,156 @@ class PostgresRagService(BaseRagService):
         top_k: int = 5,
         collection_name: Optional[str] = None,
         source_ids: Optional[list[str]] = None,
+        keep_best: bool = False,
     ) -> list[list[RagServiceResult]]:
         """
-        Query the indexed items for similarities to multiple input texts in a single database call.
-
-        This method uses PostgreSQL CROSS JOIN LATERAL to efficiently process multiple queries
-        in a single round trip to the database, significantly improving performance for batch operations.
-
-        Args:
-            texts (list[str]): List of query texts to search for.
-            top_k (int): Number of top results to return per query. Defaults to 5.
-            collection_name (Optional[str]): If provided, filter by collection name.
-            source_ids (Optional[list[str]]): If provided, filter by source identifiers.
-
-        Returns:
-            list[list[RagServiceResult]]: A list of result lists, where each inner list contains
-                                          the top_k results for the corresponding query text.
+        Query one collection for similarities to multiple input texts in a
+        single database call (CROSS JOIN LATERAL over an unnested vector array).
         """
         if not texts:
             return []
+        collection_name = collection_name or "default"
 
         async with self.session_maker() as session:
-            # The similarity query is raw SQL, which schema_translate_map does
-            # not rewrite — point search_path at the configured schema instead.
-            if self.schema:
-                await session.execute(text(f"SET search_path TO {self.schema}, public"))
-
-            # Compute embeddings for all query texts
             embeddings, stats = await self.embedding_client.compute_embeddings(
                 texts=texts,
                 normalizer=self.normalizer,
             )
             session.add(stats)
 
-            # Build the CROSS JOIN LATERAL query
-            query = self._build_batch_query_sql(
+            info = await self._load_collection(session, collection_name)
+            if info is None:
+                await session.commit()  # persist embedding stats
+                return [[] for _ in texts]
+
+            cte_sql, params = self._build_batch_query_cte(
+                info=info,
                 embeddings=embeddings,
                 top_k=top_k,
-                collection_name=collection_name,
                 source_ids=source_ids,
+                keep_best=keep_best,
             )
-
-            # Execute the query
-            result = await session.execute(query)
+            query_sql = (
+                f"WITH {cte_sql} SELECT * FROM rag_results "
+                f"ORDER BY query_idx ASC, distance ASC"
+            )
+            result = await session.execute(sql_text(query_sql).bindparams(**params))
             rows = result.all()
+            await session.commit()
 
-            # Group results by query_index
             results_by_query: dict[int, list[RagServiceResult]] = {
                 i: [] for i in range(len(texts))
             }
-
             for row in rows:
-                rag_result = RagServiceResult(
-                    id=row.id,
-                    model=row.model,
-                    collection_name=row.collection_name,
-                    source_id=row.source_id,
-                    content=row.content,
-                    embedding_size=row.embedding_size,
-                    rag_metadata=row.metadata or {},
-                    similarity=1.0 - float(row.distance)
-                    if row.distance is not None
-                    else 0.0,
-                    created_at=row.created_at,
-                    updated_at=row.updated_at,
-                    query_index=int(row.query_idx)
-                    - 1,  # Convert 1-indexed to 0-indexed
-                )
-                results_by_query[int(row.query_idx) - 1].append(rag_result)
-
-            # Return results in order
+                idx = int(row.query_idx) - 1
+                results_by_query[idx].append(self._map_row(row, info, idx))
             return [results_by_query[i] for i in range(len(texts))]
+
+    def build_batch_query_cte(
+        self,
+        embeddings: list[list[float]],
+        top_k: int,
+        collection_name: Optional[str] = None,
+        source_filter_sql: Optional[str] = None,
+        keep_best: bool = False,
+        info: Optional[CollectionInfo] = None,
+    ) -> tuple[str, dict]:
+        """
+        Build a ``rag_results`` CTE for batch vector search, embeddable in
+        larger queries. Requires the collection to exist (pass ``info`` or a
+        ``collection_name`` previously loaded via any service call).
+        """
+        if info is None:
+            info = self._collections.get(collection_name or "default")
+        if info is None:
+            raise ValueError(
+                f"Unknown RAG collection {collection_name or 'default'!r}; "
+                f"load or create it first."
+            )
+        return self._build_batch_query_cte(
+            info=info,
+            embeddings=embeddings,
+            top_k=top_k,
+            source_filter_sql=source_filter_sql,
+            keep_best=keep_best,
+        )
+
+    def _build_batch_query_cte(
+        self,
+        info: CollectionInfo,
+        embeddings: list[list[float]],
+        top_k: int,
+        source_ids: Optional[list[str]] = None,
+        source_filter_sql: Optional[str] = None,
+        keep_best: bool = False,
+    ) -> tuple[str, dict]:
+        params: dict = {"top_k": top_k}
+        vector_parts = []
+        for i, embedding in enumerate(embeddings):
+            params[f"vector_{i}"] = str(list(embedding))
+            vector_parts.append(f"CAST(:vector_{i} AS public.vector)")
+        vector_array = f"ARRAY[{', '.join(vector_parts)}]"
+
+        where_clauses = ["TRUE"]
+        if source_ids:
+            where_clauses.append("rag_index.source_id = ANY(:source_ids)")
+            params["source_ids"] = source_ids
+        if source_filter_sql:
+            where_clauses.append(f"({source_filter_sql})")
+        where_clause = " AND ".join(where_clauses)
+
+        # For keep_best, scan a wider window than top_k so deduplication by
+        # source_id still leaves up to top_k distinct sources.
+        inner_limit = ":scan_k" if keep_best else ":top_k"
+        if keep_best:
+            params["scan_k"] = max(top_k * 10, 100)
+
+        # The collection table is aliased as ``rag_index`` so caller-supplied
+        # filters (source_filter_sql) can reference a stable name.
+        lateral = f"""
+            SELECT
+                id, source_id, content, metadata, created_at, updated_at,
+                (embedding <=> v.query_vector) as distance
+            FROM {self._qualified(info.table_name)} AS rag_index
+            WHERE {where_clause}
+            ORDER BY (embedding <=> v.query_vector) ASC
+            LIMIT {inner_limit}
+        """
+
+        if keep_best:
+            # DISTINCT ON keeps the best chunk per (query, source); the ranked
+            # outer query then caps at top_k distinct sources per query.
+            cte_sql = f"""rag_results AS (
+                SELECT * FROM (
+                    SELECT
+                        dedup.*,
+                        row_number() OVER (
+                            PARTITION BY dedup.query_idx
+                            ORDER BY dedup.distance ASC
+                        ) AS rn
+                    FROM (
+                        SELECT DISTINCT ON (v.query_idx, results.source_id)
+                            results.*,
+                            (1.0 - results.distance) as similarity,
+                            v.query_idx
+                        FROM unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
+                        CROSS JOIN LATERAL ({lateral}) AS results
+                        ORDER BY v.query_idx ASC, results.source_id, results.distance ASC
+                    ) AS dedup
+                ) AS ranked
+                WHERE ranked.rn <= :top_k
+            )"""
+        else:
+            cte_sql = f"""rag_results AS (
+                SELECT
+                    results.*,
+                    (1.0 - results.distance) as similarity,
+                    v.query_idx
+                FROM unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
+                CROSS JOIN LATERAL ({lateral}) AS results
+                ORDER BY v.query_idx ASC, results.distance ASC
+            )"""
+        return cte_sql, params
 
     async def batch_query_with_join(
         self,
@@ -375,75 +801,47 @@ class PostgresRagService(BaseRagService):
         keep_best: bool = False,
     ) -> list[list[dict]]:
         """
-        Query indexed items and join with another table in a single SQL query using CTE.
+        Query one collection and join with another table in a single SQL query.
 
-        This is useful when you need to filter RAG results by attributes in another table
-        (e.g., product category, price, availability) without passing large lists of IDs.
-
-        Args:
-            texts (list[str]): List of query texts to search for.
-            top_k (int): Number of top results to return per query. Defaults to 5.
-            collection_name (Optional[str]): If provided, filter by collection name.
-            join_table (Optional[str]): Table to join with (e.g., "products p").
-            join_condition (Optional[str]): Join condition (e.g., "p.id::text = r.source_id").
-            join_columns (Optional[list[str]]): Additional columns to select from joined table.
-            additional_where (Optional[str]): Additional WHERE clause for filtering joined table.
-            keep_best (bool): If True, only the best result per source_id is returned for each query.
-
-        Returns:
-            list[list[dict]]: A list of result lists, where each inner list contains
-                             dictionaries with RAG results + joined table columns.
-
-        Example:
-            results = await service.batch_query_with_join(
-                texts=["wireless headphones", "laptop stand"],
-                top_k=10,
-                collection_name="products",
-                join_table="products p",
-                join_condition="p.id::text = r.source_id",
-                join_columns=["p.name", "p.price", "p.category", "p.in_stock"],
-                additional_where="p.category = 'electronics' AND p.in_stock = true"
-            )
+        ``join_condition`` references the CTE alias ``r`` (e.g.
+        ``"p.id::text = r.source_id"``); ``additional_where`` filters the joined
+        table. Inside the vector-search CTE the collection table is aliased as
+        ``rag_index`` for source filters.
         """
         if not texts:
             return []
+        collection_name = collection_name or "default"
 
         async with self.session_maker() as session:
-            # Raw SQL below bypasses schema_translate_map — use search_path.
-            if self.schema:
-                await session.execute(text(f"SET search_path TO {self.schema}, public"))
-
-            # Compute embeddings
             embeddings, stats = await self.embedding_client.compute_embeddings(
                 texts=texts,
                 normalizer=self.normalizer,
             )
             session.add(stats)
 
-            # Build source filter for CTE if additional_where is provided
+            info = await self._load_collection(session, collection_name)
+            if info is None:
+                await session.commit()
+                return [[] for _ in texts]
+
             source_filter = None
             if join_table and additional_where:
-                # Extract table alias from join_table (e.g., "products p" -> "p")
-                table_parts = join_table.split()
-                _ = table_parts[-1] if len(table_parts) > 1 else table_parts[0]
                 source_filter = f"""
                     EXISTS (
                         SELECT 1 FROM {join_table}
-                        WHERE {join_condition.replace('r.source_id', 'rag_index.source_id')}
+                        WHERE {join_condition.replace("r.source_id", "rag_index.source_id")}
                         AND {additional_where}
                     )
                 """
 
-            # Build CTE
-            cte_sql, params = self.build_batch_query_cte(
+            cte_sql, params = self._build_batch_query_cte(
+                info=info,
                 embeddings=embeddings,
                 top_k=top_k,
-                collection_name=collection_name,
                 source_filter_sql=source_filter,
                 keep_best=keep_best,
             )
 
-            # Build final query
             select_columns = [
                 "r.id",
                 "r.source_id",
@@ -451,10 +849,8 @@ class PostgresRagService(BaseRagService):
                 "r.similarity",
                 "r.query_idx",
             ]
-
             if join_columns:
                 select_columns.extend(join_columns)
-
             select_clause = ", ".join(select_columns)
 
             if join_table and join_condition:
@@ -473,333 +869,27 @@ class PostgresRagService(BaseRagService):
                     ORDER BY r.query_idx, r.similarity DESC
                 """
 
-            result = await session.execute(text(query_sql).bindparams(**params))
+            result = await session.execute(sql_text(query_sql).bindparams(**params))
             rows = result.all()
+            await session.commit()
 
-            # Group results by query_index
             results_by_query: dict[int, list[dict]] = {i: [] for i in range(len(texts))}
-
             for row in rows:
                 row_dict = dict(row._mapping)
-                query_idx = row_dict.pop("query_idx") - 1  # Convert to 0-indexed
+                query_idx = row_dict.pop("query_idx") - 1
                 results_by_query[query_idx].append(row_dict)
-
             return [results_by_query[i] for i in range(len(texts))]
-
-    def build_batch_query_cte(
-        self,
-        embeddings: list[list[float]],
-        top_k: int,
-        collection_name: Optional[str] = None,
-        source_filter_sql: Optional[str] = None,
-        keep_best: bool = False,
-    ) -> tuple[str, dict]:
-        """
-        Build a CTE (Common Table Expression) for batch vector search that can be embedded in larger queries.
-
-        This allows you to join RAG results with other tables in a single query.
-
-        Args:
-            embeddings (list[list[float]]): Pre-computed embeddings for the queries.
-            top_k (int): Number of results per query.
-            collection_name (Optional[str]): Filter by collection name.
-            source_filter_sql (Optional[str]): Additional SQL WHERE clause to filter sources.
-                                               Can reference other CTEs or tables.
-                                               Example: "EXISTS (SELECT 1 FROM filtered_hotels fh WHERE fh.id = rag_index.source_id)"
-            keep_best (bool): If True, only the best result per source_id is returned for each query.
-                             Useful when a single source is split into multiple indexed items.
-
-        Returns:
-            tuple[str, dict]: (CTE SQL without WITH keyword, parameter dict)
-
-        Example:
-            embeddings, _ = await llm_client.compute_embeddings(texts)
-            cte_sql, params = service.build_batch_query_cte(embeddings, top_k=10)
-
-            query = text(f'''
-                WITH {cte_sql},
-                hotel_data AS (
-                    SELECT h.*, r.similarity, r.query_idx
-                    FROM rag_results r
-                    JOIN hotels h ON h.id = r.source_id::uuid
-                )
-                SELECT * FROM hotel_data ORDER BY query_idx, similarity DESC
-            ''').bindparams(**params)
-        """
-        params = self._build_cte_params(embeddings, collection_name)
-        vector_array = self._build_vector_array(len(embeddings))
-        where_clause = self._build_cte_where_clause(collection_name, source_filter_sql)
-
-        if keep_best:
-            # Use DISTINCT ON to get only the best result per source_id for each query
-            # Apply LIMIT inside LATERAL to control how many RAG entries we scan per keyword
-            # Then DISTINCT ON deduplicates to get one per (query_idx, source_id)
-            cte_sql = f"""rag_results AS (
-                SELECT DISTINCT ON (v.query_idx, results.source_id)
-                    results.id,
-                    results.model,
-                    results.collection_name,
-                    results.source_id,
-                    results.content,
-                    results.embedding_size,
-                    results.metadata,
-                    results.created_at,
-                    results.updated_at,
-                    results.distance,
-                    (1.0 - results.distance) as similarity,
-                    v.query_idx
-                FROM
-                    unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
-                CROSS JOIN LATERAL (
-                    SELECT
-                        id,
-                        model,
-                        collection_name,
-                        source_id,
-                        content,
-                        embedding_size,
-                        metadata,
-                        created_at,
-                        updated_at,
-                        (embedding <=> v.query_vector) as distance
-                    FROM
-                        rag_index
-                    WHERE
-                        {where_clause}
-                    ORDER BY
-                        (embedding <=> v.query_vector) ASC
-                    LIMIT :top_k
-                ) AS results
-                ORDER BY v.query_idx ASC, results.source_id, results.distance ASC
-            )"""
-        else:
-            cte_sql = f"""rag_results AS (
-                SELECT
-                    results.id,
-                    results.model,
-                    results.collection_name,
-                    results.source_id,
-                    results.content,
-                    results.embedding_size,
-                    results.metadata,
-                    results.created_at,
-                    results.updated_at,
-                    results.distance,
-                    (1.0 - results.distance) as similarity,
-                    v.query_idx
-                FROM
-                    unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
-                CROSS JOIN LATERAL (
-                    SELECT
-                        id,
-                        model,
-                        collection_name,
-                        source_id,
-                        content,
-                        embedding_size,
-                        metadata,
-                        created_at,
-                        updated_at,
-                        (embedding <=> v.query_vector) as distance
-                    FROM
-                        rag_index
-                    WHERE
-                        {where_clause}
-                    ORDER BY
-                        (embedding <=> v.query_vector) ASC
-                    LIMIT :top_k
-                ) AS results
-                ORDER BY v.query_idx ASC, results.distance ASC
-            )"""
-
-        params["top_k"] = top_k
-        return cte_sql, params
-
-    def _build_cte_params(
-        self, embeddings: list[list[float]], collection_name: Optional[str]
-    ) -> dict:
-        """Build parameter dictionary for CTE."""
-        params = {"model": self.model}
-        for i, embedding in enumerate(embeddings):
-            params[f"vector_{i}"] = str(embedding)
-        if collection_name:
-            params["collection_name"] = collection_name
-        return params
-
-    def _build_vector_array(self, num_embeddings: int) -> str:
-        """Build the ARRAY[...] expression for vector embeddings."""
-        vector_parts = [f"CAST(:vector_{i} AS vector)" for i in range(num_embeddings)]
-        return f"ARRAY[{', '.join(vector_parts)}]"
-
-    def _build_cte_where_clause(
-        self, collection_name: Optional[str], source_filter_sql: Optional[str]
-    ) -> str:
-        """Build WHERE clause for CTE."""
-        where_clauses = ["model = :model"]
-        if collection_name:
-            where_clauses.append("collection_name = :collection_name")
-        if source_filter_sql:
-            where_clauses.append(f"({source_filter_sql})")
-        return " AND ".join(where_clauses)
-
-    def _build_batch_query_sql(
-        self,
-        embeddings: list[list[float]],
-        top_k: int,
-        collection_name: Optional[str] = None,
-        source_ids: Optional[list[str]] = None,
-    ):
-        """
-        Build a CROSS JOIN LATERAL SQL query for batch vector search.
-
-        This uses the technique described in:
-        https://www.murhabazi.com/batch-vector-search-pgvector-postgresql-cross-lateral-joins
-        """
-        # Build the array of vectors for UNNEST
-        vector_array_parts = []
-        params = {}
-
-        for i, embedding in enumerate(embeddings):
-            param_name = f"vector_{i}"
-            params[param_name] = str(embedding)
-            vector_array_parts.append(f"CAST(:{param_name} AS vector)")
-
-        vector_array = f"ARRAY[{', '.join(vector_array_parts)}]"
-
-        # Build WHERE clause filters
-        where_clauses = ["model = :model"]
-        params["model"] = self.model
-
-        if collection_name:
-            where_clauses.append("collection_name = :collection_name")
-            params["collection_name"] = collection_name
-
-        if source_ids:
-            where_clauses.append("source_id = ANY(:source_ids)")
-            params["source_ids"] = source_ids
-
-        where_clause = " AND ".join(where_clauses)
-
-        # Build the complete query
-        query_sql = f"""
-        SELECT
-            results.*,
-            v.query_idx
-        FROM
-            unnest({vector_array}) WITH ORDINALITY AS v(query_vector, query_idx)
-        CROSS JOIN LATERAL (
-            SELECT
-                id,
-                model,
-                collection_name,
-                source_id,
-                content,
-                embedding_size,
-                metadata,
-                created_at,
-                updated_at,
-                (embedding <=> v.query_vector) as distance
-            FROM
-                rag_index
-            WHERE
-                {where_clause}
-            ORDER BY
-                (embedding <=> v.query_vector) ASC
-            LIMIT :top_k
-        ) AS results
-        ORDER BY v.query_idx ASC, results.distance ASC
-        """
-
-        params["top_k"] = top_k
-
-        return text(query_sql).bindparams(**params)
-
-    def _build_query_stmt(
-        self,
-        query_embedding: list[float],
-        top_k: int,
-        collection_name: Optional[str] = None,
-        source_ids: Optional[list[str]] = None,
-        keep_best: bool = False,
-    ):
-        """Build the SQLAlchemy statement for the RAG query."""
-        distance_col = RagIndex.embedding.op("<=>")(query_embedding).label("distance")
-
-        if keep_best:
-            # Use DISTINCT ON to get one row per source_id.
-            # We order by source_id, then distance, then id as a tie-breaker.
-            distinct_stmt = (
-                select(RagIndex, distance_col.label("distance"))
-                .distinct(RagIndex.source_id)
-                .where(RagIndex.model == self.model)
-            )
-
-            if collection_name:
-                distinct_stmt = distinct_stmt.where(
-                    RagIndex.collection_name == collection_name
-                )
-
-            if source_ids:
-                distinct_stmt = distinct_stmt.where(RagIndex.source_id.in_(source_ids))
-
-            distinct_stmt = distinct_stmt.order_by(
-                RagIndex.source_id, distance_col, RagIndex.id
-            )
-
-            sub = distinct_stmt.subquery()
-            # Create an alias of RagIndex mapped to the subquery
-            RagIndexAlias = aliased(RagIndex, sub)
-            stmt = select(RagIndexAlias, sub.c.distance).order_by(sub.c.distance)
-        else:
-            stmt = select(RagIndex, distance_col).where(RagIndex.model == self.model)
-
-            if collection_name:
-                stmt = stmt.where(RagIndex.collection_name == collection_name)
-
-            if source_ids:
-                stmt = stmt.where(RagIndex.source_id.in_(source_ids))
-
-            stmt = stmt.order_by(distance_col)
-
-        return stmt.limit(top_k)
-
-    def _map_row_to_result(self, item: RagIndex, distance: float) -> RagServiceResult:
-        """Map a database row to a RagServiceResult."""
-        return RagServiceResult(
-            id=item.id,
-            model=item.model,
-            collection_name=item.collection_name,
-            source_id=item.source_id,
-            content=item.content,
-            embedding_size=item.embedding_size,
-            rag_metadata=item.rag_metadata or {},
-            similarity=1.0 - float(distance) if distance is not None else 0.0,
-            created_at=item.created_at,
-            updated_at=item.updated_at,
-        )
 
     async def compute_similarity_matrix(
         self,
         texts: list[str],
         source_ids: list[str],
         method: str = "min",
+        collection_name: str = "default",
     ) -> list[list[float]]:
         """
-        Compute a similarity matrix between multiple texts and multiple source identifiers.
-
-        This method generates embeddings for all input texts and performs a single database
-        query to find similarities against all specified source_ids.
-
-        Args:
-            texts (list[str]): List of query texts (rows in the matrix).
-            source_ids (list[str]): List of source identifiers to compare against (columns in the matrix).
-            method (str): Aggregate method to use when multiple items exist for a source_id.
-                          "min" (default) uses the shortest distance (highest similarity).
-                          "avg" uses the average distance.
-
-        Returns:
-            list[list[float]]: A 2D matrix where matrix[i][j] is the similarity between
-                               texts[i] and source_ids[j].
+        Compute a similarity matrix between texts and source identifiers within
+        one collection, in a single database query.
         """
         if not texts or not source_ids:
             return [[0.0 for _ in source_ids] for _ in texts]
@@ -811,67 +901,158 @@ class PostgresRagService(BaseRagService):
             )
             session.add(stats)
 
-            stmt = self._build_similarity_matrix_stmt(embeddings, source_ids, method)
-            result = await session.execute(stmt)
-            rows = result.all()
+            info = await self._load_collection(session, collection_name)
+            if info is None:
+                await session.commit()
+                return [[0.0 for _ in source_ids] for _ in texts]
 
-            return self._process_similarity_matrix_rows(rows, texts, source_ids)
-
-    def _build_similarity_matrix_stmt(
-        self,
-        embeddings: list[list[float]],
-        source_ids: list[str],
-        method: str,
-    ):
-        """Build the SQLAlchemy statement for similarity matrix computation."""
-        agg_func = func.min if method == "min" else func.avg
-
-        # Construct a single query with one column per text embedding
-        cols = [RagIndex.source_id]
-        for i, emb in enumerate(embeddings):
-            distance_col = RagIndex.embedding.op("<=>")(emb)
-            cols.append(agg_func(distance_col).label(f"dist_{i}"))
-
-        return (
-            select(*cols)
-            .where(
-                RagIndex.model == self.model,
-                RagIndex.source_id.in_(source_ids),
+            agg = "min" if method == "min" else "avg"
+            params: dict = {"source_ids": source_ids}
+            dist_cols = []
+            for i, emb in enumerate(embeddings):
+                params[f"vector_{i}"] = str(list(emb))
+                dist_cols.append(
+                    f"{agg}(embedding <=> CAST(:vector_{i} AS public.vector)) "
+                    f"AS dist_{i}"
+                )
+            query_sql = (
+                f"SELECT source_id, {', '.join(dist_cols)} "
+                f"FROM {self._qualified(info.table_name)} "
+                f"WHERE source_id = ANY(:source_ids) GROUP BY source_id"
             )
-            .group_by(RagIndex.source_id)
-        )
+            rows = (
+                await session.execute(sql_text(query_sql).bindparams(**params))
+            ).all()
+            await session.commit()
 
-    def _process_similarity_matrix_rows(
-        self,
-        rows: list,
-        texts: list[str],
-        source_ids: list[str],
-    ) -> list[list[float]]:
-        """Process database rows into a similarity matrix."""
-        # Map source_id to index for quick lookup
-        source_id_to_idx = {sid: i for i, sid in enumerate(source_ids)}
-        # Initialize matrix with 0.0
-        matrix = [[0.0 for _ in range(len(source_ids))] for _ in range(len(texts))]
-
-        for row in rows:
-            sid = row.source_id
-            if sid in source_id_to_idx:
-                s_idx = source_id_to_idx[sid]
+            source_id_to_idx = {sid: i for i, sid in enumerate(source_ids)}
+            matrix = [[0.0 for _ in source_ids] for _ in texts]
+            for row in rows:
+                s_idx = source_id_to_idx.get(row.source_id)
+                if s_idx is None:
+                    continue
                 for t_idx in range(len(texts)):
-                    # Retrieve distance from the dynamically named column
                     dist = getattr(row, f"dist_{t_idx}")
-                    # Similarity = 1 - Distance
                     matrix[t_idx][s_idx] = (
                         1.0 - float(dist) if dist is not None else 0.0
                     )
-
-        return matrix
+            return matrix
 
     async def learn_normalizer(
         self, collection_name: Optional[str] = None
     ) -> Normalizer:
-        """Learns a normalizer from the current RAG index."""
+        """Learn a centering normalizer from one collection's embeddings."""
+        collection_name = collection_name or "default"
         async with self.session_maker() as session:
-            return await Normalizer.learn_from_rag(
-                session, model=self.model, collection_name=collection_name
-            )
+            info = await self._load_collection(session, collection_name)
+            if info is None:
+                raise Exception("No embeddings found in RAG index.")
+            mean_vector = (
+                await session.execute(
+                    sql_text(
+                        f"SELECT avg(embedding) FROM "
+                        f"{self._qualified(info.table_name)}"
+                    )
+                )
+            ).scalar()
+            if mean_vector is None:
+                raise Exception("No embeddings found in RAG index.")
+            if isinstance(mean_vector, str):
+                mean_vector = [float(x) for x in mean_vector.strip("[]").split(",")]
+            await session.commit()
+            return Normalizer(center_vector=list(mean_vector))
+
+    # ------------------------------------------------------------------
+    # Bulk export
+    # ------------------------------------------------------------------
+
+    async def iter_entries(
+        self, collection_name: str, batch_size: int = 500
+    ) -> AsyncIterator[dict]:
+        """
+        Iterate all entries of a collection (including embeddings) in stable
+        ``id`` order using keyset pagination. Yields dicts with keys:
+        id, source_id, content, embedding, rag_metadata, created_at, updated_at.
+        """
+        async with self.session_maker() as session:
+            info = await self._load_collection(session, collection_name)
+            if info is None:
+                await session.commit()
+                return
+            last_id = None
+            while True:
+                where = "WHERE id > :last_id" if last_id is not None else ""
+                query_sql = (
+                    f"SELECT id, source_id, content, embedding::text AS embedding, "
+                    f"metadata, created_at, updated_at "
+                    f"FROM {self._qualified(info.table_name)} {where} "
+                    f"ORDER BY id ASC LIMIT :batch_size"
+                )
+                stmt = sql_text(query_sql).bindparams(batch_size=batch_size)
+                if last_id is not None:
+                    stmt = stmt.bindparams(last_id=last_id)
+                rows = (await session.execute(stmt)).all()
+                if not rows:
+                    # Close the read transaction (see count_entries).
+                    await session.commit()
+                    return
+                for row in rows:
+                    embedding = row.embedding
+                    if isinstance(embedding, str):
+                        embedding = [float(x) for x in embedding.strip("[]").split(",")]
+                    yield {
+                        "id": row.id,
+                        "source_id": row.source_id,
+                        "content": row.content,
+                        "embedding": embedding,
+                        "rag_metadata": row.metadata or {},
+                        "created_at": row.created_at,
+                        "updated_at": row.updated_at,
+                    }
+                last_id = rows[-1].id
+
+    async def count_entries(self, collection_name: str) -> int:
+        """Number of entries in a collection (0 if it doesn't exist)."""
+        async with self.session_maker() as session:
+            info = await self._load_collection(session, collection_name)
+            if info is None:
+                await session.commit()
+                return 0
+            count = (
+                await session.execute(
+                    sql_text(f"SELECT count(*) FROM {self._qualified(info.table_name)}")
+                )
+            ).scalar() or 0
+            # Close the read transaction: shared-session factories (e.g. the
+            # backoffice) would otherwise pin a pooled connection.
+            await session.commit()
+            return count
+
+    async def get_embeddings_by_ids(
+        self, collection_name: str, ids: list[UUID]
+    ) -> dict[UUID, list[float]]:
+        """Fetch embeddings for specific entry ids within a collection."""
+        if not ids:
+            return {}
+        async with self.session_maker() as session:
+            info = await self._load_collection(session, collection_name)
+            if info is None:
+                await session.commit()
+                return {}
+            rows = (
+                await session.execute(
+                    sql_text(
+                        f"SELECT id, embedding::text AS embedding "
+                        f"FROM {self._qualified(info.table_name)} "
+                        f"WHERE id = ANY(:ids)"
+                    ).bindparams(ids=ids)
+                )
+            ).all()
+            out = {}
+            for row in rows:
+                embedding = row.embedding
+                if isinstance(embedding, str):
+                    embedding = [float(x) for x in embedding.strip("[]").split(",")]
+                out[row.id] = embedding
+            await session.commit()
+            return out

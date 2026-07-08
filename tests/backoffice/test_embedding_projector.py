@@ -16,57 +16,57 @@ limitations under the License.
 
 import os
 import csv
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 import numpy as np
-from sqlalchemy.ext.asyncio import AsyncSession
 from sklearn.decomposition import IncrementalPCA
-from kavalai.agents.db import RagIndex
+
+from kavalai.agents.db import ModelCallStat
 from kavalai.backoffice.embedding_projector import download_rag_index, compute_pca
 from kavalai.llm_clients.streamer import Streamer
+from kavalai.rag import PostgresRagService
+
+
+def make_seeded_rag_service(session_maker, schema, embeddings_by_text):
+    """RAG service with a mocked embedding client (storage is backend-owned)."""
+    service = PostgresRagService(
+        session_maker=session_maker, model="test/embedding", schema=schema
+    )
+
+    async def fake_compute_embeddings(texts, normalizer=None):
+        stats = ModelCallStat(call_type="embedding", model="test/embedding")
+        return [embeddings_by_text[t] for t in texts], stats
+
+    client = MagicMock()
+    client.compute_embeddings = AsyncMock(side_effect=fake_compute_embeddings)
+    service.embedding_client = client
+    return service
 
 
 @pytest.mark.asyncio
-async def test_download_rag_index(
-    agents_db: AsyncSession, agents_session_maker, tmp_path
-):
-    # Setup: Add some items to the RAG index
+async def test_download_rag_index(agents_db: object, agents_session_maker, tmp_path):
     collection = "test_collection"
-    items = [
-        RagIndex(
-            model="test_model",
-            collection_name=collection,
-            source_id="label1",
-            content="content1",
-            embedding_size=3,
-            embedding=[1.0, 0.0, 0.0],
-        ),
-        RagIndex(
-            model="test_model",
-            collection_name=collection,
-            source_id="label2",
-            content="content2",
-            embedding_size=3,
-            embedding=[0.0, 1.0, 0.0],
-        ),
-        RagIndex(
-            model="test_model",
-            collection_name=collection,
-            source_id="label3",
-            content="content3",
-            embedding_size=3,
-            embedding=[0.0, 0.0, 1.0],
-        ),
-    ]
-    agents_db.add_all(items)
-    await agents_db.commit()
+    embeddings_by_text = {
+        "content1": [1.0, 0.0, 0.0],
+        "content2": [0.0, 1.0, 0.0],
+        "content3": [0.0, 0.0, 1.0],
+    }
+    service = make_seeded_rag_service(
+        agents_session_maker, "test_agents", embeddings_by_text
+    )
+    await service.index_batch(
+        texts=list(embeddings_by_text.keys()),
+        metadata_list=[{}] * 3,
+        source_ids=["label1", "label2", "label3"],
+        collection_name=collection,
+    )
 
     csv_path = tmp_path / "rag_index.csv"
     streamer = Streamer(stream_delta=True).get_value_streamer("test")
 
     # Execute
-    await download_rag_index(
-        agents_session_maker, collection, str(csv_path), streamer=streamer
-    )
+    await download_rag_index(service, collection, str(csv_path), streamer=streamer)
 
     # Verify
     assert os.path.exists(csv_path)
@@ -74,9 +74,11 @@ async def test_download_rag_index(
         reader = csv.reader(f)
         rows = list(reader)
         assert len(rows) == 3
-        # Check first row
-        assert rows[0][0] == "content1"
-        assert [float(x) for x in rows[0][1:]] == [1.0, 0.0, 0.0]
+        # Export order follows entry ids (random UUIDs) — compare as a set.
+        by_label = {row[0]: [float(x) for x in row[1:]] for row in rows}
+        assert by_label == embeddings_by_text
+
+    await service.drop_collection(collection)
 
 
 @pytest.mark.asyncio

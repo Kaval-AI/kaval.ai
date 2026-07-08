@@ -3,7 +3,6 @@ import pytest
 import math
 import numpy as np
 from kavalai.normalizer import Normalizer
-from kavalai.agents.db import RagIndex
 from kavalai.rag import PostgresRagService
 
 
@@ -108,77 +107,46 @@ def test_yaml_save_load(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_learn_from_rag(agents_db):
-    # Add some data to RagIndex
-    model = "openai/test-model"
-    collection = "test-collection"
-
-    embeddings = [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]
-
-    for i, emb in enumerate(embeddings):
-        idx = RagIndex(
-            model=model,
-            collection_name=collection,
-            source_id=f"src_{i}",
-            embedding=emb,
-            embedding_size=2,
-        )
-        agents_db.add(idx)
-
-    await agents_db.commit()
-
-    # Learn from RAG
-    normalizer = await Normalizer.learn_from_rag(
-        agents_db, model=model, collection_name=collection
-    )
-
-    # Mean should be [ (1+3+5)/3, (2+4+6)/3 ] = [3.0, 4.0]
-    assert np.allclose(normalizer.center_vector, [3.0, 4.0])
-
-    # Test centering with learned vector
-    test_emb = [[3.0, 4.0], [0.0, 0.0]]
-    centered = normalizer.center(np.array(test_emb)).tolist()
-    assert centered[0] == [0.0, 0.0]
-    assert centered[1] == [-3.0, -4.0]
-
-
-@pytest.mark.asyncio
-async def test_learn_from_rag_empty(agents_db):
-    with pytest.raises(Exception, match="No embeddings found in RAG index."):
-        await Normalizer.learn_from_rag(agents_db, model="non-existent/model")
-
-
-@pytest.mark.asyncio
 async def test_rag_service_learn_normalizer(agents_db):
-    model = "openai/test-model"
-    # We need to mock compute_embeddings or ensure it's not called if we don't want to hit real API.
-    # But for this test, we can just manually insert into RagIndex.
+    """learn_normalizer computes the centering vector from stored embeddings.
 
-    embeddings = [[1.0, 1.0], [3.0, 3.0]]
-    for i, emb in enumerate(embeddings):
-        idx = RagIndex(
-            model=model,
-            collection_name="test",
-            source_id=f"s{i}",
-            embedding=emb,
-            embedding_size=2,
-        )
-        agents_db.add(idx)
-    await agents_db.commit()
-
+    Storage is backend-owned: seed via the service with a mocked embedding
+    client, then learn from the collection.
+    """
     from contextlib import asynccontextmanager
+    from unittest.mock import AsyncMock, MagicMock
+
+    from kavalai.agents.db import ModelCallStat
+
+    model = "openai/test-model"
 
     @asynccontextmanager
     async def session_factory():
         yield agents_db
 
-    from unittest.mock import patch
+    service = PostgresRagService(
+        session_maker=session_factory, model=model, schema="test_agents"
+    )
 
-    with patch.dict(os.environ, {"OPENAI_API_KEY": "fake"}):
-        rag_service = PostgresRagService(session_maker=session_factory, model=model)
-    normalizer = await rag_service.learn_normalizer(collection_name="test")
+    async def fake_compute_embeddings(texts, normalizer=None):
+        stats = ModelCallStat(call_type="embedding", model=model)
+        return [[1.0, 1.0], [3.0, 3.0]][: len(texts)], stats
 
+    client = MagicMock()
+    client.compute_embeddings = AsyncMock(side_effect=fake_compute_embeddings)
+    service.embedding_client = client
+
+    await service.index_batch(
+        texts=["a", "b"], metadata_list=[{}, {}], collection_name="test"
+    )
+
+    normalizer = await service.learn_normalizer(collection_name="test")
     assert np.allclose(normalizer.center_vector, [2.0, 2.0])
+
+    with pytest.raises(Exception, match="No embeddings found"):
+        await service.learn_normalizer(collection_name="does-not-exist")
+
+    await service.drop_collection("test")
 
 
 @pytest.fixture

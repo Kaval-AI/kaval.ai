@@ -334,6 +334,7 @@ async def test_inherited_compute_similarity_matrix(service_factory):
     matrix = await service.compute_similarity_matrix(
         texts=["apple", "banana"],
         source_ids=["sid_apple", "sid_banana", "sid_missing"],
+        collection_name="fruits",
     )
 
     assert len(matrix) == 2

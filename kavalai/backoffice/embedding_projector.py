@@ -20,69 +20,55 @@ import base64
 import json
 import tempfile
 import os
-from typing import Callable, AsyncContextManager, Optional
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
+from sqlalchemy import select
 from sklearn.decomposition import IncrementalPCA
 import numpy as np
 from loguru import logger
 
-from kavalai.agents.db import RagIndex
 from kavalai.backoffice.db import Project, ProjectCache
 from kavalai.llm_clients.streamer import ValueStreamer
+from kavalai.rag.base import BaseRagService
 
 
 async def download_rag_index(
-    session_maker: Callable[[], AsyncContextManager[AsyncSession]],
+    rag_service: BaseRagService,
     collection_name: str,
     output_csv_path: str,
     streamer: Optional[ValueStreamer] = None,
 ):
     """
-    Downloads rag index to specified CSV file using a streaming cursor.
-    The first column is label (source_id), the next columns represent the embeddings.
+    Downloads a RAG collection to the specified CSV file via the service's
+    bulk-export API. The first column is the label (content, falling back to
+    source_id); the remaining columns are the embedding components.
 
     Args:
-        session_maker: A callable that returns an async session context manager.
+        rag_service: RAG service to export from (storage is backend-owned).
         collection_name: The name of the collection to download.
         output_csv_path: The path where the CSV file will be saved.
         streamer: Optional streamer for progress reporting.
     """
-    async with session_maker() as session:
-        # Get total count
-        count_stmt = (
-            select(func.count())
-            .select_from(RagIndex)
-            .where(RagIndex.collection_name == collection_name)
-        )
-        total_count = await session.scalar(count_stmt) or 0
+    total_count = await rag_service.count_entries(collection_name)
 
-        stmt = (
-            select(RagIndex)
-            .where(RagIndex.collection_name == collection_name)
-            .execution_options(yield_per=100)
-        )
-        result = await session.stream_scalars(stmt)
+    with open(output_csv_path, "w", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        count = 0
+        async for item in rag_service.iter_entries(collection_name):
+            if item["embedding"]:
+                # Use content as label, fallback to source_id if content is empty
+                label = item["content"] or item["source_id"]
+                row = [label] + list(item["embedding"])
+                writer.writerow(row)
+                count += 1
+                if count % 100 == 0:
+                    msg = f"Downloaded {count}/{total_count} items..."
+                    if streamer:
+                        await streamer.stream_partial(msg)
 
-        with open(output_csv_path, "w", newline="", encoding="utf-8") as csvfile:
-            writer = csv.writer(csvfile)
-            count = 0
-            async for item in result:
-                if item.embedding:
-                    # Use content as label, fallback to source_id if content is empty
-                    label = item.content or item.source_id
-                    row = [label] + list(item.embedding)
-                    writer.writerow(row)
-                    count += 1
-                    if count % 100 == 0:
-                        msg = f"Downloaded {count}/{total_count} items..."
-                        if streamer:
-                            await streamer.stream_partial(msg)
-
-            msg = f"Finished downloading {count}/{total_count} items."
-            logger.info(msg)
-            if streamer:
-                await streamer.stream_partial(msg)
+        msg = f"Finished downloading {count}/{total_count} items."
+        logger.info(msg)
+        if streamer:
+            await streamer.stream_partial(msg)
 
 
 async def compute_pca(
@@ -145,8 +131,8 @@ async def compute_pca(
 
 
 async def train_pca(
-    bo_session_maker: Callable[[], AsyncContextManager[AsyncSession]],
-    agents_session_maker: Callable[[], AsyncContextManager[AsyncSession]],
+    bo_session_maker,
+    rag_service: BaseRagService,
     project_name: str,
     collection_name: str,
     streamer: Optional[ValueStreamer] = None,
@@ -156,9 +142,9 @@ async def train_pca(
 
     Args:
         bo_session_maker: Callable returning an async backoffice session.
-        agents_session_maker: Callable returning an async agents session.
+        rag_service: RAG service holding the collection (storage backend-owned).
         project_name: Name of the project.
-        collection_name: Name of the collection in RagIndex.
+        collection_name: Name of the RAG collection.
         streamer: Optional streamer for progress reporting.
     """
 
@@ -184,7 +170,7 @@ async def train_pca(
         if streamer:
             await streamer.stream_partial("Downloading embeddings...")
         await download_rag_index(
-            agents_session_maker,
+            rag_service,
             collection_name,
             output_csv_path=tmp_csv_path,
             streamer=streamer,

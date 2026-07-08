@@ -31,12 +31,12 @@ async def test_rag_service_indexing(
         texts=texts, metadata_list=source_metadata, collection_name="test_coll"
     )
     assert len(items) == 2
-    assert items[0].collection_name == "test_coll"
-    assert items[0].content == "hello"
-    assert len(items[0].embedding) == 1536
-    assert items[0].rag_metadata == {"id": 1}
-    assert items[1].content == "world"
-    assert len(items[1].embedding) == 1536
+    assert items[0]["collection_name"] == "test_coll"
+    assert items[0]["content"] == "hello"
+    assert len(items[0]["embedding"]) == 1536
+    assert items[0]["rag_metadata"] == {"id": 1}
+    assert items[1]["content"] == "world"
+    assert len(items[1]["embedding"]) == 1536
 
     result = await service.query("hello", top_k=1, collection_name="test_coll")
     assert len(result) == 1
@@ -152,6 +152,19 @@ async def test_rag_service_with_normalizer():
         service = PostgresRagService(
             session_maker=session_factory, model=model, normalizer=normalizer
         )
+        # Seed the collection registry cache: these tests only verify that the
+        # normalizer is forwarded to compute_embeddings, not provisioning.
+        from kavalai.rag.postgres import CollectionInfo
+
+        service._registry_ready = True
+        for name in ("test_coll", "default"):
+            service._collections[name] = CollectionInfo(
+                name=name,
+                table_name=f"rag_c_{name}",
+                model=model,
+                embedding_size=3,
+                schema_version=1,
+            )
 
         assert service.normalizer == normalizer
 
@@ -174,7 +187,9 @@ async def test_rag_service_with_normalizer():
 
         # 3. Test compute_similarity_matrix
         mock_llm_client.compute_embeddings.reset_mock()
-        await service.compute_similarity_matrix(texts=["t1"], source_ids=["s1"])
+        await service.compute_similarity_matrix(
+            texts=["t1"], source_ids=["s1"], collection_name="default"
+        )
 
         mock_llm_client.compute_embeddings.assert_called_with(
             texts=["t1"], normalizer=normalizer
@@ -202,6 +217,16 @@ async def test_rag_service_without_normalizer():
             yield mock_session
 
         service = PostgresRagService(session_maker=session_factory, model=model)
+        from kavalai.rag.postgres import CollectionInfo
+
+        service._registry_ready = True
+        service._collections["default"] = CollectionInfo(
+            name="default",
+            table_name="rag_c_default",
+            model=model,
+            embedding_size=3,
+            schema_version=1,
+        )
 
         assert service.normalizer is None
 
@@ -384,7 +409,10 @@ async def test_compute_similarity_matrix(
 
     # Test "min" method (shortest distance = max similarity)
     matrix_min = await service.compute_similarity_matrix(
-        texts=queries, source_ids=target_source_ids, method="min"
+        texts=queries,
+        source_ids=target_source_ids,
+        method="min",
+        collection_name="matrix_test",
     )
 
     assert len(matrix_min) == 2  # 2 queries
@@ -402,7 +430,10 @@ async def test_compute_similarity_matrix(
 
     # Test "avg" method
     matrix_avg = await service.compute_similarity_matrix(
-        texts=queries, source_ids=target_source_ids, method="avg"
+        texts=queries,
+        source_ids=target_source_ids,
+        method="avg",
+        collection_name="matrix_test",
     )
     assert len(matrix_avg) == 2
     assert len(matrix_avg[0]) == 4
@@ -708,6 +739,9 @@ async def test_build_batch_query_cte(
         [0.2] * 1536,  # Query 2
     ]
 
+    # The CTE builder requires a provisioned collection (table-per-collection).
+    await service.create_collection("test", embedding_size=1536)
+
     # Test 1: Basic CTE without filters
     cte_sql, params = service.build_batch_query_cte(
         embeddings=embeddings, top_k=5, collection_name="test"
@@ -717,8 +751,7 @@ async def test_build_batch_query_cte(
     assert "unnest" in cte_sql.lower()
     assert "CROSS JOIN LATERAL" in cte_sql
     assert "WITH ORDINALITY" in cte_sql
-    assert params["model"] == embedding_model
-    assert params["collection_name"] == "test"
+    assert "rag_c_test" in cte_sql  # collection table, aliased as rag_index
     assert params["top_k"] == 5
     assert "vector_0" in params
     assert "vector_1" in params
@@ -889,9 +922,9 @@ async def test_rag_service_index_batch_edge_cases(
     item = await service.index(
         text="test single", source_metadata={"key": "val"}, collection_name="single"
     )
-    assert item.content == "test single"
-    assert item.rag_metadata == {"key": "val"}
-    assert item.collection_name == "single"
+    assert item["content"] == "test single"
+    assert item["rag_metadata"] == {"key": "val"}
+    assert item["collection_name"] == "single"
 
 
 @pytest.mark.asyncio
@@ -979,11 +1012,11 @@ async def test_rag_service_delete_by_id(
         source_ids=["sid1", "sid2"],
     )
 
-    await service.delete(items[0].id)
+    await service.delete(items[0]["id"])
 
     results = await service.query("item", top_k=10, collection_name=collection)
     assert len(results) == 1
-    assert results[0].id == items[1].id
+    assert results[0].id == items[1]["id"]
 
 
 @pytest.mark.asyncio
@@ -1008,3 +1041,163 @@ async def test_rag_service_delete_by_source_id_single(
     results = await service.query("doc", top_k=10, collection_name=collection)
     assert len(results) == 1
     assert results[0].source_id == "sid_b"
+
+
+# --- self-provisioning backend (M2) ------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_collection_provisioning_and_drop(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Indexing provisions a typed table + registry row; drop removes both."""
+    from sqlalchemy import create_engine, inspect
+
+    from kavalai.migrate_db import ensure_sync_scheme
+    from kavalai.rag.postgres import PostgresRagService as Svc
+
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
+    collection = "provision_test"
+    await service.index_batch(
+        texts=["a", "b"], metadata_list=[{}, {}], collection_name=collection
+    )
+
+    table_name = Svc.table_name_for_collection(collection)
+    engine = create_engine(ensure_sync_scheme(agents_db_config["uri"]))
+    insp = inspect(engine)
+    tables = insp.get_table_names(schema=agents_db_config["schema"])
+    assert table_name in tables
+    assert "rag_collections" in tables
+    index_names = {
+        i["name"]
+        for i in insp.get_indexes(table_name, schema=agents_db_config["schema"])
+    }
+    assert f"ix_{table_name}_embedding" in index_names
+    assert f"ix_{table_name}_metadata" in index_names
+
+    collections = await service.list_collections()
+    entry = next(c for c in collections if c["name"] == collection)
+    assert entry["model"] == embedding_model
+    assert entry["embedding_size"] == 1536
+    assert entry["count"] == 2
+
+    stats = await service.get_stats()
+    assert collection in stats["collections"]
+    assert stats["total_entries"] >= 2
+
+    await service.drop_collection(collection)
+    insp = inspect(engine)
+    assert table_name not in insp.get_table_names(schema=agents_db_config["schema"])
+    assert await service.count_entries(collection) == 0
+    engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_collection_dim_mismatch(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
+    await service.create_collection("dim_test", embedding_size=3)
+    with pytest.raises(ValueError, match="3-dimensional"):
+        await service.index_batch(
+            texts=["a"], metadata_list=[{}], collection_name="dim_test"
+        )
+    await service.drop_collection("dim_test")
+
+
+@pytest.mark.asyncio
+async def test_collection_schema_version_upgrade(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    """Registry schema_version drives in-code upgrades of collection tables."""
+    import kavalai.rag.postgres as pg_mod
+
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
+    collection = "upgrade_test"
+    await service.create_collection(collection, embedding_size=3)
+
+    schema = agents_db_config["schema"]
+    session_maker = db_manager.get_sessionmaker(
+        uri=agents_db_config["uri"], schema=schema
+    )
+    async with session_maker() as session:
+        await session.execute(
+            text(
+                f'UPDATE "{schema}".rag_collections SET schema_version = 0 '
+                f"WHERE name = :name"
+            ).bindparams(name=collection)
+        )
+        await session.commit()
+
+    upgraded = []
+
+    async def fake_upgrade(session, svc, info):
+        upgraded.append(info.name)
+
+    fresh = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=schema
+    )
+    original = dict(pg_mod._COLLECTION_UPGRADES)
+    pg_mod._COLLECTION_UPGRADES[0] = fake_upgrade
+    try:
+        assert await fresh.count_entries(collection) == 0  # triggers load+upgrade
+    finally:
+        pg_mod._COLLECTION_UPGRADES.clear()
+        pg_mod._COLLECTION_UPGRADES.update(original)
+
+    assert upgraded == [collection]
+    collections = await fresh.list_collections()
+    entry = next(c for c in collections if c["name"] == collection)
+    assert entry["schema_version"] == pg_mod.RAG_COLLECTION_SCHEMA_VERSION
+
+    # A version newer than the library supports is refused.
+    async with session_maker() as session:
+        await session.execute(
+            text(
+                f'UPDATE "{schema}".rag_collections SET schema_version = 99 '
+                f"WHERE name = :name"
+            ).bindparams(name=collection)
+        )
+        await session.commit()
+    newer = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=schema
+    )
+    with pytest.raises(ValueError, match="newer than this library"):
+        await newer.count_entries(collection)
+
+    await service.drop_collection(collection)
+
+
+@pytest.mark.asyncio
+async def test_iter_entries_and_embeddings_by_ids(
+    agents_db_config, migrated_agents_db, embedding_model
+):
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
+    collection = "export_test"
+    items = await service.index_batch(
+        texts=["one", "two", "three"],
+        metadata_list=[{"n": 1}, {"n": 2}, {"n": 3}],
+        source_ids=["s1", "s2", "s3"],
+        collection_name=collection,
+    )
+
+    exported = [e async for e in service.iter_entries(collection, batch_size=2)]
+    assert len(exported) == 3
+    assert {e["source_id"] for e in exported} == {"s1", "s2", "s3"}
+    assert all(len(e["embedding"]) == 1536 for e in exported)
+    assert all(isinstance(e["rag_metadata"], dict) for e in exported)
+
+    ids = [items[0]["id"], items[2]["id"]]
+    by_id = await service.get_embeddings_by_ids(collection, ids)
+    assert set(by_id.keys()) == set(ids)
+    assert all(len(v) == 1536 for v in by_id.values())
+
+    await service.drop_collection(collection)

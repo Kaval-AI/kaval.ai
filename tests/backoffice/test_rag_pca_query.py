@@ -112,21 +112,11 @@ async def test_projects_rag_query_with_pca(backoffice_db, agents_db, monkeypatch
             return_value=([np.random.rand(3).tolist()], None)
         )
 
-        # Mock the embedding fetch for results
-        from kavalai.agents.db import RagIndex
-
-        _ = RagIndex(id=mock_rag_result.id, embedding=[0.1, 0.2, 0.3])
-
-        # When session.execute is called for embeddings
-        mock_result_obj = MagicMock()
-        mock_result_obj.all.return_value = [(mock_rag_result.id, [0.1, 0.2, 0.3])]
-
-        # We need to patch the session.execute call inside server.py
-        # But server.py uses the session passed from the dependency.
-        # In our case it's MockSessionMaker(agents_db).session which is agents_db.
-
-        # agents_db is an AsyncSession, we need to mock its execute method
-        agents_db.execute = AsyncMock(return_value=mock_result_obj)
+        # The endpoint fetches result embeddings through the service
+        # (storage is backend-owned).
+        mock_instance.get_embeddings_by_ids = AsyncMock(
+            return_value={mock_rag_result.id: [0.1, 0.2, 0.3]}
+        )
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

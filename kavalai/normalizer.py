@@ -19,10 +19,7 @@ import numpy as np
 import yaml
 from typing import List, Optional, Union
 
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
-from kavalai.agents.db import RagIndex
 
 
 class Normalizer:
@@ -119,28 +116,8 @@ class Normalizer:
         with open(path, "r") as f:
             return cls.from_yaml(f.read())
 
-    @classmethod
-    async def learn_from_rag(
-        cls,
-        session: AsyncSession,
-        model: str,
-        collection_name: Optional[str] = None,
-    ) -> "Normalizer":
-        """Learns the centering vector (mean) from the RAG index."""
-        stmt = select(func.avg(RagIndex.embedding)).where(RagIndex.model == model)
-        if collection_name:
-            stmt = stmt.where(RagIndex.collection_name == collection_name)
-
-        result = await session.execute(stmt)
-        mean_vector = result.scalar()
-
-        if mean_vector is None:
-            raise Exception("No embeddings found in RAG index.")
-
-        if isinstance(mean_vector, str):
-            mean_vector = [float(x) for x in mean_vector.strip("[]").split(",")]
-
-        return cls(center_vector=mean_vector)
+    # NOTE: centering-vector learning from stored embeddings moved to the RAG
+    # backends (``BaseRagService.learn_normalizer``) — storage is backend-owned.
 
 
 _default_normalizer = None

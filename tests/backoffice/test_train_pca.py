@@ -17,14 +17,45 @@ limitations under the License.
 import base64
 import json
 import pickle
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavalai.agents.db import RagIndex
+from kavalai.agents.db import ModelCallStat
 from kavalai.backoffice.db import Project, ProjectCache
 from kavalai.backoffice.embedding_projector import train_pca
 from kavalai.llm_clients.streamer import Streamer
+from kavalai.rag import PostgresRagService
+
+
+def make_seeded_rag_service(session_maker, schema, embeddings_by_text):
+    """RAG service with a mocked embedding client (storage is backend-owned)."""
+    service = PostgresRagService(
+        session_maker=session_maker, model="test/embedding", schema=schema
+    )
+
+    async def fake_compute_embeddings(texts, normalizer=None):
+        stats = ModelCallStat(call_type="embedding", model="test/embedding")
+        return [embeddings_by_text[t] for t in texts], stats
+
+    client = MagicMock()
+    client.compute_embeddings = AsyncMock(side_effect=fake_compute_embeddings)
+    service.embedding_client = client
+    return service
+
+
+async def seed_collection(session_maker, collection: str, n: int = 10):
+    embeddings_by_text = {f"content{i}": [float(i), 1.0, 0.5] for i in range(n)}
+    service = make_seeded_rag_service(session_maker, "test_agents", embeddings_by_text)
+    await service.index_batch(
+        texts=list(embeddings_by_text.keys()),
+        metadata_list=[{}] * n,
+        source_ids=[f"label{i}" for i in range(n)],
+        collection_name=collection,
+    )
+    return service
 
 
 @pytest.mark.asyncio
@@ -41,31 +72,13 @@ async def test_train_pca(
     await backoffice_db.commit()
     await backoffice_db.refresh(project)
 
-    # Setup: Add embeddings to agents DB
+    # Setup: seed embeddings through the RAG service (storage backend-owned)
     collection = "test_collection"
-    items = [
-        RagIndex(
-            model="test_model",
-            collection_name=collection,
-            source_id=f"label{i}",
-            content=f"content{i}",
-            embedding_size=3,
-            embedding=[float(i), 1.0, 0.5],
-        )
-        for i in range(10)
-    ]
-    agents_db.add_all(items)
-    await agents_db.commit()
+    rag_service = await seed_collection(agents_session_maker, collection)
 
     # Setup: Streamer
     streamer = Streamer(stream_delta=True)
     value_streamer = streamer.get_value_streamer("pca_streamer")
-
-    # Need session makers for the function
-    # backoffice_db is a session, but train_pca expects a session_maker
-    # We can create a mock session maker that returns the existing session
-    # However, train_pca uses 'async with session_maker() as session:'
-    # So we need something that behaves like that.
 
     class MockSessionMaker:
         def __init__(self, session):
@@ -81,12 +94,11 @@ async def test_train_pca(
             pass
 
     bo_sm = MockSessionMaker(backoffice_db)
-    agents_sm = agents_session_maker  # This is already a sessionmaker
 
     # Execute
     await train_pca(
         bo_session_maker=bo_sm,
-        agents_session_maker=agents_sm,
+        rag_service=rag_service,
         project_name=project_name,
         collection_name=collection,
         streamer=value_streamer,
@@ -134,6 +146,8 @@ async def test_train_pca(
     assert types[-1] == "complete"
     assert messages[-2] == "PCA training completed successfully."
 
+    await rag_service.drop_collection(collection)
+
 
 @pytest.mark.asyncio
 async def test_train_pca_project_not_found(
@@ -155,7 +169,7 @@ async def test_train_pca_project_not_found(
     with pytest.raises(ValueError, match="Project 'non_existent' not found"):
         await train_pca(
             bo_session_maker=MockSessionMaker(backoffice_db),
-            agents_session_maker=agents_session_maker,
+            rag_service=MagicMock(),  # never reached: project lookup fails first
             project_name="non_existent",
             collection_name="test",
         )
@@ -173,26 +187,15 @@ async def test_train_pca_endpoint(
     from kavalai.backoffice.server import app
     from httpx import AsyncClient, ASGITransport
 
-    # Setup project and data
-    project = Project(name="test_project_endpoint")
+    # Setup project and data. db_schema must match where the RAG collections
+    # live — the endpoint's RAG service uses it for its raw SQL.
+    project = Project(name="test_project_endpoint", db_schema="test_agents")
     backoffice_db.add(project)
     await backoffice_db.commit()
     await backoffice_db.refresh(project)
 
     collection = "test_collection_endpoint"
-    items = [
-        RagIndex(
-            model="test_model",
-            collection_name=collection,
-            source_id=f"label{i}",
-            content=f"content{i}",
-            embedding_size=3,
-            embedding=[float(i), 1.0, 0.5],
-        )
-        for i in range(10)
-    ]
-    agents_db.add_all(items)
-    await agents_db.commit()
+    rag_service = await seed_collection(agents_session_maker, collection)
 
     # Mock authentication and project access
     monkeypatch.setattr(server, "assert_logged_in", lambda r: None)
@@ -253,3 +256,5 @@ async def test_train_pca_endpoint(
     result = await backoffice_db.execute(stmt)
     cache_entries = result.scalars().all()
     assert len(cache_entries) == 2
+
+    await rag_service.drop_collection(collection)

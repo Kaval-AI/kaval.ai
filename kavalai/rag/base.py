@@ -16,7 +16,7 @@ limitations under the License.
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional, Union
+from typing import AsyncIterator, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -171,12 +171,17 @@ class BaseRagService(ABC):
         """
 
     @abstractmethod
-    async def delete(self, item_id: UUID) -> None:
+    async def delete(
+        self, item_id: UUID, collection_name: Optional[str] = None
+    ) -> None:
         """
         Delete a single indexed item by its identifier.
 
         Args:
             item_id (UUID): Identifier of the indexed item to delete.
+            collection_name (Optional[str]): Collection the item belongs to.
+                Backends that store collections separately search all
+                collections when omitted.
         """
 
     @abstractmethod
@@ -193,11 +198,33 @@ class BaseRagService(ABC):
             source_id (Union[str, list[str]]): A source identifier, or a list of them.
         """
 
+    async def count_entries(self, collection_name: str) -> int:
+        """Number of entries in a collection (0 if it doesn't exist)."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support count_entries"
+        )
+
+    def iter_entries(
+        self, collection_name: str, batch_size: int = 500
+    ) -> "AsyncIterator[dict]":
+        """
+        Iterate all entries of a collection (including embeddings).
+
+        Yields dicts with keys: id, source_id, content, embedding,
+        rag_metadata, created_at, updated_at. Used for bulk export (e.g. the
+        backoffice embedding projector) so no caller needs to touch backend
+        storage directly.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support iter_entries"
+        )
+
     async def compute_similarity_matrix(
         self,
         texts: list[str],
         source_ids: list[str],
         method: str = "min",
+        collection_name: str = "default",
     ) -> list[list[float]]:
         """
         Compute a similarity matrix between multiple texts and multiple source identifiers.
@@ -226,6 +253,7 @@ class BaseRagService(ABC):
         batch_results = await self.query_batch(
             texts=texts,
             top_k=top_k,
+            collection_name=collection_name,
             source_ids=source_ids,
         )
 

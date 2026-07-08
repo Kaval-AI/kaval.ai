@@ -134,7 +134,8 @@ def build_db_uri(
 # Version stamp for SQLite databases bootstrapped via ``create_all`` (written
 # to ``PRAGMA user_version``). Bump on any ORM schema change: SQLite stores
 # created with a different version are dropped and recreated on init.
-SQLITE_SCHEMA_VERSION = 1
+# 2: rag_index left the shared metadata (RAG backends self-provision).
+SQLITE_SCHEMA_VERSION = 2
 
 
 def _drop_all_sqlite_tables(connection):
@@ -566,31 +567,7 @@ class ChatMessage(Base):
     run: Mapped["Run"] = relationship(back_populates="chat_messages")
 
 
-class RagIndex(Base):
-    """One indexed RAG item and its embedding.
-
-    Each row stores a chunk of content together with the embedding vector used
-    for similarity search: the embedding ``model`` and vector size, the
-    ``collection_name`` it belongs to, a caller-supplied ``source_id`` and any
-    associated metadata. Queried for retrieval-augmented generation.
-    """
-
-    __tablename__ = "rag_index"
-
-    id: Mapped[UUID] = mapped_column(uuid_column(), primary_key=True, default=uuid4)
-    model: Mapped[str] = mapped_column(TEXT, nullable=False)
-    collection_name: Mapped[str] = mapped_column(TEXT, nullable=False, index=True)
-    source_id: Mapped[str] = mapped_column(TEXT, nullable=False, index=True)
-    content: Mapped[str | None] = mapped_column(TEXT)
-    embedding_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(VectorType())
-    rag_metadata: Mapped[dict | None] = mapped_column("metadata", json_column())
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-    )
+# NOTE: RAG storage is backend-owned and NOT part of this metadata — see
+# kavalai/rag/postgres.py (self-provisioning table-per-collection) and
+# kavalai/rag/sqllite.py. ``VectorType`` above remains because the initial
+# Alembic revision (0001) references it.
