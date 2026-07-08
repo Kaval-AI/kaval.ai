@@ -7,13 +7,15 @@ chatbots and agents, and connecting them to databases and tooling — with a foc
 
 
 Features:
-- Supports common LLM backends out of the box (OpenAI, Gemini, Ollama, WebLLM).
-- Supports plain and structured responses with streaming.
-- Built-in support for Retrieval augmented generation (RAG) index.
-- Makes implementing simple workflows simple via YAML-defined workflows.
-- Built-in debugging and monitoring tools via modern UI.
-- Agent server REST API with authentication and streaming support.
-- Python tools, REST server endpoints and MCP support.
+- Supports common commercial LLM providers such OpenAI, Google Gemini etc.
+- Supports open source LLMs via Ollama backend.
+- Agents can be run client-side in browser via WebLLM and Pyodide.
+- Structured responses using Pydantic semantics.
+- Streaming responses.
+- Retrieval augmented generation (RAG) index on various storage engines.
+- Fully featured workflow engine using conditional processing and tool calling.
+- Workflows can be defined in YAML for better readability.
+- Python tools, REST server endpoints (supports basic auth) and MCP support.
 
 ## Install
 
