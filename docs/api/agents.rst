@@ -24,7 +24,7 @@ Workflow configuration models
 Agent service & persistence
 ---------------------------
 
-.. automodule:: kavalai.agents.agent_service
+.. automodule:: kavalai.agent_service
 
 .. automodule:: kavalai.agents.sessions
 

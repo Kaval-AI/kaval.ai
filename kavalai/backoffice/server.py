@@ -29,7 +29,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from kavalai.backoffice import db
 from kavalai.backoffice.db import is_owner, is_member
 from kavalai.backoffice.project_service import ProjectService
-from kavalai.agents.agent_service import AgentService
+from kavalai.agent_service import AgentService
 from kavalai.agents.db import db_manager, Agent
 from kavalai.agents import stats as agent_stats
 from kavalai.agents import sessions as agent_sessions

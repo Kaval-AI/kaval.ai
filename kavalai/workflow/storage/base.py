@@ -46,7 +46,7 @@ class DataStorage(ABC):
 
     Backends implement this to persist agents, sessions, runs, chat messages
     and the serialized :class:`WorkflowState`. The method shapes intentionally
-    mirror :class:`~kavalai.agents.agent_service.AgentService` so a Postgres
+    mirror :class:`~kavalai.agent_service.AgentService` so a Postgres
     backend is a thin delegation layer over the existing tables.
     """
 

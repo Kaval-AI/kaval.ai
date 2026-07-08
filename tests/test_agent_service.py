@@ -1,6 +1,6 @@
 import pytest
 from uuid import uuid4
-from kavalai.agents.agent_service import AgentService
+from kavalai.agent_service import AgentService
 from kavalai.agents.db import ModelCallStat
 
 
@@ -223,7 +223,9 @@ class TestAgentService:
         assert run.id is not None
         assert run.session_id == session.id
 
-    async def test_initialize_workflow_run_with_existing_session(self, agents_session_maker):
+    async def test_initialize_workflow_run_with_existing_session(
+        self, agents_session_maker
+    ):
         """Test batch initialization with existing session_id."""
         service = AgentService(agents_session_maker)
 
@@ -260,7 +262,9 @@ class TestAgentService:
         assert session.external_id == "user-123-session"
         assert session.agent_id == agent.id
 
-    async def test_initialize_workflow_run_invalid_session_id(self, agents_session_maker):
+    async def test_initialize_workflow_run_invalid_session_id(
+        self, agents_session_maker
+    ):
         """Test batch initialization with non-existent session_id raises error."""
         service = AgentService(agents_session_maker)
 
@@ -270,3 +274,65 @@ class TestAgentService:
                 session_id=uuid4(),  # Non-existent session
                 input_data={"query": "test"},
             )
+
+    async def test_chat_history_windowing(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
+        agent = await service.get_or_create_agent(name="ChatWindowTest")
+        session = await service.get_or_create_session(agent_id=agent.id)
+
+        for i in range(5):
+            await service.add_chat_message(
+                agent_id=agent.id,
+                session_id=session.id,
+                role="user" if i % 2 == 0 else "assistant",
+                content=f"message {i}",
+            )
+
+        messages = await service.get_chat_history(session.id)
+        assert [m.content for m in messages] == [f"message {i}" for i in range(5)]
+
+        window = await service.get_chat_history(session.id, limit=2)
+        assert len(window) == 2
+
+    async def test_add_model_call_stats_assigns_agent(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
+        agent = await service.get_or_create_agent(name="StatAgentTest")
+
+        stat = await service.add_model_call_stats(
+            ModelCallStat(call_type="llm", model="test/model"), agent_id=agent.id
+        )
+        assert stat.agent_id == agent.id
+
+    async def test_delete_history_for_session(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
+        agent = await service.get_or_create_agent(name="DeleteSessionTest")
+        session = await service.get_or_create_session(agent_id=agent.id)
+        other_session = await service.get_or_create_session(agent_id=agent.id)
+
+        for sess in (session, other_session):
+            await service.add_chat_message(
+                agent_id=agent.id, session_id=sess.id, role="user", content="hello"
+            )
+            run = await service.create_run(session_id=sess.id)
+            await service.add_task(session_id=sess.id, run_id=run.id, name="node-1")
+
+        await service.delete_history_for_session(session.id)
+        assert await service.get_chat_history(session.id) == []
+        assert len(await service.get_chat_history(other_session.id)) == 1
+
+    async def test_delete_history_for_agent(self, agents_session_maker):
+        service = AgentService(agents_session_maker)
+        agent = await service.get_or_create_agent(name="DeleteAgentTest")
+        session = await service.get_or_create_session(agent_id=agent.id)
+
+        await service.add_chat_message(
+            agent_id=agent.id, session_id=session.id, role="user", content="hello"
+        )
+        await service.add_model_call_stats(
+            ModelCallStat(call_type="llm", model="m"), agent_id=agent.id
+        )
+
+        await service.delete_history_for_agent(agent.id)
+        assert await service.get_chat_history(session.id) == []
+        stats = await service.get_model_call_stats(call_type="llm", limit=100)
+        assert not any(s.agent_id == agent.id for s in stats)

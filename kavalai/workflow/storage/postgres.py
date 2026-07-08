@@ -21,7 +21,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kavalai.agents.agent_service import AgentService
+from kavalai.agent_service import AgentService
 from kavalai.agents.db import Run
 from kavalai.workflow.state import WorkflowState
 from kavalai.workflow.storage.base import ChatMsg, DataStorage, RunHandle

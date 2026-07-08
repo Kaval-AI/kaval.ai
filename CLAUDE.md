@@ -53,6 +53,7 @@ Claude Code's static command analysis and forces a manual permission prompt.
 
 ## Key Files
 
+- `kavalai/agent_service.py` — `AgentService`: all runtime persistence (agents, sessions, runs, chat history, tasks, model-call stats) over a plain `async_sessionmaker`
 - `kavalai/workflow/engine.py` — core workflow engine (`WorkflowEngine.from_yaml_path`, YAML → execution)
 - `kavalai/workflow/models.py` — Pydantic data models for workflows
 - `kavalai/agents/agent.py` — modular planning agent (uses the native LLM clients)

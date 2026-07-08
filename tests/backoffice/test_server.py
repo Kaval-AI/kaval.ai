@@ -308,7 +308,7 @@ async def test_projects_get_llm_call_stats(client, backoffice_db):
         mock_session.__aenter__.return_value = mock_session
 
         with patch(
-            "kavalai.agents.agent_service.AgentService.get_model_call_stats",
+            "kavalai.agent_service.AgentService.get_model_call_stats",
             return_value=[],
         ) as mock_get_stats:
             response = await client.get(f"/projects/{project_id}/llm-call-stats")
