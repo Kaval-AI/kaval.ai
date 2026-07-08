@@ -1,10 +1,11 @@
 import os
-import pytest
-import psycopg2
 from unittest.mock import patch
+
+import pytest
+from sqlalchemy import create_engine, inspect, text
 from testcontainers.postgres import PostgresContainer
-from kavalai.migrate_db import migrate, main
-from kavalai.paths import SQL_MIGRATIONS_PATH
+
+from kavalai.migrate_db import ensure_sync_scheme, migrate, main
 
 
 @pytest.fixture(scope="module")
@@ -14,187 +15,207 @@ def postgres_container():
 
 
 @pytest.fixture
-def db_config(postgres_container):
-    return {
-        "host": postgres_container.get_container_host_ip(),
-        "port": int(postgres_container.get_exposed_port(5432)),
-        "user": postgres_container.username,
-        "password": postgres_container.password,
-        "database": postgres_container.dbname,
-    }
-
-
-def test_migrate_app_migrations(db_config):
-    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
-    schema = "app_schema"
-    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
-
-    # Run migrations
-    migrate(migrations_dir, uri, schema=schema)
-
-    # Verify migrations were applied
-    conn = psycopg2.connect(**db_config)
-    cur = conn.cursor()
-
-    # Check tracking table
-    cur.execute(f"SELECT count(*) FROM {schema}.kavalai_migrations")
-    count = cur.fetchone()[0]
-
-    # Count SQL files in app directory
-    expected_count = len(
-        [
-            f
-            for f in os.listdir(migrations_dir)
-            if f.startswith("V") and f.endswith(".sql")
-        ]
+def db_uri(postgres_container):
+    return (
+        f"postgresql://{postgres_container.username}:{postgres_container.password}"
+        f"@{postgres_container.get_container_host_ip()}"
+        f":{postgres_container.get_exposed_port(5432)}/{postgres_container.dbname}"
     )
-    assert count == expected_count
 
-    # Check if one of the tables from migrations exists
-    cur.execute(
-        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = %s AND table_name = 'agents')",
-        (schema,),
+
+def _inspector(db_uri):
+    engine = create_engine(ensure_sync_scheme(db_uri))
+    return engine, inspect(engine)
+
+
+def test_ensure_sync_scheme():
+    assert ensure_sync_scheme("postgresql+asyncpg://u:p@h:5/db").startswith(
+        "postgresql+psycopg2://"
     )
-    assert cur.fetchone()[0] is True
-
-    conn.close()
-
-
-def test_migrate_backoffice_migrations(db_config):
-    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "backoffice")
-    schema = "test_backoffice"
-    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
-
-    # Run migrations
-    migrate(migrations_dir, uri, schema=schema)
-
-    # Verify migrations were applied
-    conn = psycopg2.connect(**db_config)
-    cur = conn.cursor()
-
-    # Check tracking table
-    cur.execute(f"SELECT count(*) FROM {schema}.kavalai_migrations")
-    count = cur.fetchone()[0]
-
-    # Count SQL files in backoffice directory
-    expected_count = len(
-        [
-            f
-            for f in os.listdir(migrations_dir)
-            if f.startswith("V") and f.endswith(".sql")
-        ]
-    )
-    assert count == expected_count
-
-    # Check if one of the tables from migrations exists
-    cur.execute(
-        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = %s AND table_name = 'users')",
-        (schema,),
-    )
-    assert cur.fetchone()[0] is True
-
-    conn.close()
+    assert ensure_sync_scheme("sqlite+aiosqlite:///x.db") == "sqlite:///x.db"
+    # Password must survive the round-trip (str(URL) would mask it).
+    assert "p" in ensure_sync_scheme("postgresql://u:p@h:5/db")
 
 
-def test_migrate_idempotency(db_config):
-    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
+def test_migrate_agents(db_uri):
+    schema = "agents_schema"
+    migrate("agents", uri=db_uri, schema=schema)
+
+    engine, insp = _inspector(db_uri)
+    tables = set(insp.get_table_names(schema=schema))
+    assert {
+        "agents",
+        "sessions",
+        "runs",
+        "tasks",
+        "chat_messages",
+        "model_call_stats",
+        "rag_index",
+        "alembic_version",
+    } <= tables
+
+    # Hand-written Postgres-only rag indexes exist.
+    index_names = {i["name"] for i in insp.get_indexes("rag_index", schema=schema)}
+    assert "idx_rag_index_metadata" in index_names
+    assert "idx_rag_embedding_768" in index_names
+    engine.dispose()
+
+
+def test_migrate_backoffice(db_uri):
+    schema = "backoffice_schema"
+    migrate("backoffice", uri=db_uri, schema=schema)
+
+    engine, insp = _inspector(db_uri)
+    tables = set(insp.get_table_names(schema=schema))
+    assert {
+        "users",
+        "projects",
+        "project_memberships",
+        "project_cache",
+        "alembic_version",
+    } <= tables
+    engine.dispose()
+
+
+def test_migrate_idempotency(db_uri):
     schema = "idempotency_schema"
-    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
+    migrate("agents", uri=db_uri, schema=schema)
+    # Second run must be a no-op, not an error.
+    migrate("agents", uri=db_uri, schema=schema)
 
-    # First run
-    migrate(migrations_dir, uri, schema=schema)
-
-    # Second run should not fail and should not add new entries
-    migrate(migrations_dir, uri, schema=schema)
-
-    conn = psycopg2.connect(**db_config)
-    cur = conn.cursor()
-    cur.execute(f"SELECT count(*) FROM {schema}.kavalai_migrations")
-    count = cur.fetchone()[0]
-
-    expected_count = len(
-        [
-            f
-            for f in os.listdir(migrations_dir)
-            if f.startswith("V") and f.endswith(".sql")
-        ]
-    )
-    assert count == expected_count
-    conn.close()
+    engine, insp = _inspector(db_uri)
+    assert "agents" in insp.get_table_names(schema=schema)
+    engine.dispose()
 
 
-def test_migrate_checksum_mismatch_real_db(db_config, tmp_path):
-    schema = "checksum_schema"
-    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
-
-    # Create a temporary migration file
-    m_dir = tmp_path / "migrations"
-    m_dir.mkdir()
-    m1 = m_dir / "V001__test.sql"
-    m1.write_text("CREATE TABLE test (id INT);")
-
-    # Apply it
-    migrate(str(m_dir), uri, schema=schema)
-
-    # Change the file content
-    m1.write_text("CREATE TABLE test (id INT); -- modified")
-
-    # Should raise ValueError
-    with pytest.raises(ValueError, match="Checksum mismatch"):
-        migrate(str(m_dir), uri, schema=schema)
+def test_migrate_unknown_set(db_uri):
+    with pytest.raises(ValueError, match="Unknown migration set"):
+        migrate("nope", uri=db_uri, schema="x")
 
 
-def test_migrate_main_with_env_vars(db_config):
+def test_migrate_sqlite_file(tmp_path):
+    db_path = tmp_path / "agents.db"
+    uri = f"sqlite:///{db_path}"
+    migrate("agents", uri=uri)
+    migrate("agents", uri=uri)  # idempotent
+
+    engine = create_engine(uri)
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    assert {"agents", "rag_index", "alembic_version"} <= tables
+    # Postgres-only DDL (extension, hnsw/gin indexes) must have been skipped.
+    index_names = {i["name"] for i in insp.get_indexes("rag_index")}
+    assert "idx_rag_index_metadata" not in index_names
+    engine.dispose()
+
+
+def test_migrate_main_with_env_vars(db_uri):
     schema = "main_env_schema"
-    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
     env = {
-        "KAVALAI_DB_URI": uri,
+        "KAVALAI_DB_URI": db_uri,
         "KAVALAI_DB_SCHEMA": schema,
     }
-
     with patch.dict(os.environ, env), patch("sys.argv", ["migrate_db.py", "app"]):
         main()
 
-    # Verify migrations were applied
-    conn = psycopg2.connect(**db_config)
-    cur = conn.cursor()
-    cur.execute(f"SELECT count(*) FROM {schema}.kavalai_migrations")
-    count = cur.fetchone()[0]
-    assert count > 0
-    conn.close()
+    engine, insp = _inspector(db_uri)
+    assert "agents" in insp.get_table_names(schema=schema)
+    engine.dispose()
 
 
-def test_migrate_skip_create_schema(db_config):
-    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
+def test_migrate_main_backoffice_env_vars(db_uri):
+    schema = "main_bo_env_schema"
+    env = {
+        "KAVALAI_BO_DB_URI": db_uri,
+        "KAVALAI_BO_DB_SCHEMA": schema,
+    }
+    with patch.dict(os.environ, env), patch(
+        "sys.argv", ["migrate_db.py", "backoffice"]
+    ):
+        main()
+
+    engine, insp = _inspector(db_uri)
+    assert "users" in insp.get_table_names(schema=schema)
+    engine.dispose()
+
+
+def test_migrate_skip_create_schema(db_uri):
     schema = "skip_create_schema_schema"
-    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
+    engine = create_engine(ensure_sync_scheme(db_uri))
+    with engine.begin() as conn:
+        conn.execute(text(f'CREATE SCHEMA "{schema}"'))
 
-    # First, create schema manually but NOT the table
-    conn = psycopg2.connect(**db_config)
-    cur = conn.cursor()
-    cur.execute(f"CREATE SCHEMA {schema}")
-    conn.commit()
-    conn.close()
+    migrate("agents", uri=db_uri, schema=schema, skip_create_schema=True)
 
-    # Now run migrations with skip_create_schema=True
-    # It should work because schema already exists, and it should create the table
-    migrate(migrations_dir, uri, schema=schema, skip_create_schema=True)
-
-    # Verify migrations were applied and table was created
-    conn = psycopg2.connect(**db_config)
-    cur = conn.cursor()
-    cur.execute(f"SELECT count(*) FROM {schema}.kavalai_migrations")
-    count = cur.fetchone()[0]
-    assert count > 0
-    conn.close()
+    insp = inspect(engine)
+    assert "agents" in insp.get_table_names(schema=schema)
+    engine.dispose()
 
 
-def test_migrate_skip_create_schema_fails_if_schema_missing(db_config):
-    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
-    schema = "missing_schema"
-    uri = f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['database']}"
+def test_migrate_skip_create_schema_fails_if_schema_missing(db_uri):
+    from sqlalchemy.exc import ProgrammingError
 
-    # Running with skip_create_schema=True when schema doesn't exist should fail
-    # because it will try to set search_path or create table in non-existent schema
-    with pytest.raises(psycopg2.Error):
-        migrate(migrations_dir, uri, schema=schema, skip_create_schema=True)
+    with pytest.raises(ProgrammingError):
+        migrate(
+            "agents",
+            uri=db_uri,
+            schema="missing_schema",
+            skip_create_schema=True,
+        )
+
+
+# --- model <-> migration parity ---------------------------------------------
+#
+# The guard that replaces "keep the SQL files in sync by hand": applying the
+# revisions to an empty database and diffing it against the ORM metadata must
+# produce no changes.
+
+
+def _parity_diffs(db_uri, schema, target_metadata, include_object=None):
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+
+    def _include(obj, name, type_, reflected, compare_to):
+        if type_ == "table" and name == "alembic_version":
+            return False
+        if include_object is not None:
+            return include_object(obj, name, type_, reflected, compare_to)
+        return True
+
+    engine = create_engine(ensure_sync_scheme(db_uri))
+    try:
+        with engine.connect() as connection:
+            # Make the migrated schema the default so the schema-less
+            # metadata compares against it.
+            connection.execute(text(f'SET search_path TO "{schema}"'))
+            context = MigrationContext.configure(
+                connection,
+                opts={
+                    "compare_type": True,
+                    "include_object": _include,
+                },
+            )
+            return compare_metadata(context, target_metadata)
+    finally:
+        engine.dispose()
+
+
+def test_agents_migrations_match_models(db_uri):
+    from kavalai.agents.db import Base
+    from kavalai.migrations.common import agents_include_object
+
+    schema = "parity_agents"
+    migrate("agents", uri=db_uri, schema=schema)
+    diffs = _parity_diffs(
+        db_uri, schema, Base.metadata, include_object=agents_include_object
+    )
+    assert diffs == [], f"models and migrations diverged: {diffs}"
+
+
+def test_backoffice_migrations_match_models(db_uri):
+    from kavalai.backoffice.db import Base
+
+    schema = "parity_backoffice"
+    migrate("backoffice", uri=db_uri, schema=schema)
+    diffs = _parity_diffs(db_uri, schema, Base.metadata)
+    assert diffs == [], f"models and migrations diverged: {diffs}"

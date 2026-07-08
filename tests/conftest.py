@@ -2,7 +2,6 @@ import os
 import logging
 from loguru import logger
 
-os.environ["KAVALAI_DB_SCHEMA"] = "test_agents"
 os.environ["KAVALAI_DEFAULT_LLM_MODEL"] = "openai/gpt-4o-mini"
 
 import pytest
@@ -10,7 +9,6 @@ import pytest_asyncio
 from sqlalchemy import text
 from testcontainers.postgres import PostgresContainer
 from kavalai.migrate_db import migrate
-from kavalai.paths import SQL_MIGRATIONS_PATH
 
 from kavalai.agents.db import Base, build_db_uri, db_manager
 
@@ -50,18 +48,20 @@ def agents_db_config(postgres_container):
 
 @pytest.fixture(scope="session")
 def migrated_agents_db(agents_db_config):
-    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
     migrate(
-        migrations_dir=migrations_dir,
+        "agents",
         uri=agents_db_config["uri"],
-        schema="test_agents",
+        schema=agents_db_config["schema"],
     )
 
 
 @pytest.fixture(scope="session")
 def agents_session_maker(agents_db_config, migrated_agents_db):
     return db_manager.get_sessionmaker(
-        uri=agents_db_config["uri"], pool_size=1, max_overflow=0
+        uri=agents_db_config["uri"],
+        schema=agents_db_config["schema"],
+        pool_size=1,
+        max_overflow=0,
     )
 
 

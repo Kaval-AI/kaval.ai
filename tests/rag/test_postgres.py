@@ -20,7 +20,9 @@ def embedding_model():
 async def test_rag_service_indexing(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     texts = ["hello", "world"]
     source_metadata = [{"id": 1}, {"id": 2}]
@@ -47,7 +49,9 @@ async def test_rag_service_indexing(
 async def test_rag_service_deletion(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     texts = ["item 1", "item 2", "item 3"]
     source_ids = ["sid1", "sid2", "sid3"]
@@ -80,7 +84,9 @@ async def test_rag_service_deletion(
 async def test_rag_service_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # We index multiple items with the same source_id
     texts = ["apple", "apple pie", "banana"]
@@ -211,7 +217,9 @@ async def test_rag_service_keep_best_duplicates(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test that keep_best handles duplicate content/distances correctly."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     collection = "duplicate_test"
     # Index exactly the same content for the same source_id multiple times
@@ -240,7 +248,9 @@ async def test_rag_service_keep_best_duplicates(
 async def test_rag_service_top_k_with_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # Index items for 5 different source IDs, each with 2 items
     texts = []
@@ -283,7 +293,9 @@ async def test_rag_service_top_k_with_keep_best(
 async def test_rag_service_query_source_ids(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     texts = ["apple", "banana", "cherry"]
     source_ids = ["sid_apple", "sid_banana", "sid_cherry"]
@@ -315,7 +327,9 @@ async def test_rag_service_query_source_ids(
 async def test_rag_service_query_source_ids_with_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # Index multiple items for some source_ids
     texts = ["apple 1", "apple 2", "banana 1", "banana 2", "cherry"]
@@ -350,7 +364,9 @@ async def test_rag_service_query_source_ids_with_keep_best(
 async def test_compute_similarity_matrix(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # Index some documents
     texts = ["apple", "apple pie", "banana", "banana bread", "cherry"]
@@ -402,7 +418,9 @@ async def test_compute_similarity_matrix(
 async def test_rag_service_query_batch(
     agents_db_config, migrated_agents_db, embedding_model
 ):
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # Index some test documents
     texts = ["apple", "banana", "cherry", "date", "elderberry"]
@@ -485,7 +503,9 @@ async def test_rag_service_batch_query_with_join(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test batch_query_with_join with a mock products table."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     async with service.session_maker() as session:
         # Create a mock products table
@@ -678,7 +698,9 @@ async def test_build_batch_query_cte(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test the build_batch_query_cte method directly."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # Create some embeddings (mock)
     embeddings = [
@@ -734,7 +756,9 @@ async def test_batch_query_with_join_empty_input(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test batch_query_with_join with empty texts."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     results = await service.batch_query_with_join(
         texts=[],
@@ -750,7 +774,9 @@ async def test_batch_query_with_join_keep_best(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test batch_query_with_join with keep_best parameter."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
     collection = "test_keep_best_join"
 
     # Index some items for the same source
@@ -814,11 +840,16 @@ async def test_rag_service_from_session_maker(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test creating PostgresRagService from session maker."""
-    session_maker = db_manager.get_sessionmaker(uri=agents_db_config["uri"])
-    service = PostgresRagService.from_session_maker(session_maker, embedding_model)
+    session_maker = db_manager.get_sessionmaker(
+        uri=agents_db_config["uri"], schema=agents_db_config["schema"]
+    )
+    service = PostgresRagService.from_session_maker(
+        session_maker, embedding_model, schema=agents_db_config["schema"]
+    )
     assert isinstance(service, PostgresRagService)
     assert service.model == embedding_model
     assert service.session_maker == session_maker
+    assert service.schema == agents_db_config["schema"]
 
 
 @pytest.mark.asyncio
@@ -826,7 +857,9 @@ async def test_rag_service_index_batch_edge_cases(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test index_batch edge cases for coverage."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # Empty texts
     assert (
@@ -866,7 +899,9 @@ async def test_rag_service_compute_similarity_matrix_empty(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test compute_similarity_matrix with empty inputs."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # Empty texts
     res1 = await service.compute_similarity_matrix(texts=[], source_ids=["1"])
@@ -882,7 +917,9 @@ async def test_rag_service_batch_query_with_join_no_table(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test batch_query_with_join without join_table to cover the 'else' branch (line 479)."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # Index something
     await service.index(text="test join", collection_name="join_test", source_id="s1")
@@ -907,7 +944,9 @@ async def test_rag_service_learn_normalizer(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test learn_normalizer method."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     # Add some data to learn from
     await service.index_batch(
@@ -928,7 +967,9 @@ async def test_rag_service_delete_by_id(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test deleting a single indexed item by its id."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     collection = "delete_by_id_test"
     items = await service.index_batch(
@@ -950,7 +991,9 @@ async def test_rag_service_delete_by_source_id_single(
     agents_db_config, migrated_agents_db, embedding_model
 ):
     """Test delete_by_source_id with a single source id string."""
-    service = PostgresRagService.from_uri(agents_db_config["uri"], embedding_model)
+    service = PostgresRagService.from_uri(
+        agents_db_config["uri"], embedding_model, schema=agents_db_config["schema"]
+    )
 
     collection = "delete_single_sid_test"
     await service.index_batch(

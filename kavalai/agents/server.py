@@ -396,6 +396,7 @@ def create_app_from_env_conf(
     # Specify the connection to the KavalAI agent server.
     session_provider = db_manager.get_sessionmaker(
         uri=db_uri,
+        schema=db_schema,
         echo=sql_echo,
         pool_size=pool_size,
         max_overflow=max_overflow,

@@ -26,6 +26,7 @@ authors = [
 # which does not require greenlet.
 dependencies = [
     "aiosqlite",
+    "alembic",
     "environs",
     "httpx",
     "jinja2",
@@ -116,7 +117,9 @@ include = ["kavalai*"]
 
 [tool.setuptools.package-data]
 "kavalai" = [
-    "sql_migrations/**/*.sql",
+    "migrations/*/env.py",
+    "migrations/*/script.py.mako",
+    "migrations/*/versions/*.py",
     "demo_agents/**/*.yaml",
     "demo_agents/**/*.yml",
 ]

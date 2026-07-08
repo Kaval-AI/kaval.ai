@@ -12,202 +12,161 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+Kaval.AI database migration runner (Alembic).
+
+Thin wrapper around ``alembic.command.upgrade``: it resolves the migration set
+(``agents`` or ``backoffice``), waits for the database to accept connections,
+creates the target schema if needed, and runs the set's revisions with the
+schema applied via ``schema_translate_map`` (see
+:mod:`kavalai.migrations.common`).
+
+``migrate`` is a pure function taking explicit parameters; only ``main()``
+reads environment variables — this module is an application entry point, the
+rest of the library never touches the environment.
 """
 
 import argparse
-import hashlib
 import os
 import time
-from typing import List, Tuple
 
+from alembic import command
+from alembic.config import Config
 from loguru import logger
-import psycopg2
-from psycopg2 import sql
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
 
-from kavalai.paths import SQL_MIGRATIONS_PATH
-from kavalai.agents.db import parse_db_uri
+from kavalai.paths import MIGRATIONS_PATH
 
-
-def calculate_checksum(file_path: str) -> str:
-    sha256_hash = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
+#: Migration set name -> script directory.
+MIGRATION_SETS = {
+    "agents": os.path.join(MIGRATIONS_PATH, "agents"),
+    "backoffice": os.path.join(MIGRATIONS_PATH, "backoffice"),
+}
 
 
-def get_migrations(migrations_dir: str) -> List[Tuple[str, str]]:
-    migrations = []
-    if not os.path.exists(migrations_dir):
-        logger.error(f"Migrations directory not found: {migrations_dir}")
-        return []
-
-    for filename in os.listdir(migrations_dir):
-        if filename.endswith(".sql") and filename.startswith("V"):
-            migrations.append(filename)
-
-    # Sort by version (V001, V002, etc.)
-    migrations.sort()
-
-    return [
-        (filename, os.path.join(migrations_dir, filename)) for filename in migrations
-    ]
+def ensure_sync_scheme(uri: str) -> str:
+    """Return ``uri`` with a synchronous driver (Alembic runs sync)."""
+    url = make_url(uri)
+    backend = url.get_backend_name()
+    if backend == "postgresql":
+        url = url.set(drivername="postgresql+psycopg2")
+    elif backend == "sqlite":
+        url = url.set(drivername="sqlite")
+    # str(URL) masks the password; render it fully for engine creation.
+    return url.render_as_string(hide_password=False)
 
 
-def ensure_schema_and_table(cur, schema: str, skip_create_schema: bool = False):
-    """Ensures the schema and the migration tracking table exist."""
-    if not skip_create_schema:
-        cur.execute(
-            sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(schema))
-        )
-
-    # Set search_path to the target schema and public (for extensions)
-    cur.execute(sql.SQL("SET search_path TO {}, public").format(sql.Identifier(schema)))
-
-    # Create migrations table if it doesn't exist
-    cur.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {schema}.kavalai_migrations (
-            id SERIAL PRIMARY KEY,
-            filename TEXT UNIQUE NOT NULL,
-            checksum TEXT NOT NULL,
-            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """
-    )
-
-
-def get_applied_migrations(cur, schema: str) -> dict:
-    """Fetches the already applied migrations from the tracking table."""
-    cur.execute(f"SELECT filename, checksum FROM {schema}.kavalai_migrations")
-    return {row[0]: row[1] for row in cur.fetchall()}
-
-
-def apply_migration(cur, schema: str, filename: str, file_path: str, checksum: str):
-    """Reads and executes a single migration file and records it in the tracking table."""
-    logger.info(f"Applying migration: {filename}")
-    with open(file_path, "r") as f:
-        sql_content = f.read()
-
-    cur.execute(sql_content)
-    cur.execute(
-        f"INSERT INTO {schema}.kavalai_migrations (filename, checksum) VALUES (%s, %s)",
-        (filename, checksum),
-    )
-
-
-def migrate(
-    migrations_dir: str,
-    uri: str,
-    schema: str,
-    skip_create_schema: bool = False,
-):
-    logger.info(f"Connecting to database: {uri}")
-
-    conn = None
-    max_wait = 60
+def _connect_with_retry(engine, max_wait: float):
+    """Connect to the database, retrying with backoff for up to ``max_wait`` s."""
     start_time = time.time()
-    retry_interval = 1
-
+    retry_interval = 1.0
     while True:
         try:
-            components = parse_db_uri(uri)
-            conn = psycopg2.connect(
-                host=components["host"],
-                port=components["port"],
-                user=components["user"],
-                password=components["password"],
-                dbname=components["db_name"],
-            )
-            break
-        except psycopg2.OperationalError:
+            connection = engine.connect()
+            connection.execute(text("SELECT 1"))
+            return connection
+        except OperationalError:
             elapsed = time.time() - start_time
             if elapsed > max_wait:
                 logger.error(f"Failed to connect to database after {max_wait} seconds.")
                 raise
             logger.info(
-                f"Database connection failed, retrying in {retry_interval}s... ({int(elapsed)}s elapsed)"
+                f"Database connection failed, retrying in {retry_interval}s... "
+                f"({int(elapsed)}s elapsed)"
             )
             time.sleep(retry_interval)
-            retry_interval = min(
-                retry_interval * 2, max_wait - (time.time() - start_time)
-            )
-            if retry_interval <= 0:
-                retry_interval = 0.1
+            retry_interval = min(retry_interval * 2, 10.0)
 
+
+def migrate(
+    set_name: str,
+    uri: str,
+    schema: str | None = None,
+    skip_create_schema: bool = False,
+    max_wait: float = 60.0,
+):
+    """Upgrade one migration set to head.
+
+    Args:
+        set_name: ``"agents"`` or ``"backoffice"``.
+        uri: Database URI (async driver schemes are converted to sync).
+        schema: Target schema for the set's tables and the ``alembic_version``
+            table. ``None`` uses the database default (Postgres: ``public``;
+            SQLite: the main database).
+        skip_create_schema: Don't issue ``CREATE SCHEMA IF NOT EXISTS``.
+        max_wait: How long to wait for the database to accept connections.
+    """
+    if set_name not in MIGRATION_SETS:
+        raise ValueError(
+            f"Unknown migration set {set_name!r}; expected one of "
+            f"{sorted(MIGRATION_SETS)}"
+        )
+
+    sync_uri = ensure_sync_scheme(uri)
+    logger.info(f"Running {set_name!r} migrations (schema={schema or 'default'}).")
+
+    engine = create_engine(sync_uri)
     try:
-        conn.autocommit = False
-        cur = conn.cursor()
+        connection = _connect_with_retry(engine, max_wait=max_wait)
+        with connection:
+            is_postgres = connection.dialect.name == "postgresql"
+            if schema and is_postgres and not skip_create_schema:
+                connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
+                connection.commit()
 
-        ensure_schema_and_table(cur, schema, skip_create_schema=skip_create_schema)
+            config = Config()
+            config.set_main_option("script_location", MIGRATION_SETS[set_name])
+            config.attributes["connection"] = connection
+            config.attributes["schema"] = schema
 
-        applied_migrations = get_applied_migrations(cur, schema)
-
-        logger.info(f"Loading migrations from {migrations_dir}")
-        migrations = get_migrations(migrations_dir)
-        if not migrations:
-            logger.info("No migrations found.")
-            conn.commit()
-            return
-
-        for filename, file_path in migrations:
-            checksum = calculate_checksum(file_path)
-
-            if filename in applied_migrations:
-                if applied_migrations[filename] != checksum:
-                    logger.error(
-                        f"Checksum mismatch for migration {filename}. Expected {applied_migrations[filename]}, got {checksum}."
-                    )
-                    conn.rollback()
-                    raise ValueError(f"Checksum mismatch for {filename}")
-                logger.info(f"Migration {filename} already `app`lied.")
-                continue
-
-            try:
-                logger.info(f"Applying migration: {filename}")
-                apply_migration(cur, schema, filename, file_path, checksum)
-            except Exception as e:
-                logger.error(f"Error applying migration {filename}: {e}")
-                conn.rollback()
-                raise
-
-        conn.commit()
-        logger.info("Migrations completed successfully.")
-
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        if conn:
-            conn.rollback()
-        raise
+            command.upgrade(config, "head")
+            connection.commit()
+        logger.info(f"{set_name!r} migrations completed successfully.")
     finally:
-        if conn:
-            conn.close()
+        engine.dispose()
 
 
 def main():
     parser = argparse.ArgumentParser(description="Kaval.AI Database Migration Tool")
     parser.add_argument(
-        "type", choices=["app", "backoffice"], help="Type of migrations to run."
+        "type",
+        choices=["app", "backoffice"],
+        help="Type of migrations to run ('app' = the agents set).",
+    )
+    parser.add_argument(
+        "--uri",
+        default=None,
+        help="Database URI (defaults to KAVALAI_DB_URI / KAVALAI_BO_DB_URI).",
+    )
+    parser.add_argument(
+        "--schema",
+        default=None,
+        help="Target schema (defaults to KAVALAI_DB_SCHEMA / KAVALAI_BO_DB_SCHEMA).",
     )
     parser.add_argument(
         "--skip-create-schema",
         action="store_true",
-        help="Don't create schema, just create tables and apply migrations.",
+        help="Don't create schema, just apply migrations.",
     )
     args = parser.parse_args()
 
     if args.type == "backoffice":
-        uri = os.environ["KAVALAI_BO_DB_URI"]
-        schema = os.environ["KAVALAI_BO_DB_SCHEMA"]
-        migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "backoffice")
-    elif args.type == "app":
-        uri = os.environ["KAVALAI_DB_URI"]
-        schema = os.environ.get("KAVALAI_DB_SCHEMA")
-        migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "app")
+        uri = args.uri or os.environ["KAVALAI_BO_DB_URI"]
+        schema = args.schema or os.environ.get("KAVALAI_BO_DB_SCHEMA")
+        set_name = "backoffice"
     else:
-        raise ValueError(f"Invalid migration type: {args.type}")
+        uri = args.uri or os.environ["KAVALAI_DB_URI"]
+        schema = args.schema or os.environ.get("KAVALAI_DB_SCHEMA")
+        set_name = "agents"
 
-    migrate(migrations_dir, uri, schema, skip_create_schema=args.skip_create_schema)
+    migrate(
+        set_name,
+        uri=uri,
+        schema=schema,
+        skip_create_schema=args.skip_create_schema,
+    )
 
 
 if __name__ == "__main__":

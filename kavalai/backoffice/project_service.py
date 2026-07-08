@@ -184,6 +184,7 @@ class ProjectService:
                 host=project.db_host,
                 port=project.db_port,
                 db_name=project.db_name,
+                schema=project.db_schema,
             )
             async with project_session_maker() as project_session:
                 await project_session.execute(text("SELECT 1"))

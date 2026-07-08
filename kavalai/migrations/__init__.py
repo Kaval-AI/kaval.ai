@@ -13,14 +13,3 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-
-import os
-
-PACKAGE_PATH = os.path.dirname(os.path.abspath(__file__))
-MIGRATIONS_PATH = os.path.join(PACKAGE_PATH, "migrations")
-
-AGENTS_PACKAGE_PATH = os.path.join(PACKAGE_PATH, "agents")
-AGENTS_MIGRATIONS_PATH = os.path.join(MIGRATIONS_PATH, "agents")
-
-BACKOFFICE_PACKAGE_PATH = os.path.join(PACKAGE_PATH, "backoffice")
-BACKOFFICE_MIGRATIONS_PATH = os.path.join(MIGRATIONS_PATH, "backoffice")

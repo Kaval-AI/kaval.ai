@@ -108,7 +108,9 @@ async def index_csv(
 ):
     model = model if model else os.environ["KAVALAI_DEFAULT_EMBEDDING_MODEL"]
     rag_service = PostgresRagService.from_uri(
-        uri=os.environ["KAVALAI_DB_URI"], model=model
+        uri=os.environ["KAVALAI_DB_URI"],
+        model=model,
+        schema=os.environ.get("KAVALAI_DB_SCHEMA"),
     )
 
     rows_processed = 0

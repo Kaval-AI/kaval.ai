@@ -19,10 +19,10 @@ from datetime import datetime, timezone
 from enum import Enum as PyEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import MetaData
+from sqlalchemy import Enum, MetaData
 from sqlalchemy import TEXT, Boolean, ForeignKey, DateTime, Integer
 from sqlalchemy import select, Index
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ENUM
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -31,20 +31,36 @@ from sqlalchemy.pool import NullPool
 from kavalai.agents.db import ensure_async_scheme
 
 
-def AsyncBackofficeSession():
+def AsyncBackofficeSession(uri: str | None = None, schema: str | None = None):
+    """Create a backoffice DB session.
+
+    ``uri``/``schema`` default to ``KAVALAI_BO_DB_URI``/``KAVALAI_BO_DB_SCHEMA``
+    when omitted — the backoffice is an application, so reading its own
+    environment at call time is acceptable; library code should always pass
+    both explicitly. The schema is applied via ``schema_translate_map``.
+    """
+    uri = uri or os.environ["KAVALAI_BO_DB_URI"]
+    if schema is None:
+        schema = os.environ.get("KAVALAI_BO_DB_SCHEMA")
+    engine = create_async_engine(
+        ensure_async_scheme(uri),
+        echo=False,
+        poolclass=NullPool,
+    )
+    if schema:
+        engine = engine.execution_options(schema_translate_map={None: schema})
     return async_sessionmaker(
-        bind=create_async_engine(
-            ensure_async_scheme(os.environ["KAVALAI_BO_DB_URI"]),
-            echo=False,
-            poolclass=NullPool,
-        ),
+        bind=engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )()
 
 
 class Base(DeclarativeBase):
-    metadata = MetaData(schema=os.environ["KAVALAI_BO_DB_SCHEMA"])
+    # Schema-less by design: the target schema is applied per-engine via
+    # ``schema_translate_map`` (see ``AsyncBackofficeSession``); no env vars
+    # are read at import time.
+    metadata = MetaData()
 
 
 class User(Base):
@@ -123,12 +139,10 @@ class ProjectMembership(Base):
         ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
     )
     role: Mapped[ProjectRole] = mapped_column(
-        ENUM(
-            ProjectRole,
-            name="project_role",
-            schema=os.environ["KAVALAI_BO_DB_SCHEMA"],
-            create_type=False,
-        ),
+        # Stored as plain text with a CHECK constraint instead of a native
+        # Postgres ENUM: keeps the model schema-agnostic (no type to place in
+        # a schema) and portable across dialects.
+        Enum(ProjectRole, name="project_role", native_enum=False),
         nullable=False,
     )
 

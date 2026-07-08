@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import os
 from typing import Optional, Union, Callable, AsyncContextManager
 from uuid import UUID
 
@@ -47,6 +46,7 @@ class PostgresRagService(BaseRagService):
         model: str,
         agent: Optional[Agent] = None,
         normalizer: Optional[Normalizer] = None,
+        schema: Optional[str] = None,
     ):
         """
         Initialize the PostgresRagService.
@@ -57,11 +57,15 @@ class PostgresRagService(BaseRagService):
             model (str): The name of the embedding model to use (e.g., "openai/text-embedding-3-small").
             agent (Optional[Agent]): Optional Agent object to associate with this service.
             normalizer (Optional[Normalizer]): Optional normalizer to use for embeddings.
+            schema (Optional[str]): Schema the ``rag_index`` table lives in. Used to set
+                ``search_path`` for the raw-SQL similarity queries; must match the schema
+                the ``session_maker`` targets. ``None`` uses the connection default.
         """
         self.session_maker = session_maker
         self.model = model
         self.agent = agent
         self.normalizer = normalizer
+        self.schema = schema
         self.embedding_client = make_embedding_client(model)
 
     @classmethod
@@ -71,6 +75,7 @@ class PostgresRagService(BaseRagService):
         model: str,
         agent: Optional[Agent] = None,
         normalizer: Optional[Normalizer] = None,
+        schema: Optional[str] = None,
     ) -> "PostgresRagService":
         """
         Create a PostgresRagService from a database URI.
@@ -84,8 +89,8 @@ class PostgresRagService(BaseRagService):
         Returns:
             PostgresRagService: A new instance of PostgresRagService.
         """
-        session_maker = db_manager.get_sessionmaker(uri=uri)
-        return cls(session_maker, model, agent, normalizer)
+        session_maker = db_manager.get_sessionmaker(uri=uri, schema=schema)
+        return cls(session_maker, model, agent, normalizer, schema=schema)
 
     @classmethod
     def from_session_maker(
@@ -94,6 +99,7 @@ class PostgresRagService(BaseRagService):
         model: str,
         agent: Optional[Agent] = None,
         normalizer: Optional[Normalizer] = None,
+        schema: Optional[str] = None,
     ) -> "PostgresRagService":
         """
         Create a PostgresRagService from a session maker.
@@ -107,7 +113,7 @@ class PostgresRagService(BaseRagService):
         Returns:
             PostgresRagService: A new instance of PostgresRagService.
         """
-        return cls(session_maker, model, agent, normalizer)
+        return cls(session_maker, model, agent, normalizer, schema=schema)
 
     async def index_batch(
         self,
@@ -306,10 +312,10 @@ class PostgresRagService(BaseRagService):
             return []
 
         async with self.session_maker() as session:
-            # Get schema from environment variable if possible, similar to other parts of the system
-            schema = os.getenv("KAVALAI_DB_SCHEMA")
-            if schema:
-                await session.execute(text(f"SET search_path TO {schema}, public"))
+            # The similarity query is raw SQL, which schema_translate_map does
+            # not rewrite — point search_path at the configured schema instead.
+            if self.schema:
+                await session.execute(text(f"SET search_path TO {self.schema}, public"))
 
             # Compute embeddings for all query texts
             embeddings, stats = await self.embedding_client.compute_embeddings(
@@ -403,10 +409,9 @@ class PostgresRagService(BaseRagService):
             return []
 
         async with self.session_maker() as session:
-            # Set schema if configured
-            schema = os.getenv("KAVALAI_DB_SCHEMA")
-            if schema:
-                await session.execute(text(f"SET search_path TO {schema}, public"))
+            # Raw SQL below bypasses schema_translate_map — use search_path.
+            if self.schema:
+                await session.execute(text(f"SET search_path TO {self.schema}, public"))
 
             # Compute embeddings
             embeddings, stats = await self.embedding_client.compute_embeddings(

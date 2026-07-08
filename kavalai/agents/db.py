@@ -17,7 +17,6 @@ limitations under the License.
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from environs import Env
 from sqlalchemy import (
     JSON,
     MetaData,
@@ -132,6 +131,30 @@ def build_db_uri(
     return f"{scheme}://{user}:{password}@{host}:{port}/{db_name}"
 
 
+# Version stamp for SQLite databases bootstrapped via ``create_all`` (written
+# to ``PRAGMA user_version``). Bump on any ORM schema change: SQLite stores
+# created with a different version are dropped and recreated on init.
+SQLITE_SCHEMA_VERSION = 1
+
+
+def _drop_all_sqlite_tables(connection):
+    """Drop every table in a SQLite database (sync connection).
+
+    Used when ``PRAGMA user_version`` doesn't match ``SQLITE_SCHEMA_VERSION``:
+    browser/IndexedDB stores have no migration path, a stale file is wiped.
+    """
+    rows = connection.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+    ).fetchall()
+    connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+    try:
+        for (name,) in rows:
+            if not name.startswith("sqlite_"):
+                connection.exec_driver_sql(f'DROP TABLE IF EXISTS "{name}"')
+    finally:
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+
+
 class DatabaseManager:
     """Manages dynamic engine creation and session factories."""
 
@@ -152,136 +175,158 @@ class DatabaseManager:
         port=None,
         db_name=None,
         uri=None,
+        schema=None,
         echo=False,
         pool_size=1,
         max_overflow=0,
     ):
+        """Return an ``async_sessionmaker`` for the given database and schema.
+
+        ``schema`` selects the schema the ORM tables live in. The models are
+        defined schema-less; the schema is applied per-engine via SQLAlchemy's
+        ``schema_translate_map``, so the same models can target any schema at
+        runtime. ``schema=None`` leaves table names unqualified (Postgres then
+        resolves them via the connection's ``search_path``, i.e. ``public``).
+        """
         if uri:
             url = ensure_async_scheme(uri)
         else:
             url = build_db_uri(user, password, host, port, db_name)
 
-        # Check cache first
-        if url not in self._engines:
-            self._engines[url] = create_async_engine(
+        # Cache per (url, schema): translate maps are engine-level options.
+        key = (url, schema)
+        if key not in self._engines:
+            engine = create_async_engine(
                 url,
                 echo=echo,
                 pool_size=pool_size,
                 max_overflow=max_overflow,
             )
-        engine = self._engines[url]
+            if schema:
+                engine = engine.execution_options(schema_translate_map={None: schema})
+            self._engines[key] = engine
+        engine = self._engines[key]
         return async_sessionmaker(
             bind=engine, class_=AsyncSession, expire_on_commit=False
         )
 
     # -- SQLite / IndexedDB backend -------------------------------------------
     #
-    # A pure-Python, pyodide-compatible backend. The ORM models live in a named
-    # schema (``KAVALAI_DB_SCHEMA``, default ``"test"``); SQLite exposes that
-    # schema by ATTACH-ing the database file under that alias. Under Pyodide the
-    # file sits on IDBFS so it is persisted to the browser's IndexedDB.
+    # A pure-Python, pyodide-compatible backend. The ORM models are schema-less
+    # and live directly in the SQLite file (no ATTACH aliasing). Under Pyodide
+    # the file sits on IDBFS so it is persisted to the browser's IndexedDB.
     #
     # Two flavours are offered: an async engine (for normal CPython, where
     # ``greenlet`` is available) and a *sync* engine. ``greenlet`` has no pyodide
     # build, and SQLAlchemy's async engine depends on it, so in the browser the
     # sync engine is the one that works -- see :meth:`get_sqlite_sync_engine`.
+    #
+    # ``init_sqlite``/``init_sqlite_sync`` bootstrap the schema with
+    # ``create_all`` (Alembic is never imported in the browser) and stamp
+    # ``PRAGMA user_version`` with ``SQLITE_SCHEMA_VERSION``. Browser stores are
+    # per-user and ephemeral: on a version mismatch the database is dropped and
+    # recreated rather than migrated.
 
-    def _resolve_sqlite_target(self, db_path, schema):
-        """Resolve the ATTACH alias (schema) and database file path."""
-        # The ATTACH alias must match the schema the ORM tables actually live in
-        # (fixed on ``Base.metadata`` at import time), otherwise schema-qualified
-        # DDL like ``CREATE TABLE <schema>.agents`` targets an unknown database.
-        schema = schema or Base.metadata.schema
+    def _resolve_sqlite_path(self, db_path):
+        """Resolve the SQLite database file path."""
         if db_path is None:
             db_path = self.SQLITE_PYODIDE_DB_PATH if idb.is_pyodide() else ":memory:"
-        return db_path, schema
+        return db_path
 
     @staticmethod
-    def _attach_listener(db_path, schema):
-        """Build a connect listener that enables FKs and ATTACHes the schema db."""
-        attach_sql = f'ATTACH DATABASE "{db_path}" AS "{schema}"'
+    def _fk_pragma_listener(dbapi_connection, _record):
+        """Connect listener that enables SQLite foreign keys."""
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
 
-        def _configure_connection(dbapi_connection, _record):
-            cursor = dbapi_connection.cursor()
-            try:
-                cursor.execute("PRAGMA foreign_keys=ON")
-                cursor.execute(attach_sql)
-            finally:
-                cursor.close()
-
-        return _configure_connection
-
-    def get_sqlite_engine(self, *, db_path=None, schema=None, echo=False):
+    def get_sqlite_engine(self, *, db_path=None, echo=False):
         """Return a cached **async** SQLite engine backed by ``db_path``.
 
         Requires ``greenlet`` (SQLAlchemy's async engine dependency), so this is
         for CPython. Under pyodide use :meth:`get_sqlite_sync_engine` instead.
 
         ``db_path`` defaults to the IndexedDB-backed file under Pyodide and to an
-        in-memory database otherwise. The configured schema is exposed by
-        ATTACH-ing ``db_path`` under that name, and SQLite foreign keys are
-        enabled. A :class:`~sqlalchemy.pool.StaticPool` keeps a single shared
-        connection so the in-memory main database and the ATTACH survive across
-        sessions.
+        in-memory database otherwise. SQLite foreign keys are enabled. A
+        :class:`~sqlalchemy.pool.StaticPool` keeps a single shared connection so
+        an in-memory database survives across sessions.
         """
-        db_path, schema = self._resolve_sqlite_target(db_path, schema)
-        key = f"sqlite-async::{db_path}::{schema}"
+        db_path = self._resolve_sqlite_path(db_path)
+        key = f"sqlite-async::{db_path}"
         if key not in self._engines:
             engine = create_async_engine(
-                "sqlite+aiosqlite://", echo=echo, poolclass=StaticPool
+                f"sqlite+aiosqlite:///{db_path}", echo=echo, poolclass=StaticPool
             )
-            event.listen(
-                engine.sync_engine, "connect", self._attach_listener(db_path, schema)
-            )
+            event.listen(engine.sync_engine, "connect", self._fk_pragma_listener)
             self._engines[key] = engine
         return self._engines[key]
 
-    def get_sqlite_sessionmaker(self, *, db_path=None, schema=None, echo=False):
+    def get_sqlite_sessionmaker(self, *, db_path=None, echo=False):
         """Return an ``async_sessionmaker`` bound to the async SQLite engine."""
-        engine = self.get_sqlite_engine(db_path=db_path, schema=schema, echo=echo)
+        engine = self.get_sqlite_engine(db_path=db_path, echo=echo)
         return async_sessionmaker(
             bind=engine, class_=AsyncSession, expire_on_commit=False
         )
 
-    async def init_sqlite(self, *, db_path=None, schema=None, echo=False):
-        """Prepare the async SQLite/IndexedDB backend (mount, create tables, persist)."""
+    async def init_sqlite(self, *, db_path=None, echo=False):
+        """Prepare the async SQLite/IndexedDB backend (mount, create tables, persist).
+
+        Stamps ``PRAGMA user_version``; a database written by a different
+        schema version is dropped and recreated (browser stores are ephemeral,
+        there is no in-place upgrade path).
+        """
         await idb.mount()
-        engine = self.get_sqlite_engine(db_path=db_path, schema=schema, echo=echo)
+        engine = self.get_sqlite_engine(db_path=db_path, echo=echo)
         async with engine.begin() as conn:
+            version = (await conn.exec_driver_sql("PRAGMA user_version")).scalar()
+            if version not in (0, SQLITE_SCHEMA_VERSION):
+                await conn.run_sync(_drop_all_sqlite_tables)
             await conn.run_sync(Base.metadata.create_all)
+            await conn.exec_driver_sql(f"PRAGMA user_version = {SQLITE_SCHEMA_VERSION}")
         await idb.flush()
 
-    def get_sqlite_sync_engine(self, *, db_path=None, schema=None, echo=False):
+    def get_sqlite_sync_engine(self, *, db_path=None, echo=False):
         """Return a cached **sync** SQLite engine backed by ``db_path``.
 
         This is the pyodide-friendly variant: SQLAlchemy's synchronous engine
         does not need ``greenlet`` (which has no pyodide build). It behaves like
-        :meth:`get_sqlite_engine` otherwise -- ATTACH-ing ``db_path`` under the
-        configured schema with foreign keys enabled and a shared connection.
+        :meth:`get_sqlite_engine` otherwise -- foreign keys enabled and a shared
+        connection.
         """
-        db_path, schema = self._resolve_sqlite_target(db_path, schema)
-        key = f"sqlite-sync::{db_path}::{schema}"
+        db_path = self._resolve_sqlite_path(db_path)
+        key = f"sqlite-sync::{db_path}"
         if key not in self._engines:
-            engine = create_engine("sqlite://", echo=echo, poolclass=StaticPool)
-            event.listen(engine, "connect", self._attach_listener(db_path, schema))
+            engine = create_engine(
+                f"sqlite:///{db_path}", echo=echo, poolclass=StaticPool
+            )
+            event.listen(engine, "connect", self._fk_pragma_listener)
             self._engines[key] = engine
         return self._engines[key]
 
-    def get_sqlite_sync_sessionmaker(self, *, db_path=None, schema=None, echo=False):
+    def get_sqlite_sync_sessionmaker(self, *, db_path=None, echo=False):
         """Return a sync ``sessionmaker`` bound to the sync SQLite engine."""
-        engine = self.get_sqlite_sync_engine(db_path=db_path, schema=schema, echo=echo)
+        engine = self.get_sqlite_sync_engine(db_path=db_path, echo=echo)
         return sessionmaker(bind=engine, expire_on_commit=False)
 
-    async def init_sqlite_sync(self, *, db_path=None, schema=None, echo=False):
+    async def init_sqlite_sync(self, *, db_path=None, echo=False):
         """Prepare the sync SQLite/IndexedDB backend (mount, create tables, persist).
 
         Mounts IndexedDB (under Pyodide), creates all ORM tables and persists the
         resulting database. The table creation itself is synchronous; only the
-        IndexedDB mount/flush are awaited. Safe to call repeatedly.
+        IndexedDB mount/flush are awaited. Safe to call repeatedly. Stamps
+        ``PRAGMA user_version`` and drops a stale-version database (see
+        :meth:`init_sqlite`).
         """
         await idb.mount()
-        engine = self.get_sqlite_sync_engine(db_path=db_path, schema=schema, echo=echo)
-        Base.metadata.create_all(engine)
+        engine = self.get_sqlite_sync_engine(db_path=db_path, echo=echo)
+        with engine.begin() as conn:
+            version = conn.exec_driver_sql("PRAGMA user_version").scalar()
+            if version not in (0, SQLITE_SCHEMA_VERSION):
+                _drop_all_sqlite_tables(conn)
+            Base.metadata.create_all(conn)
+            conn.exec_driver_sql(f"PRAGMA user_version = {SQLITE_SCHEMA_VERSION}")
         await idb.flush()
 
     async def flush(self):
@@ -293,14 +338,11 @@ class DatabaseManager:
 db_manager = DatabaseManager()
 
 
-def get_kavalai_db_schema():
-    env = Env()
-    env.read_env()
-    return env.str("KAVALAI_DB_SCHEMA", "test")
-
-
 class Base(DeclarativeBase):
-    metadata = MetaData(schema=get_kavalai_db_schema())
+    # Schema-less by design: the target schema is applied per-engine via
+    # ``schema_translate_map`` (see ``DatabaseManager.get_sessionmaker``), so
+    # the library never reads configuration from the environment.
+    metadata = MetaData()
 
 
 class Agent(Base):
@@ -352,9 +394,9 @@ class ModelCallStat(Base):
     __tablename__ = "model_call_stats"
 
     id: Mapped[UUID] = mapped_column(uuid_column(), primary_key=True, default=uuid4)
-    call_type: Mapped[str] = mapped_column(TEXT, nullable=False)
-    model: Mapped[str] = mapped_column(TEXT, nullable=False)
-    agent_id: Mapped[UUID | None] = mapped_column(uuid_column())
+    call_type: Mapped[str] = mapped_column(TEXT, nullable=False, index=True)
+    model: Mapped[str] = mapped_column(TEXT, nullable=False, index=True)
+    agent_id: Mapped[UUID | None] = mapped_column(uuid_column(), index=True)
     request_data: Mapped[dict | None] = mapped_column(json_column())
     response_data: Mapped[dict | None] = mapped_column(json_column())
     response_code: Mapped[int | None] = mapped_column(Integer)
@@ -366,7 +408,9 @@ class ModelCallStat(Base):
     cost: Mapped[float | None] = mapped_column(Numeric(10, 6))
     currency: Mapped[str | None] = mapped_column(TEXT)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -387,7 +431,7 @@ class Session(Base):
 
     id: Mapped[UUID] = mapped_column(uuid_column(), primary_key=True, default=uuid4)
     agent_id: Mapped[UUID] = mapped_column(
-        ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
     )
     external_id: Mapped[str | None] = mapped_column(TEXT)
     created_at: Mapped[datetime] = mapped_column(
@@ -423,7 +467,7 @@ class Run(Base):
 
     id: Mapped[UUID] = mapped_column(uuid_column(), primary_key=True, default=uuid4)
     session_id: Mapped[UUID] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     input_data: Mapped[dict | None] = mapped_column(json_column())
     output_data: Mapped[dict | None] = mapped_column(json_column())
@@ -457,13 +501,13 @@ class Task(Base):
 
     id: Mapped[UUID] = mapped_column(uuid_column(), primary_key=True, default=uuid4)
     agent_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("agents.id", ondelete="SET NULL")
+        ForeignKey("agents.id", ondelete="SET NULL"), index=True
     )
     session_id: Mapped[UUID] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     run_id: Mapped[UUID] = mapped_column(
-        ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("runs.id", ondelete="CASCADE"), nullable=False, index=True
     )
     inputs: Mapped[dict | None] = mapped_column(json_column())
     output: Mapped[dict | None] = mapped_column(json_column())
@@ -498,13 +542,13 @@ class ChatMessage(Base):
 
     id: Mapped[UUID] = mapped_column(uuid_column(), primary_key=True, default=uuid4)
     agent_id: Mapped[UUID] = mapped_column(
-        ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
     )
     session_id: Mapped[UUID] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     run_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("runs.id", ondelete="SET NULL")
+        ForeignKey("runs.id", ondelete="SET NULL"), index=True
     )
     role: Mapped[str] = mapped_column(TEXT, nullable=False)
     content: Mapped[str] = mapped_column(TEXT, nullable=False)
@@ -535,8 +579,8 @@ class RagIndex(Base):
 
     id: Mapped[UUID] = mapped_column(uuid_column(), primary_key=True, default=uuid4)
     model: Mapped[str] = mapped_column(TEXT, nullable=False)
-    collection_name: Mapped[str] = mapped_column(TEXT, nullable=False)
-    source_id: Mapped[str] = mapped_column(TEXT, nullable=False)
+    collection_name: Mapped[str] = mapped_column(TEXT, nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(TEXT, nullable=False, index=True)
     content: Mapped[str | None] = mapped_column(TEXT)
     embedding_size: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding: Mapped[list[float] | None] = mapped_column(VectorType())

@@ -3,11 +3,11 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import text
 from kavalai.migrate_db import migrate
-from kavalai.paths import SQL_MIGRATIONS_PATH
 from kavalai.agents.db import build_db_uri
 
 
-os.environ["KAVALAI_BO_DB_SCHEMA"] = "test_backoffice"
+# The backoffice application reads these at call time (AsyncBackofficeSession
+# defaults); the library itself never reads them at import time anymore.
 os.environ["KAVALAI_BO_DB_SCHEMA"] = "test_backoffice"
 
 
@@ -31,11 +31,10 @@ def backoffice_db_config(postgres_container):
 
 @pytest.fixture(scope="session")
 def migrated_backoffice_db(backoffice_db_config):
-    migrations_dir = os.path.join(SQL_MIGRATIONS_PATH, "backoffice")
     migrate(
-        migrations_dir=migrations_dir,
+        "backoffice",
         uri=backoffice_db_config["uri"],
-        schema="test_backoffice",
+        schema=backoffice_db_config["schema"],
     )
 
 

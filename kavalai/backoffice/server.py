@@ -78,6 +78,7 @@ async def get_project_session(project: db.Project):
         host=project.db_host,
         port=project.db_port,
         db_name=project.db_name,
+        schema=project.db_schema,
     )
     try:
         async with sessionmaker() as session:
@@ -477,6 +478,7 @@ async def projects_get_llm_call_stats(
             host=project.db_host,
             port=project.db_port,
             db_name=project.db_name,
+            schema=project.db_schema,
         )
 
     # Since AgentService manages its own sessions, we wrap the whole call to catch connection errors

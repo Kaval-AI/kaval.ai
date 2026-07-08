@@ -23,9 +23,10 @@ import aiosqlite
 from kavalai.workflow.state import WorkflowState
 from kavalai.workflow.storage.base import ChatMsg, DataStorage, RunHandle
 
-# Schema mirrors the Postgres ``app`` tables (agents/sessions/runs/chat_messages)
-# from kavalai/sql_migrations/app, using TEXT UUIDs and JSON-encoded columns so
-# the in-memory backend has identical semantics to the production backend.
+# Schema mirrors the agents tables (agents/sessions/runs/chat_messages) defined
+# by the ORM models in kavalai/agents/db.py, using TEXT UUIDs and JSON-encoded
+# columns so the in-memory backend has identical semantics to the production
+# backend.
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS agents (
     id TEXT PRIMARY KEY,

@@ -4,14 +4,8 @@ set -e
 # Function to run backoffice migrations
 run_backoffice_migrations() {
     echo "Running backoffice migrations..."
-    python -m kavalai.migrate_db \
-        --migrations kavalai/sql_migrations/backoffice \
-        --host "$BACKOFFICE_DB_HOST" \
-        --port "${BACKOFFICE_DB_PORT:-5432}" \
-        --user "$BACKOFFICE_DB_USER" \
-        --password "$BACKOFFICE_DB_PASSWORD" \
-        --database "$BACKOFFICE_DB_NAME" \
-        --schema "${KAVALAI_BO_DB_SCHEMA:-public}"
+    # Reads KAVALAI_BO_DB_URI and KAVALAI_BO_DB_SCHEMA from the environment.
+    python -m kavalai.migrate_db backoffice
 }
 
 # Function to run backoffice server

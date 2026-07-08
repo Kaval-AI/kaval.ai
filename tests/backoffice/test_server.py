@@ -31,13 +31,15 @@ async def test_user_details_unauthorized(client):
 
 @pytest.mark.asyncio
 async def test_google_auth_callback_success(client, mock_google_oauth, backoffice_db):
-    # Setup mock user in DB
+    # Setup mock user in DB (active_project_id has a real FK to projects)
+    project = db.Project(name="Auth Test Project", id=uuid.uuid4())
+    backoffice_db.add(project)
     user = db.User(
         email="test@example.com",
         name="Test User",
         is_admin=True,
         id=uuid.uuid4(),
-        active_project_id=uuid.uuid4(),
+        active_project_id=project.id,
     )
     backoffice_db.add(user)
     await backoffice_db.commit()
