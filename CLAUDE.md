@@ -22,13 +22,15 @@ shell you must load it yourself to match the PyCharm environment — otherwise
 integration tests gated on these keys silently skip:
 
 ```bash
-# Load .env, then run tests with the project venv (mirrors PyCharm/Junie)
-set -a && source .env && set +a
-.venv/bin/python -m pytest
+# Run tests with .env loaded, using the project venv (mirrors PyCharm/Junie)
+.venv/bin/dotenv run -- .venv/bin/python -m pytest
 
 # Equivalently, with uv:
 uv run --env-file .env pytest
 ```
+
+Avoid `set -a && source .env && set +a` — changing shell option state defeats
+Claude Code's static command analysis and forces a manual permission prompt.
 
 ## Key Directories
 
